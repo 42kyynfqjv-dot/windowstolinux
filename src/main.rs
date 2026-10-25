@@ -1,5 +1,7 @@
 use std::env;
+#[cfg(test)]
 use std::fmt::Write as _;
+mod control;
 use std::fs;
 use std::path::Path;
 
@@ -148,6 +150,7 @@ impl<'a> Pe<'a> {
                 || !section.raw_size.is_multiple_of(file_alignment)
                 || section.raw_offset < headers_size
                 || section.virtual_address < section_alignment
+                || section.virtual_address < headers_size
                 || virtual_end > image_size
                 || raw_end as usize > bytes.len()
                 || section.characteristics != 0x6000_0020
@@ -190,6 +193,7 @@ impl<'a> Pe<'a> {
     }
 }
 
+#[cfg(test)]
 #[derive(Debug, PartialEq, Eq)]
 enum Op {
     MovEax(u32),
@@ -198,6 +202,7 @@ enum Op {
     Ret,
 }
 
+#[cfg(test)]
 fn decode_straight_line(bytes: &[u8]) -> Result<Vec<Op>, String> {
     let mut ops = Vec::new();
     let mut at = 0usize;
@@ -236,6 +241,7 @@ fn decode_straight_line(bytes: &[u8]) -> Result<Vec<Op>, String> {
     Err("entry path has no return within 1024 supported instructions".into())
 }
 
+#[cfg(test)]
 fn validated_exit_status(ops: &[Op]) -> Result<u8, String> {
     let mut eax = None;
     for op in ops {
@@ -258,6 +264,7 @@ fn validated_exit_status(ops: &[Op]) -> Result<u8, String> {
     Err("missing entry return".into())
 }
 
+#[cfg(test)]
 fn generate_rust(ops: &[Op]) -> String {
     let mutable = ops.iter().filter(|op| **op != Op::Ret).count() > 1;
     let mut out = format!(
@@ -287,9 +294,8 @@ fn run() -> Result<(), String> {
     }
     let bytes = fs::read(&input).map_err(|e| e.to_string())?;
     let pe = Pe::parse(&bytes)?;
-    let ops = decode_straight_line(pe.entry_bytes()?)?;
-    validated_exit_status(&ops)?;
-    fs::write(Path::new(&output), generate_rust(&ops)).map_err(|e| e.to_string())
+    let source = control::translate(pe.entry_bytes()?)?;
+    fs::write(Path::new(&output), source).map_err(|e| e.to_string())
 }
 
 fn main() {
@@ -421,6 +427,15 @@ mod tests {
             decode_straight_line(Pe::parse(&virtual_padding).unwrap().entry_bytes().unwrap())
                 .is_err()
         );
+    }
+
+    #[test]
+    fn rejects_section_overlapping_virtual_headers() {
+        let mut bytes = fixture(&[0x31, 0xc0, 0xc3]);
+        bytes.resize(0x1400, 0);
+        bytes[0xd4..0xd8].copy_from_slice(&0x1200u32.to_le_bytes());
+        bytes[0x18c..0x190].copy_from_slice(&0x1200u32.to_le_bytes());
+        assert!(Pe::parse(&bytes).is_err());
     }
 
     #[test]

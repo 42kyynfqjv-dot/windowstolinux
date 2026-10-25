@@ -29,6 +29,25 @@ CASES = {
 }
 
 
+def branch_case(prefix: bytes, opcode: int) -> bytes:
+    return prefix + bytes([opcode, 6]) + mov_eax(11) + b"\xC3" + mov_eax(22) + b"\xC3"
+
+
+for name, prefix, opcode in [
+    ("jc_taken", mov_eax(0xFFFFFFFF) + add_eax(1), 0x72),
+    ("jc_clear", mov_eax(1) + add_eax(1), 0x72),
+    ("jnc_taken", mov_eax(1) + add_eax(1), 0x73),
+    ("jnc_clear", mov_eax(0xFFFFFFFF) + add_eax(1), 0x73),
+    ("jz_taken", mov_eax(0xFFFFFFFF) + add_eax(1), 0x74),
+    ("jz_clear", mov_eax(1) + add_eax(1), 0x74),
+    ("jnz_taken", mov_eax(1) + add_eax(1), 0x75),
+    ("jnz_clear", mov_eax(0xFFFFFFFF) + add_eax(1), 0x75),
+    ("mov_flags", b"\x31\xC0" + mov_eax(7), 0x74),
+    ("xor_carry", b"\x31\xC0", 0x72),
+]:
+    CASES[name] = branch_case(prefix, opcode)
+
+
 def build(case: str) -> bytes:
     if case not in CASES:
         raise ValueError(f"unknown fixture case: {case}")
