@@ -35,5 +35,6 @@ jobs:
         run: |
           Write-Host "Windows version: $([System.Environment]::OSVersion.VersionString)"
           python scripts/make_pe32_fixture.py fixture.exe
-          & .\fixture.exe
-          if ($LASTEXITCODE -ne 12) { throw "Expected exit 12, got $LASTEXITCODE" }
+          $process = Start-Process -FilePath (Resolve-Path .\fixture.exe) -NoNewWindow -Wait -PassThru
+          Write-Host "Original PE32 exit status: $($process.ExitCode)"
+          if ($process.ExitCode -ne 12) { throw "Expected exit 12, got $($process.ExitCode)" }
