@@ -103,6 +103,9 @@ impl<'a> Pe<'a> {
         let entry_rva = u32_at(bytes, optional + 16)?;
         let image_size = u32_at(bytes, optional + 56)?;
         let headers_size = u32_at(bytes, optional + 60)?;
+        image_base
+            .checked_add(image_size)
+            .ok_or("image address overflow")?;
         let section_table = optional
             .checked_add(optional_size)
             .ok_or("offset overflow")?;
@@ -394,6 +397,11 @@ mod tests {
         let mut invalid_image_base = base.clone();
         invalid_image_base[0xb4..0xb8].copy_from_slice(&0x400001u32.to_le_bytes());
         assert!(Pe::parse(&invalid_image_base).is_err());
+
+        let mut image_address_overflow = base.clone();
+        image_address_overflow[0xb4..0xb8].copy_from_slice(&0xffff_0000u32.to_le_bytes());
+        image_address_overflow[0xd0..0xd4].copy_from_slice(&0x2_0000u32.to_le_bytes());
+        assert!(Pe::parse(&image_address_overflow).is_err());
 
         let mut raw_overflow = base.clone();
         raw_overflow[0x18c..0x190].copy_from_slice(&0xffff_fe00u32.to_le_bytes());
