@@ -1,0 +1,10 @@
+[package]
+name = "windowstolinux"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "Experimental deterministic PE-to-Rust static recompiler"
+
+[[bin]]
+name = "w2l"
+path = "src/main.rs"
