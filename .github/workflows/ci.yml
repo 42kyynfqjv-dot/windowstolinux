@@ -13,3 +13,27 @@ jobs:
       - run: cargo fmt --check
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test
+      - name: Translate authored PE32 fixture to ELF
+        run: |
+          python3 scripts/make_pe32_fixture.py /tmp/w2l-fixture.exe
+          cargo run -- /tmp/w2l-fixture.exe /tmp/w2l-translated.rs
+          rustc /tmp/w2l-translated.rs -o /tmp/w2l-translated
+          set +e
+          /tmp/w2l-translated
+          result=$?
+          set -e
+          test "$result" -eq 12
+  authored-windows-fixture:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Execute authored PE32 fixture on Windows
+        shell: pwsh
+        run: |
+          Write-Host "Windows version: $([System.Environment]::OSVersion.VersionString)"
+          python scripts/make_pe32_fixture.py fixture.exe
+          & .\fixture.exe
+          if ($LASTEXITCODE -ne 12) { throw "Expected exit 12, got $LASTEXITCODE" }
