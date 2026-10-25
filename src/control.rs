@@ -156,6 +156,11 @@ pub fn translate(bytes: &[u8]) -> Result<String, String> {
 }
 
 #[cfg(test)]
+pub(super) fn exit_for_test(bytes: &[u8]) -> Result<u8, String> {
+    validate(&decode(bytes)?)
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     #[test]

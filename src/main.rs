@@ -1,6 +1,4 @@
 use std::env;
-#[cfg(test)]
-use std::fmt::Write as _;
 mod control;
 use std::fs;
 use std::path::Path;
@@ -193,98 +191,6 @@ impl<'a> Pe<'a> {
     }
 }
 
-#[cfg(test)]
-#[derive(Debug, PartialEq, Eq)]
-enum Op {
-    MovEax(u32),
-    AddEax(u32),
-    XorEaxEax,
-    Ret,
-}
-
-#[cfg(test)]
-fn decode_straight_line(bytes: &[u8]) -> Result<Vec<Op>, String> {
-    let mut ops = Vec::new();
-    let mut at = 0usize;
-    while at < bytes.len() && ops.len() < 1024 {
-        let opcode = bytes[at];
-        let (op, size) = match opcode {
-            0xb8 | 0x05 => {
-                let immediate = u32_at(bytes, at + 1)?;
-                (
-                    if opcode == 0xb8 {
-                        Op::MovEax(immediate)
-                    } else {
-                        Op::AddEax(immediate)
-                    },
-                    5,
-                )
-            }
-            0x31 if bytes.get(at + 1) == Some(&0xc0) => (Op::XorEaxEax, 2),
-            0xc3 => (Op::Ret, 1),
-            _ => {
-                return Err(format!(
-                    "unsupported x86 instruction at entry offset {at}: 0x{opcode:02x}"
-                ))
-            }
-        };
-        at += size;
-        let done = op == Op::Ret;
-        ops.push(op);
-        if done {
-            if !matches!(ops.first(), Some(Op::MovEax(_) | Op::XorEaxEax)) {
-                return Err("entry EAX is unknown before the first operation".into());
-            }
-            return Ok(ops);
-        }
-    }
-    Err("entry path has no return within 1024 supported instructions".into())
-}
-
-#[cfg(test)]
-fn validated_exit_status(ops: &[Op]) -> Result<u8, String> {
-    let mut eax = None;
-    for op in ops {
-        match *op {
-            Op::MovEax(value) => eax = Some(value),
-            Op::XorEaxEax => eax = Some(0),
-            Op::AddEax(value) => {
-                eax = Some(
-                    eax.ok_or("entry EAX is unknown before addition")?
-                        .wrapping_add(value),
-                );
-            }
-            Op::Ret => {
-                let value = eax.ok_or("entry EAX is unknown at return")?;
-                return u8::try_from(value)
-                    .map_err(|_| "Windows exit status exceeds Linux's 8-bit exit range".into());
-            }
-        }
-    }
-    Err("missing entry return".into())
-}
-
-#[cfg(test)]
-fn generate_rust(ops: &[Op]) -> String {
-    let mutable = ops.iter().filter(|op| **op != Op::Ret).count() > 1;
-    let mut out = format!(
-        "// Experimental translation of one straight-line x86 entry path.\n// This is not a Windows application compatibility runtime.\nfn translated_entry() -> u32 {{\n    let {}eax: u32;\n",
-        if mutable { "mut " } else { "" }
-    );
-    for op in ops {
-        match op {
-            Op::MovEax(value) => writeln!(out, "    eax = 0x{value:08x};").unwrap(),
-            Op::AddEax(value) => {
-                writeln!(out, "    eax = eax.wrapping_add(0x{value:08x});").unwrap()
-            }
-            Op::XorEaxEax => writeln!(out, "    eax = 0;").unwrap(),
-            Op::Ret => writeln!(out, "    return eax;").unwrap(),
-        }
-    }
-    out.push_str("}\nfn main() { std::process::exit(translated_entry() as i32); }\n");
-    out
-}
-
 fn run() -> Result<(), String> {
     let mut args = env::args_os().skip(1);
     let input = args.next().ok_or("usage: w2l INPUT.exe OUTPUT.rs")?;
@@ -345,16 +251,17 @@ mod tests {
     fn parses_and_translates_supported_path() {
         let bytes = fixture(&[0xb8, 7, 0, 0, 0, 0x05, 5, 0, 0, 0, 0xc3]);
         let entry = Pe::parse(&bytes).unwrap().entry_bytes().unwrap();
-        let ops = decode_straight_line(entry).unwrap();
-        assert_eq!(ops, vec![Op::MovEax(7), Op::AddEax(5), Op::Ret]);
-        assert!(generate_rust(&ops).contains("eax.wrapping_add(0x00000005)"));
+        assert_eq!(control::exit_for_test(entry).unwrap(), 12);
+        assert!(control::translate(entry)
+            .unwrap()
+            .contains("overflowing_add(5)"));
     }
 
     #[test]
     fn rejects_non_pe_and_unsupported_instruction() {
         assert!(Pe::parse(b"not a PE").is_err());
         let bytes = fixture(&[0xeb, 0xfe]);
-        assert!(decode_straight_line(Pe::parse(&bytes).unwrap().entry_bytes().unwrap()).is_err());
+        assert!(control::translate(Pe::parse(&bytes).unwrap().entry_bytes().unwrap()).is_err());
     }
 
     #[test]
@@ -366,7 +273,7 @@ mod tests {
 
     #[test]
     fn rejects_use_of_unknown_entry_eax() {
-        assert!(decode_straight_line(&[0x05, 1, 0, 0, 0, 0xc3]).is_err());
+        assert!(control::translate(&[0x05, 1, 0, 0, 0, 0xc3]).is_err());
     }
 
     #[test]
@@ -424,7 +331,7 @@ mod tests {
             &[0xb8]
         );
         assert!(
-            decode_straight_line(Pe::parse(&virtual_padding).unwrap().entry_bytes().unwrap())
+            control::translate(Pe::parse(&virtual_padding).unwrap().entry_bytes().unwrap())
                 .is_err()
         );
     }
@@ -441,18 +348,18 @@ mod tests {
     #[test]
     fn evaluates_wrapping_arithmetic_and_exit_range() {
         assert_eq!(
-            validated_exit_status(&[Op::MovEax(0xffff_ffff), Op::AddEax(3), Op::Ret]).unwrap(),
+            control::exit_for_test(&[0xb8, 255, 255, 255, 255, 0x05, 3, 0, 0, 0, 0xc3]).unwrap(),
             2
         );
         assert_eq!(
-            validated_exit_status(&[Op::XorEaxEax, Op::AddEax(9), Op::Ret]).unwrap(),
+            control::exit_for_test(&[0x31, 0xc0, 0x05, 9, 0, 0, 0, 0xc3]).unwrap(),
             9
         );
         assert_eq!(
-            validated_exit_status(&[Op::MovEax(255), Op::Ret]).unwrap(),
+            control::exit_for_test(&[0xb8, 255, 0, 0, 0, 0xc3]).unwrap(),
             255
         );
-        assert!(validated_exit_status(&[Op::MovEax(256), Op::Ret]).is_err());
-        assert!(validated_exit_status(&[Op::AddEax(1), Op::Ret]).is_err());
+        assert!(control::translate(&[0xb8, 0, 1, 0, 0, 0xc3]).is_err());
+        assert!(control::translate(&[0x05, 1, 0, 0, 0, 0xc3]).is_err());
     }
 }

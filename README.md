@@ -4,7 +4,7 @@ WindowsToLinux is an early research project for deterministic Windows PE to Rust
 
 ## Current prototype
 
-`w2l` accepts only a narrow PE32/x86 console profile: one executable section, no PE data directories, no DLL characteristics, a file-backed entry point, and a single straight-line sequence of `mov eax, imm32`, `add eax, imm32`, `xor eax, eax`, and `ret`. The returned EAX value must be in 0–255 so a Linux process exit status can represent it without truncation. Unsupported instructions, imports, TLS, relocations, other declared directories, and images outside this profile cause an error. This prototype does not implement general PE loading, Windows APIs, memory, stack, flags, or branches.
+`w2l` accepts only a narrow PE32/x86 console profile: one executable section, no PE data directories, no DLL characteristics, a file-backed entry point, and instructions limited to `mov eax, imm32`, `add eax, imm32`, `xor eax, eax`, `ret`, and forward short `JC/JNC/JZ/JNZ` branches. ADD and XOR model carry and zero flags; MOV preserves them. Both branch successors must decode, all targets must be instruction boundaries, and decoding and execution are limited to 1,024 instructions. The returned EAX value must be in 0–255 so a Linux process exit status can represent it without truncation. Unsupported instructions, imports, TLS, relocations, other declared directories, and images outside this profile cause an error. This prototype does not implement general PE loading, Windows APIs, memory, stack, backward branches, signed conditions, or other CPU flags. See [M2-CONTRACT.md](M2-CONTRACT.md) for the precise accepted subset.
 
 ```sh
 cargo run -- sample.exe translated.rs
@@ -17,7 +17,7 @@ The authored `scripts/make_pe32_fixture.py` builds import-free PE32 cases within
 
 ## Status
 
-M0 and the narrow M1 fixtures are in review. The 99% compatibility objective is aspirational and has no measured corpus result.
+M0, M1 and the bounded M2 slice are in draft review. CI exercises 15 authored Windows/Linux cases, including taken and untaken outcomes for each supported branch. The 99% compatibility objective is aspirational and has no measured corpus result.
 
 ## License
 

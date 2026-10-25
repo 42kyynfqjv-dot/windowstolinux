@@ -2,7 +2,8 @@
 
 - M0: Rust workspace, strict PE parsing, CI, project governance, licensing.
 - M1: one actual PE32 program translated to Rust, built to ELF, and compared with its Windows execution.
-- M2–M3: instruction semantics and executable structure.
+- M2: bounded carry/zero flags and forward JC/JNC/JZ/JNZ slice in draft review; wider instruction semantics remain open.
+- M3: executable structure, imports and relocation semantics remain open.
 - M4–M7: Windows compatibility runtime, dynamic observation, and desktop behavior.
 - M8–M10: PE32+/x86-64, measured corpus expansion, optimization and reproducible releases.
 
