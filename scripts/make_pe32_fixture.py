@@ -1,7 +1,6 @@
-"""Build an independently authored, import-free PE32 entry-return fixture.
+"""Build independently authored, import-free PE32 entry-return fixtures.
 
-The entry computes 7 + 5 in EAX and returns. This is only a narrow process
-exit-status experiment, not an application compatibility corpus.
+These are narrow process exit-status experiments, not an application corpus.
 """
 
 import sys
@@ -12,7 +11,27 @@ def put(data: bytearray, offset: int, value: int, width: int) -> None:
     data[offset : offset + width] = value.to_bytes(width, "little")
 
 
-def build() -> bytes:
+def mov_eax(value: int) -> bytes:
+    return bytes([0xB8]) + value.to_bytes(4, "little")
+
+
+def add_eax(value: int) -> bytes:
+    return bytes([0x05]) + value.to_bytes(4, "little")
+
+
+CASES = {
+    "sum12": mov_eax(7) + add_eax(5) + b"\xC3",
+    "wrap2": mov_eax(0xFFFFFFFF) + add_eax(3) + b"\xC3",
+    "xor9": b"\x31\xC0" + add_eax(9) + b"\xC3",
+    "zero": mov_eax(0) + b"\xC3",
+    "max255": mov_eax(255) + b"\xC3",
+    "out_of_range": mov_eax(256) + b"\xC3",
+}
+
+
+def build(case: str) -> bytes:
+    if case not in CASES:
+        raise ValueError(f"unknown fixture case: {case}")
     data = bytearray(0x400)
     data[0:2] = b"MZ"
     put(data, 0x3C, 0x80, 4)
@@ -52,11 +71,12 @@ def build() -> bytes:
     put(data, section + 20, 0x200, 4)  # raw offset
     put(data, section + 36, 0x60000020, 4)  # code, execute, read
 
-    data[0x200:0x20B] = bytes([0xB8, 7, 0, 0, 0, 0x05, 5, 0, 0, 0, 0xC3])
+    code = CASES[case]
+    data[0x200 : 0x200 + len(code)] = code
     return bytes(data)
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        raise SystemExit("usage: make_pe32_fixture.py OUTPUT.exe")
-    Path(sys.argv[1]).write_bytes(build())
+    if len(sys.argv) != 3:
+        raise SystemExit("usage: make_pe32_fixture.py CASE OUTPUT.exe")
+    Path(sys.argv[2]).write_bytes(build(sys.argv[1]))

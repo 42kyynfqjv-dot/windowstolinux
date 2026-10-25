@@ -52,19 +52,71 @@ impl<'a> Pe<'a> {
             return Err("only x86 PE32 is supported".into());
         }
         let section_count = u16_at(bytes, coff + 2)? as usize;
-        if section_count == 0 || section_count > 96 {
-            return Err("invalid section count".into());
+        if section_count != 1 {
+            return Err("only one-section PE32 images are supported".into());
+        }
+        if u16_at(bytes, coff + 18)? != 0x0102 {
+            return Err("unsupported COFF characteristics".into());
+        }
+        if u32_at(bytes, coff + 8)? != 0 || u32_at(bytes, coff + 12)? != 0 {
+            return Err("COFF symbols are unsupported".into());
         }
         let optional_size = u16_at(bytes, coff + 16)? as usize;
         let optional = coff.checked_add(20).ok_or("offset overflow")?;
         range(bytes, optional, optional_size)?;
-        if optional_size < 96 || u16_at(bytes, optional)? != 0x10b {
-            return Err("invalid PE32 optional header".into());
+        if optional_size != 0xe0 || u16_at(bytes, optional)? != 0x10b {
+            return Err("only standard PE32 optional headers are supported".into());
+        }
+        if u32_at(bytes, optional + 92)? != 16 {
+            return Err("unsupported PE data-directory count".into());
+        }
+        for index in 0..16 {
+            let directory = optional + 96 + index * 8;
+            if u32_at(bytes, directory)? != 0 || u32_at(bytes, directory + 4)? != 0 {
+                return Err(format!("unsupported nonempty PE data directory {index}"));
+            }
+        }
+        if u16_at(bytes, optional + 68)? != 3 || u16_at(bytes, optional + 70)? != 0 {
+            return Err("only console images without DLL characteristics are supported".into());
+        }
+        let image_base = u32_at(bytes, optional + 28)?;
+        let stack_reserve = u32_at(bytes, optional + 72)?;
+        let stack_commit = u32_at(bytes, optional + 76)?;
+        let heap_reserve = u32_at(bytes, optional + 80)?;
+        let heap_commit = u32_at(bytes, optional + 84)?;
+        if image_base == 0
+            || !image_base.is_multiple_of(0x10000)
+            || u32_at(bytes, optional + 52)? != 0
+            || u32_at(bytes, optional + 88)? != 0
+            || stack_commit == 0
+            || stack_commit > stack_reserve
+            || heap_commit == 0
+            || heap_commit > heap_reserve
+        {
+            return Err("unsupported or invalid PE loader settings".into());
+        }
+        let section_alignment = u32_at(bytes, optional + 32)?;
+        let file_alignment = u32_at(bytes, optional + 36)?;
+        if section_alignment != 0x1000 || file_alignment != 0x200 {
+            return Err("unsupported PE section or file alignment".into());
         }
         let entry_rva = u32_at(bytes, optional + 16)?;
+        let image_size = u32_at(bytes, optional + 56)?;
+        let headers_size = u32_at(bytes, optional + 60)?;
         let section_table = optional
             .checked_add(optional_size)
             .ok_or("offset overflow")?;
+        let section_table_end = section_table
+            .checked_add(section_count * 40)
+            .ok_or("offset overflow")?;
+        if headers_size as usize > bytes.len()
+            || (headers_size as usize) < section_table_end
+            || !headers_size.is_multiple_of(file_alignment)
+            || image_size == 0
+            || !image_size.is_multiple_of(section_alignment)
+        {
+            return Err("invalid PE image or header bounds".into());
+        }
         let mut sections = Vec::with_capacity(section_count);
         for i in 0..section_count {
             let at = section_table
@@ -78,6 +130,27 @@ impl<'a> Pe<'a> {
                 raw_offset: u32_at(bytes, at + 20)?,
                 characteristics: u32_at(bytes, at + 36)?,
             };
+            let virtual_end = section
+                .virtual_address
+                .checked_add(section.virtual_size)
+                .ok_or("section RVA overflow")?;
+            let raw_end = section
+                .raw_offset
+                .checked_add(section.raw_size)
+                .ok_or("section file offset overflow")?;
+            if section.virtual_size == 0
+                || section.raw_size == 0
+                || !section.virtual_address.is_multiple_of(section_alignment)
+                || !section.raw_offset.is_multiple_of(file_alignment)
+                || !section.raw_size.is_multiple_of(file_alignment)
+                || section.raw_offset < headers_size
+                || section.virtual_address < section_alignment
+                || virtual_end > image_size
+                || raw_end as usize > bytes.len()
+                || section.characteristics != 0x6000_0020
+            {
+                return Err("unsupported or invalid executable section".into());
+            }
             range(
                 bytes,
                 section.raw_offset as usize,
@@ -107,7 +180,7 @@ impl<'a> Pe<'a> {
             let start = (section.raw_offset as usize)
                 .checked_add(delta as usize)
                 .ok_or("offset overflow")?;
-            let available = (section.raw_size - delta) as usize;
+            let available = (section.raw_size.min(section.virtual_size) - delta) as usize;
             return range(self.bytes, start, available);
         }
         Err("entry point is not in executable file-backed bytes".into())
@@ -160,8 +233,34 @@ fn decode_straight_line(bytes: &[u8]) -> Result<Vec<Op>, String> {
     Err("entry path has no return within 1024 supported instructions".into())
 }
 
+fn validated_exit_status(ops: &[Op]) -> Result<u8, String> {
+    let mut eax = None;
+    for op in ops {
+        match *op {
+            Op::MovEax(value) => eax = Some(value),
+            Op::XorEaxEax => eax = Some(0),
+            Op::AddEax(value) => {
+                eax = Some(
+                    eax.ok_or("entry EAX is unknown before addition")?
+                        .wrapping_add(value),
+                );
+            }
+            Op::Ret => {
+                let value = eax.ok_or("entry EAX is unknown at return")?;
+                return u8::try_from(value)
+                    .map_err(|_| "Windows exit status exceeds Linux's 8-bit exit range".into());
+            }
+        }
+    }
+    Err("missing entry return".into())
+}
+
 fn generate_rust(ops: &[Op]) -> String {
-    let mut out = String::from("// Experimental translation of one straight-line x86 entry path.\n// This is not a Windows application compatibility runtime.\nfn translated_entry() -> u32 {\n    let mut eax: u32;\n");
+    let mutable = ops.iter().filter(|op| **op != Op::Ret).count() > 1;
+    let mut out = format!(
+        "// Experimental translation of one straight-line x86 entry path.\n// This is not a Windows application compatibility runtime.\nfn translated_entry() -> u32 {{\n    let {}eax: u32;\n",
+        if mutable { "mut " } else { "" }
+    );
     for op in ops {
         match op {
             Op::MovEax(value) => writeln!(out, "    eax = 0x{value:08x};").unwrap(),
@@ -172,7 +271,7 @@ fn generate_rust(ops: &[Op]) -> String {
             Op::Ret => writeln!(out, "    return eax;").unwrap(),
         }
     }
-    out.push_str("}\nfn main() { std::process::exit((translated_entry() & 0xff) as i32); }\n");
+    out.push_str("}\nfn main() { std::process::exit(translated_entry() as i32); }\n");
     out
 }
 
@@ -186,6 +285,7 @@ fn run() -> Result<(), String> {
     let bytes = fs::read(&input).map_err(|e| e.to_string())?;
     let pe = Pe::parse(&bytes)?;
     let ops = decode_straight_line(pe.entry_bytes()?)?;
+    validated_exit_status(&ops)?;
     fs::write(Path::new(&output), generate_rust(&ops)).map_err(|e| e.to_string())
 }
 
@@ -208,8 +308,20 @@ mod tests {
         bytes[0x84..0x86].copy_from_slice(&0x14cu16.to_le_bytes());
         bytes[0x86..0x88].copy_from_slice(&1u16.to_le_bytes());
         bytes[0x94..0x96].copy_from_slice(&0xe0u16.to_le_bytes());
+        bytes[0x96..0x98].copy_from_slice(&0x0102u16.to_le_bytes());
         bytes[0x98..0x9a].copy_from_slice(&0x10bu16.to_le_bytes());
         bytes[0xa8..0xac].copy_from_slice(&0x1000u32.to_le_bytes());
+        bytes[0xb4..0xb8].copy_from_slice(&0x400000u32.to_le_bytes());
+        bytes[0xb8..0xbc].copy_from_slice(&0x1000u32.to_le_bytes());
+        bytes[0xbc..0xc0].copy_from_slice(&0x200u32.to_le_bytes());
+        bytes[0xd0..0xd4].copy_from_slice(&0x2000u32.to_le_bytes());
+        bytes[0xd4..0xd8].copy_from_slice(&0x200u32.to_le_bytes());
+        bytes[0xdc..0xde].copy_from_slice(&3u16.to_le_bytes());
+        bytes[0xe0..0xe4].copy_from_slice(&0x100000u32.to_le_bytes());
+        bytes[0xe4..0xe8].copy_from_slice(&0x1000u32.to_le_bytes());
+        bytes[0xe8..0xec].copy_from_slice(&0x100000u32.to_le_bytes());
+        bytes[0xec..0xf0].copy_from_slice(&0x1000u32.to_le_bytes());
+        bytes[0xf4..0xf8].copy_from_slice(&16u32.to_le_bytes());
         bytes[0x178..0x17d].copy_from_slice(b".text");
         bytes[0x180..0x184].copy_from_slice(&0x100u32.to_le_bytes());
         bytes[0x184..0x188].copy_from_slice(&0x1000u32.to_le_bytes());
@@ -254,5 +366,70 @@ mod tests {
         for len in 0..bytes.len() {
             assert!(Pe::parse(&bytes[..len]).is_err(), "accepted prefix {len}");
         }
+    }
+
+    #[test]
+    fn rejects_every_nonempty_pe_directory() {
+        for index in 0..16 {
+            let mut bytes = fixture(&[0xb8, 0, 0, 0, 0, 0xc3]);
+            let directory = 0xf8 + index * 8;
+            bytes[directory..directory + 4].copy_from_slice(&0x1000u32.to_le_bytes());
+            let error = Pe::parse(&bytes).unwrap_err();
+            assert!(error.contains(&format!("directory {index}")), "{error}");
+        }
+    }
+
+    #[test]
+    fn rejects_dll_multisection_and_ambiguous_bounds() {
+        let base = fixture(&[0xb8, 0, 0, 0, 0, 0xc3]);
+
+        let mut dll = base.clone();
+        dll[0x96..0x98].copy_from_slice(&0x2102u16.to_le_bytes());
+        assert!(Pe::parse(&dll).is_err());
+
+        let mut multisection = base.clone();
+        multisection[0x86..0x88].copy_from_slice(&2u16.to_le_bytes());
+        assert!(Pe::parse(&multisection).is_err());
+
+        let mut invalid_image_base = base.clone();
+        invalid_image_base[0xb4..0xb8].copy_from_slice(&0x400001u32.to_le_bytes());
+        assert!(Pe::parse(&invalid_image_base).is_err());
+
+        let mut raw_overflow = base.clone();
+        raw_overflow[0x18c..0x190].copy_from_slice(&0xffff_fe00u32.to_le_bytes());
+        assert!(Pe::parse(&raw_overflow).is_err());
+
+        let mut virtual_overflow = base.clone();
+        virtual_overflow[0x184..0x188].copy_from_slice(&0xffff_f000u32.to_le_bytes());
+        assert!(Pe::parse(&virtual_overflow).is_err());
+
+        let mut virtual_padding = base;
+        virtual_padding[0x180..0x184].copy_from_slice(&1u32.to_le_bytes());
+        assert_eq!(
+            Pe::parse(&virtual_padding).unwrap().entry_bytes().unwrap(),
+            &[0xb8]
+        );
+        assert!(
+            decode_straight_line(Pe::parse(&virtual_padding).unwrap().entry_bytes().unwrap())
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn evaluates_wrapping_arithmetic_and_exit_range() {
+        assert_eq!(
+            validated_exit_status(&[Op::MovEax(0xffff_ffff), Op::AddEax(3), Op::Ret]).unwrap(),
+            2
+        );
+        assert_eq!(
+            validated_exit_status(&[Op::XorEaxEax, Op::AddEax(9), Op::Ret]).unwrap(),
+            9
+        );
+        assert_eq!(
+            validated_exit_status(&[Op::MovEax(255), Op::Ret]).unwrap(),
+            255
+        );
+        assert!(validated_exit_status(&[Op::MovEax(256), Op::Ret]).is_err());
+        assert!(validated_exit_status(&[Op::AddEax(1), Op::Ret]).is_err());
     }
 }

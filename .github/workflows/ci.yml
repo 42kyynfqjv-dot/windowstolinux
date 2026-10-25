@@ -15,16 +15,27 @@ jobs:
       - run: cargo test
       - name: Translate authored PE32 fixture to ELF
         run: |
-          python3 scripts/make_pe32_fixture.py /tmp/w2l-fixture.exe
-          cargo run -- /tmp/w2l-fixture.exe /tmp/w2l-translated.rs
-          rustc /tmp/w2l-translated.rs -o /tmp/w2l-translated
-          set +e
-          /tmp/w2l-translated > /tmp/w2l-translated.stdout 2> /tmp/w2l-translated.stderr
-          result=$?
-          set -e
-          test "$result" -eq 12
-          test ! -s /tmp/w2l-translated.stdout
-          test ! -s /tmp/w2l-translated.stderr
+          for specification in sum12:12 wrap2:2 xor9:9 zero:0 max255:255; do
+            case_name=${specification%:*}
+            expected=${specification#*:}
+            python3 scripts/make_pe32_fixture.py "$case_name" /tmp/w2l-fixture.exe
+            cargo run -- /tmp/w2l-fixture.exe /tmp/w2l-translated.rs
+            cargo run -- /tmp/w2l-fixture.exe /tmp/w2l-translated-again.rs
+            cmp /tmp/w2l-translated.rs /tmp/w2l-translated-again.rs
+            rustc -D warnings /tmp/w2l-translated.rs -o /tmp/w2l-translated
+            set +e
+            /tmp/w2l-translated > /tmp/w2l-translated.stdout 2> /tmp/w2l-translated.stderr
+            result=$?
+            set -e
+            test "$result" -eq "$expected"
+            test ! -s /tmp/w2l-translated.stdout
+            test ! -s /tmp/w2l-translated.stderr
+          done
+          python3 scripts/make_pe32_fixture.py out_of_range /tmp/w2l-fixture.exe
+          if cargo run -- /tmp/w2l-fixture.exe /tmp/w2l-rejected.rs; then
+            echo 'converter unexpectedly accepted exit status 256' >&2
+            exit 1
+          fi
   authored-windows-fixture:
     runs-on: windows-latest
     steps:
@@ -36,9 +47,21 @@ jobs:
         shell: pwsh
         run: |
           Write-Host "Windows version: $([System.Environment]::OSVersion.VersionString)"
-          python scripts/make_pe32_fixture.py fixture.exe
-          $process = Start-Process -FilePath (Resolve-Path .\fixture.exe) -NoNewWindow -Wait -PassThru -RedirectStandardOutput original.stdout -RedirectStandardError original.stderr
-          Write-Host "Original PE32 exit status: $($process.ExitCode)"
-          if ($process.ExitCode -ne 12) { throw "Expected exit 12, got $($process.ExitCode)" }
-          if ((Get-Item original.stdout).Length -ne 0) { throw "Expected empty stdout" }
-          if ((Get-Item original.stderr).Length -ne 0) { throw "Expected empty stderr" }
+          $cases = @(
+            @{ Name = 'sum12'; Expected = 12 },
+            @{ Name = 'wrap2'; Expected = 2 },
+            @{ Name = 'xor9'; Expected = 9 },
+            @{ Name = 'zero'; Expected = 0 },
+            @{ Name = 'max255'; Expected = 255 }
+          )
+          foreach ($testCase in $cases) {
+            $exe = "fixture_$($testCase.Name).exe"
+            $stdout = "original_$($testCase.Name).stdout"
+            $stderr = "original_$($testCase.Name).stderr"
+            python scripts/make_pe32_fixture.py $testCase.Name $exe
+            $process = Start-Process -FilePath (Resolve-Path $exe) -NoNewWindow -Wait -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+            Write-Host "$($testCase.Name) original exit status: $($process.ExitCode)"
+            if ($process.ExitCode -ne $testCase.Expected) { throw "Unexpected exit status for $($testCase.Name)" }
+            if ((Get-Item $stdout).Length -ne 0) { throw "Expected empty stdout for $($testCase.Name)" }
+            if ((Get-Item $stderr).Length -ne 0) { throw "Expected empty stderr for $($testCase.Name)" }
+          }
