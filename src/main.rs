@@ -21,15 +21,21 @@ struct Pe<'a> {
 
 fn range(bytes: &[u8], offset: usize, len: usize) -> Result<&[u8], String> {
     let end = offset.checked_add(len).ok_or("offset overflow")?;
-    bytes.get(offset..end).ok_or_else(|| "truncated PE file".into())
+    bytes
+        .get(offset..end)
+        .ok_or_else(|| "truncated PE file".into())
 }
 
 fn u16_at(bytes: &[u8], offset: usize) -> Result<u16, String> {
-    Ok(u16::from_le_bytes(range(bytes, offset, 2)?.try_into().unwrap()))
+    Ok(u16::from_le_bytes(
+        range(bytes, offset, 2)?.try_into().unwrap(),
+    ))
 }
 
 fn u32_at(bytes: &[u8], offset: usize) -> Result<u32, String> {
-    Ok(u32::from_le_bytes(range(bytes, offset, 4)?.try_into().unwrap()))
+    Ok(u32::from_le_bytes(
+        range(bytes, offset, 4)?.try_into().unwrap(),
+    ))
 }
 
 impl<'a> Pe<'a> {
@@ -56,7 +62,9 @@ impl<'a> Pe<'a> {
             return Err("invalid PE32 optional header".into());
         }
         let entry_rva = u32_at(bytes, optional + 16)?;
-        let section_table = optional.checked_add(optional_size).ok_or("offset overflow")?;
+        let section_table = optional
+            .checked_add(optional_size)
+            .ok_or("offset overflow")?;
         let mut sections = Vec::with_capacity(section_count);
         for i in 0..section_count {
             let at = section_table
@@ -70,20 +78,35 @@ impl<'a> Pe<'a> {
                 raw_offset: u32_at(bytes, at + 20)?,
                 characteristics: u32_at(bytes, at + 36)?,
             };
-            range(bytes, section.raw_offset as usize, section.raw_size as usize)?;
+            range(
+                bytes,
+                section.raw_offset as usize,
+                section.raw_size as usize,
+            )?;
             sections.push(section);
         }
-        Ok(Self { bytes, entry_rva, sections })
+        Ok(Self {
+            bytes,
+            entry_rva,
+            sections,
+        })
     }
 
     fn entry_bytes(&self) -> Result<&'a [u8], String> {
         const EXECUTE: u32 = 0x2000_0000;
         for section in &self.sections {
-            if section.characteristics & EXECUTE == 0 { continue; }
-            let Some(delta) = self.entry_rva.checked_sub(section.virtual_address) else { continue };
-            if delta >= section.virtual_size || delta >= section.raw_size { continue; }
+            if section.characteristics & EXECUTE == 0 {
+                continue;
+            }
+            let Some(delta) = self.entry_rva.checked_sub(section.virtual_address) else {
+                continue;
+            };
+            if delta >= section.virtual_size || delta >= section.raw_size {
+                continue;
+            }
             let start = (section.raw_offset as usize)
-                .checked_add(delta as usize).ok_or("offset overflow")?;
+                .checked_add(delta as usize)
+                .ok_or("offset overflow")?;
             let available = (section.raw_size - delta) as usize;
             return range(self.bytes, start, available);
         }
@@ -92,7 +115,12 @@ impl<'a> Pe<'a> {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-enum Op { MovEax(u32), AddEax(u32), XorEaxEax, Ret }
+enum Op {
+    MovEax(u32),
+    AddEax(u32),
+    XorEaxEax,
+    Ret,
+}
 
 fn decode_straight_line(bytes: &[u8]) -> Result<Vec<Op>, String> {
     let mut ops = Vec::new();
@@ -102,26 +130,44 @@ fn decode_straight_line(bytes: &[u8]) -> Result<Vec<Op>, String> {
         let (op, size) = match opcode {
             0xb8 | 0x05 => {
                 let immediate = u32_at(bytes, at + 1)?;
-                (if opcode == 0xb8 { Op::MovEax(immediate) } else { Op::AddEax(immediate) }, 5)
+                (
+                    if opcode == 0xb8 {
+                        Op::MovEax(immediate)
+                    } else {
+                        Op::AddEax(immediate)
+                    },
+                    5,
+                )
             }
             0x31 if bytes.get(at + 1) == Some(&0xc0) => (Op::XorEaxEax, 2),
             0xc3 => (Op::Ret, 1),
-            _ => return Err(format!("unsupported x86 instruction at entry offset {at}: 0x{opcode:02x}")),
+            _ => {
+                return Err(format!(
+                    "unsupported x86 instruction at entry offset {at}: 0x{opcode:02x}"
+                ))
+            }
         };
         at += size;
         let done = op == Op::Ret;
         ops.push(op);
-        if done { return Ok(ops); }
+        if done {
+            if !matches!(ops.first(), Some(Op::MovEax(_) | Op::XorEaxEax)) {
+                return Err("entry EAX is unknown before the first operation".into());
+            }
+            return Ok(ops);
+        }
     }
     Err("entry path has no return within 1024 supported instructions".into())
 }
 
 fn generate_rust(ops: &[Op]) -> String {
-    let mut out = String::from("// Experimental translation of one straight-line x86 entry path.\n// This is not a Windows application compatibility runtime.\nfn translated_entry() -> u32 {\n    let mut eax: u32 = 0;\n");
+    let mut out = String::from("// Experimental translation of one straight-line x86 entry path.\n// This is not a Windows application compatibility runtime.\nfn translated_entry() -> u32 {\n    let mut eax: u32;\n");
     for op in ops {
         match op {
             Op::MovEax(value) => writeln!(out, "    eax = 0x{value:08x};").unwrap(),
-            Op::AddEax(value) => writeln!(out, "    eax = eax.wrapping_add(0x{value:08x});").unwrap(),
+            Op::AddEax(value) => {
+                writeln!(out, "    eax = eax.wrapping_add(0x{value:08x});").unwrap()
+            }
             Op::XorEaxEax => writeln!(out, "    eax = 0;").unwrap(),
             Op::Ret => writeln!(out, "    return eax;").unwrap(),
         }
@@ -134,7 +180,9 @@ fn run() -> Result<(), String> {
     let mut args = env::args_os().skip(1);
     let input = args.next().ok_or("usage: w2l INPUT.exe OUTPUT.rs")?;
     let output = args.next().ok_or("usage: w2l INPUT.exe OUTPUT.rs")?;
-    if args.next().is_some() { return Err("usage: w2l INPUT.exe OUTPUT.rs".into()); }
+    if args.next().is_some() {
+        return Err("usage: w2l INPUT.exe OUTPUT.rs".into());
+    }
     let bytes = fs::read(&input).map_err(|e| e.to_string())?;
     let pe = Pe::parse(&bytes)?;
     let ops = decode_straight_line(pe.entry_bytes()?)?;
@@ -162,7 +210,7 @@ mod tests {
         bytes[0x94..0x96].copy_from_slice(&0xe0u16.to_le_bytes());
         bytes[0x98..0x9a].copy_from_slice(&0x10bu16.to_le_bytes());
         bytes[0xa8..0xac].copy_from_slice(&0x1000u32.to_le_bytes());
-        bytes[0x178..0x17c].copy_from_slice(b".text");
+        bytes[0x178..0x17d].copy_from_slice(b".text");
         bytes[0x180..0x184].copy_from_slice(&0x100u32.to_le_bytes());
         bytes[0x184..0x188].copy_from_slice(&0x1000u32.to_le_bytes());
         bytes[0x188..0x18c].copy_from_slice(&0x200u32.to_le_bytes());
@@ -193,5 +241,10 @@ mod tests {
         let mut bytes = fixture(&[0xc3]);
         bytes[0xa8..0xac].copy_from_slice(&0x1200u32.to_le_bytes());
         assert!(Pe::parse(&bytes).unwrap().entry_bytes().is_err());
+    }
+
+    #[test]
+    fn rejects_use_of_unknown_entry_eax() {
+        assert!(decode_straight_line(&[0x05, 1, 0, 0, 0, 0xc3]).is_err());
     }
 }
