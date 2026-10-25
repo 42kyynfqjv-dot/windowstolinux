@@ -19,10 +19,12 @@ jobs:
           cargo run -- /tmp/w2l-fixture.exe /tmp/w2l-translated.rs
           rustc /tmp/w2l-translated.rs -o /tmp/w2l-translated
           set +e
-          /tmp/w2l-translated
+          /tmp/w2l-translated > /tmp/w2l-translated.stdout 2> /tmp/w2l-translated.stderr
           result=$?
           set -e
           test "$result" -eq 12
+          test ! -s /tmp/w2l-translated.stdout
+          test ! -s /tmp/w2l-translated.stderr
   authored-windows-fixture:
     runs-on: windows-latest
     steps:
@@ -35,6 +37,8 @@ jobs:
         run: |
           Write-Host "Windows version: $([System.Environment]::OSVersion.VersionString)"
           python scripts/make_pe32_fixture.py fixture.exe
-          $process = Start-Process -FilePath (Resolve-Path .\fixture.exe) -NoNewWindow -Wait -PassThru
+          $process = Start-Process -FilePath (Resolve-Path .\fixture.exe) -NoNewWindow -Wait -PassThru -RedirectStandardOutput original.stdout -RedirectStandardError original.stderr
           Write-Host "Original PE32 exit status: $($process.ExitCode)"
           if ($process.ExitCode -ne 12) { throw "Expected exit 12, got $($process.ExitCode)" }
+          if ((Get-Item original.stdout).Length -ne 0) { throw "Expected empty stdout" }
+          if ((Get-Item original.stderr).Length -ne 0) { throw "Expected empty stderr" }

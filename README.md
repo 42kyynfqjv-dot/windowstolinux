@@ -13,11 +13,11 @@ rustc translated.rs -o translated
 
 Only use independently authored or appropriately licensed fixtures. See [ARCHITECTURE.md](ARCHITECTURE.md) and [ROADMAP.md](ROADMAP.md) for boundaries and validation gates.
 
-The authored `scripts/make_pe32_fixture.py` builds an import-free PE32 that returns 12 from its entry point. CI executes it on the currently available GitHub hosted Windows runner and compares the expected exit code to the translated Linux ELF. This is a single modern Windows fixture, not evidence of Windows XP–7 compatibility.
+The authored `scripts/make_pe32_fixture.py` builds an import-free PE32 that returns 12 from its entry point. CI executes it on a GitHub hosted Windows Server 2025 runner and checks that the translated Linux ELF has the same exit status (12) and empty stdout/stderr. This is a single modern Windows fixture, not evidence of Windows XP–7 compatibility.
 
 ## Status
 
-M0 is in progress. M1 requires an executable Windows baseline and comparison of output and exit status. The 99% compatibility objective is aspirational and has no measured result.
+M0 and the narrow M1 fixture are in review. Only one authored fixture has been compared on modern Windows and Linux. The 99% compatibility objective is aspirational and has no measured corpus result.
 
 ## License
 
