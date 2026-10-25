@@ -247,4 +247,12 @@ mod tests {
     fn rejects_use_of_unknown_entry_eax() {
         assert!(decode_straight_line(&[0x05, 1, 0, 0, 0, 0xc3]).is_err());
     }
+
+    #[test]
+    fn rejects_every_truncated_fixture_prefix() {
+        let bytes = fixture(&[0xc3]);
+        for len in 0..bytes.len() {
+            assert!(Pe::parse(&bytes[..len]).is_err(), "accepted prefix {len}");
+        }
+    }
 }
