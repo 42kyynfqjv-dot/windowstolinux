@@ -21,7 +21,11 @@ Exact unprefixed `A1 moffs32` loads EAX from four validated immutable data bytes
 
 ## Status
 
-The reviewed foundation and bounded implementation are merged through SUB-545.
+The reviewed foundation and bounded implementation are merged through SUB-551.
+SUB-552 [runtime-input integration](research/input/INTEGRATION.md) is pending review.
+It adds one unchanged freestanding compiler program with 17 runtime scenarios;
+the generated ELF reads input at execution within the explicit bounded environment
+contract. This is separate from ordinary CRT startup.
 Current CI requires 12 unchanged compiler-program Windows/Linux comparisons,
 102 authored comparisons and 18 original-only launch checks. Four held-out
 capabilities (runtime arguments, ordinary CRT, file I/O and PE32+) remain rejected.
@@ -30,8 +34,7 @@ specified instruction policies. The 99% compatibility objective remains aspirati
 
 SUB-546 records a [no-go accessor closure decision](research/crt/ACCESSOR-CLOSURE.md).
 The isolated option, sentinel and external-cell research components do not close
-ordinary CRT startup. The next gate is a bounded runtime-specific accessor effect
-analysis. Historical checkpoints below describe earlier scopes; the latest linked
+ordinary CRT startup. The later lifetime/context analysis still leaves original startup blocked. Historical checkpoints below describe earlier scopes; the latest linked
 implementation contracts govern each added profile. Four historical Windows
 fixture timeouts remain unexplained; diagnostics and failure propagation remain enabled.
 

@@ -31,6 +31,11 @@ struct Section {
     virtual_size: u32,
     flags: u32,
 }
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Api {
+    Write,
+    Environment,
+}
 /// Private image context; translation validates every decoded path before emission.
 pub(crate) struct Candidate<'a> {
     bytes: &'a [u8],
@@ -40,6 +45,7 @@ pub(crate) struct Candidate<'a> {
     sections: Vec<Section>,
     metadata: Vec<(u32, u32)>,
     iat: u32,
+    api: Api,
     pointers: std::collections::BTreeMap<u32, u32>,
 }
 impl<'a> Candidate<'a> {
@@ -147,6 +153,7 @@ impl<'a> Candidate<'a> {
             sections: Vec::new(),
             metadata: Vec::new(),
             iat: 0,
+            api: Api::Write,
             pointers: Default::default(),
         };
         let mut next = rounded(headers)?;
@@ -268,17 +275,27 @@ impl<'a> Candidate<'a> {
             thunk != 0 && thunk & 0x80000000 == 0 && thunk.is_multiple_of(2),
             "linker named import",
         )?;
-        let np = self.reserve(thunk, 9, DATA)?;
+        // Select by fully bounded imported spelling. Failed selection never falls back.
+        let prefix = self.location(thunk, 3, DATA)?;
+        let (hint_name, dll): (&[u8], &[u8]) = if self.bytes[prefix + 2] == b'G' {
+            self.api = Api::Environment;
+            (b"GetEnvironmentVariableW\0", b"KERNEL32.dll\0")
+        } else {
+            (b"_write\0", b"msvcrt.dll\0")
+        };
+        let np = self.reserve(thunk, (2 + hint_name.len()) as u32, DATA)?;
+        // Hints are loader search accelerators, not function identity.
         need(
-            range(self.bytes, np, 9)? == b"\0\0_write\0",
+            range(self.bytes, np + 2, hint_name.len())? == hint_name,
             "linker hint/name",
         )?;
-        let dp = self.reserve(name, 11, DATA)?;
-        need(
-            range(self.bytes, dp, 11)? == b"msvcrt.dll\0",
-            "linker DLL name",
-        )
+        if self.api == Api::Write {
+            need(u16_at(self.bytes, np)? == 0, "write hint profile")?;
+        }
+        let dp = self.reserve(name, dll.len() as u32, DATA)?;
+        need(range(self.bytes, dp, dll.len())? == dll, "linker DLL name")
     }
+
     fn debug(&mut self, (rva, size): (u32, u32)) -> Result<(), String> {
         need(size == 28 && rva.is_multiple_of(4), "linker debug extent")?;
         let at = self.reserve(rva, size, DATA)?;
@@ -359,6 +376,7 @@ impl<'a> Candidate<'a> {
     }
 }
 
+mod input;
 mod translate;
 
 /// The capability can only be made by the checked, owned importless intake.
@@ -382,6 +400,7 @@ pub(crate) fn translate_importless(
         }],
         metadata: vec![],
         iat: 0,
+        api: Api::Write,
         pointers: std::collections::BTreeMap::new(),
     }
     .translate()

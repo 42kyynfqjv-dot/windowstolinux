@@ -5,6 +5,9 @@ use std::fmt::Write;
 include!("state.rs");
 impl Candidate<'_> {
     pub(crate) fn translate(&self) -> Result<String, String> {
+        if self.api == Api::Environment {
+            return super::input::translate(self);
+        }
         self.translate_checked()
             .map_err(|e| format!("linker intake validated; emission blocked: {e}"))
     }

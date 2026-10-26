@@ -1,5 +1,9 @@
 # SUB-551: isolated bounded native acquisition
 
+Historical design/component checkpoint: production integration is now specified in
+[SUB-552 INTEGRATION.md](INTEGRATION.md). Statements below about blocked emission
+refer to that earlier phase; these artifacts alone still grant no eligibility.
+
 `examples/bounded_input.rs` implements local Linux input acquisition for the frozen
 freestanding environment-input experiment. It is an isolated component, not
 emitted by the converter and not an eligibility certificate. The input PE and

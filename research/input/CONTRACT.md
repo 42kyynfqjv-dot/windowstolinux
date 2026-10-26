@@ -1,5 +1,9 @@
 # SUB-549: bounded runtime environment input
 
+Historical design/component checkpoint: production integration is now specified in
+[SUB-552 INTEGRATION.md](INTEGRATION.md). Statements below about blocked emission
+refer to that earlier phase; these artifacts alone still grant no eligibility.
+
 This is a new freestanding capability track. Ordinary CRT startup and the four
 remaining held-out conversions remain blocked. The C program has an explicit
 custom entry; it does not replace the entry of an existing CRT program. Production

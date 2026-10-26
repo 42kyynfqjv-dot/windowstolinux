@@ -67,3 +67,11 @@ never by fallback after a failed check. Transitions commit machine state only af
 success. Bounds, tags and initialization are checked on every path. This adds no
 observable absolute ESP, general memory or Windows loader runtime. See
 SUB531-LOCAL-IMPLEMENTATION.md for validation and conditional execution assumptions.
+
+
+The [SUB-552 input profile](research/input/INTEGRATION.md) adds a separate private
+production certificate after linker metadata validation. Its IR carries symbolic
+unknown runtime values and tagged stack ownership; path-specific modular predicate
+refinement proves initialized full reads before deterministic native emission.
+Acquisition is a shared native API effect, while application operations come from
+decoded instructions. No test model/report can confer this capability.
