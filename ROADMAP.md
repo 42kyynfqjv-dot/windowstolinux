@@ -285,3 +285,9 @@ for unchanged guard_join, requiring17new Windows/ELF input comparisons.
 All51original diversity scenarios remain; squares/helper retain explicit rejection
 pending nonlinear value and pointer-call ownership designs. Medium production review
 precedes merge. No fixture-result or graph-stencil admission is introduced.
+
+SUB-556: bounded nonlinear scalar design/model in
+`research/input/scalar/NONLINEAR.md`; eight new test functions and same-artifact
+seven-form inventory. Production squares/helper still reject. Next gate is medium
+contract review before private expression/proof/emitter integration and actual
+unchanged squares Windows/ELF evidence. See document for resource and proof limits.
