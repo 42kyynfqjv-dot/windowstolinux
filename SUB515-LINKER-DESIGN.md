@@ -164,6 +164,25 @@ Actual Windows compiler measurement additionally records model mapping/relocatio
 reports and dumpbin /relocations. No PE patching or decoder bypass; no extra Linux
 comparison for the rejected compiler programs. Reports only, no binary redistribution.
 
+Observed CI [40269206888](https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/40269206888)
+at 46e8af9c3390b91127db5d274bdf6bce24e76545: all four jobs passed. MSVC
+19.51.36260.0 / LINK 14.51.36260.0, Windows Server 2025 NT10.0.26100.0. Independent
+model and dumpbin agree on one page-0x1000 relocation block of size 12, records
+0x3004 and 0x300c (two HIGHLOWs, no padding). Original field at RVA 0x1004 is
+0x402008, the PUSH buffer operand; field at RVA 0x100c is 0x402000, the FF15 IAT
+operand. These correspond to normalized RVAs 0x2008 and 0x2000. This observed
+disassembly correspondence is not a production decoder-binding proof.
+
+Debug type 13 has payload RVA 0x2044, file offset 0x644, size 0xbc, ending exactly
+at import descriptor RVA 0x2100. IAT occupies [0x2000,0x2008); Hello occupies
+[0x2008,0x200d). These adjacent ranges are disjoint. The model accepts the unchanged
+image structurally; production still rejects directory 5. Ordinary CRT output
+still rejects its four-section layout. Both Windows originals emit Hello, empty
+stderr, exit 0; neither produces a translated ELF. The 102 existing comparisons,
+46 root tests, 43 evaluation functions (27 inherited) and 14 new prototype tests
+passed. [Text/JSON artifact](https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/40269206888/artifacts/12627179619).
+This is a historical measured commit; the PR/Linear checkpoint records final-head CI.
+
 After medium review, bounded production integration requires:
 
 1. Rust image-scoped range/role/ownership types; exact policies/diagnostics and
