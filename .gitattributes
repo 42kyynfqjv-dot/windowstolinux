@@ -9,3 +9,4 @@ research/crt/option-state-vectors.json text eol=lf
 research/crt/*onexit*.py text eol=lf
 research/crt/*sentinel*.py text eol=lf
 research/crt/sentinel-vectors.json text eol=lf
+research/crt/*commode*.py text eol=lf
