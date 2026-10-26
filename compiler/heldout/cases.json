@@ -1,0 +1,95 @@
+[
+  {
+    "kind": "held_args",
+    "source": "compiler/heldout/args.c",
+    "profile": "crt",
+    "arch": "x86",
+    "args": [
+      "A",
+      "B"
+    ],
+    "stdout_hex": "41726773",
+    "stderr_hex": "",
+    "exit": 68,
+    "files": {}
+  },
+  {
+    "kind": "held_loop",
+    "source": "compiler/heldout/loop.c",
+    "profile": "custom",
+    "arch": "x86",
+    "args": [],
+    "stdout_hex": "",
+    "stderr_hex": "",
+    "exit": 10,
+    "files": {}
+  },
+  {
+    "kind": "held_array",
+    "source": "compiler/heldout/array.c",
+    "profile": "custom",
+    "arch": "x86",
+    "args": [],
+    "stdout_hex": "",
+    "stderr_hex": "",
+    "exit": 9,
+    "files": {}
+  },
+  {
+    "kind": "held_buffer",
+    "source": "compiler/heldout/buffer.c",
+    "profile": "custom",
+    "arch": "x86",
+    "args": [],
+    "stdout_hex": "",
+    "stderr_hex": "",
+    "exit": 132,
+    "files": {}
+  },
+  {
+    "kind": "held_structure",
+    "source": "compiler/heldout/structure.c",
+    "profile": "custom",
+    "arch": "x86",
+    "args": [],
+    "stdout_hex": "",
+    "stderr_hex": "",
+    "exit": 12,
+    "files": {}
+  },
+  {
+    "kind": "held_crt",
+    "source": "compiler/heldout/crt.c",
+    "profile": "crt",
+    "arch": "x86",
+    "args": [],
+    "stdout_hex": "435254",
+    "stderr_hex": "",
+    "exit": 0,
+    "files": {}
+  },
+  {
+    "kind": "held_file",
+    "source": "compiler/heldout/file.c",
+    "profile": "crt",
+    "arch": "x86",
+    "args": [],
+    "stdout_hex": "44617461",
+    "stderr_hex": "",
+    "exit": 0,
+    "files": {
+      "held.txt": "44617461"
+    }
+  },
+  {
+    "kind": "held_pe32plus",
+    "source": "compiler/heldout/crt.c",
+    "profile": "crt",
+    "arch": "x64",
+    "args": [],
+    "stdout_hex": "435254",
+    "stderr_hex": "",
+    "exit": 0,
+    "files": {}
+  }
+]
