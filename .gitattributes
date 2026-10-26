@@ -21,3 +21,7 @@ research/input/diversity/*.py text eol=lf
 research/input/diversity/*.json text eol=lf
 
 research/input/scalar/*.py text eol=lf
+
+# Frozen held-out input vectors must retain preregistered bytes on Windows.
+research/input/heldout/*.json text eol=lf
+research/input/heldout/*.py text eol=lf

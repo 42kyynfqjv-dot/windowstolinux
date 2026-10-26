@@ -1,0 +1,358 @@
+[
+  {
+    "name": "shared",
+    "vectors": [
+      {
+        "value": null,
+        "exit": 200,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "",
+        "exit": 200,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "0",
+        "exit": 0,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "7",
+        "exit": 14,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "42",
+        "exit": 46,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "07",
+        "exit": 7,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "99",
+        "exit": 108,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "a",
+        "exit": 202,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "0/",
+        "exit": 202,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "123",
+        "exit": 201,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "1234",
+        "exit": 201,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "12345",
+        "exit": 201,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "９",
+        "exit": 202,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "😀",
+        "exit": 202,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      }
+    ]
+  },
+  {
+    "name": "nested",
+    "vectors": [
+      {
+        "value": null,
+        "exit": 200,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "",
+        "exit": 200,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "0",
+        "exit": 0,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "7",
+        "exit": 7,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "42",
+        "exit": 42,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "07",
+        "exit": 7,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "99",
+        "exit": 99,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "a",
+        "exit": 202,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "0/",
+        "exit": 202,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "123",
+        "exit": 201,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "1234",
+        "exit": 201,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "12345",
+        "exit": 201,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "９",
+        "exit": 202,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "😀",
+        "exit": 202,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      }
+    ]
+  },
+  {
+    "name": "composed",
+    "vectors": [
+      {
+        "value": null,
+        "exit": 200,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "",
+        "exit": 200,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "0",
+        "exit": 6,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "7",
+        "exit": 20,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "42",
+        "exit": 90,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "07",
+        "exit": 20,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "99",
+        "exit": 204,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "a",
+        "exit": 202,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "0/",
+        "exit": 202,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "123",
+        "exit": 201,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "1234",
+        "exit": 201,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "12345",
+        "exit": 201,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "９",
+        "exit": 202,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "😀",
+        "exit": 202,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      }
+    ]
+  },
+  {
+    "name": "larger",
+    "vectors": [
+      {
+        "value": null,
+        "exit": 200,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "",
+        "exit": 200,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "0",
+        "exit": 0,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "7",
+        "exit": 7,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "42",
+        "exit": 6,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "07",
+        "exit": 7,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "99",
+        "exit": 18,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "a",
+        "exit": 202,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "0/",
+        "exit": 202,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "123",
+        "exit": 6,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "1234",
+        "exit": 10,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "12345",
+        "exit": 201,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "９",
+        "exit": 202,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      {
+        "value": "😀",
+        "exit": 202,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      }
+    ]
+  }
+]

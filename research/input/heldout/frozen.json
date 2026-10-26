@@ -1,0 +1,36 @@
+{
+  "scope": "SUB-560 preregistered before compiler/converter evaluation; no support changes",
+  "configurations": {
+    "O1": [
+      "/O1"
+    ],
+    "O2": [
+      "/O2"
+    ]
+  },
+  "compile_flags": [
+    "/nologo",
+    "/Bv",
+    "/W4",
+    "/GS-",
+    "/Zl",
+    "/c"
+  ],
+  "link_flags": [
+    "/nologo",
+    "/machine:x86",
+    "/subsystem:console",
+    "/nodefaultlib",
+    "/entry:entry@0"
+  ],
+  "libraries": [
+    "kernel32.lib"
+  ],
+  "sha256": {
+    "cases.json": "de6d683b33878a2eb2edda74a42b081cbab114fc4fd8133f0414fb2ff733ba4e",
+    "composed.c": "4f9093a20a358e52fb9d8abd6448da26fd6eb0d142e789438511abe15d551f24",
+    "larger.c": "46044ce4640ea552489bbe09b2926d827c6d3fddec6865b63e9830c948dfbeb0",
+    "nested.c": "9d21cae758dfae61027851175b8b0f2e9a3c6ad8789cb8404f621037eee0c452",
+    "shared.c": "75b4203b6fd851d77bfdf30e0e4921eb474019260f521ffc251b99b627e1830e"
+  }
+}
