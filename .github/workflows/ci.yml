@@ -11,7 +11,7 @@ jobs:
         with:
           components: clippy, rustfmt
       - run: cargo fmt --check
-      - run: rustfmt --check src/linker/state.rs src/inspection/read_state.rs src/inspection/loop_state.rs
+      - run: rustfmt --check src/linker/state.rs src/inspection/read_state.rs src/inspection/loop_state.rs src/linker/input/acquisition.rs
       - run: cargo clippy --all-targets --locked -- -D warnings
       - run: cargo test --locked
       - run: python3 -m unittest discover -s research/crt -p test_runtime_identity.py -v
@@ -52,6 +52,7 @@ jobs:
           python3 tools/check_byte_production.py
           python3 tools/check_image_read_production.py
           python3 tools/check_finite_loop_production.py
+          python3 tools/check_input_production.py
           python3 scripts/check_imported_output.py
           python3 corpus/check.py
           rustfmt --check tools/output-probe.rs
@@ -318,9 +319,13 @@ jobs:
           python3 research/input/check_model.py evidence --compare
           cargo build --locked --example bounded_input
           python3 research/input/check_acquisition.py evidence
+          python3 research/input/check_translation.py evidence
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: native-input-acquisition
-          path: evidence/input-acquisition.json
+          path: |
+            evidence/input-acquisition.json
+            evidence/input-translation.json
+            evidence/input-native.rs
           if-no-files-found: warn

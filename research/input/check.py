@@ -1,4 +1,4 @@
-"""Frozen independent expectations: original Windows vs separate native prototype."""
+"""Frozen original baseline; separate prototype and production conversion evidence."""
 import argparse, hashlib, json, os, subprocess
 from pathlib import Path
 ap=argparse.ArgumentParser();ap.add_argument('evidence',type=Path);ap.add_argument('--compare',action='store_true');a=ap.parse_args()
@@ -28,6 +28,6 @@ if a.compare:
 else:
     assert sha(exe)==before
     converter=run([str(repo/'target/debug/w2l.exe'),str(exe),str(root/'input-generated.rs')])
-    assert converter.returncode==1,('expected explicit rejection',converter.returncode,converter.stderr)
-    report=dict(sources=sources,pe_sha256=before,compile_flags=flags,link_flags=link,observations=results,conversion_accepted=False,converter_error=converter.stderr.decode(errors='replace'),emission_allowed=False)
-    (root/'input-contract.json').write_text(json.dumps(report,indent=2)+'\n');print('INPUT_CONTRACT: 17 original observations; production rejected')
+    assert converter.returncode==0,('production admission failed',converter.returncode,converter.stderr)
+    report=dict(sources=sources,pe_sha256=before,compile_flags=flags,link_flags=link,observations=results,conversion_accepted=True,generated_sha256=sha(root/'input-generated.rs'),emission_allowed=True)
+    (root/'input-contract.json').write_text(json.dumps(report,indent=2)+'\n');print('INPUT_CONTRACT: 17 original observations; production source emitted (Linux execution checked separately)')

@@ -1,5 +1,9 @@
 # SUB-550: guarded unknown-input proof
 
+Historical design/component checkpoint: production integration is now specified in
+[SUB-552 INTEGRATION.md](INTEGRATION.md). Statements below about blocked emission
+refer to that earlier phase; these artifacts alone still grant no eligibility.
+
 This is a test-only, conditional proof for the exact frozen input program. It
 constructs no production certificate, emits no program and does not activate an
 API shim. Original CRT and the new input PE remain conversion rejected.

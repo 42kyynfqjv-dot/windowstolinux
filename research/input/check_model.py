@@ -7,7 +7,7 @@ def main():
     ap=argparse.ArgumentParser();ap.add_argument('evidence',type=Path);ap.add_argument('--compare',action='store_true');a=ap.parse_args();root=a.evidence
     b=(root/'input.exe').read_bytes();sha=lambda b:hashlib.sha256(b).hexdigest()
     prior=json.loads((root/'input-contract.json').read_text(encoding='utf-8'))
-    assert sha(b)==prior['pe_sha256'] and prior['conversion_accepted'] is False
+    assert sha(b)==prior['pe_sha256']
     p=struct.unpack_from('<I',b,60)[0];o=p+24;t=o+struct.unpack_from('<H',b,p+20)[0]
     assert struct.unpack_from('<H',b,p+4)[0]==0x14c and struct.unpack_from('<H',b,o)[0]==0x10b
     assert struct.unpack_from('<I',b,o+28)[0]==0x400000 and struct.unpack_from('<I',b,o+16)[0]==0x1000
@@ -46,5 +46,5 @@ def main():
     path=root/'input-model.json'
     if a.compare:assert json.loads(path.read_text(encoding='utf-8'))==json.loads(json.dumps(out))
     else:path.write_text(json.dumps(out,indent=2)+'\n')
-    print('INPUT_MODEL: complete result intervals, guarded reads, production blocked')
+    print('INPUT_MODEL: complete result intervals, guarded reads; model grants no emission authority')
 if __name__=='__main__':main()

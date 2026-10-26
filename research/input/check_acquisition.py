@@ -21,7 +21,7 @@ assert results==prior['observations']
 for env in [{b'W2L_INPUT':b'\xff'}, {b'w2l_input':b'7'}, {b'W2L_INPUT':b'7',b'w2l_input':b'42'}, {b'OTHER':b'x'*4097}, {b'W2L_\xc4\xb1NPUT':b'7'}]:
     r=subprocess.run([os.fsencode(exe)],env=env,capture_output=True,timeout=10)
     assert (r.returncode,r.stdout,r.stderr)==(203,b'',b'')
-out=dict(component_sha256=sha(source),binary_sha256=sha(exe),pe_sha256=prior['pe_sha256'],
+out=dict(component_sha256=sha(source),acquisition_sha256=sha(repo/'src/linker/input/acquisition.rs'),binary_sha256=sha(exe),pe_sha256=prior['pe_sha256'],
          observations=results,linux_host_rejections=5,source='initial /proc/self/environ',
          separate_component=True,conversion_accepted=False)
 (a.evidence/'input-acquisition.json').write_text(json.dumps(out,indent=2)+'\n')

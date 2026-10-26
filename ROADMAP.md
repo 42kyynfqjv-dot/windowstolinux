@@ -252,3 +252,14 @@ using an explicit stable initial-environment/procfs domain. Eight component test
 17 inherited Windows/component comparisons and five Linux host rejections remain
 separate from translation evidence. Next medium review, then private production
 state/ownership integration with actual unchanged input PE conversion gates.
+
+
+SUB-552 adds [production runtime-input integration](research/input/INTEGRATION.md):
+checked import/relocation admission, symbolic unknown lengths/UTF16 values, guarded
+owned buffers and mechanically emitted native operations. CI now requires the
+same unchanged input PE to match Windows in all 17 frozen runtime scenarios, with
+identical Rust across hosts/converter environments. This is one new compiler
+program, additional to the prior 12. Separate component/model counts are retained.
+Next: substantive medium production/provenance review before merge, then evaluate
+unknown-state composition diversity. Ordinary CRT, four older held-out programs,
+general memory/loops and PE32+ remain outside this input capability.
