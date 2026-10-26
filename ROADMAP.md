@@ -196,3 +196,9 @@ See [SUB535-IMAGE-READ-IMPLEMENTATION.md](SUB535-IMAGE-READ-IMPLEMENTATION.md).
 CI now requires unchanged held_array same-PE Windows/Linux empty output/exit9:
 eleven compiler programs total, five held-out rejections. Next medium production
 and provenance review; loops/general memory/CRT remain separate capability gates.
+
+SUB-536 designs the exact frozen summation loop under
+[SUB536-FINITE-LOOP-DESIGN.md](SUB536-FINITE-LOOP-DESIGN.md): rank N-i, stable typed
+bound, unsigned comparisons and explicit step/exit gates. Eight independent model
+functions and unchanged-artifact traces are test-only evidence; production loop
+rejection remains. Medium contract review precedes a separate implementation gate.
