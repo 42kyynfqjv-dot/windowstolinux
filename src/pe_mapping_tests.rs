@@ -303,3 +303,25 @@ fn exact_absolute_load_policy_and_production_negative_addresses() {
         assert!(Pe::parse(&with_code(&bytes)).unwrap().translate().is_err());
     }
 }
+
+#[test]
+fn immutable_context_stays_bound_to_each_image_and_file_mapping() {
+    let mut code = load_code(0x402000);
+    code.extend([0x05, 5, 0, 0, 0, 0xc3]);
+    let mut first = with_code(&code);
+    put(&mut first, 0x400, 7);
+    let mut second = with_code(&code);
+    second.resize(0x800, 0);
+    put(&mut second, 0x1b4, 0x600);
+    put(&mut second, 0x600, 9);
+    put(&mut second, 0x400, 99); // Stale original file offset must not be consulted.
+    let a = Pe::parse(&first).unwrap();
+    let b = Pe::parse(&second).unwrap();
+    let expected_a = control::translate(&[0xb8, 7, 0, 0, 0, 0x05, 5, 0, 0, 0, 0xc3]).unwrap();
+    let expected_b = control::translate(&[0xb8, 9, 0, 0, 0, 0x05, 5, 0, 0, 0, 0xc3]).unwrap();
+    for _ in 0..3 {
+        assert_eq!(a.translate().unwrap(), expected_a);
+        assert_eq!(b.translate().unwrap(), expected_b);
+    }
+    assert_ne!(expected_a, expected_b);
+}

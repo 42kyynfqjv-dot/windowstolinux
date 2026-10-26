@@ -21,7 +21,7 @@ Exact unprefixed `A1 moffs32` loads EAX from four validated immutable data bytes
 
 ## Status
 
-M0, M1 and the bounded M2 slice are in draft review. CI exercises 62 authored Windows/Linux cases, including taken and untaken outcomes for each supported branch. The [strict iced production adapter](docs/DECODER-INTEGRATION.md) preserves the exact subset and is compared against a handwritten test oracle. The 99% compatibility objective is aspirational and has no measured corpus result.
+M0, M1 and the bounded M2 slice are in draft review. CI exercises 63 authored Windows/Linux cases, including taken and untaken outcomes for each supported branch. The [strict iced production adapter](docs/DECODER-INTEGRATION.md) preserves the exact subset and is compared against a handwritten test oracle. The 99% compatibility objective is aspirational and has no measured corpus result.
 
 ## License
 

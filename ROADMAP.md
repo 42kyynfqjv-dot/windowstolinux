@@ -7,7 +7,7 @@
 - M4–M7 Windows APIs, advanced execution, instrumentation and desktop behavior remain open.
 - M8–M10 x64, representative corpus, optimization and reproducible releases remain open.
 
-Current production evidence:62 authored Windows Server2025/Linux cases. This is
+Current production evidence:63 authored Windows Server2025/Linux cases. This is
 not XP/7 validation or application compatibility; the99% objective is aspirational.
 No milestone is complete merely because generated Rust compiles.
 
@@ -26,11 +26,14 @@ both words must be cleaned before entry RET. Existing fixture arithmetic and
 intermediate-result branches were inspected against the actual emitted paths.
 
 SUB-509 implements the bounded two-section profile in [SUB509-MAPPING.md](SUB509-MAPPING.md).
-The new authored image retains helper exit12; read-only bytes remain unobservable.
+The SUB-509 image retains helper exit12; data became observable in SUB-510.
 SUB-510 now implements exact A1 immutable EAX loads with complete four-byte
 VA/RVA/file provenance and preferred-base/flat-DS/no-fault assumptions; see
 [SUB510-IMMUTABLE-LOAD.md](SUB510-IMMUTABLE-LOAD.md). Data can now affect bounded
-program results. Next medium review audits context, whole-width bounds, flags,
-independent fixtures and final CI. Afterward separately design the smallest
-observable output/import/API gate. General memory, writes, dynamic pointers and
-rebasing remain unsupported. Server2025 evidence does not validate XP/7.
+program results. Medium review reproduced no defect and adds cross-image/context
+isolation plus changed-data native evidence. Next SUB-511 designs the smallest
+imported console-output contract on Astra High, followed by medium contract review.
+Compare primary CRT/Win32 contracts and specify exact output, import/IAT policy,
+calling convention, immutable buffers, clobbers and error/short-write behavior.
+Production integration requires separate bounded gates. General memory, writes,
+dynamic pointers and rebasing remain unsupported; Server2025 is not XP/7 evidence.

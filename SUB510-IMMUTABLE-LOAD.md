@@ -86,3 +86,24 @@ all-path resolution, unaligned fault preconditions, flags, fixture independence 
 unchanged prior emission. Resolve confirmed gaps within this slice before designing
 an output/import/API gate. General memory, writes, dynamic pointers and APIs remain
 unsupported. No remaining architecture blocker identified within this contract.
+
+## Medium review
+
+No production defect reproduced in the CLI Pe-bound resolver or whole-width bounds.
+The internal resolver closure is an explicit trusted boundary, not a type-level
+proof against arbitrary future callers. Current production captures the same Pe
+for its code and data and caches no resolved values between images. A new test
+alternates two PEs with identical code but different data and raw offsets, placing
+a decoy at the old file offset; generated source must match each independent
+literal EAX value. The new data_sum_alt fixture keeps data_sum code identical but
+changes the word7 to9, requiring exit14 versus12 on Windows and Linux.
+
+Current43 root functions; isolated36 =24 inherited control/stack+6 comparisons+6
+design tests. Native fixture count63. Preferred-base/flat-DS/immutability/no-fault
+and disabled alignment-check assumptions remain explicit and conditional.
+
+Next SUB-511 is an Astra High design gate for one imported output function and
+exact observable bytes. Compare documented CRT _write with Win32 output contracts,
+choose the smallest truthful boundary, and specify imports/IAT, calling convention,
+buffer provenance, clobbers and error/short-write behavior before implementation.
+Return to medium contract review; no API or general-memory support is added here.

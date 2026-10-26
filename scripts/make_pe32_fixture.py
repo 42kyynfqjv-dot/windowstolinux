@@ -125,6 +125,8 @@ def load_data(offset: int = 0) -> bytes:
 
 DATA_WORDS = {"data_sum": (0, 7), "data_unaligned": (1, 7), "data_last": (12, 255), "data_wrap": (0, 0xffffffff)}
 CASES["data_sum"] = load_data() + add_eax(5) + b"\xc3"
+CASES["data_sum_alt"] = CASES["data_sum"]
+DATA_WORDS["data_sum_alt"] = (0, 9)
 CASES["data_unaligned"] = load_data(1) + add_eax(5) + b"\xc3"
 CASES["data_last"] = load_data(12) + b"\xc3"
 CASES["data_wrap"] = load_data() + add_eax(3) + b"\xc3"
