@@ -16,6 +16,7 @@ jobs:
       - run: cargo test --locked
       - run: cargo build --locked --example crt_graph
       - run: python3 research/crt/check_graph.py
+      - run: python3 -m unittest discover -s research/crt -p test_initializer_model.py -v
       - run: python3 scripts/check_fixture_manifest.py
       - run: python3 -m unittest discover -s tools -p test_linker_intake.py -v
       - run: python3 -m unittest discover -s tools -p test_permissioned_intake.py -v
@@ -239,6 +240,8 @@ jobs:
         run: |
           cargo run --locked --example crt_graph -- "${{ runner.temp }}/w2l-compiler-measurement/held_crt.exe" | Out-File -Encoding ascii "${{ runner.temp }}/w2l-compiler-measurement/crt-graph.json"
           if ($LASTEXITCODE -ne 0) { throw 'CRT graph exploration failed' }
+      - name: Bind initializer callback evidence
+        run: python research/crt/callback_inventory.py "${{ runner.temp }}/w2l-compiler-measurement"
       - name: Inventory ordinary CRT dependencies without emission
         run: python research/crt/inventory.py "${{ runner.temp }}/w2l-compiler-measurement"
       - uses: actions/upload-artifact@v4
@@ -279,3 +282,4 @@ jobs:
           python3 research/crt/inventory.py evidence --compare
           cargo run --locked --example crt_graph -- evidence/held_crt.exe > /tmp/crt-graph.json
           python3 -c 'import json; assert json.load(open("/tmp/crt-graph.json")) == json.load(open("evidence/crt-graph.json"))'
+          python3 research/crt/callback_inventory.py evidence --compare
