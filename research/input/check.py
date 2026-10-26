@@ -4,7 +4,7 @@ from pathlib import Path
 ap=argparse.ArgumentParser();ap.add_argument('evidence',type=Path);ap.add_argument('--compare',action='store_true');a=ap.parse_args()
 repo=Path(__file__).resolve().parents[2];src=repo/'research/input';root=a.evidence
 sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()
-vectors=json.loads((src/'vectors.json').read_text());sources={n:sha(src/n) for n in ['program.c','prototype.rs','vectors.json','check.py']}
+vectors=json.loads((src/'vectors.json').read_text(encoding='utf-8'));sources={n:sha(src/n) for n in ['program.c','prototype.rs','vectors.json','check.py']}
 def run(args,**kw):return subprocess.run(args,capture_output=True,timeout=30,**kw)
 if not a.compare:
     flags=['/nologo','/Bv','/O2','/W4','/GS-','/Zl','/c',str(src/'program.c'),'/Foinput.obj']
@@ -13,7 +13,7 @@ if not a.compare:
         p=run(args,cwd=root);(root/('input-'+name+'.txt')).write_bytes(p.stdout+p.stderr);assert p.returncode==0,(name,p.stderr)
     exe=root/'input.exe';before=sha(exe)
 else:
-    old=json.loads((root/'input-contract.json').read_text());assert old['sources']==sources and sha(root/'input.exe')==old['pe_sha256']
+    old=json.loads((root/'input-contract.json').read_text(encoding='utf-8'));assert old['sources']==sources and sha(root/'input.exe')==old['pe_sha256']
     exe=root/'input-prototype';p=run(['rustc','--edition=2021',str(src/'prototype.rs'),'-o',str(exe)]);assert p.returncode==0,p.stderr
 results=[]
 for v in vectors:

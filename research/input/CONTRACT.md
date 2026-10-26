@@ -128,3 +128,11 @@ These 17 prototype comparisons add no converter compatibility cases. Modern
 Windows observations establish no XP/7 claim. Four prior timeout causes remain
 unresolved. Full CRT effects, general heap/global memory, arbitrary loops, files,
 PE32+ and general Windows environment semantics are outside this gate.
+
+Development evidence: initial CI40383503193 failed the surrogate-pair case
+(exit201 instead of202). The initial UTF-8 JSON contained literal Unicode and
+Python's default Windows text decoding misinterpreted it. For example the four
+UTF-8 bytes of the emoji decode as four code points under CP1252. The later
+ASCII-escaped manifest passed; the harness now explicitly reads UTF-8 as well.
+Expected results were unchanged. This was a harness encoding defect, not an API
+semantic adjustment or another historical process timeout.
