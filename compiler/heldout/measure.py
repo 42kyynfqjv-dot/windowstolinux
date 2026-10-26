@@ -60,6 +60,8 @@ for case in manifest:
     p=subprocess.run([str(repo/'target/debug/w2l.exe'),str(pe),str(rust)],capture_output=True,timeout=15)
     assert p.returncode in (0,1),p.stderr
     accepted=p.returncode==0
+    expected_accepted=json.loads((repo/'compiler/heldout/conversion.json').read_text())['accepted']
+    assert accepted == (name in expected_accepted),(name,p.stderr)
     if not accepted:
         assert rust.read_bytes()==b'preserve';rust.unlink()
     result=dict(case,freeze_commit=FREEZE,source_sha256=sha(original_source),sha256=sha(before),

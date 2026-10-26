@@ -541,7 +541,7 @@ fn nested_copy_store_tail_context_and_atomic_rejection() {
     assert_eq!(s.pc, 0);
     assert_eq!(s.eax, Value::Integer(12));
     s.step(Op::StoreSecond, 0, &mut no_output).unwrap();
-    s.step(Op::StoreFirst, 0, &mut no_output).unwrap();
+    s.step(Op::StoreFour(12), 0, &mut no_output).unwrap();
     let before = s.words.clone();
     let flags = s.flags;
     s.step(Op::Tail(0x1040), 0x1080, &mut no_output).unwrap();
@@ -573,7 +573,7 @@ fn nested_copy_store_tail_context_and_atomic_rejection() {
             let before = copy.words.clone();
             assert!(copy.step(Op::CopyArgument, 13, &mut no_output).is_err());
             assert_eq!(copy.words, before);
-            for op in [Op::StoreFirst, Op::StoreSecond, Op::Tail(0x1040)] {
+            for op in [Op::StoreFour(12), Op::StoreSecond, Op::Tail(0x1040)] {
                 let mut t = State::new(0);
                 for op in [Op::Push(5), Op::Push(7), Op::Call(20)] {
                     t.step(op, 5, &mut no_output).unwrap();

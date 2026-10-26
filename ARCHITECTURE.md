@@ -49,3 +49,21 @@ six exact scalar forms in [SUB524-CONDITIONAL-IMPLEMENTATION.md](SUB524-CONDITIO
 Internal calls retain decoded effects; external _write invalidates volatile
 ECX/EDX and flags. New argument loads and arithmetic require scalar tags, with
 complete separate all-path states and unchanged ownership/resource barriers.
+
+SUB-531 adds a private owned `Importless` intake capability distinct from inspection
+JSON. For the existing DLL8540 family, an absent import directory explicitly selects
+semantic importless intake; an advertised import selects the strict imported profile.
+Failures are never retried against another parser. Closed debug13 is the only optional
+directory; only file-backed RX code and immutable sections are permitted. Only code
+bytes reach the existing graph/state proof: no absolute data or IAT capability is
+exposed. All paths must validate before constructing private `ProvenProgram` for
+emission. Inspection still always reports false emission eligibility.
+
+The shared validator/generated runtime adds Local(owner,token,Option<u32>) and explicit
+per-invocation boundary/allocation state. Eight-byte allocation, exact scalar stores,
+load/add and cleanup follow SUB530-LOCAL-FRAME-DESIGN.md. Overlapping [ESP+4] load/store
+and ADD ESP8 operations select local versus argument semantics from allocation state,
+never by fallback after a failed check. Transitions commit machine state only after
+success. Bounds, tags and initialization are checked on every path. This adds no
+observable absolute ESP, general memory or Windows loader runtime. See
+SUB531-LOCAL-IMPLEMENTATION.md for validation and conditional execution assumptions.

@@ -305,10 +305,24 @@ impl<'a> Pe<'a> {
 }
 
 fn translate_image(bytes: &[u8]) -> Result<String, String> {
-    // Select the strict linker profile before parsing; never retry a failed parse.
+    // Explicit header/directory dispatch; a failed selected profile is never retried.
     let pe = u32_at(bytes, 0x3c)? as usize;
     let characteristics = pe.checked_add(24 + 70).ok_or("header offset overflow")?;
     if u16_at(bytes, characteristics)? == 0x8540 {
+        let optional = usize::from(u16_at(bytes, pe + 20)?);
+        range(bytes, pe + 24, optional)?;
+        if optional < 96 {
+            return Err("short optional header".into());
+        }
+        let count = u32_at(bytes, pe + 24 + 92)? as usize;
+        if count > 16 || 96 + count * 8 > optional {
+            return Err("directory count".into());
+        }
+        let importless =
+            count < 2 || (u32_at(bytes, pe + 24 + 104)? == 0 && u32_at(bytes, pe + 24 + 108)? == 0);
+        if importless {
+            return inspection::Importless::parse(bytes.to_vec())?.translate();
+        }
         return linker::Candidate::parse(bytes)?.translate();
     }
     Pe::parse(bytes)?.translate()

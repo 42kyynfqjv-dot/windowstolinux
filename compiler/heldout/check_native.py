@@ -14,6 +14,7 @@ expected={c['kind']:c for c in cases}
 def sha(path):return hashlib.sha256(path.read_bytes()).hexdigest()
 for report in reports:
     name=report['kind'];case=expected[name]
+    assert report['conversion_accepted'] == (name in json.loads(Path('compiler/heldout/conversion.json').read_text())['accepted'])
     for key,value in case.items():assert report[key]==value
     assert sha(Path(case['source']))==report['source_sha256']
     pe=root/(name+'.exe');assert sha(pe)==report['sha256']
@@ -36,4 +37,4 @@ for report in reports:
             p=subprocess.run([str(native)]+case['args'],cwd=work,stdout=out,stderr=err,timeout=15)
         assert ((work/'stdout').read_bytes().hex(),(work/'stderr').read_bytes().hex(),p.returncode)==(case['stdout_hex'],case['stderr_hex'],case['exit'])
         assert {n:(work/n).read_bytes().hex() for n in case['files']}==case['files']
-        print('HELD_SAME_PE_NATIVE',name,report['sha256'],report['rust_sha256'])
+        print('HELD_SAME_PE_NATIVE',name,report['sha256'],report['rust_sha256'],json.dumps(dict(stdout_hex=(work/'stdout').read_bytes().hex(),stderr_hex=(work/'stderr').read_bytes().hex(),exit=p.returncode)))

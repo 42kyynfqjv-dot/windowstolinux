@@ -31,6 +31,7 @@ jobs:
           python3 tools/check_compiler_subset.py
           python3 tools/check_conditional_production.py
           python3 tools/check_nested_production.py
+          python3 tools/check_local_production.py
           python3 scripts/check_imported_output.py
           python3 corpus/check.py
           rustfmt --check tools/output-probe.rs
@@ -217,7 +218,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Held-out x64 measurement failed' }
       - name: Validate design-only permissioned intake against all held-out originals
         run: python tools/check_permissioned_corpus.py "${{ runner.temp }}/w2l-compiler-measurement"
-      - name: Check scalar local-frame design against unchanged compiler artifact
+      - name: Check scalar local-frame contract against unchanged compiler artifact
         run: python tools/check_local_frame_contract.py "${{ runner.temp }}/w2l-compiler-measurement"
       - uses: actions/upload-artifact@v4
         if: always()

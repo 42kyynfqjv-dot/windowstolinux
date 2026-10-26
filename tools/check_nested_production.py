@@ -22,7 +22,7 @@ with tempfile.TemporaryDirectory() as tmp:
     def execute(code,expected):
         p=convert(code);assert p.returncode==0,p.stderr
         source=rs.read_bytes();assert convert(code).returncode==0 and rs.read_bytes()==source
-        for text in ['Op::CopyArgument','Op::StoreFirst','Op::StoreSecond','Op::Tail(4160)','Op::Equal(4203)']:
+        for text in ['Op::CopyArgument','Op::StoreFour(12)','Op::StoreSecond','Op::Tail(4160)','Op::Equal(4203)']:
             assert text.encode() in source,text
         native=root/'native'
         subprocess.run(['rustc','-D','warnings',str(rs),'-o',str(native)],check=True,capture_output=True)

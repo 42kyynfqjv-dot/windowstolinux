@@ -1,4 +1,4 @@
-//! SUB-529 non-emitting inspection. Owned snapshot and private range/provenance types.
+//! Checked owned PE envelope: diagnostic reports and separate importless intake capability.
 use crate::{range, u16_at, u32_at};
 type Result<T> = std::result::Result<T, String>;
 fn need(ok: bool, why: &str) -> Result<()> {
@@ -439,9 +439,60 @@ impl Envelope {
         format!("{{\"stage\":\"envelope-checked\",\"metadata_closed\":{},\"emission_allowed\":false,\"base_evidence\":\"preferred-header-only\",\"entry\":{},\"sections\":[{sections}],\"directories\":[{dirs}],\"relocation_candidates\":[{pointers}],\"blockers\":[{blockers}]}}",self.closed,self.entry)
     }
 }
-/// Only a diagnostic string crosses the module boundary. No emitter or program reads.
+/// Diagnostic entry point: report strings never confer execution authority.
 pub(crate) fn inspect(bytes: Vec<u8>) -> Result<String> {
     Ok(Envelope::parse(bytes)?.report())
 }
 #[cfg(test)]
 mod tests;
+
+/// Capability created from owned PE bytes, never from the diagnostic report.
+/// This proves intake only; linker graph/state proof must still precede emission.
+pub(crate) struct Importless {
+    image: Envelope,
+}
+impl Importless {
+    pub(crate) fn parse(bytes: Vec<u8>) -> Result<Self> {
+        let image = Envelope::parse(bytes)?;
+        need(
+            image
+                .sections
+                .iter()
+                .all(|s| matches!(s.role, Role::Code | Role::Immutable)),
+            "importless: only code and immutable sections",
+        )?;
+        need(
+            image
+                .dirs
+                .iter()
+                .enumerate()
+                .all(|(i, d)| i == 6 || d.is_none()),
+            "importless: unsupported directory",
+        )?;
+        need(
+            image.closed && image.pointers.is_empty(),
+            "importless: metadata closure",
+        )?;
+        Ok(Self { image })
+    }
+    // The only program bytes exposed are validated file-backed executable bytes.
+    // No absolute address, immutable-data read, IAT or relocation capability exists.
+    pub(crate) fn code(&self) -> Result<(u32, u32, &[u8])> {
+        let section = self
+            .image
+            .sections
+            .iter()
+            .find(|s| s.role == Role::Code)
+            .ok_or("code region")?;
+        let size = section.virtual_size.min(section.size);
+        self.image.outside(section.rva, size)?;
+        Ok((
+            self.image.entry,
+            section.rva,
+            range(&self.image.bytes, section.raw as usize, size as usize)?,
+        ))
+    }
+    pub(crate) fn translate(&self) -> Result<String> {
+        crate::linker::translate_importless(self)
+    }
+}

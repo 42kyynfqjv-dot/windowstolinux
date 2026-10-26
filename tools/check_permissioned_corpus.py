@@ -2,7 +2,7 @@
 
 Expected roles/directories/relocation sites are literal observations of independently
 recorded dumpbin listings, not values obtained from the prototype under test.
-The production inspector is invoked here; check_native.py separately enforces conversion rejection.
+The production inspector is invoked here; check_native.py separately enforces conversion acceptance gates.
 """
 import argparse
 import hashlib
@@ -34,7 +34,8 @@ for case in cases:
     assert hashlib.sha256(Path(case['source']).read_bytes()).hexdigest() == r['source_sha256']
     original = (root / (name + '.exe')).read_bytes()
     digest = hashlib.sha256(original).hexdigest()
-    assert digest == r['sha256'] and not r['conversion_accepted']
+    assert digest == r['sha256']
+    assert r['conversion_accepted'] == (name in json.loads(Path('compiler/heldout/conversion.json').read_text())['accepted'])
     baseline = json.loads((root / (name + '-baseline.json')).read_text())
     assert baseline == {k: case[k] for k in ('stdout_hex', 'stderr_hex', 'exit', 'files')}
     if name == 'held_pe32plus':

@@ -206,3 +206,82 @@ fn report_never_copies_section_text_or_confers_emission() {
         assert!(!report.contains("\"true"));
     }
 }
+
+#[test]
+fn importless_private_proof_rejects_inspectable_execution_hazards() {
+    let b = specimen();
+    assert!(crate::translate_image(&b).is_ok());
+    for i in 0..16 {
+        if i == 6 {
+            continue;
+        }
+        let mut bad = b.clone();
+        put(&mut bad, 248 + 8 * i, 0x2000);
+        put(&mut bad, 252 + 8 * i, 8);
+        assert!(crate::translate_image(&bad).is_err(), "directory {i}");
+    }
+    for (at, value) in [
+        (452, 0xc0000040),
+        (452, 0xc0000080),
+        (452, 0x42000040),
+        (424, 513),
+        (412, 0xe0000020),
+        (168, 0x2000),
+        (436, 1024),
+        (388, 0x2000),
+    ] {
+        let mut bad = b.clone();
+        put(&mut bad, at, value);
+        assert!(crate::translate_image(&bad).is_err(), "field {at}");
+    }
+    for code in [
+        &[0xa1, 0, 0x20, 0x40, 0, 0xc3][..],
+        &[0xff, 0x15, 0, 0x20, 0x40, 0, 0xc3],
+        &[0xeb, 0xfe],
+        &[0x8a, 0x04, 0x24, 0xc3],
+        &[0x83, 0xec, 8, 0x8b, 0x44, 0x24, 4, 0xc3],
+    ] {
+        let mut bad = b.clone();
+        bad[1024..1024 + code.len()].copy_from_slice(code);
+        assert!(inspect(bad.clone())
+            .unwrap()
+            .contains("\"emission_allowed\":false"));
+        assert!(crate::translate_image(&bad).is_err());
+    }
+    let view = Importless::parse(b.clone()).unwrap();
+    let mut other = b;
+    other[1024] = 0xcc;
+    assert!(crate::translate_image(&other).is_err());
+    assert!(view.translate().is_ok()); // owned input cannot be replaced after parsing
+}
+#[test]
+fn importless_debug_closure_and_code_width_are_execution_gates() {
+    let mut b = specimen();
+    put(&mut b, 424, 64);
+    put(&mut b, 296, 0x2000);
+    put(&mut b, 300, 28);
+    for (offset, n) in [(12, 13), (16, 4), (20, 0x2020), (24, 1568)] {
+        put(&mut b, 1536 + offset, n);
+    }
+    assert!(crate::translate_image(&b).is_ok());
+    for (at, n) in [
+        (1560, 1569),
+        (1556, 0x2010),
+        (1552, 33),
+        (1548, 2),
+        (296, 0x1000),
+    ] {
+        let mut bad = b.clone();
+        put(&mut bad, at, n);
+        assert!(crate::translate_image(&bad).is_err());
+    }
+    for n in 0..b.len() {
+        assert!(
+            crate::translate_image(&b[..n]).is_err(),
+            "truncated file {n}"
+        );
+    }
+    let mut b = specimen();
+    put(&mut b, 384, 5); // RET exists only in file padding
+    assert!(crate::translate_image(&b).is_err());
+}

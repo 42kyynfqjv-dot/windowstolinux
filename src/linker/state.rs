@@ -17,17 +17,24 @@ impl Value {
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Word {
     Entry,
+    Local(usize, usize, Option<u32>),
     Data(usize, Value),
     Saved(usize, Value),
     Return(usize, u32),
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 struct Frame {
     owner: usize,
     esi: Value,
+    boundary: usize,
+    allocation: Option<usize>,
 }
 #[derive(Clone, Copy, Debug)]
 enum Op {
+    AllocateLocal,
+    StoreLocalZero(u32),
+    StoreFour(u32),
+    AddLocalZero,
     Save,
     Restore,
     Push(u32),
@@ -51,7 +58,6 @@ enum Op {
     CompareEsi(u32),
     Xor,
     CopyArgument,
-    StoreFirst,
     StoreSecond,
     Tail(u32),
     Equal(u32),
@@ -59,7 +65,7 @@ enum Op {
     Branch(u32),
     Ret,
 }
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 struct State {
     pc: u32,
     eax: Value,
@@ -86,6 +92,8 @@ impl State {
             frames: vec![Frame {
                 owner: 0,
                 esi: Value::Unknown(1),
+                boundary: 0,
+                allocation: None,
             }],
             serial: 0,
             steps: 0,
@@ -94,6 +102,44 @@ impl State {
     }
     fn owner(&self) -> usize {
         self.frames.last().unwrap().owner
+    }
+    fn boundary(&self) -> Result<usize, String> {
+        let frame = self.frames.last().ok_or("missing frame")?;
+        let valid = if self.frames.len() == 1 {
+            frame.boundary == 0 && self.words.get(frame.boundary) == Some(&Word::Entry)
+        } else {
+            matches!(self.words.get(frame.boundary), Some(Word::Return(o,_)) if *o == frame.owner)
+        };
+        if !valid {
+            return Err("protected frame boundary".into());
+        }
+        Ok(frame.boundary)
+    }
+    fn local_window(&self) -> Result<usize, String> {
+        let boundary = self.boundary()?;
+        let token = self
+            .frames
+            .last()
+            .unwrap()
+            .allocation
+            .ok_or("no local allocation")?;
+        if self.words.len() != boundary + 3
+            || !self.words[boundary + 1..]
+                .iter()
+                .all(|w| matches!(w, Word::Local(o,t,_) if *o == self.owner() && *t == token))
+        {
+            return Err("local ownership/shape".into());
+        }
+        Ok(boundary + 1)
+    }
+    fn local_value(&self, at: usize) -> Result<u32, String> {
+        match self.words.get(at) {
+            Some(Word::Local(_, _, Some(v))) => Ok(*v),
+            _ => Err("uninitialized local".into()),
+        }
+    }
+    fn has_locals(&self) -> bool {
+        self.frames.last().unwrap().allocation.is_some()
     }
     fn push(&mut self, w: Word) -> Result<(), String> {
         if self.words.len() >= 129 {
@@ -155,12 +201,82 @@ impl State {
         next: u32,
         output: &mut impl FnMut(u32, u32) -> Result<u32, String>,
     ) -> Result<Option<u32>, String> {
+        let mut candidate = self.clone();
+        let alternate = candidate.step_inner(op, next, output)?;
+        *self = candidate;
+        Ok(alternate)
+    }
+    fn step_inner(
+        &mut self,
+        op: Op,
+        next: u32,
+        output: &mut impl FnMut(u32, u32) -> Result<u32, String>,
+    ) -> Result<Option<u32>, String> {
         if self.done || self.steps >= 1024 {
             return Err("terminal state or instruction limit".into());
+        }
+        self.boundary()?;
+        if self.has_locals()
+            && matches!(
+                op,
+                Op::Save
+                    | Op::Restore
+                    | Op::Push(_)
+                    | Op::Pointer(_)
+                    | Op::CopyArgument
+                    | Op::StoreSecond
+                    | Op::Tail(_)
+                    | Op::Write
+                    | Op::Cleanup
+                    | Op::CleanupSix
+                    | Op::Ret
+            )
+        {
+            return Err("operation with live locals".into());
         }
         self.steps += 1;
         self.pc = next;
         match op {
+            Op::AllocateLocal => {
+                let boundary = self.boundary()?;
+                if self.has_locals() || self.words.len() != boundary + 1 {
+                    return Err("local allocation shape".into());
+                }
+                if self.words.len() > 127 {
+                    return Err("stack limit".into());
+                }
+                let token = self.steps;
+                self.words.extend([
+                    Word::Local(self.owner(), token, None),
+                    Word::Local(self.owner(), token, None),
+                ]);
+                self.frames.last_mut().unwrap().allocation = Some(token);
+                self.flags = None;
+            }
+            Op::StoreLocalZero(v) | Op::StoreFour(v)
+                if self.has_locals() || matches!(op, Op::StoreLocalZero(_)) =>
+            {
+                let at = self.local_window()? + usize::from(matches!(op, Op::StoreLocalZero(_)));
+                let Word::Local(_, _, value) = &mut self.words[at] else {
+                    unreachable!()
+                };
+                *value = Some(v);
+            }
+            Op::StoreFour(v) => {
+                if v != 12 {
+                    return Err("unsupported caller store value".into());
+                }
+                let boundary = self.scalar_window()?;
+                let owner = self.frames[self.frames.len() - 2].owner;
+                self.words[boundary - 1] = Word::Data(owner, Value::Integer(12));
+            }
+            Op::StoreLocalZero(_) => unreachable!(),
+            Op::AddLocalZero => {
+                let at = self.local_window()? + 1;
+                let (value, flags) = Flags::add(self.eax.integer()?, self.local_value(at)?);
+                self.eax = Value::Integer(value);
+                self.flags = Some(flags);
+            }
             Op::Save => self.push(Word::Saved(self.owner(), self.esi))?,
             Op::Restore => match self.words.last().cloned() {
                 Some(Word::Saved(o, v)) if o == self.owner() => {
@@ -173,7 +289,13 @@ impl State {
             Op::Pointer(rva) => self.push(Word::Data(self.owner(), Value::Pointer(rva)))?,
             Op::Mov(v) => self.eax = Value::Integer(v),
             Op::MoveEsi => self.esi = self.eax,
-            Op::Argument => self.eax = self.argument(1)?,
+            Op::Argument => {
+                self.eax = if self.has_locals() {
+                    Value::Integer(self.local_value(self.local_window()?)?)
+                } else {
+                    self.argument(1)?
+                }
+            }
             Op::ScalarArgumentTwo => self.eax = Value::Integer(self.argument(2)?.integer()?),
             Op::EcxArgumentOne => self.ecx = Value::Integer(self.argument(1)?.integer()?),
             Op::EdxOne => self.edx = Value::Integer(1),
@@ -214,7 +336,20 @@ impl State {
                 self.eax = Value::Integer(0);
                 self.flags = Some(Flags::xor_self())
             }
+            Op::CleanupTwo if self.has_locals() => {
+                let at = self.local_window()?;
+                self.words.truncate(at);
+                self.frames.last_mut().unwrap().allocation = None;
+                self.flags = None;
+            }
             Op::Cleanup | Op::CleanupSix | Op::CleanupTwo => {
+                let boundary = self.boundary()?;
+                if self.words[boundary + 1..]
+                    .iter()
+                    .any(|w| matches!(w, Word::Local(..)))
+                {
+                    return Err("untracked local allocation".into());
+                }
                 let count = match op {
                     Op::CleanupTwo => 2,
                     Op::CleanupSix => 6,
@@ -225,9 +360,10 @@ impl State {
                     .len()
                     .checked_sub(count)
                     .ok_or("cleanup bounds")?;
-                if !self.words[at..]
-                    .iter()
-                    .all(|w| matches!(w,Word::Data(o,_) if *o==self.owner()))
+                if at <= boundary
+                    || !self.words[at..]
+                        .iter()
+                        .all(|w| matches!(w,Word::Data(o,_) if *o==self.owner()))
                 {
                     return Err("cleanup ownership".into());
                 }
@@ -248,15 +384,10 @@ impl State {
                 let value = self.scalar_at(boundary, at)?;
                 self.push(Word::Data(self.owner(), Value::Integer(value)))?;
             }
-            Op::StoreFirst | Op::StoreSecond => {
+            Op::StoreSecond => {
                 let boundary = self.scalar_window()?;
-                let (index, value) = if matches!(op, Op::StoreFirst) {
-                    (1, 12)
-                } else {
-                    (2, 3)
-                };
                 let owner = self.frames[self.frames.len() - 2].owner;
-                self.words[boundary - index] = Word::Data(owner, Value::Integer(value));
+                self.words[boundary - 2] = Word::Data(owner, Value::Integer(3));
             }
             Op::Tail(target) => {
                 self.scalar_window()?;
@@ -270,11 +401,17 @@ impl State {
                 if self.frames.len() > 32 {
                     return Err("call depth".into());
                 }
+                if self.has_locals() {
+                    self.local_window()?;
+                }
+                let boundary = self.words.len();
                 self.serial += 1;
                 self.push(Word::Return(self.serial, next))?;
                 self.frames.push(Frame {
                     owner: self.serial,
                     esi: self.esi,
+                    boundary,
+                    allocation: None,
                 });
                 self.pc = target
             }

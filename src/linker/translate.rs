@@ -50,9 +50,8 @@ impl Candidate<'_> {
                 0xc7 if b.get(..8) == Some(&[0xc7, 0x44, 0x24, 8, 3, 0, 0, 0]) => {
                     (8, Op::StoreSecond)
                 }
-                0xc7 if b.get(..8) == Some(&[0xc7, 0x44, 0x24, 4, 12, 0, 0, 0]) => {
-                    (8, Op::StoreFirst)
-                }
+                0xc7 if b.get(..3) == Some(&[0xc7, 0x04, 0x24]) => (7, Op::StoreLocalZero(imm(3)?)),
+                0xc7 if b.get(..4) == Some(&[0xc7, 0x44, 0x24, 4]) => (8, Op::StoreFour(imm(4)?)),
                 0xff if byte(1)? == 0x15 => {
                     let site = pc + 2;
                     imm(2)?;
@@ -68,6 +67,7 @@ impl Candidate<'_> {
                 0x8b if b.get(..4) == Some(&[0x8b, 0x4c, 0x24, 4]) => (4, Op::EcxArgumentOne),
                 0x3b if byte(1)? == 0xc8 => (2, Op::CompareEcxEax),
                 0x0f if b.get(..3) == Some(&[0x0f, 0x4d, 0xc2]) => (3, Op::SelectGe),
+                0x03 if b.get(..3) == Some(&[0x03, 0x04, 0x24]) => (3, Op::AddLocalZero),
                 0x03 if byte(1)? == 0xc1 => (2, Op::AddEcx),
                 0x8b if byte(1)? == 0xf0 => (2, Op::MoveEsi),
                 0x8b if b.get(..4) == Some(&[0x8b, 0x44, 0x24, 4]) => (4, Op::Argument),
@@ -75,6 +75,7 @@ impl Candidate<'_> {
                 0x03 if b.get(..4) == Some(&[0x03, 0x44, 0x24, 12]) => (4, Op::AddThirdArgument),
                 0x33 if byte(1)? == 0xc0 => (2, Op::Xor),
                 0x83 => match byte(1)? {
+                    0xec if byte(2)? == 8 => (3, Op::AllocateLocal),
                     0xc4 if byte(2)? == 8 => (3, Op::CleanupTwo),
                     0xc4 if byte(2)? == 20 => (3, Op::Cleanup),
                     0xc4 if byte(2)? == 24 => (3, Op::CleanupSix),
@@ -172,6 +173,22 @@ impl Candidate<'_> {
                 }
             }
         }
+        Ok(ProvenProgram {
+            entry: self.entry,
+            graph,
+            buffers,
+        }
+        .emit())
+    }
+}
+// Constructed only after every reachable path passes the graph and ABI proof above.
+struct ProvenProgram {
+    entry: u32,
+    graph: BTreeMap<u32, (Op, u32)>,
+    buffers: BTreeMap<(u32, u32), Vec<u8>>,
+}
+impl ProvenProgram {
+    fn emit(self) -> String {
         let mut source=String::from("// Validated static MSVC subset; no PE decoding at runtime.\n#[allow(dead_code)] mod abi {\n");
         source.push_str(
             &include_str!("../control/flags.rs")
@@ -187,23 +204,28 @@ impl Candidate<'_> {
                 .next()
                 .unwrap(),
         );
-        source.push_str("pub fn run() { let mut output=|rva:u32,n:u32|->Result<u32,String>{ let bytes:&[u8]=match (rva,n) {\n");
-        for ((rva, n), bytes) in buffers {
-            writeln!(source, "({rva},{n})=>&{bytes:?},").unwrap();
+        if self.buffers.is_empty() {
+            source.push_str("pub fn run() { let mut output=|_:u32,_:u32|->Result<u32,String>{Err(\"unvalidated output\".into())};\n");
+        } else {
+            source.push_str("pub fn run() { let mut output=|rva:u32,n:u32|->Result<u32,String>{ let bytes:&[u8]=match (rva,n) {\n");
+            for ((rva, n), bytes) in self.buffers {
+                writeln!(source, "({rva},{n})=>&{bytes:?},").unwrap();
+            }
+            source.push_str(
+                "_=>return Err(\"unvalidated output\".into())};Ok(native_output(bytes))};\n",
+            );
         }
-        source
-            .push_str("_=>return Err(\"unvalidated output\".into())};Ok(native_output(bytes))};\n");
         writeln!(
             source,
             "let mut state=State::new({}); while !state.done {{ let (op,next)=match state.pc {{",
             self.entry
         )
         .unwrap();
-        for (pc, (op, next)) in graph {
+        for (pc, (op, next)) in self.graph {
             writeln!(source, "{pc}=>(Op::{op:?},{next}),").unwrap();
         }
         source.push_str("_=>panic!(\"validated PC\")};state.step(op,next,&mut output).expect(\"validated transition\");} std::process::exit(state.eax.integer().unwrap() as i32);}}\nfn main(){abi::run()}\n");
-        Ok(source)
+        source
     }
 }
 #[cfg(test)]
@@ -270,3 +292,7 @@ fn validate_routines(entry: u32, graph: &BTreeMap<u32, (Op, u32)>) -> Result<(),
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "local_tests.rs"]
+mod local_tests;

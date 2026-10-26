@@ -141,33 +141,26 @@ SUB-526 implements the reviewed bounded nested compiler path; see
 CI now requires eight unchanged compiler programs, including nested.c, alongside
 102 authored comparisons and18 launch samples. Medium production review is next.
 
-SUB-527 held-out measurement: all eight configurations meet original Windows
-expectations and all conversions reject with cross-host matching diagnostics.
-See [compiler/heldout/RESULTS.md](compiler/heldout/RESULTS.md). No new translated
-pairs; next proposed gate is a bounded normalized PE32 image-intake design,
-with execution barriers retained for writable memory, loops and CRT.
+SUB-527 froze eight held-out compiler configurations before measurement; all eight
+initially rejected. The recorded first results remain historical evidence in
+[compiler/heldout/RESULTS.md](compiler/heldout/RESULTS.md). SUB-528/529 introduced
+checked non-emitting inspection, and SUB-530 reviewed the local-frame contract.
 
-SUB-528 proposes a permissioned PE32 envelope with separate metadata and execution
-proofs in [SUB528-PE32-DESIGN.md](SUB528-PE32-DESIGN.md). Fifteen test-only model
-functions and all eight unchanged held-out artifacts exercise range/permission
-checks. Seven PE32 envelopes parse; PE32+ rejects; every case remains ineligible
-for emission. Production and the eight compiler/102 authored comparisons stay
-unchanged. Next: medium contract review, then bounded non-emitting production
-intake/diagnostics; writable memory, loops and CRT retain explicit barriers.
+SUB-531 implements two owned scalar local words and a private importless execution
+path under [SUB531-LOCAL-IMPLEMENTATION.md](SUB531-LOCAL-IMPLEMENTATION.md). The frozen
+structure.c PE must now independently convert on Windows and Linux to identical
+Rust, then execute as Linux ELF with empty stdout/stderr and exit12, matching the
+same hashed Windows artifact. Source, compiler flags and PE bytes are unchanged.
+The other seven held-out programs retain explicit conversion rejection gates.
 
-SUB-529 implements the reviewed non-emitting inspection gate in
-[SUB529-INSPECTION.md](SUB529-INSPECTION.md). Six independent Rust tests and same-PE
-Windows/Linux production-report checks supplement the design model. Next is medium
-production/provenance review; connecting closed metadata to existing execution proof
-requires a separate bounded gate. Parsing adds no translated-program coverage.
+Inspection always reports `emission_allowed: false`; it is independent of the
+complete graph/ABI/local proof required for conversion. Writable/global/byte memory,
+loops, ordinary CRT and PE32+ remain unsupported. CI preserves eight earlier compiler
+comparisons,102 authored comparisons and18 launch checks alongside the one new
+structure-program comparison. Three historical Windows timeout causes remain
+unresolved; persistent diagnostics and failure propagation remain enabled.
 
-SUB-529 medium review prioritizes execution of frozen structure.c via a bounded
-scalar local-frame contract, followed by reviewed integration with closed importless
-intake. Design first on Astra High: local ownership/uninitialized state, full word
-bounds, protected returns and cleanup/flags. Target unchanged PE exit12 with Windows/
-Linux comparison; no broad byte/global memory, loop or CRT expansion.
-
-SUB-530 defines the bounded scalar local-frame execution contract in
-[SUB530-LOCAL-FRAME-DESIGN.md](SUB530-LOCAL-FRAME-DESIGN.md), targeting unchanged
-structure.c exit12. Ten independent model tests and exact-artifact checks include explicit cleanup dispatch before
-medium contract review; production still rejects all eight held-out programs.
+Next: medium production/provenance review of local-versus-argument byte-form dispatch,
+protected ownership and uninitialized state, importless proof isolation and the
+unchanged structure artifact. Subsequent capability work requires a separate bounded
+gate driven by the remaining held-out failures. XP/7 and general apps remain unvalidated.

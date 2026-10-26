@@ -360,3 +360,29 @@ impl<'a> Candidate<'a> {
 }
 
 mod translate;
+
+/// The capability can only be made by the checked, owned importless intake.
+/// Reuse the identical graph/typed-stack proof; its private ProvenProgram emits.
+pub(crate) fn translate_importless(
+    image: &crate::inspection::Importless,
+) -> Result<String, String> {
+    let (entry, rva, bytes) = image.code()?;
+    let size = u32::try_from(bytes.len()).map_err(|_| "code size")?;
+    Candidate {
+        bytes,
+        base: 0,
+        entry,
+        image_size: end(rva, size)?,
+        sections: vec![Section {
+            rva,
+            size,
+            raw: 0,
+            virtual_size: size,
+            flags: CODE,
+        }],
+        metadata: vec![],
+        iat: 0,
+        pointers: std::collections::BTreeMap::new(),
+    }
+    .translate()
+}
