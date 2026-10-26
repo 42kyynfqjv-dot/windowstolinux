@@ -302,3 +302,8 @@ initialized-buffer authority, protected call/return contexts, explicit argument
 versus local cleanup and narrow unreachable-padding gates. Eight model tests and
 same-artifact inventory are design evidence; production helper remains rejected.
 Medium review precedes separate graph/capability/emitter implementation.
+
+SUB-559: private helper graph/call/borrow/emission integration is documented in
+`research/input/helper/INTEGRATION.md`. Same-artifact execution gates now cover
+all three frozen input variants; broader owner lifetimes and mutable pointers
+remain excluded. Medium production/provenance review follows final CI.

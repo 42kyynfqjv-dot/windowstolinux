@@ -11,13 +11,16 @@ fn graph() -> Graph {
     graph_for(&code())
 }
 fn graph_for(program: &[u8]) -> Graph {
+    graph_at(program, 0x1000)
+}
+fn graph_at(program: &[u8], entry: u32) -> Graph {
     let mut bytes = program.to_vec();
     bytes.resize(512, 0);
     bytes.extend(b"W\0\x32\0L\0_\0I\0N\0P\0U\0T\0\0\0");
     let c = Candidate {
         bytes: &bytes,
         base: 0x400000,
-        entry: 0x1000,
+        entry,
         image_size: 0x3000,
         sections: vec![
             Section {
@@ -273,6 +276,82 @@ fn nonlinear_decoded_paths_and_native_boundaries() {
                 assert_eq!(r.status.code(), Some(a * a + b * b));
                 assert!(r.stdout.is_empty() && r.stderr.is_empty());
             }
+        }
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+}
+
+#[test]
+fn helper_actual_context_and_independent_negative_paths() {
+    let hex="8b5424040fb70a8d41d06683f809772583e930837c24080275180fb752028d42d06683f809770e8d0c898bc28d49e88d0c488bc1c3b8ca000000c3cccccccccc83ec088d04246a03506808204000ff150020400085c07509b8c800000083c408c383f8417609b8cb00000083c408c383f8027609b8c900000083c408c3508d44240450e878ffffff83c40883c408c3";
+    let bytes: Vec<u8> = (0..hex.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap())
+        .collect();
+    let g = graph_at(&bytes, 0x1040);
+    assert!(matches!(g[&0x1083].0, Op::Call(0x1000)));
+    assert!(matches!(g[&0x101a].0, Op::ReadWord(2, 2, 2)));
+    let p = prove(g.clone(), 0x1040).unwrap();
+    assert_eq!(p.loads, [(0x1004, 0), (0x101a, 2)].into());
+    for (at, op) in [
+        (0x1083, Op::Call(0x1040)),
+        (0x1083, Op::Call(0x1001)),
+        (0x1000, Op::Argument(2, 8)),
+        (0x1000, Op::Argument(2, 0)),
+        (0x1004, Op::ReadWord(1, 2, 6)),
+        (0x1004, Op::Cleanup),
+        (0x1004, Op::Call(0x1000)),
+        (0x107e, Op::Mov(0, 0)),
+        (0x1056, Op::Branch(Condition::Be, 0x1061)),
+        (0x1088, Op::Ret),
+    ] {
+        let mut bad = g.clone();
+        bad.get_mut(&at).unwrap().0 = op;
+        assert!(prove(bad, 0x1040).is_err(), "{at:x}");
+    }
+    // Shared call-site context is conservative: a second call after volatile clobber
+    // cannot inherit the prior pointer arguments or re-use a protected continuation.
+    let mut bad = g.clone();
+    bad.get_mut(&0x108b).unwrap().0 = Op::Call(0x1000);
+    assert!(prove(bad, 0x1040).is_err());
+    // A nested call without explicitly passed arguments cannot borrow the parent slots.
+    let mut nested = g.clone();
+    nested.get_mut(&0x1000).unwrap().0 = Op::Call(0x2000);
+    nested.insert(0x2000, (Op::Argument(2, 4), 0x2001));
+    nested.insert(0x2001, (Op::Ret, 0x2002));
+    assert!(prove(nested, 0x1040).is_err());
+    let source = p.emit();
+    if cfg!(target_os = "linux") {
+        let dir = std::env::temp_dir().join(format!("w2l-helper-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("h.rs");
+        let bin = dir.join("native");
+        std::fs::write(&file, source).unwrap();
+        assert!(std::process::Command::new("rustc")
+            .arg("--edition=2021")
+            .arg(&file)
+            .arg("-o")
+            .arg(&bin)
+            .status()
+            .unwrap()
+            .success());
+        for (value, expected) in [
+            ("7", 7),
+            ("42", 42),
+            ("07", 7),
+            ("99", 99),
+            ("a", 202),
+            ("", 200),
+            ("123", 201),
+            ("0/", 202),
+        ] {
+            let r = std::process::Command::new(&bin)
+                .env_clear()
+                .env("W2L_INPUT", value)
+                .output()
+                .unwrap();
+            assert_eq!(r.status.code(), Some(expected));
+            assert!(r.stdout.is_empty() && r.stderr.is_empty());
         }
         std::fs::remove_dir_all(dir).unwrap();
     }
