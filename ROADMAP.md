@@ -263,3 +263,12 @@ program, additional to the prior 12. Separate component/model counts are retaine
 Next: substantive medium production/provenance review before merge, then evaluate
 unknown-state composition diversity. Ordinary CRT, four older held-out programs,
 general memory/loops and PE32+ remain outside this input capability.
+
+SUB-553 freezes three structurally different runtime-input C programs before
+measurement: reordered guards/join, squared digits, and a pointer/length helper.
+All51 original Windows scenarios match independent frozen expectations, but all
+three conversions reject. No support is widened. See
+[measured barriers and next gate](research/input/diversity/RESULTS.md).
+Next recommended Astra design: bounded register-parametric scalar IR and proof
+for the unchanged reordered-guard program, preserving unknown-state/ownership
+checks. Nonlinear IMUL and helper-pointer calls remain separate prerequisites.
