@@ -55,8 +55,9 @@ negative=[('noalloc-load',L+R),('noalloc-store',s0(1)+R),('uninit4',A+s0(7)+L+C+
     ('wide-exit',frame(255,1)),('unknown-eax',A+s0(1)+ADD+C+R),
     ('incomplete-caller-pair',h('6a01')+C+mov(1)+R),
     ('saved-cleanup',h('56 6a01')+C+mov(1)+R)]
-# One real path initializes word4, the untaken path skips it. Both must prove.
-negative.append(('untaken-uninit',A+h('33c0 7408')+s4(7)+L+C+R))
+# Taken invalid path and untaken invalid path must both reject independently.
+negative.append(('taken-uninit',A+h('33c0 7408')+s4(7)+L+C+R))
+negative.append(('untaken-uninit',A+h('33c0 7508')+s4(7)+L+C+R))
 # Callee cannot reinterpret suspended caller Local words as Data arguments.
 main=A+s0(7)+s4(5);main+=call(len(main),len(main)+5+len(C+R))+C+R
 negative.append(('callee-borrows-locals',main+L+R))

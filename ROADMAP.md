@@ -164,3 +164,9 @@ Next: medium production/provenance review of local-versus-argument byte-form dis
 protected ownership and uninitialized state, importless proof isolation and the
 unchanged structure artifact. Subsequent capability work requires a separate bounded
 gate driven by the remaining held-out failures. XP/7 and general apps remain unvalidated.
+
+SUB-531 medium review adds the missing untaken-uninitialized production regression.
+Next: bounded Astra High byte-local contract/model for unchanged held_buffer, whose
+PUSH ECX storage, byte MOV/MOVZX, INC AL and POP ECX require explicit partial-byte
+initialization, register/flag and ownership semantics. Keep production rejection
+until separate reviewed implementation and same-PE exit132 acceptance gates.

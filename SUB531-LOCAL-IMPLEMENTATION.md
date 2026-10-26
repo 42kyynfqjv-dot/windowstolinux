@@ -69,7 +69,7 @@ Run cargo fmt --check, rustfmt --check src/linker/state.rs, cargo clippy --all-t
 --locked -- -D warnings, cargo test --locked, cargo build --locked, then
 python tools/check_local_production.py. The latter authors its own PE bytes and literal
 expected results independently of production, earlier fixtures and the model:10
-native deterministic cases and94 CLI rejections. Four added Rust functions check
+native deterministic cases and95 CLI rejections. Four added Rust functions check
 layout/arithmetic, atomic tag/token/protected failures and both cleanup modes,
 fresh/nested/shared frames, per-path initialization and resource/return obligations.
 Two added intake functions check directory/permission/snapshot boundaries, debug
@@ -97,3 +97,18 @@ results do not establish XP/7 or ordinary application compatibility.
 Next medium review: audit production local/argument dispatch, protected words and
 all-path initialization, importless capability and artifact identity/output evidence.
 Keep the draft PR unmerged; future capability expansion needs a distinct bounded gate.
+
+Medium review: the original uninitialized-branch regression took its invalid path.
+Added opposite branch polarity so a concrete initialized execution still rejects
+the hypothetical uninitialized successor. Both remain tested. No production defect
+was reproduced. Reviewed same-artifact Windows/Linux empty output and exit12, local
+tag/token/boundary checks, explicit cleanup dispatch, unknown ESP flags and private
+code-only intake bridge. All seven other held-out conversions remain mandatory rejects.
+
+Next proposed gate is design-only owned byte-local storage for frozen buffer.c:
+actual observed PUSH ECX/POP ECX allocation, byte initialization, MOVZX, AL increment
+and store. Resolve partial-register/INC flag semantics, unknown discarded ECX,
+per-byte initialization and protected-word isolation with independent traces before
+production changes. It advances the remaining importless stack-memory case without
+adding loader rebasing, writable globals, loops or CRT startup at the same time.
+Astra High is appropriate for that contract/model; medium review precedes implementation.
