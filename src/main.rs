@@ -135,7 +135,7 @@ impl<'a> Pe<'a> {
             };
             let virtual_end = section
                 .virtual_address
-                .checked_add(section.virtual_size)
+                .checked_add(section.virtual_size.max(section.raw_size))
                 .ok_or("section RVA overflow")?;
             let raw_end = section
                 .raw_offset
@@ -343,6 +343,27 @@ mod tests {
         bytes[0xd4..0xd8].copy_from_slice(&0x1200u32.to_le_bytes());
         bytes[0x18c..0x190].copy_from_slice(&0x1200u32.to_le_bytes());
         assert!(Pe::parse(&bytes).is_err());
+    }
+
+    #[test]
+    fn rejects_raw_section_extent_beyond_image() {
+        let mut bytes = fixture(&[0x31, 0xc0, 0xc3]);
+        bytes.resize(0x1400, 0);
+        bytes[0x188..0x18c].copy_from_slice(&0x1200u32.to_le_bytes());
+        assert!(Pe::parse(&bytes).is_err());
+    }
+
+    #[test]
+    fn entry_offset_maps_to_code_and_respects_virtual_end() {
+        let mut bytes = fixture(&[0x90, 0x90, 0x31, 0xc0, 0xc3]);
+        bytes[0xa8..0xac].copy_from_slice(&0x1002u32.to_le_bytes());
+        let pe = Pe::parse(&bytes).unwrap();
+        assert_eq!(
+            control::exit_for_test(pe.entry_bytes().unwrap()).unwrap(),
+            0
+        );
+        bytes[0xa8..0xac].copy_from_slice(&0x1100u32.to_le_bytes());
+        assert!(Pe::parse(&bytes).unwrap().entry_bytes().is_err());
     }
 
     #[test]

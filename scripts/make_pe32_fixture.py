@@ -47,6 +47,11 @@ for name, prefix, opcode in [
 ]:
     CASES[name] = branch_case(prefix, opcode)
 
+CASES["join_taken"] = b"\x31\xc0\x74\x05" + mov_eax(11) + add_eax(1) + b"\xc3"
+CASES["join_fallthrough"] = mov_eax(1) + add_eax(0) + b"\x74\x05" + mov_eax(11) + add_eax(1) + b"\xc3"
+CASES["same_successor"] = b"\x31\xc0\x74\x00" + add_eax(3) + b"\xc3"
+CASES["entry_offset"] = CASES["sum12"]
+
 
 def build(case: str) -> bytes:
     if case not in CASES:
@@ -91,7 +96,11 @@ def build(case: str) -> bytes:
     put(data, section + 36, 0x60000020, 4)  # code, execute, read
 
     code = CASES[case]
-    data[0x200 : 0x200 + len(code)] = code
+    entry_offset = 8 if case == "entry_offset" else 0
+    put(data, optional + 16, 0x1000 + entry_offset, 4)
+    data[0x200 : 0x200 + entry_offset] = b"\x90" * entry_offset
+    start = 0x200 + entry_offset
+    data[start : start + len(code)] = code
     return bytes(data)
 
 

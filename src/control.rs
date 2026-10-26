@@ -192,6 +192,48 @@ mod tests {
         assert!(translate(&bad).is_err());
     }
     #[test]
+    fn joins_and_zero_displacement_preserve_path_state() {
+        assert_eq!(
+            exit_for_test(&[0x31, 0xc0, 0x74, 5, 0xb8, 11, 0, 0, 0, 0x05, 1, 0, 0, 0, 0xc3])
+                .unwrap(),
+            1
+        );
+        assert_eq!(
+            exit_for_test(&[
+                0xb8, 1, 0, 0, 0, 0x05, 0, 0, 0, 0, 0x74, 5, 0xb8, 11, 0, 0, 0, 0x05, 1, 0, 0, 0,
+                0xc3
+            ])
+            .unwrap(),
+            12
+        );
+        assert_eq!(
+            exit_for_test(&[0x31, 0xc0, 0x74, 0, 0x05, 3, 0, 0, 0, 0xc3]).unwrap(),
+            3
+        );
+    }
+
+    #[test]
+    fn instruction_limit_accepts_exact_boundary() {
+        let mut code = [0x31, 0xc0].repeat(LIMIT - 1);
+        code.push(0xc3);
+        assert_eq!(exit_for_test(&code).unwrap(), 0);
+        code.splice(0..0, [0x31, 0xc0]);
+        assert!(translate(&code).is_err());
+    }
+
+    #[test]
+    fn rejects_truncated_immediates_and_conditions_outside_subset() {
+        for code in [
+            &[0xb8, 1, 2, 3][..],
+            &[0x05, 1, 2, 3][..],
+            &[0x74][..],
+            &[0x31, 0xc0, 0x70, 0, 0xc3][..],
+        ] {
+            assert!(translate(code).is_err());
+        }
+    }
+
+    #[test]
     fn instruction_limit_and_exit_domain() {
         let mut code = [0x31, 0xc0].repeat(LIMIT);
         code.push(0xc3);
