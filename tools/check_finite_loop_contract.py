@@ -6,7 +6,7 @@ from image_read_model import Image,Section,Relocation
 from finite_loop_model import prove,eligible
 root=Path(sys.argv[1]);blob=(root/'held_loop.exe').read_bytes()
 r=next(x for x in json.loads((root/'heldout-x86.json').read_text()) if x['kind']=='held_loop')
-assert hashlib.sha256(blob).hexdigest()==r['sha256'] and not r['conversion_accepted']
+assert hashlib.sha256(blob).hexdigest()==r['sha256'] and r['conversion_accepted']
 assert r['freeze_commit']=='cf042295303dccedb8506564f1e466ef9d353acd'
 assert hashlib.sha256(Path('compiler/heldout/loop.c').read_bytes()).hexdigest()==r['source_sha256']
 assert json.loads((root/'held_loop-baseline.json').read_text())==dict(stdout_hex='',stderr_hex='',exit=10,files={})
@@ -22,4 +22,4 @@ p=prove(m);result=eligible(p)
 assert (p.bound,p.steps,p.result)==(5,26,10)
 assert result['headers']==[(0,0,5),(1,0,4),(2,1,3),(3,3,2),(4,6,1)] and not result['emission_allowed']
 assert hashlib.sha256((root/'held_loop.exe').read_bytes()).hexdigest()==r['sha256']
-print('FINITE_LOOP_CONTRACT',r['sha256'],'rank=N-i bound=5 steps=26 model_exit=10 production_conversion=rejected')
+print('FINITE_LOOP_CONTRACT',r['sha256'],'rank=N-i bound=5 steps=26 model_exit=10 production_conversion=accepted native_execution=separate_check')

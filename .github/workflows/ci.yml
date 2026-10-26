@@ -11,7 +11,7 @@ jobs:
         with:
           components: clippy, rustfmt
       - run: cargo fmt --check
-      - run: rustfmt --check src/linker/state.rs src/inspection/read_state.rs
+      - run: rustfmt --check src/linker/state.rs src/inspection/read_state.rs src/inspection/loop_state.rs
       - run: cargo clippy --all-targets --locked -- -D warnings
       - run: cargo test --locked
       - run: python3 scripts/check_fixture_manifest.py
@@ -37,6 +37,7 @@ jobs:
           python3 tools/check_local_production.py
           python3 tools/check_byte_production.py
           python3 tools/check_image_read_production.py
+          python3 tools/check_finite_loop_production.py
           python3 scripts/check_imported_output.py
           python3 corpus/check.py
           rustfmt --check tools/output-probe.rs

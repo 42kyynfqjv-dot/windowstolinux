@@ -202,3 +202,9 @@ SUB-536 designs the exact frozen summation loop under
 bound, unsigned comparisons and explicit step/exit gates. Eight independent model
 functions and unchanged-artifact traces are test-only evidence; production loop
 rejection remains. Medium contract review precedes a separate implementation gate.
+
+SUB-537 implements the reviewed exact finite loop, with structural ranking proof and
+native structured-loop output; see [implementation contract](SUB537-FINITE-LOOP-IMPLEMENTATION.md).
+CI requires unchanged loop same-PE exit10 agreement alongside eleven prior compiler
+comparisons. Four held-out cases remain rejected. Next medium production/provenance
+review; general cyclic control flow, CRT/runtime inputs and PE32+ remain separate gates.

@@ -497,11 +497,22 @@ impl Importless {
     }
 }
 
+mod loops;
 mod reads;
 pub(crate) fn translate_importless(bytes: Vec<u8>) -> Result<String> {
     let image = Envelope::parse(bytes.clone())?;
     if image.sections.iter().any(|s| s.role.writable()) {
-        reads::translate(image)
+        let code = image
+            .sections
+            .iter()
+            .find(|s| s.role == Role::Code)
+            .ok_or("code region")?;
+        // Classification only. Each chosen profile must independently prove its body.
+        if range(&image.bytes, code.raw as usize, 1)?[0] == 0x33 {
+            loops::translate(image)
+        } else {
+            reads::translate(image)
+        }
     } else {
         Importless::parse(bytes)?.translate()
     }

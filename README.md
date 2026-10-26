@@ -102,3 +102,9 @@ SUB-535 adds the bounded initialized image-read profile documented in
 Writable data is read only after complete no-write/relocation proof for a five-form
 straight-line body. The frozen array program joins ten previous compiler comparisons;
 five held-out programs remain unsupported. Conditional execution assumptions apply.
+
+SUB-537 adds only the exact proven finite summation loop in
+[SUB537-FINITE-LOOP-IMPLEMENTATION.md](SUB537-FINITE-LOOP-IMPLEMENTATION.md).
+The unchanged held-out loop must match Windows empty output/exit10; twelve compiler
+comparisons are now required, with four remaining held-out capabilities rejected.
+This is a narrow recognized graph with explicit ranking, resource and exit bounds.
