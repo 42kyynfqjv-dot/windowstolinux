@@ -13,3 +13,4 @@ research/crt/*commode*.py text eol=lf
 research/crt/check_external_cell.py text eol=lf
 research/crt/*accessor*.py text eol=lf
 research/crt/*runtime*.py text eol=lf
+research/crt/*composition*.py text eol=lf

@@ -15,6 +15,7 @@ jobs:
       - run: cargo clippy --all-targets --locked -- -D warnings
       - run: cargo test --locked
       - run: python3 -m unittest discover -s research/crt -p test_runtime_identity.py -v
+      - run: python3 -m unittest discover -s research/crt -p test_composition_audit.py -v
       - run: cargo test --locked --example runtime_boundary
       - run: cargo test --locked --example crt_external_cell
       - run: cargo test --locked --example crt_sentinel
@@ -250,6 +251,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'CRT graph exploration failed' }
       - name: Bind initializer callback evidence
         run: python research/crt/callback_inventory.py "${{ runner.temp }}/w2l-compiler-measurement"
+      - name: Audit original startup composition prerequisites
+        run: python research/crt/composition_audit.py "${{ runner.temp }}/w2l-compiler-measurement"
       - name: Inventory ordinary CRT dependencies without emission
         run: python research/crt/inventory.py "${{ runner.temp }}/w2l-compiler-measurement"
       - uses: actions/upload-artifact@v4
@@ -305,3 +308,4 @@ jobs:
           python3 research/crt/check_external_cell.py evidence --compare
           python3 research/crt/check_accessor.py evidence --compare
           python3 research/crt/check_runtime.py evidence --compare
+          python3 research/crt/composition_audit.py evidence --compare
