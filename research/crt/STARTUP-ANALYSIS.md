@@ -63,3 +63,8 @@ This requires Astra High design after medium review; successful probes alone can
 close the effect proof. Keep ordinary CRT/runtime/file/PE32+ rejected, preserve12
 compiler/102 authored comparisons and18 launch checks. Three historic timeouts remain
 unexplained. Server2025 evidence is not XP/7/application compatibility.
+
+Independent authored graph checks cover RET, a self-cycle, indirect call, outside-code
+target, trap and overlapping instruction target. Even a trivial RET and a finite
+graph remain explicitly incomplete effect proofs. Six checks are research-only;
+they are not new native program comparisons or root Rust test functions.

@@ -14,6 +14,8 @@ jobs:
       - run: rustfmt --check src/linker/state.rs src/inspection/read_state.rs src/inspection/loop_state.rs
       - run: cargo clippy --all-targets --locked -- -D warnings
       - run: cargo test --locked
+      - run: cargo build --locked --example crt_graph
+      - run: python3 research/crt/check_graph.py
       - run: python3 scripts/check_fixture_manifest.py
       - run: python3 -m unittest discover -s tools -p test_linker_intake.py -v
       - run: python3 -m unittest discover -s tools -p test_permissioned_intake.py -v
