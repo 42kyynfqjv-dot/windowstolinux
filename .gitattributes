@@ -1,0 +1,4 @@
+# Converter includes Rust source verbatim; both hosts must see identical bytes.
+*.rs text eol=lf
+# Compiler fixture provenance compares the actual compiled source bytes.
+*.c text eol=lf

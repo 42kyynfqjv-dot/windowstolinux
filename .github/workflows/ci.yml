@@ -1,0 +1,285 @@
+name: Rust CI
+on:
+  push:
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - run: cargo fmt --check
+      - run: rustfmt --check src/linker/state.rs src/inspection/read_state.rs src/inspection/loop_state.rs
+      - run: cargo clippy --all-targets --locked -- -D warnings
+      - run: cargo test --locked
+      - run: cargo build --locked --example crt_graph
+      - run: python3 research/crt/check_graph.py
+      - run: python3 -m unittest discover -s research/crt -p test_initializer_model.py -v
+      - run: python3 scripts/check_fixture_manifest.py
+      - run: python3 -m unittest discover -s tools -p test_linker_intake.py -v
+      - run: python3 -m unittest discover -s tools -p test_permissioned_intake.py -v
+      - run: python3 -m unittest discover -s tools -p test_launch_evidence.py -v
+      - run: python3 -m unittest discover -s tools -p test_typed_abi_model.py -v
+      - run: python3 -m unittest discover -s tools -p test_conditional_register_model.py -v
+      - run: python3 -m unittest discover -s tools -p test_nested_stack_model.py -v
+      - run: python3 -m unittest discover -s tools -p test_local_frame_model.py -v
+      - run: python3 -m unittest discover -s tools -p test_byte_local_model.py -v
+      - run: python3 -m unittest discover -s tools -p test_image_read_model.py -v
+      - run: python3 -m unittest discover -s tools -p test_finite_loop_model.py -v
+      - name: Imported output translation and support checks
+        run: |
+          python3 scripts/check_output_probe.py
+          python3 scripts/make_output_probe.py /tmp/output-probe.exe
+          cargo build --locked
+          python3 tools/check_linker_production.py
+          python3 tools/check_compiler_subset.py
+          python3 tools/check_conditional_production.py
+          python3 tools/check_nested_production.py
+          python3 tools/check_local_production.py
+          python3 tools/check_byte_production.py
+          python3 tools/check_image_read_production.py
+          python3 tools/check_finite_loop_production.py
+          python3 scripts/check_imported_output.py
+          python3 corpus/check.py
+          rustfmt --check tools/output-probe.rs
+          rustc -D warnings tools/output-probe.rs -o /tmp/output-probe
+          /tmp/output-probe > /tmp/output-probe.stdout 2> /tmp/output-probe.stderr
+          python3 -c "from pathlib import Path; assert Path('/tmp/output-probe.stdout').read_bytes() == b'Hello'; assert Path('/tmp/output-probe.stderr').read_bytes() == b''"
+          set +e
+          /tmp/output-probe > /dev/null 2> /tmp/output-probe-rejected.stderr
+          result=$?
+          set -e
+          test "$result" -eq 125
+          test -s /tmp/output-probe-rejected.stderr
+      - name: Translate authored PE32 fixture to ELF
+        run: |
+          for specification in sum12:12 wrap2:2 xor9:9 zero:0 max255:255 jc_taken:22 jc_clear:11 jnc_taken:22 jnc_clear:11 jz_taken:22 jz_clear:11 jnz_taken:22 jnz_clear:11 mov_flags:22 xor_carry:11 join_taken:1 join_fallthrough:12 same_successor:3 entry_offset:12 cmp_min_max_jl:22 cmp_max_min_jl:11 cmp_equal_jge:22 cmp_less_jge:11 cmp_borrow:22 cmp_no_borrow:22 cmp_zero:22 cmp_nonzero:22 cmp_mov_flags:22 add_signed_overflow:11 add_negative_overflow:22 xor_signed_reset:22 cmp_preserve_eax:42 signed_join_taken:22 signed_join_fallthrough:11 call_helper:12 call_nested:12 call_shared:8 call_flags_preserved:22 call_flags_changed:11 call_unknown_then_init:42 call_wide_internal:0 call_shared_branch:5 stack_argument:12 stack_shared:14 stack_nested:12 stack_shared_join:14 stack_flags_zero:22 stack_flags_carry:22 stack_flags_overflow:11 stack_flags_negative_overflow:22 stack_flags_negative:22 stack_flags_clear:11 two_section_helper:12 data_sum:12 data_unaligned:12 data_last:255 data_wrap:2 data_zero:22 data_carry:22 data_overflow:11 data_negative_overflow:22 data_call:12 data_sum_alt:14; do
+            case_name=${specification%:*}
+            expected=${specification#*:}
+            python3 scripts/make_pe32_fixture.py "$case_name" /tmp/w2l-fixture.exe
+            cargo run --locked -- /tmp/w2l-fixture.exe /tmp/w2l-translated.rs
+            cargo run --locked -- /tmp/w2l-fixture.exe /tmp/w2l-translated-again.rs
+            cmp /tmp/w2l-translated.rs /tmp/w2l-translated-again.rs
+            rustc -D warnings /tmp/w2l-translated.rs -o /tmp/w2l-translated
+            set +e
+            /tmp/w2l-translated > /tmp/w2l-translated.stdout 2> /tmp/w2l-translated.stderr
+            result=$?
+            set -e
+            test "$result" -eq "$expected"
+            test ! -s /tmp/w2l-translated.stdout
+            test ! -s /tmp/w2l-translated.stderr
+          done
+          python3 scripts/make_pe32_fixture.py out_of_range /tmp/w2l-fixture.exe
+          if cargo run --locked -- /tmp/w2l-fixture.exe /tmp/w2l-rejected.rs; then
+            echo 'converter unexpectedly accepted exit status 256' >&2
+            exit 1
+          fi
+  authored-windows-fixture:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Diagnose original fixture launches without retries
+        run: python scripts/diagnose_windows_launch.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-launch-diagnosis
+          path: ${{ runner.temp }}/w2l-launch-diagnosis/*
+          if-no-files-found: error
+      - name: Imported output Windows comparisons
+        shell: pwsh
+        run: |
+          Write-Host "Output probe OS: $([System.Environment]::OSVersion.VersionString)"
+          $crt = Get-Item "$env:WINDIR\SysWOW64\msvcrt.dll"
+          Write-Host "32-bit CRT file version: $($crt.VersionInfo.FileVersion)"
+          python scripts/check_output_probe.py --execute-windows
+          if ($LASTEXITCODE -ne 0) { throw 'Output design probe failed' }
+          python scripts/check_imported_output.py --windows
+          if ($LASTEXITCODE -ne 0) { throw 'Imported output comparison failed' }
+          python corpus/check.py --windows
+          if ($LASTEXITCODE -ne 0) { throw 'Independent corpus failed' }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: corpus-launch-evidence
+          path: ${{ runner.temp }}/w2l-corpus-launch/*
+          if-no-files-found: warn
+      - name: Execute authored PE32 fixture on Windows
+        shell: pwsh
+        run: |
+          Write-Host "Windows version: $([System.Environment]::OSVersion.VersionString)"
+          $cases = @(
+            @{ Name = 'sum12'; Expected = 12 },
+            @{ Name = 'wrap2'; Expected = 2 },
+            @{ Name = 'xor9'; Expected = 9 },
+            @{ Name = 'zero'; Expected = 0 },
+            @{ Name = 'max255'; Expected = 255 },
+            @{ Name = 'jc_taken'; Expected = 22 },
+            @{ Name = 'jc_clear'; Expected = 11 },
+            @{ Name = 'jnc_taken'; Expected = 22 },
+            @{ Name = 'jnc_clear'; Expected = 11 },
+            @{ Name = 'jz_taken'; Expected = 22 },
+            @{ Name = 'jz_clear'; Expected = 11 },
+            @{ Name = 'jnz_taken'; Expected = 22 },
+            @{ Name = 'jnz_clear'; Expected = 11 },
+            @{ Name = 'mov_flags'; Expected = 22 },
+            @{ Name = 'xor_carry'; Expected = 11 },
+            @{ Name = 'join_taken'; Expected = 1 },
+            @{ Name = 'join_fallthrough'; Expected = 12 },
+            @{ Name = 'same_successor'; Expected = 3 },
+            @{ Name = 'entry_offset'; Expected = 12 },
+            @{ Name = 'cmp_min_max_jl'; Expected = 22 },
+            @{ Name = 'cmp_max_min_jl'; Expected = 11 },
+            @{ Name = 'cmp_equal_jge'; Expected = 22 },
+            @{ Name = 'cmp_less_jge'; Expected = 11 },
+            @{ Name = 'cmp_borrow'; Expected = 22 },
+            @{ Name = 'cmp_no_borrow'; Expected = 22 },
+            @{ Name = 'cmp_zero'; Expected = 22 },
+            @{ Name = 'cmp_nonzero'; Expected = 22 },
+            @{ Name = 'cmp_mov_flags'; Expected = 22 },
+            @{ Name = 'add_signed_overflow'; Expected = 11 },
+            @{ Name = 'add_negative_overflow'; Expected = 22 },
+            @{ Name = 'xor_signed_reset'; Expected = 22 },
+            @{ Name = 'cmp_preserve_eax'; Expected = 42 },
+            @{ Name = 'signed_join_taken'; Expected = 22 },
+            @{ Name = 'signed_join_fallthrough'; Expected = 11 },
+            @{ Name = 'call_helper'; Expected = 12 },
+            @{ Name = 'call_nested'; Expected = 12 },
+            @{ Name = 'call_shared'; Expected = 8 },
+            @{ Name = 'call_flags_preserved'; Expected = 22 },
+            @{ Name = 'call_flags_changed'; Expected = 11 },
+            @{ Name = 'call_unknown_then_init'; Expected = 42 },
+            @{ Name = 'call_wide_internal'; Expected = 0 },
+            @{ Name = 'call_shared_branch'; Expected = 5 },
+            @{ Name = 'stack_argument'; Expected = 12 },
+            @{ Name = 'stack_shared'; Expected = 14 },
+            @{ Name = 'stack_nested'; Expected = 12 },
+            @{ Name = 'stack_shared_join'; Expected = 14 },
+            @{ Name = 'stack_flags_zero'; Expected = 22 },
+            @{ Name = 'stack_flags_carry'; Expected = 22 },
+            @{ Name = 'stack_flags_overflow'; Expected = 11 },
+            @{ Name = 'stack_flags_negative_overflow'; Expected = 22 },
+            @{ Name = 'stack_flags_negative'; Expected = 22 },
+            @{ Name = 'stack_flags_clear'; Expected = 11 },
+            @{ Name = 'two_section_helper'; Expected = 12 },
+            @{ Name = 'data_sum'; Expected = 12 },
+            @{ Name = 'data_unaligned'; Expected = 12 },
+            @{ Name = 'data_last'; Expected = 255 },
+            @{ Name = 'data_wrap'; Expected = 2 },
+            @{ Name = 'data_zero'; Expected = 22 },
+            @{ Name = 'data_carry'; Expected = 22 },
+            @{ Name = 'data_overflow'; Expected = 11 },
+            @{ Name = 'data_negative_overflow'; Expected = 22 },
+            @{ Name = 'data_call'; Expected = 12 },
+            @{ Name = 'data_sum_alt'; Expected = 14 }
+          )
+          foreach ($testCase in $cases) {
+            $exe = "fixture_$($testCase.Name).exe"
+            $stdout = "original_$($testCase.Name).stdout"
+            $stderr = "original_$($testCase.Name).stderr"
+            python scripts/make_pe32_fixture.py $testCase.Name $exe
+            $process = Start-Process -FilePath (Resolve-Path $exe) -NoNewWindow -Wait -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+            Write-Host "$($testCase.Name) original exit status: $($process.ExitCode)"
+            if ($process.ExitCode -ne $testCase.Expected) { throw "Unexpected exit status for $($testCase.Name)" }
+            if ((Get-Item $stdout).Length -ne 0) { throw "Expected empty stdout for $($testCase.Name)" }
+            if ((Get-Item $stderr).Length -ne 0) { throw "Expected empty stderr for $($testCase.Name)" }
+          }
+
+  decoder-evaluation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - run: python3 scripts/export_decoder_cases.py
+      - run: cargo fmt --manifest-path tools/decoder-eval/Cargo.toml --check
+      - run: cargo clippy --manifest-path tools/decoder-eval/Cargo.toml --all-targets --locked -- -D warnings
+      - run: cargo test --manifest-path tools/decoder-eval/Cargo.toml --locked -- --nocapture
+
+  compiler-produced-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: cargo build --locked
+      - name: Measure available MSVC x86 output
+        shell: pwsh
+        run: |
+          Write-Host "Compiler baseline OS: $([System.Environment]::OSVersion.VersionString)"
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $installation = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (!$installation) { throw 'Required existing MSVC toolchain unavailable' }
+          $vcvars = Join-Path $installation 'VC\Auxiliary\Build\vcvarsall.bat'
+          cmd /c "`"$vcvars`" x86 && python compiler/measure.py && python compiler/diversity.py && python compiler/diversity.py --structures && python compiler/heldout/measure.py x86 && python research/crt/probe.py"
+          if ($LASTEXITCODE -ne 0) { throw 'Compiler measurement failed' }
+          cmd /c "`"$vcvars`" x64 && python compiler/heldout/measure.py x64"
+          if ($LASTEXITCODE -ne 0) { throw 'Held-out x64 measurement failed' }
+      - name: Validate design-only permissioned intake against all held-out originals
+        run: python tools/check_permissioned_corpus.py "${{ runner.temp }}/w2l-compiler-measurement"
+      - name: Check scalar local-frame contract against unchanged compiler artifact
+        run: python tools/check_local_frame_contract.py "${{ runner.temp }}/w2l-compiler-measurement"
+      - name: Check byte-local contract against unchanged compiler artifact
+        run: python tools/check_byte_local_contract.py "${{ runner.temp }}/w2l-compiler-measurement"
+      - name: Check initialized image-read design against unchanged array and loop
+        run: python tools/check_image_read_contract.py "${{ runner.temp }}/w2l-compiler-measurement"
+      - name: Check finite-loop design against unchanged compiler artifact
+        run: python tools/check_finite_loop_contract.py "${{ runner.temp }}/w2l-compiler-measurement"
+      - name: Explore ordinary CRT normal flow without emission
+        shell: pwsh
+        run: |
+          cargo run --locked --example crt_graph -- "${{ runner.temp }}/w2l-compiler-measurement/held_crt.exe" | Out-File -Encoding ascii "${{ runner.temp }}/w2l-compiler-measurement/crt-graph.json"
+          if ($LASTEXITCODE -ne 0) { throw 'CRT graph exploration failed' }
+      - name: Bind initializer callback evidence
+        run: python research/crt/callback_inventory.py "${{ runner.temp }}/w2l-compiler-measurement"
+      - name: Inventory ordinary CRT dependencies without emission
+        run: python research/crt/inventory.py "${{ runner.temp }}/w2l-compiler-measurement"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: compiler-measurement-reports
+          path: |
+            ${{ runner.temp }}/w2l-compiler-measurement/freestanding.exe
+            ${{ runner.temp }}/w2l-compiler-measurement/variation_*.exe
+            ${{ runner.temp }}/w2l-compiler-measurement/held_*.exe
+            ${{ runner.temp }}/w2l-compiler-measurement/*.rs
+            ${{ runner.temp }}/w2l-compiler-measurement/*.json
+            ${{ runner.temp }}/w2l-compiler-measurement/*.txt
+          if-no-files-found: error
+
+  compiler-native-linux:
+    needs: compiler-produced-windows
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: compiler-measurement-reports
+          path: evidence
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --locked
+      - name: Convert same hashed PE on Linux and compare native execution
+        run: |
+          python3 compiler/check_native.py evidence
+          python3 compiler/check_native.py evidence diversity-report.json
+          python3 compiler/check_native.py evidence structures-report.json
+          python3 compiler/heldout/check_native.py evidence
+          python3 tools/check_permissioned_corpus.py evidence --compare
+          python3 tools/check_local_frame_contract.py evidence
+          python3 tools/check_byte_local_contract.py evidence
+          python3 tools/check_image_read_contract.py evidence
+          python3 tools/check_finite_loop_contract.py evidence
+          python3 research/crt/inventory.py evidence --compare
+          cargo run --locked --example crt_graph -- evidence/held_crt.exe > /tmp/crt-graph.json
+          python3 -c 'import json; assert json.load(open("/tmp/crt-graph.json")) == json.load(open("evidence/crt-graph.json"))'
+          python3 research/crt/callback_inventory.py evidence --compare

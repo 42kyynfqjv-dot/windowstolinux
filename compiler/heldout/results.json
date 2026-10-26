@@ -1,0 +1,503 @@
+{
+  "freeze_commit": "cf042295303dccedb8506564f1e466ef9d353acd",
+  "measurement_commit": "8eb5f5991d41bd23eb4f544e64afc4f8ff9b81e4",
+  "run_id": 40288844509,
+  "artifact_id": 12634409438,
+  "cases": [
+    {
+      "kind": "held_args",
+      "source": "compiler/heldout/args.c",
+      "profile": "crt",
+      "arch": "x86",
+      "args": [
+        "A",
+        "B"
+      ],
+      "stdout_hex": "41726773",
+      "stderr_hex": "",
+      "exit": 68,
+      "files": {},
+      "freeze_commit": "cf042295303dccedb8506564f1e466ef9d353acd",
+      "source_sha256": "1eabbc9f298d7c44402a3cde48bb3a13894f46bf758deffc9f59c4c7229c8a16",
+      "sha256": "e5fb978e5d7c7e3ef63c0b93563cd1aaa767cd018f481c1d193319a03516e5c4",
+      "rust_sha256": null,
+      "conversion_accepted": false,
+      "converter_stderr": "w2l: only code with optional read-only data is supported\n",
+      "compile_flags": [
+        "/nologo",
+        "/Bv",
+        "/O2",
+        "/W4",
+        "/c",
+        "D:\\a\\windowstolinux\\windowstolinux\\compiler\\heldout\\args.c",
+        "/Foheld_args.obj",
+        "/MD"
+      ],
+      "link_flags": [
+        "/nologo",
+        "/machine:x86",
+        "/subsystem:console",
+        "held_args.obj",
+        "/out:held_args.exe"
+      ],
+      "sections": [
+        {
+          "name": ".text",
+          "virtual_size": 3521,
+          "rva": 4096,
+          "flags": "0x60000020"
+        },
+        {
+          "name": ".rdata",
+          "virtual_size": 2552,
+          "rva": 8192,
+          "flags": "0x40000040"
+        },
+        {
+          "name": ".data",
+          "virtual_size": 248,
+          "rva": 12288,
+          "flags": "0xc0000040"
+        },
+        {
+          "name": ".reloc",
+          "virtual_size": 336,
+          "rva": 16384,
+          "flags": "0x42000040"
+        }
+      ],
+      "machine": "0x14c",
+      "optional_magic": "0x10b"
+    },
+    {
+      "kind": "held_loop",
+      "source": "compiler/heldout/loop.c",
+      "profile": "custom",
+      "arch": "x86",
+      "args": [],
+      "stdout_hex": "",
+      "stderr_hex": "",
+      "exit": 10,
+      "files": {},
+      "freeze_commit": "cf042295303dccedb8506564f1e466ef9d353acd",
+      "source_sha256": "ab7399ad06d76244e6da488ddd34e09e62cd932a4511c9bc7d6c2eb686c010a1",
+      "sha256": "4dd5b215aef1137aaa7459fdfd6250bd963edead7b0884475ee067acd16d55a7",
+      "rust_sha256": null,
+      "conversion_accepted": false,
+      "converter_stderr": "w2l: linker COFF profile\n",
+      "compile_flags": [
+        "/nologo",
+        "/Bv",
+        "/O2",
+        "/W4",
+        "/c",
+        "D:\\a\\windowstolinux\\windowstolinux\\compiler\\heldout\\loop.c",
+        "/Foheld_loop.obj",
+        "/GS-",
+        "/Zl"
+      ],
+      "link_flags": [
+        "/nologo",
+        "/machine:x86",
+        "/subsystem:console",
+        "held_loop.obj",
+        "/out:held_loop.exe",
+        "/nodefaultlib",
+        "/entry:entry@0"
+      ],
+      "sections": [
+        {
+          "name": ".text",
+          "virtual_size": 28,
+          "rva": 4096,
+          "flags": "0x60000020"
+        },
+        {
+          "name": ".rdata",
+          "virtual_size": 156,
+          "rva": 8192,
+          "flags": "0x40000040"
+        },
+        {
+          "name": ".data",
+          "virtual_size": 4,
+          "rva": 12288,
+          "flags": "0xc0000040"
+        },
+        {
+          "name": ".reloc",
+          "virtual_size": 12,
+          "rva": 16384,
+          "flags": "0x42000040"
+        }
+      ],
+      "machine": "0x14c",
+      "optional_magic": "0x10b"
+    },
+    {
+      "kind": "held_array",
+      "source": "compiler/heldout/array.c",
+      "profile": "custom",
+      "arch": "x86",
+      "args": [],
+      "stdout_hex": "",
+      "stderr_hex": "",
+      "exit": 9,
+      "files": {},
+      "freeze_commit": "cf042295303dccedb8506564f1e466ef9d353acd",
+      "source_sha256": "39e5a433267e87cb0254c15f144dd8bee2f38d0aa06c81cb2bfe28222e110eb4",
+      "sha256": "97f38c7a61ef989c977e623faebc635074068df7508940e1699fe9d2d79bbccb",
+      "rust_sha256": null,
+      "conversion_accepted": false,
+      "converter_stderr": "w2l: linker COFF profile\n",
+      "compile_flags": [
+        "/nologo",
+        "/Bv",
+        "/O2",
+        "/W4",
+        "/c",
+        "D:\\a\\windowstolinux\\windowstolinux\\compiler\\heldout\\array.c",
+        "/Foheld_array.obj",
+        "/GS-",
+        "/Zl"
+      ],
+      "link_flags": [
+        "/nologo",
+        "/machine:x86",
+        "/subsystem:console",
+        "held_array.obj",
+        "/out:held_array.exe",
+        "/nodefaultlib",
+        "/entry:entry@0"
+      ],
+      "sections": [
+        {
+          "name": ".text",
+          "virtual_size": 21,
+          "rva": 4096,
+          "flags": "0x60000020"
+        },
+        {
+          "name": ".rdata",
+          "virtual_size": 156,
+          "rva": 8192,
+          "flags": "0x40000040"
+        },
+        {
+          "name": ".data",
+          "virtual_size": 12,
+          "rva": 12288,
+          "flags": "0xc0000040"
+        },
+        {
+          "name": ".reloc",
+          "virtual_size": 16,
+          "rva": 16384,
+          "flags": "0x42000040"
+        }
+      ],
+      "machine": "0x14c",
+      "optional_magic": "0x10b"
+    },
+    {
+      "kind": "held_buffer",
+      "source": "compiler/heldout/buffer.c",
+      "profile": "custom",
+      "arch": "x86",
+      "args": [],
+      "stdout_hex": "",
+      "stderr_hex": "",
+      "exit": 132,
+      "files": {},
+      "freeze_commit": "cf042295303dccedb8506564f1e466ef9d353acd",
+      "source_sha256": "e047af41528d34e357734856cdafaad12ae1f1418ff3c9299ef3308f20cdb09a",
+      "sha256": "7f31478552b129340c86fb3f432e96838c1fab9272cd0014c9d0ba8ef20f3e38",
+      "rust_sha256": null,
+      "conversion_accepted": false,
+      "converter_stderr": "w2l: linker COFF profile\n",
+      "compile_flags": [
+        "/nologo",
+        "/Bv",
+        "/O2",
+        "/W4",
+        "/c",
+        "D:\\a\\windowstolinux\\windowstolinux\\compiler\\heldout\\buffer.c",
+        "/Foheld_buffer.obj",
+        "/GS-",
+        "/Zl"
+      ],
+      "link_flags": [
+        "/nologo",
+        "/machine:x86",
+        "/subsystem:console",
+        "held_buffer.obj",
+        "/out:held_buffer.exe",
+        "/nodefaultlib",
+        "/entry:entry@0"
+      ],
+      "sections": [
+        {
+          "name": ".text",
+          "virtual_size": 34,
+          "rva": 4096,
+          "flags": "0x60000020"
+        },
+        {
+          "name": ".rdata",
+          "virtual_size": 140,
+          "rva": 8192,
+          "flags": "0x40000040"
+        }
+      ],
+      "machine": "0x14c",
+      "optional_magic": "0x10b"
+    },
+    {
+      "kind": "held_structure",
+      "source": "compiler/heldout/structure.c",
+      "profile": "custom",
+      "arch": "x86",
+      "args": [],
+      "stdout_hex": "",
+      "stderr_hex": "",
+      "exit": 12,
+      "files": {},
+      "freeze_commit": "cf042295303dccedb8506564f1e466ef9d353acd",
+      "source_sha256": "ef8f8f7d8f7ec42857130d21a277405b1d36a247af65633f47d69c3efecd2f97",
+      "sha256": "f4ee671fd6f10e0637ff62d6e0316b0e1626fabfdd9a1ed0e4b08de6fcd0ea30",
+      "rust_sha256": null,
+      "conversion_accepted": false,
+      "converter_stderr": "w2l: linker COFF profile\n",
+      "compile_flags": [
+        "/nologo",
+        "/Bv",
+        "/O2",
+        "/W4",
+        "/c",
+        "D:\\a\\windowstolinux\\windowstolinux\\compiler\\heldout\\structure.c",
+        "/Foheld_structure.obj",
+        "/GS-",
+        "/Zl"
+      ],
+      "link_flags": [
+        "/nologo",
+        "/machine:x86",
+        "/subsystem:console",
+        "held_structure.obj",
+        "/out:held_structure.exe",
+        "/nodefaultlib",
+        "/entry:entry@0"
+      ],
+      "sections": [
+        {
+          "name": ".text",
+          "virtual_size": 29,
+          "rva": 4096,
+          "flags": "0x60000020"
+        },
+        {
+          "name": ".rdata",
+          "virtual_size": 140,
+          "rva": 8192,
+          "flags": "0x40000040"
+        }
+      ],
+      "machine": "0x14c",
+      "optional_magic": "0x10b"
+    },
+    {
+      "kind": "held_crt",
+      "source": "compiler/heldout/crt.c",
+      "profile": "crt",
+      "arch": "x86",
+      "args": [],
+      "stdout_hex": "435254",
+      "stderr_hex": "",
+      "exit": 0,
+      "files": {},
+      "freeze_commit": "cf042295303dccedb8506564f1e466ef9d353acd",
+      "source_sha256": "ce74a99f0bfb05b512ffe86d71d74ef6afc542cffc30112cbcf7e5bcceed6008",
+      "sha256": "b249aef8c33ca3bd971708402d69c0c569b718f8e5afc85c0e7eee29a35696f9",
+      "rust_sha256": null,
+      "conversion_accepted": false,
+      "converter_stderr": "w2l: only code with optional read-only data is supported\n",
+      "compile_flags": [
+        "/nologo",
+        "/Bv",
+        "/O2",
+        "/W4",
+        "/c",
+        "D:\\a\\windowstolinux\\windowstolinux\\compiler\\heldout\\crt.c",
+        "/Foheld_crt.obj",
+        "/MD"
+      ],
+      "link_flags": [
+        "/nologo",
+        "/machine:x86",
+        "/subsystem:console",
+        "held_crt.obj",
+        "/out:held_crt.exe"
+      ],
+      "sections": [
+        {
+          "name": ".text",
+          "virtual_size": 3505,
+          "rva": 4096,
+          "flags": "0x60000020"
+        },
+        {
+          "name": ".rdata",
+          "virtual_size": 2552,
+          "rva": 8192,
+          "flags": "0x40000040"
+        },
+        {
+          "name": ".data",
+          "virtual_size": 248,
+          "rva": 12288,
+          "flags": "0xc0000040"
+        },
+        {
+          "name": ".reloc",
+          "virtual_size": 336,
+          "rva": 16384,
+          "flags": "0x42000040"
+        }
+      ],
+      "machine": "0x14c",
+      "optional_magic": "0x10b"
+    },
+    {
+      "kind": "held_file",
+      "source": "compiler/heldout/file.c",
+      "profile": "crt",
+      "arch": "x86",
+      "args": [],
+      "stdout_hex": "44617461",
+      "stderr_hex": "",
+      "exit": 0,
+      "files": {
+        "held.txt": "44617461"
+      },
+      "freeze_commit": "cf042295303dccedb8506564f1e466ef9d353acd",
+      "source_sha256": "39eaaf51c6b2d8dc620adcf7a2ec5c78f1a70dce5fb0805ed280857dea24a6bf",
+      "sha256": "567ce31bd5fadbaa129b87d587475420700cfe3c231bd588ffa4d6521735b6a4",
+      "rust_sha256": null,
+      "conversion_accepted": false,
+      "converter_stderr": "w2l: only code with optional read-only data is supported\n",
+      "compile_flags": [
+        "/nologo",
+        "/Bv",
+        "/O2",
+        "/W4",
+        "/c",
+        "D:\\a\\windowstolinux\\windowstolinux\\compiler\\heldout\\file.c",
+        "/Foheld_file.obj",
+        "/MD"
+      ],
+      "link_flags": [
+        "/nologo",
+        "/machine:x86",
+        "/subsystem:console",
+        "held_file.obj",
+        "/out:held_file.exe"
+      ],
+      "sections": [
+        {
+          "name": ".text",
+          "virtual_size": 3681,
+          "rva": 4096,
+          "flags": "0x60000020"
+        },
+        {
+          "name": ".rdata",
+          "virtual_size": 2590,
+          "rva": 8192,
+          "flags": "0x40000040"
+        },
+        {
+          "name": ".data",
+          "virtual_size": 248,
+          "rva": 12288,
+          "flags": "0xc0000040"
+        },
+        {
+          "name": ".reloc",
+          "virtual_size": 356,
+          "rva": 16384,
+          "flags": "0x42000040"
+        }
+      ],
+      "machine": "0x14c",
+      "optional_magic": "0x10b"
+    },
+    {
+      "kind": "held_pe32plus",
+      "source": "compiler/heldout/crt.c",
+      "profile": "crt",
+      "arch": "x64",
+      "args": [],
+      "stdout_hex": "435254",
+      "stderr_hex": "",
+      "exit": 0,
+      "files": {},
+      "freeze_commit": "cf042295303dccedb8506564f1e466ef9d353acd",
+      "source_sha256": "ce74a99f0bfb05b512ffe86d71d74ef6afc542cffc30112cbcf7e5bcceed6008",
+      "sha256": "d794a01752a5fde5a8d5c015d66471fa41963feb61a97de45cada2dfde4474e6",
+      "rust_sha256": null,
+      "conversion_accepted": false,
+      "converter_stderr": "w2l: only x86 PE32 is supported\n",
+      "compile_flags": [
+        "/nologo",
+        "/Bv",
+        "/O2",
+        "/W4",
+        "/c",
+        "D:\\a\\windowstolinux\\windowstolinux\\compiler\\heldout\\crt.c",
+        "/Foheld_pe32plus.obj",
+        "/MD"
+      ],
+      "link_flags": [
+        "/nologo",
+        "/machine:x64",
+        "/subsystem:console",
+        "held_pe32plus.obj",
+        "/out:held_pe32plus.exe"
+      ],
+      "sections": [
+        {
+          "name": ".text",
+          "virtual_size": 3144,
+          "rva": 4096,
+          "flags": "0x60000020"
+        },
+        {
+          "name": ".rdata",
+          "virtual_size": 3240,
+          "rva": 8192,
+          "flags": "0x40000040"
+        },
+        {
+          "name": ".data",
+          "virtual_size": 304,
+          "rva": 12288,
+          "flags": "0xc0000040"
+        },
+        {
+          "name": ".pdata",
+          "virtual_size": 312,
+          "rva": 16384,
+          "flags": "0x40000040"
+        },
+        {
+          "name": ".reloc",
+          "virtual_size": 44,
+          "rva": 20480,
+          "flags": "0x42000040"
+        }
+      ],
+      "machine": "0x8664",
+      "optional_magic": "0x20b"
+    }
+  ]
+}
