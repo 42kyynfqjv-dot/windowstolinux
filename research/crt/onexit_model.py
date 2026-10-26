@@ -49,11 +49,11 @@ def validate(s):
     for table, address in zip(s.tables, (0x30ac, 0x30b8)):
         if table.owner != s.owner or table.start != address or table.size != 12:
             raise ValueError('table owner/full range/protected alias')
-        if len(table.words) != 3 or any(v is not None and not 0 <= v <= 0xffffffff for v in table.words):
+        if len(table.words) != 3 or any(v is not None and (not isinstance(v, int) or not 0 <= v <= 0xffffffff) for v in table.words):
             raise ValueError('word range')
-    if s.flag is not None and not 0 <= s.flag <= 255:
+    if s.flag is not None and (not isinstance(s.flag, int) or not 0 <= s.flag <= 255):
         raise ValueError('flag byte')
-    if s.mode is not None and not 0 <= s.mode <= 0xffffffff:
+    if s.mode is not None and (not isinstance(s.mode, int) or not 0 <= s.mode <= 0xffffffff):
         raise ValueError('mode word')
 
 
@@ -74,7 +74,7 @@ def foreign(s, t, f, name):
     if not f.framed or f.result is None or f.nonreturn:
         # Numeric success/failure alone never grants a frame or preserves disjoint words.
         return block(s, 'unresolved foreign effects/nonreturn')
-    if not 0 <= f.result <= 0xffffffff:
+    if not isinstance(f.result, int) or not 0 <= f.result <= 0xffffffff:
         raise ValueError('foreign result must be x86 bits')
     if t is not None:
         if f.words is None or len(f.words) != 3 or any(not isinstance(v, int) or not 0 <= v <= 0xffffffff for v in f.words):
@@ -131,7 +131,7 @@ def initialize(s, policy, *, incoming_eax=None, effects=()):
 
 
 def conversion(callback_bits, result_bits):
-    if not 0 <= callback_bits <= 0xffffffff or not 0 <= result_bits <= 0xffffffff:
+    if not isinstance(callback_bits, int) or not isinstance(result_bits, int) or not 0 <= callback_bits <= 0xffffffff or not 0 <= result_bits <= 0xffffffff:
         raise ValueError('x86 scalar range')
     # Independent specification of the CMOVE/NEG/SBB/NEG/LEA result.
     success = callback_bits != 0 and result_bits == 0

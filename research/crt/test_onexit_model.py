@@ -69,6 +69,17 @@ class Contract(unittest.TestCase):
             with self.assertRaises(ValueError):initialize(s,1)
             self.assertEqual(s,before)
 
+    def test_fractional_state_is_not_x86_bits(self):
+        for field in ['flag','mode']:
+            s=State();setattr(s,field,0.5);before=copy.deepcopy(s)
+            with self.assertRaises(ValueError):initialize(s,1)
+            self.assertEqual(s,before)
+        s=State();s.tables[0].words=(0.5,0,0);before=copy.deepcopy(s)
+        with self.assertRaises(ValueError):initialize(s,1)
+        self.assertEqual(s,before)
+        for args in [(0.5,0),(1,0.5)]:
+            with self.assertRaises(ValueError):conversion(*args)
+
     def test_sentinel_registration_unknown_effect_and_callback_provenance(self):
         s=State();initialize(s,1)
         with self.assertRaises(ValueError):register(s,0,allowed_callbacks={0x4018d0})

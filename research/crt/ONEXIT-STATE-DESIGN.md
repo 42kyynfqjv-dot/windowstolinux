@@ -125,7 +125,7 @@ No numeric incoming ESP or flags are fabricated in the design.
 
 ## Independent evidence and provenance
 
-Twelve model test functions use literal bytes/values and explicit hypothetical
+Thirteen model test functions use literal bytes/values and explicit hypothetical
 foreign frames; they include first/second failures, no rollback, blocked composition,
 partial EAX, initialization policy, ownership/bounds, consumed lifetime, separate
 process queue and invalid callbacks. They do not count as native program comparisons.
@@ -179,3 +179,5 @@ explicit ownership assumptions while exposing _crt_atexit registration as a hard
 boundary. It does not resolve the earlier __p__commode alias or any whole-startup
 entry contract. A separate external registration/heap/lifetime design is needed
 before actual ordinary CRT translation can advance.
+
+Medium review also rejects fractional state/foreign/scalar values: range membership alone is insufficient to represent x86 bits. The independent regression checks rejection before local writes.
