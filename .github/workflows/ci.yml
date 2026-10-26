@@ -195,6 +195,7 @@ jobs:
         with:
           name: compiler-measurement-reports
           path: |
+            ${{ runner.temp }}/w2l-compiler-measurement/freestanding.exe
             ${{ runner.temp }}/w2l-compiler-measurement/*.rs
             ${{ runner.temp }}/w2l-compiler-measurement/*.json
             ${{ runner.temp }}/w2l-compiler-measurement/*.txt
@@ -204,21 +205,12 @@ jobs:
     needs: compiler-produced-windows
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           name: compiler-measurement-reports
           path: evidence
       - uses: dtolnay/rust-toolchain@stable
-      - name: Execute unchanged compiler program translated to native ELF
-        run: |
-          rustc -D warnings evidence/freestanding.rs -o /tmp/compiler-native
-          /tmp/compiler-native > /tmp/native.stdout 2> /tmp/native.stderr
-          python3 - <<'PYCODE'
-          import json
-          from pathlib import Path
-          original = json.loads(Path('evidence/report.json').read_text())[0]
-          assert original['conversion_accepted'] and original['exit'] == 0
-          assert Path('/tmp/native.stdout').read_bytes().hex() == original['stdout_hex'] == '48656c6c6f'
-          assert Path('/tmp/native.stderr').read_bytes().hex() == original['stderr_hex'] == ''
-          print('UNCHANGED_COMPILER_NATIVE_MATCH', original['sha256'], 'Hello', 'exit=0')
-          PYCODE
+      - run: cargo build --locked
+      - name: Convert same hashed PE on Linux and compare native execution
+        run: python3 compiler/check_native.py evidence

@@ -57,13 +57,16 @@ for kind in ['freestanding','crt']:
         again.unlink()
     else:
         assert converter.returncode == 1
-    result=dict(kind=kind,sha256=hashlib.sha256(b).hexdigest(),sections=sections,
+    result=dict(kind=kind,sha256=hashlib.sha256(b).hexdigest(),
+        source_sha256=hashlib.sha256((repo/'compiler/program.c').read_bytes()).hexdigest(),
+        rust_sha256=hashlib.sha256((root/(kind+'.rs')).read_bytes()).hexdigest() if kind=='freestanding' else None,sections=sections,
         coff_characteristics=hex(struct.unpack_from('<H',b,pe+22)[0]),dll_characteristics=hex(struct.unpack_from('<H',b,o+70)[0]),
         directories=[dict(index=i,rva=hex(struct.unpack_from('<I',b,o+96+8*i)[0]),size=struct.unpack_from('<I',b,o+100+8*i)[0]) for i in range(16) if any(struct.unpack_from('<II',b,o+96+8*i))],
         expected_stdout_hex='48656c6c6f',stdout_hex=observation[0],stderr_hex=observation[1],exit=observation[2],
         converter_exit=converter.returncode,converter_stderr=converter.stderr.decode(errors='replace'),
         conversion_accepted=converter.returncode==0,compile_flags=flags,link_flags=link[1:])
     print('MEASUREMENT '+json.dumps(result))
+    assert (root/exe).read_bytes() == b
     results.append(result)
     if kind=='freestanding':
         # Independent structural cross-check alongside production conversion.

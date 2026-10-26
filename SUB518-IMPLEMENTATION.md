@@ -66,3 +66,31 @@ Historical unexplained corpus timeout is not declared solved.
 Next medium review should focus on decoded relocation coverage, per-Candidate
 ownership isolation, hypothetical branch states, saved ESI and cleanup boundaries,
 generated transition equivalence, and provenance of the actual CI compiler artifact.
+
+## Medium production/provenance review
+
+The first CI checkpoint converted PE on Windows and compiled its Rust on Linux;
+it did not establish independent Linux conversion of that PE. The revised gate
+transfers only the authored freestanding PE, its generated Rust and reports.
+Linux verifies PE SHA256, authored C source SHA256 and Windows-generated Rust SHA256,
+then runs the Linux converter twice on that exact PE. Both generated sources must
+match the recorded Windows Rust digest before native compilation/execution. PE bytes
+must remain unchanged. Full stdout/stderr/exit are checked against the original
+Windows report. No CRT/compiler binary is transferred. This strengthens provenance
+without changing compiler flags, input bytes or production semantics.
+
+Reviewed private per-Candidate state isolation, complete relocation binding and
+separate branch/call contexts; no production semantic defect reproduced. Added a
+21st production mutation: replace the success epilogue POP ESI with supported PUSH
+ESI. This must reject through ESI/terminal ownership validation, rather than merely
+an unsupported-opcode check. Root counts remain48; typed models remain16 functions
+and24 parameter variations of one layout. The six authored native cases remain
+separate from the one real compiler-program Windows/Linux comparison.
+
+Next bounded validation should compile a small fixed set of independently authored
+C source variations with the same documented toolchain/options, without PE edits
+or flag searches. Record every acceptance/rejection, independent expected outputs
+and first unsupported feature. Require accepted variants to pass this same hashed
+PE Windows/Linux conversion/execution chain. Rejection is a measured result, not
+permission to broaden semantics. Medium effort is sufficient for that measurement;
+any new semantic implementation requires a concrete Astra High handoff.

@@ -35,7 +35,7 @@ with tempfile.TemporaryDirectory() as tmp:
             p=subprocess.run([str(native)],stdout=out,stderr=err,timeout=15)
         assert (p.returncode,(root/'stdout').read_bytes(),(root/'stderr').read_bytes())==(expected,b'Hello',b'')
     # Each mutation independently targets a policy boundary; no repair of rejected bytes.
-    bads=[(0x400,0x57),(0x42a,0x5f),(0x431,0x90),(0x41d,16),
+    bads=[(0x42a,0x56),(0x400,0x57),(0x42a,0x5f),(0x431,0x90),(0x41d,16),
           (0x401,0x66),(0x409,2),(0x402,65),(0x402,0),(0x40b,0x14),
           (0x403,0xb8),(0x407,0x41),(0x417,0xff),(0x421,0x74),
           (0x422,0xff),(0x423,0x90),(0x445,0x45),(0x447,12),
@@ -46,4 +46,4 @@ with tempfile.TemporaryDirectory() as tmp:
         p=convert(b)
         assert p.returncode==1,(hex(at),p.stderr)
         assert rs.read_text()=='preserve'
-print('compiler-shaped production: 6 deterministic native cases, 20 rejected mutations; separate from unchanged MSVC evidence')
+print('compiler-shaped production: 6 deterministic native cases, 21 rejected mutations; separate from unchanged MSVC evidence')
