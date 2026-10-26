@@ -325,3 +325,10 @@ a complete49-instruction same-artifact inventory provide design evidence only.
 All eight held-out PEs still reject. Medium review precedes bounded production
 integration targeting unchanged composed_O2; other prologue/pointer/capacity
 barriers remain separate. No new translated-program count is claimed here.
+
+Strategy checkpoint: [CLI critical path](docs/CLI-CRITICAL-PATH.md) distinguishes
+reusable lifting from specialized profiles. After the current predicate contract,
+inventory and batch the frozen corpus's operand/frame/owner-offset/capacity work
+as one integrated milestone. A freestanding binary-exact ASCII-uppercase filter
+is the later useful CLI target; broad I/O does not start in this design phase.
+Keep tests/review, and measure actual compiler dependencies before fixing scope.
