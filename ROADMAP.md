@@ -166,3 +166,8 @@ scalar local-frame contract, followed by reviewed integration with closed import
 intake. Design first on Astra High: local ownership/uninitialized state, full word
 bounds, protected returns and cleanup/flags. Target unchanged PE exit12 with Windows/
 Linux comparison; no broad byte/global memory, loop or CRT expansion.
+
+SUB-530 defines the bounded scalar local-frame execution contract in
+[SUB530-LOCAL-FRAME-DESIGN.md](SUB530-LOCAL-FRAME-DESIGN.md), targeting unchanged
+structure.c exit12. Nine independent model tests and exact-artifact checks precede
+medium contract review; production still rejects all eight held-out programs.

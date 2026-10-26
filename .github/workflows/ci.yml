@@ -21,6 +21,7 @@ jobs:
       - run: python3 -m unittest discover -s tools -p test_typed_abi_model.py -v
       - run: python3 -m unittest discover -s tools -p test_conditional_register_model.py -v
       - run: python3 -m unittest discover -s tools -p test_nested_stack_model.py -v
+      - run: python3 -m unittest discover -s tools -p test_local_frame_model.py -v
       - name: Imported output translation and support checks
         run: |
           python3 scripts/check_output_probe.py
@@ -216,6 +217,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Held-out x64 measurement failed' }
       - name: Validate design-only permissioned intake against all held-out originals
         run: python tools/check_permissioned_corpus.py "${{ runner.temp }}/w2l-compiler-measurement"
+      - name: Check scalar local-frame design against unchanged compiler artifact
+        run: python tools/check_local_frame_contract.py "${{ runner.temp }}/w2l-compiler-measurement"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -247,3 +250,4 @@ jobs:
           python3 compiler/check_native.py evidence structures-report.json
           python3 compiler/heldout/check_native.py evidence
           python3 tools/check_permissioned_corpus.py evidence --compare
+          python3 tools/check_local_frame_contract.py evidence

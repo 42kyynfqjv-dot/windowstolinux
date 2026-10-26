@@ -79,3 +79,8 @@ SUB-529 adds `w2l --inspect-image INPUT.exe` for bounded PE32 diagnostic JSON.
 Inspection success always reports `emission_allowed: false`. Seven held-out PE32
 layouts can be inspected; PE32+ rejects; all eight conversions still reject.
 See [SUB529-INSPECTION.md](SUB529-INSPECTION.md) for stage boundaries and evidence.
+
+SUB-530 defines the bounded scalar local-frame execution contract in
+[SUB530-LOCAL-FRAME-DESIGN.md](SUB530-LOCAL-FRAME-DESIGN.md), targeting unchanged
+structure.c exit12. Nine independent model tests and exact-artifact checks precede
+medium contract review; production still rejects all eight held-out programs.
