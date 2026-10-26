@@ -1,0 +1,24 @@
+{
+  "purpose": "Independent expected bytes for test-only SUB-541; no startup proof",
+  "mask_hex": ["0x24", "0x02"],
+  "positive": [
+    {"name":"zero", "before":"00000000000000000000000000000000", "after":"24000000000000000200000000000000"},
+    {"name":"all_bits", "before":"ffffffffffffffffffffffffffffffff", "after":"ffffffffffffffffffffffffffffffff"},
+    {"name":"high_word_preservation", "before":"000000007856341200000000efcdab90", "after":"240000007856341202000000efcdab90"},
+    {"name":"existing_flags", "before":"04000000112233440000008055667788", "after":"24000000112233440200008055667788"},
+    {"name":"already_set", "before":"24000000010203040200000005060708", "after":"24000000010203040200000005060708"}
+  ],
+  "post_callback": {"eax":0,"cf":false,"of":false,"zf":true,"sf":false},
+  "negative": [
+    "second region has only seven initialized bytes",
+    "first high dword uninitialized despite fully known low dword",
+    "regions overlap by one byte",
+    "second region aliases protected callback slot",
+    "accessor points into metadata",
+    "accessor field missing HIGHLOW provenance",
+    "mutated OR mask or addressing form",
+    "state previously blocked by an unknown initializer",
+    "regions from different owned image snapshots"
+  ],
+  "negative_policy":"validate both complete regions before modifying either; preserve input state on rejection"
+}
