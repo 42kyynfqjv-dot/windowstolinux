@@ -255,6 +255,34 @@ memory, and loops require cycle/termination/resource semantics. CRT/runtime inpu
 files and PE32+ are independent larger projects. Do not widen all of them as part of
 loader work or remove a barrier merely to move a success counter.
 
-No tool/resource blocker was found for this design. The remaining uncertainty is
-Windows behavior beyond the measured layout/base/no-fault domain, not availability
-of the existing CI. No merge, release, new credentials or paid resources.
+Design tooling is available. Windows behavior beyond the measured layout/base/no-fault
+domain remains uncertain; the new baseline timeout below also limits CI confidence.
+No merge, release, new credentials or paid resources.
+
+## CI anomaly during this design pass
+
+First published design commit a58b188bb593b72bddb54edd1d6a37a30ea0e6e3,
+CI40291023803, authored-windows-fixture job121465842821: corpus case4 timed out in
+`subprocess.run(..., timeout=15)` at08:16:07 UTC on2026-10-26. SHA-256
+`1cc28c3ebc69978a71c776755692ea89d567cb33ea21829b322619825bf0fa9d`.
+The18 launch samples and all seven imported-output originals had passed; corpus
+cases0..3 passed, case4 timed out, later corpus cases and63 arithmetic/data originals
+were skipped. This is an additional occurrence beyond the two historical timeouts,
+on a different fixture (previously corpus14 and imported max).
+
+Source inspection confirms this Windows harness executes the original PE and never
+the converter or new model. Case4 is a finite arithmetic/branch/_write program,
+not the held-out runtime loop. The wait traceback does not localize the stall to
+loader, CRT, program, process wait or runner. The current corpus failure log lacks
+PID/elapsed-spawn/captured-output state, and the temporary directory is cleaned up;
+its exact binary is reproducible from the recorded source/hash. No root cause or
+fix is established. The separate18-sample probe passing does not disprove this stall.
+
+The compiler-produced Windows job independently passed all eight held-out baseline,
+rejection and design-model checks. Preserve the failed run when checking subsequent
+commits; a later green run is only another observation. No hidden retry, timeout
+increase, skipped case or lowered assertion is authorized by this finding. The next
+medium review should first bound a harness evidence improvement (retain failing
+original/hash/stdout/stderr, PID and timing at the actual failing launch path) and
+safe reproduction before production expansion. This does not require new semantic
+features or imply the converter caused the original-program timeout.
