@@ -17,3 +17,5 @@ owned effect, consume these fixed expectations and add a separate authored C/CPU
 operation comparison. Production ordinary CRT stays rejected. Publish on this fresh
 feature branch/draft PR after coordinating the outstanding PR #1 merge, preserving
 its exact head. Future PR merge requires separate authorization.
+
+Implementation now lives in examples/crt_option_state.rs; see OPTION-STATE-IMPLEMENTATION.md for executed evidence and limitations. The paragraphs above preserve the preregistration checkpoint.
