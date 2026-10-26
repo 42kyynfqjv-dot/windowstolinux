@@ -332,3 +332,9 @@ inventory and batch the frozen corpus's operand/frame/owner-offset/capacity work
 as one integrated milestone. A freestanding binary-exact ASCII-uppercase filter
 is the later useful CLI target; broad I/O does not start in this design phase.
 Keep tests/review, and measure actual compiler dependencies before fixing scope.
+
+SUB-562 [composition progress](research/input/heldout/COMPOSITION.md): complete
+eight-artifact inventory and first shared predicate/operand implementation unit.
+Composed O2 is the first acceptance target; seven artifacts still reject while
+coupled frame/offset/capacity/call-effect work remains in the same draft PR.
+The full112-pair milestone is incomplete.

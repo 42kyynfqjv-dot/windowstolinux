@@ -1,4 +1,8 @@
-# SUB-561 post-call predicate contract (design only)
+# SUB-561 post-call predicate contract (historical design)
+
+SUB-562 now implements this bounded starting unit; see
+[composition progress](../heldout/COMPOSITION.md). Statements below describing
+all eight rejections record the design checkpoint, not current admission.
 
 Decision: add a bounded entailment stage before the existing exact single-symbol
 refiner, and normalize seven additional observed byte forms into existing scalar,
