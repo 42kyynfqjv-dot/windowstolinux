@@ -23,6 +23,7 @@ enum Op {
     Cleanup,
     Ret,
     Lea(usize, usize, usize, u32, u32),
+    Scaled(usize, usize, u32, u32),
     ZeroExtend(usize, usize),
     Arithmetic(usize, u32, bool),
     Binary(usize, usize, bool),
@@ -105,6 +106,13 @@ fn decode(image: &Candidate<'_>) -> Result<Graph, String> {
                 bound.insert(pc + 2);
                 Op::Acquire
             }
+            [0x3d, _, _, _, _] => Op::Compare(0, 32, u32_at(b, 1)?),
+            [0x83, 0xfa, n] => Op::Compare(2, 32, *n as i8 as i32 as u32),
+            [0x8b, 0x4c, 0x24, 4] => Op::Argument(1, 4),
+            [0x0f, 0xb7, 0x01] => Op::ReadWord(0, 1, 0),
+            [0x0f, 0xb7, 0x51, 2] => Op::ReadWord(2, 1, 2),
+            [0x8d, 0x04, 0x4a] => Op::Lea(0, 2, 1, 2, 0),
+            [0x8d, 0x04, 0x45, _, _, _, _] => Op::Scaled(0, 0, 2, u32_at(b, 3)?),
             [0x8b, 0xc8] => Op::Move(1, 0),
             [0x8b, 0xc2] => Op::Move(0, 2),
             [0xb8, _, _, _, _] => Op::Mov(0, u32_at(b, 1)?),
@@ -277,6 +285,7 @@ impl Proven {
                 Op::Restore => s.push_str("s.r[3]=s.saved;s.stack.pop();\n"),
                 Op::Ret => {s.push_str("s.r[0]}\n");continue;}
                 Op::Lea(d,a,b,k,c) => writeln!(s,"s.r[{d}]=s.r[{a}].wrapping_add(s.r[{b}].wrapping_mul({k})).wrapping_add({c});").unwrap(),
+                Op::Scaled(d,v,k,c) => writeln!(s,"s.r[{d}]=s.r[{v}].wrapping_mul({k}).wrapping_add({c});").unwrap(),
                 Op::ZeroExtend(d,v) => writeln!(s,"s.r[{d}]=s.r[{v}] & 65535;").unwrap(),
                 Op::Arithmetic(r,v,subtract) => {
                     let method=if subtract{"overflowing_sub"}else{"overflowing_add"};

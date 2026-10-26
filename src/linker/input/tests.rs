@@ -356,3 +356,63 @@ fn helper_actual_context_and_independent_negative_paths() {
         std::fs::remove_dir_all(dir).unwrap();
     }
 }
+
+#[test]
+fn postcall_composition_native_and_rejections() {
+    let hex="83ec088d04246a03506808204000ff150020400085c07509b8c800000083c408c383f8417609b8cb00000083c408c383f8027609b8c900000083c408c3508d44240450e82800000083c4083dca000000750483c408c38d04450600000083c408c3cccccccccccccccccccccccccccccc8b4c24040fb70183e83083f809771a837c24080275180fb7510283ea3083fa0977078d0c808d044ac3b8ca000000c3";
+    let bytes: Vec<u8> = (0..hex.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap())
+        .collect();
+    let g = graph_for(&bytes);
+    assert!(matches!(g[&0x104b].0, Op::Compare(0, 32, 202)));
+    assert!(matches!(g[&0x1056].0, Op::Scaled(0, 0, 2, 6)));
+    assert!(matches!(g[&0x1070].0, Op::Argument(1, 4)));
+    let source = prove(g.clone(), 0x1000).unwrap().emit();
+    for (pc, op) in [
+        (0x104b, Op::Test(1)),
+        (0x1070, Op::Argument(1, 8)),
+        (0x1086, Op::ReadWord(2, 1, 6)),
+        (0x107d, Op::Branch(Condition::Be, 0x1099)),
+        (0x1048, Op::Ret),
+    ] {
+        let mut bad = g.clone();
+        bad.get_mut(&pc).unwrap().0 = op;
+        assert!(prove(bad, 0x1000).is_err(), "{pc:x}");
+    }
+    if cfg!(target_os = "linux") {
+        let dir = std::env::temp_dir().join(format!("postcall-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("p.rs");
+        let bin = dir.join("native");
+        std::fs::write(&file, source).unwrap();
+        assert!(std::process::Command::new("rustc")
+            .args(["--edition=2021"])
+            .arg(file)
+            .arg("-o")
+            .arg(&bin)
+            .status()
+            .unwrap()
+            .success());
+        for (input, expected) in [
+            ("0", 6),
+            ("99", 204),
+            ("98", 202),
+            ("42", 90),
+            ("a", 202),
+            ("0/", 202),
+            ("", 200),
+            ("123", 201),
+            ("９", 202),
+        ] {
+            let r = std::process::Command::new(&bin)
+                .env_clear()
+                .env("W2L_INPUT", input)
+                .output()
+                .unwrap();
+            assert_eq!(r.status.code(), Some(expected));
+            assert!(r.stdout.is_empty() && r.stderr.is_empty());
+        }
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+}

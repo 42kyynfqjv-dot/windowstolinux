@@ -22,6 +22,9 @@ impl Expr {
         }
     }
     fn bounds(self, ranges: &[(u32, u32); 3]) -> (u32, u32) {
+        self.width_bounds(ranges, 32)
+    }
+    fn width_bounds(self, ranges: &[(u32, u32); 3], width: u8) -> (u32, u32) {
         // Integer affine bounds, then modular projection. Wrap crossing loses precision.
         let (mut lo, mut hi) = (i128::from(self.c as i32), i128::from(self.c as i32));
         for (a, (l, h)) in self.a.into_iter().zip(ranges) {
@@ -30,9 +33,9 @@ impl Expr {
             lo += k * if k >= 0 { l } else { h };
             hi += k * if k >= 0 { h } else { l };
         }
-        let m = 1i128 << 32;
+        let m = 1i128 << width;
         if lo.div_euclid(m) != hi.div_euclid(m) {
-            (0, u32::MAX)
+            (0, (m - 1) as u32)
         } else {
             (lo.rem_euclid(m) as u32, hi.rem_euclid(m) as u32)
         }
@@ -230,7 +233,26 @@ pub(super) struct Proven {
 /// Splitting retains disjunctions instead of merging initialized and failed API paths.
 fn refine(state: &State, condition: Condition, taken: bool) -> Result<Vec<State>, String> {
     let (expr, width, k) = state.flags.ok_or("input: branch consumes unknown flags")?;
+    need(matches!(width, 16 | 32), "input: comparison width")?;
     let m = 1u64 << width;
+    need(u64::from(k) < m, "input: comparison immediate width")?;
+    let (lo, hi) = expr.width_bounds(&state.ranges, width);
+    let outcome = match condition {
+        Condition::Ne if k < lo || k > hi => Some(true),
+        Condition::Ne if lo == hi && lo == k => Some(false),
+        Condition::Be if hi <= k => Some(true),
+        Condition::Be if lo > k => Some(false),
+        Condition::A if lo > k => Some(true),
+        Condition::A if hi <= k => Some(false),
+        _ => None,
+    };
+    if let Some(value) = outcome {
+        return Ok(if value == taken {
+            vec![state.clone()]
+        } else {
+            vec![]
+        });
+    }
     let mask = (m - 1) as u32;
     let coefficients = expr.a.map(|a| a & mask);
     let variables: Vec<_> = coefficients
@@ -513,6 +535,9 @@ pub(super) fn prove(graph: Graph, entry: u32) -> Result<Proven, String> {
             Op::Lea(d, a, b, k, c) => {
                 s.regs[d] = Value::Scalar(s.regs[a].scalar()?.add(s.regs[b].scalar()?, k, c))
             }
+            Op::Scaled(d, v, k, c) => {
+                s.regs[d] = Value::Scalar(Expr::constant(0).add(s.regs[v].scalar()?, k, c))
+            }
             Op::ZeroExtend(d, v) => s.regs[d] = Value::Scalar(s.regs[v].scalar()?.low16()?),
             Op::Arithmetic(r, v, subtract) => {
                 let delta = if subtract { v.wrapping_neg() } else { v };
@@ -709,5 +734,49 @@ mod borrow_tests {
         assert!(s.argument(4).is_err());
         assert!(Value::Buffer.scalar().is_err());
         assert!(Value::Name.expression().is_err());
+    }
+}
+
+#[cfg(test)]
+mod postcall_tests {
+    use super::*;
+    #[test]
+    fn entailment_width_wrap_and_unknown_boundaries() {
+        let mut s = State::new();
+        for (c, width, k, expected) in [
+            (202, 32, 202, false),
+            (65536, 16, 0, false),
+            (u32::MAX, 16, 65535, false),
+            (0, 32, u32::MAX, true),
+        ] {
+            s.flags = Some((Expr::constant(c), width, k));
+            assert_eq!(
+                !refine(&s, Condition::Ne, true).unwrap().is_empty(),
+                expected
+            );
+        }
+        s.ranges = [(48, 57), (48, 57), (2, 2)];
+        s.flags = Some((
+            Expr {
+                c: 0u32.wrapping_sub(528),
+                a: [10, 1, 0],
+            },
+            32,
+            202,
+        ));
+        assert_eq!(refine(&s, Condition::Ne, true).unwrap().len(), 1);
+        assert!(refine(&s, Condition::Ne, false).unwrap().is_empty());
+        s.ranges = [(0, 1), (0, 1), (0, 0)];
+        s.flags = Some((
+            Expr {
+                c: u32::MAX,
+                a: [1, 1, 0],
+            },
+            32,
+            0,
+        ));
+        assert!(refine(&s, Condition::Ne, true).is_err());
+        s.flags = None;
+        assert!(refine(&s, Condition::Ne, true).is_err());
     }
 }
