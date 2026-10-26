@@ -180,3 +180,9 @@ never silently substitute one for the other or infer all loaded modules are used
 
 Astra High is appropriate for SUB-539's bounded control-flow/initializer effect
 analysis. Medium review found no production defect; production remains unchanged.
+
+SUB-543 adds an isolated Rust local sentinel effect; see
+[SENTINEL-IMPLEMENTATION.md](SENTINEL-IMPLEMENTATION.md) for binding, known-state,
+flags, stack obligations and independent CPU comparisons. It does not close CRT
+startup or enable ordinary CRT translation. Earlier __p__commode alias/state effects
+and later process exit registration remain unresolved.
