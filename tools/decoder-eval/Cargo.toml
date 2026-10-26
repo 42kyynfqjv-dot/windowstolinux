@@ -1,0 +1,13 @@
+[package]
+name = "w2l-decoder-eval"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[workspace]
+
+[dependencies]
+iced-x86 = { version = "=1.21.0", default-features = false, features = ["std", "decoder", "instr_info"] }
+yaxpeax-x86 = { version = "=2.2.0", default-features = false, features = ["std"] }
+yaxpeax-arch = { version = "=0.3.3", default-features = false, features = ["std"] }

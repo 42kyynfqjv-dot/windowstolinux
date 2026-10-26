@@ -95,3 +95,15 @@ jobs:
             if ((Get-Item $stdout).Length -ne 0) { throw "Expected empty stdout for $($testCase.Name)" }
             if ((Get-Item $stderr).Length -ne 0) { throw "Expected empty stderr for $($testCase.Name)" }
           }
+
+  decoder-evaluation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - run: python3 scripts/export_decoder_cases.py
+      - run: cargo fmt --manifest-path tools/decoder-eval/Cargo.toml --check
+      - run: cargo clippy --manifest-path tools/decoder-eval/Cargo.toml --all-targets --locked -- -D warnings
+      - run: cargo test --manifest-path tools/decoder-eval/Cargo.toml --locked -- --nocapture

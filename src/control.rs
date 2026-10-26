@@ -2,6 +2,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
 
+#[path = "control/flags.rs"]
 mod flags;
 use flags::Flags;
 
@@ -193,6 +194,43 @@ pub fn translate(bytes: &[u8]) -> Result<String, String> {
         "_ => unreachable!(),\n}\n}\npanic!(\"validated instruction limit exceeded\");\n}\n",
     );
     Ok(out)
+}
+
+#[cfg(test)]
+#[allow(dead_code)]
+pub(super) type DecodeRecord = (usize, usize, String, Option<u32>, Option<usize>);
+#[cfg(test)]
+#[allow(dead_code)]
+pub(super) fn records_for_comparison(bytes: &[u8]) -> Result<Vec<DecodeRecord>, String> {
+    Ok(decode(bytes)?
+        .iter()
+        .map(|(&at, ins)| {
+            let (name, immediate, target) = match ins.op {
+                Op::Mov(v) => ("mov", Some(v), None),
+                Op::Add(v) => ("add", Some(v), None),
+                Op::Compare(v) => ("cmp", Some(v), None),
+                Op::Xor => ("xor", None, None),
+                Op::Ret => ("ret", None, None),
+                Op::Branch {
+                    condition,
+                    when,
+                    target,
+                } => (
+                    match (condition, when) {
+                        (Condition::Carry, true) => "jb",
+                        (Condition::Carry, false) => "jae",
+                        (Condition::Zero, true) => "je",
+                        (Condition::Zero, false) => "jne",
+                        (Condition::SignedLess, true) => "jl",
+                        (Condition::SignedLess, false) => "jge",
+                    },
+                    None,
+                    Some(target),
+                ),
+            };
+            (at, ins.next - at, name.to_string(), immediate, target)
+        })
+        .collect())
 }
 
 #[cfg(test)]
