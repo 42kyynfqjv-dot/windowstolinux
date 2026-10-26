@@ -20,6 +20,7 @@ jobs:
       - run: python3 -m unittest discover -s research/input/scalar -p test_model.py -v
       - run: python3 -m unittest discover -s research/input/scalar -p test_nonlinear.py -v
       - run: python3 -m unittest discover -s research/input/helper -p test_model.py -v
+      - run: python3 -m unittest discover -s research/input/postcall -p test_model.py -v
       - run: cargo test --locked --example bounded_input
       - run: cargo test --locked --example runtime_boundary
       - run: cargo test --locked --example crt_external_cell
@@ -255,6 +256,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Helper artifact binding failed' }
           cmd /c "`"$vcvars`" x86 && python research/input/heldout/measure.py %RUNNER_TEMP%/w2l-compiler-measurement"
           if ($LASTEXITCODE -ne 0) { throw 'Held-out input measurement failed' }
+          python research/input/postcall/check.py "$env:RUNNER_TEMP/w2l-compiler-measurement"
+          if ($LASTEXITCODE -ne 0) { throw 'Post-call design binding failed' }
       - name: Validate design-only permissioned intake against all held-out originals
         run: python tools/check_permissioned_corpus.py "${{ runner.temp }}/w2l-compiler-measurement"
       - name: Check scalar local-frame contract against unchanged compiler artifact
@@ -343,6 +346,7 @@ jobs:
           python3 research/input/scalar/check_nonlinear.py evidence
           python3 research/input/helper/check.py evidence
           python3 research/input/heldout/measure.py evidence --compare
+          python3 research/input/postcall/check.py evidence --compare
       - uses: actions/upload-artifact@v4
         if: always()
         with:

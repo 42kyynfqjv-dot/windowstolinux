@@ -317,3 +317,11 @@ no new translated programs. `research/input/heldout/RESULTS.md` separates first
 operand/prologue failures from deeper proof gaps. Next bounded architecture gate:
 post-call expression predicate entailment and reusable argument/WORD operands,
 using composed_O2 evidence before broader EBP/ESI/pointer/capacity expansion.
+
+SUB-561 [post-call predicate design](research/input/postcall/CONTRACT.md) specifies
+sound affine entailment before modular refinement, immutable return-path facts
+and seven exact argument/WORD/scalar forms. Eleven independent model tests and
+a complete49-instruction same-artifact inventory provide design evidence only.
+All eight held-out PEs still reject. Medium review precedes bounded production
+integration targeting unchanged composed_O2; other prologue/pointer/capacity
+barriers remain separate. No new translated-program count is claimed here.
