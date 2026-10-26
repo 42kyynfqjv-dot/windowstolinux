@@ -34,8 +34,9 @@ int main(int argc, char **argv) {
             if (!n || n>=sizeof(path)) strcpy_s(path,sizeof(path),"UNRESOLVED");
             fprintf(report,"DLL\t%lu\t%s\n",(unsigned long)(uintptr_t)ev.u.LoadDll.lpBaseOfDll,path);
             fflush(report);
-        } else if (ev.dwDebugEventCode == CREATE_THREAD_DEBUG_EVENT) {
-            CloseHandle(ev.u.CreateThread.hThread);
+        /* Debug-event process/thread handles are closed by Windows on the
+         * corresponding continued EXIT event. Keep our PROCESS_INFORMATION
+         * handles separate and close those at the end (WaitForDebugEvent docs). */
         } else if (ev.dwDebugEventCode == EXCEPTION_DEBUG_EVENT) {
             if (first_break && ev.u.Exception.ExceptionRecord.ExceptionCode == EXCEPTION_BREAKPOINT)
                 first_break = 0;

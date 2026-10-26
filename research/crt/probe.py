@@ -18,10 +18,16 @@ for mode in ['callbacks','buffer']:
    assert (p.returncode,p.stderr)==(0,b'') and (p.stdout,markers)==expected
    results.append(dict(mode=mode,end=end,stdout=p.stdout.hex(),markers=markers.hex(),exit=p.returncode))
 pe=root/'held_crt.exe';before=sha(pe)
+record=next(r for r in json.loads((root/'heldout-x86.json').read_text()) if r['kind']=='held_crt')
+assert before==record['sha256'] and not record['conversion_accepted']
+assert json.loads((root/'held_crt-baseline.json').read_text())==dict(stdout_hex='435254',stderr_hex='',exit=0,files={})
 with tempfile.TemporaryDirectory(dir=root) as d:
  report=root/'crt-debug.txt'
  p=run([str(root/'crt_observer.exe'),str(pe),str(report)],cwd=d,env=child_env)
  assert (p.returncode,p.stdout,p.stderr)==(0,b'CRT',b'') and sha(pe)==before
+# Missing child: exercise observer creation failure without spawning a process.
+p=run([str(root/'crt_observer.exe'),str(root/'nonexistent-observer-child.exe'),str(root/'crt-missing-debug.txt')],env=child_env)
+assert p.returncode==125
 modules=[];base=None
 for line in report.read_text().splitlines():
  fields=line.split('\t')

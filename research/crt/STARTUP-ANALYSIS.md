@@ -68,3 +68,11 @@ Independent authored graph checks cover RET, a self-cycle, indirect call, outsid
 target, trap and overlapping instruction target. Even a trivial RET and a finite
 graph remain explicitly incomplete effect proofs. Six checks are research-only;
 they are not new native program comparisons or root Rust test functions.
+
+Medium review corrects debug-event thread-handle ownership: Windows closes those
+handles on the continued EXIT_THREAD/EXIT_PROCESS events (WaitForDebugEvent remarks).
+The observer closes only its separately owned PROCESS_INFORMATION handles and event
+file handles. Added missing-child creation-failure evidence (125), plus explicit
+binding of the observed PE hash and ordinary baseline to the measurement manifest.
+This does not exercise every timeout/error path; termination-event draining and
+observer timeout behavior remain review limitations, not claimed tested cleanup.
