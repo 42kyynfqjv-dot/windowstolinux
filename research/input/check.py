@@ -28,6 +28,6 @@ if a.compare:
 else:
     assert sha(exe)==before
     converter=run([str(repo/'target/debug/w2l.exe'),str(exe),str(root/'input-generated.rs')])
-    assert converter.returncode!=0,'unexpected production acceptance requires review'
+    assert converter.returncode==1,('expected explicit rejection',converter.returncode,converter.stderr)
     report=dict(sources=sources,pe_sha256=before,compile_flags=flags,link_flags=link,observations=results,conversion_accepted=False,converter_error=converter.stderr.decode(errors='replace'),emission_allowed=False)
     (root/'input-contract.json').write_text(json.dumps(report,indent=2)+'\n');print('INPUT_CONTRACT: 17 original observations; production rejected')
