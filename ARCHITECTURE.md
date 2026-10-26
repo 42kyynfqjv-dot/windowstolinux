@@ -34,3 +34,7 @@ before parsing by DLL characteristics8540. Its only terminal API rejects emissio
 metadata acceptance never grants access to the authored-image emitter. It validates
 imports/debug/HIGHLOW ranges under SUB515-LINKER-DESIGN.md. Typed pointer provenance
 and compiler ABI semantics remain required before translation; see SUB516-INTAKE.md.
+
+[SUB517-TYPED-ABI-DESIGN.md](SUB517-TYPED-ABI-DESIGN.md) specifies the proposed
+image-owned typed values and saved-ESI/return ownership. Its Python model is
+test-only; production has no new ABI forms or relocation-aware emission.

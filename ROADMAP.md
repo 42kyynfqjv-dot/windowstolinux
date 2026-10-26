@@ -73,7 +73,15 @@ SUB-515 is narrowed to design/test-only validation before production changes; se
 intake from emission, excludes loader/debug metadata from immutable reads, and
 requires typed relocation provenance. Medium contract review precedes production
 intake; actual compiler translation additionally requires the measured ABI slice
-and pointer-preserving stack state. Windows actual-base evidence remains absent.
+and pointer-preserving stack state. At that design checkpoint Windows actual-base
+evidence was absent; SUB-516 adds a separately instrumented launch observation.
 
 SUB-516 implements gated structural intake; see [SUB516-INTAKE.md](SUB516-INTAKE.md).
 Compiler-image emission remains blocked pending typed pointer/ABI integration.
+
+SUB-517 defines image-owned pointer values, saved-ESI ownership and the exact
+remaining compiler ABI gates in [SUB517-TYPED-ABI-DESIGN.md](SUB517-TYPED-ABI-DESIGN.md).
+Its independent model is test-only. Next: medium contract review, then bounded
+typed-core integration with the emission barrier retained until all listed
+ABI/form and unchanged-compiler Windows/Linux gates pass. No compiler-produced
+PE has yet been translated successfully; ordinary CRT support remains separate.
