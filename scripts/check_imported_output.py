@@ -1,5 +1,7 @@
 """Independent expected observations through production CLI and original Windows."""
 import os
+import hashlib
+import json
 from pathlib import Path
 import subprocess
 import sys
@@ -49,8 +51,17 @@ with tempfile.TemporaryDirectory() as directory:
             convert(b, True)
             assert first == source.read_bytes()
             subprocess.run(['rustc', '-D', 'warnings', str(source), '-o', str(elf)], check=True)
-        with open(root/'stdout','wb') as out, open(root/'stderr','wb') as err:
-            p = subprocess.run([str(exe if windows else elf)], stdout=out, stderr=err, timeout=15)
+        identity=dict(case=name, platform='windows' if windows else 'linux',
+                      pe_sha256=hashlib.sha256(b).hexdigest())
+        print('imported launching '+json.dumps(identity),flush=True)
+        try:
+            with open(root/'stdout','wb') as out, open(root/'stderr','wb') as err:
+                p = subprocess.run([str(exe if windows else elf)], stdout=out, stderr=err, timeout=15)
+        except subprocess.TimeoutExpired:
+            print('imported timeout '+json.dumps(dict(identity,
+                  stdout_hex=(root/'stdout').read_bytes().hex(),
+                  stderr_hex=(root/'stderr').read_bytes().hex())),flush=True)
+            raise
         actual = ((root/'stdout').read_bytes(), (root/'stderr').read_bytes(), p.returncode)
         assert actual == (b'' if skip else payload, b'', 0), (name, actual)
         print(f'imported {name}: stdout={actual[0].hex()} stderr={actual[1].hex()} exit={p.returncode}')

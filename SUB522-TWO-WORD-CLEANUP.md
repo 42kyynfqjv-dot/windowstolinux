@@ -33,3 +33,12 @@ Medium effort is sufficient; a new architecture uncertainty requires a concrete
 Astra High handoff. Ordinary CRT/XP7/general apps and arbitrary stack fault behavior
 remain unsupported/unverified. Existing valid-stack/no-fault/regular-file output
 assumptions and historical unexplained corpus timeout remain explicit.
+
+## CI timeout evidence
+
+Initial CI40279659683 failed in the original Windows imported-output max case:
+hello/changed/one passed, then the original fixture exceeded15 seconds. This
+script never invokes the converter in Windows mode. Cause remains unexplained;
+the failure is retained. Launch identity/PE hash and timeout stdout/stderr are
+now logged, with the same15-second bound and no automatic retries or acceptance
+relaxation. A subsequent pass would not establish that the cause is resolved.
