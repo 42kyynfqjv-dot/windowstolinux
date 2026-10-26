@@ -184,3 +184,25 @@ fn relocation_candidates_are_unbound_and_reject_malformed_records() {
         assert!(inspect(bad).is_err());
     }
 }
+
+#[test]
+fn report_never_copies_section_text_or_confers_emission() {
+    let mut b = specimen();
+    // Names are untrusted bytes, not JSON fields or permission authority.
+    b[376..384].copy_from_slice(b"\"true\n\\\0");
+    for writable in [false, true] {
+        let mut candidate = b.clone();
+        if writable {
+            put(&mut candidate, 452, 0xc0000040);
+        } else {
+            // In-bounds TLS directory remains an unvalidated startup obligation.
+            put(&mut candidate, 320, 0x2000);
+            put(&mut candidate, 324, 8);
+        }
+        let report = inspect(candidate).unwrap();
+        assert_eq!(report.matches("\"emission_allowed\":false").count(), 1);
+        assert!(!report.contains("\"emission_allowed\":true"));
+        assert!(!report.contains('\n'));
+        assert!(!report.contains("\"true"));
+    }
+}

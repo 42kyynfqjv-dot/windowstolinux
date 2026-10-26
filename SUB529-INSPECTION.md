@@ -74,3 +74,38 @@ with the existing instruction/ABI proof for a scoped immutable image. Keep conve
 strict for unsupported memory forms and writable layouts. The unchanged buffer and
 structure compiler artifacts still require a bounded local-storage design; loops,
 global memory, ordinary CRT and PE32+ remain separate larger gates. No merge/release.
+
+## Medium production review
+
+No emission escape was reproduced: the inspection module exports only a report string,
+conversion dispatch does not consume it, and all reports have false emission eligibility.
+Reviewed parse-time limits establish the bounds used by later field arithmetic;
+raw/virtual extents and rounded reservations reject overlaps/overflow before lookup.
+Metadata closure stays incomplete for imports/startup, and zero-fill never becomes
+a file coordinate. Added one Rust regression covering malicious section-name bytes,
+startup/writable obligations, absence of injected report text and false emission.
+Root count is now67 functions (60 original+6 intake+1 review regression).
+
+Strengthened the held-out provenance harness: verify the original PE hash again
+AFTER both inspection invocations, before recording reports. Previously only the
+pre-inspection hash was checked. The module's owned snapshot remains private;
+no parser acceptance change was required. Corrected the harness description to
+state that the production inspector is invoked while conversion rejection is checked
+separately. Local tests initially asserted no occurrence of the text true anywhere;
+that overbroad assertion also matched legitimate metadata_closed:true and was narrowed
+to the untrusted injected field text. No parser behavior changed to satisfy it.
+
+Next substantive execution gate: the frozen structure.c program's two32-bit scalar
+stack locals (SUB ESP8, exact local MOV immediate/load, ADD EAX,[ESP], ADD ESP8, RET).
+Prefer this over byte-buffer, writable-global, backward-loop or CRT expansion: it
+has no imports/relocations, one bounded frame and independent expected exit12.
+An Astra High design/test-only step should specify local uninitialized-word tags,
+read/write ownership and complete-width/alignment bounds, protected returns/saves,
+cleanup and unknown ESP-dependent flags, nested/shared call and join behavior, caps,
+and no pointer laundering. Separately define private promotion from closed importless
+read-only intake into existing instruction/ABI proof; inspection JSON cannot authorize
+execution. After contract review, implementation must convert the unchanged frozen
+compiler PE and match actual Windows stdout/stderr/exit and hashes, while rejecting
+uninitialized/out-of-frame/protected-slot access and unsupported exact forms.
+This is a path to another genuine compiler program, not further diagnostic-only work.
+Three historical original-Windows timeout causes remain unresolved.

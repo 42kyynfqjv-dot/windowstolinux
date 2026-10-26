@@ -2,7 +2,7 @@
 
 Expected roles/directories/relocation sites are literal observations of independently
 recorded dumpbin listings, not values obtained from the prototype under test.
-No converter is invoked here; existing check_native.py retains its rejection gate.
+The production inspector is invoked here; check_native.py separately enforces conversion rejection.
 """
 import argparse
 import hashlib
@@ -75,6 +75,7 @@ for case in cases:
     inspected = subprocess.run([str(converter), '--inspect-image', str(root / (name + '.exe'))], capture_output=True, timeout=15)
     repeated = subprocess.run([str(converter), '--inspect-image', str(root / (name + '.exe'))], capture_output=True, timeout=15)
     assert (inspected.returncode, inspected.stdout, inspected.stderr) == (repeated.returncode, repeated.stdout, repeated.stderr)
+    assert hashlib.sha256((root / (name + '.exe')).read_bytes()).hexdigest() == digest
     if name == 'held_pe32plus':
         assert inspected.returncode == 1 and not inspected.stdout
         assert inspected.stderr.decode().strip() == 'w2l: architecture: x86 PE32 required'

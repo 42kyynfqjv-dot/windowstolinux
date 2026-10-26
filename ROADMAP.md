@@ -160,3 +160,9 @@ SUB-529 implements the reviewed non-emitting inspection gate in
 Windows/Linux production-report checks supplement the design model. Next is medium
 production/provenance review; connecting closed metadata to existing execution proof
 requires a separate bounded gate. Parsing adds no translated-program coverage.
+
+SUB-529 medium review prioritizes execution of frozen structure.c via a bounded
+scalar local-frame contract, followed by reviewed integration with closed importless
+intake. Design first on Astra High: local ownership/uninitialized state, full word
+bounds, protected returns and cleanup/flags. Target unchanged PE exit12 with Windows/
+Linux comparison; no broad byte/global memory, loop or CRT expansion.
