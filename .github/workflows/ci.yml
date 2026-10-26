@@ -266,6 +266,8 @@ jobs:
           $vcvars = Join-Path $installation 'VC\Auxiliary\Build\vcvarsall.bat'
           cmd /c "`"$vcvars`" x86 && python research/cli/measure.py %RUNNER_TEMP%/w2l-cli"
           if ($LASTEXITCODE -ne 0) { throw 'CLI measurement failed' }
+          python research/cli/inventory.py "$env:RUNNER_TEMP/w2l-cli"
+          if ($LASTEXITCODE -ne 0) { throw 'CLI inventory failed' }
       - uses: actions/upload-artifact@v4
         if: always()
         with:
