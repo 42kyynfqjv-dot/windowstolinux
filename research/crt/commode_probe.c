@@ -3,7 +3,6 @@
 #include <process.h>
 #include <stdint.h>
 #include <stdio.h>
-extern int * __cdecl __p__commode(void);
 static int *thread_pointer;
 static int thread_value;
 static unsigned __stdcall observe(void *unused) {

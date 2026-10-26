@@ -105,3 +105,8 @@ and later exit-registration effects; more successful probes alone cannot supply 
 
 No Wine/Microsoft implementation source was imported. Authored sources and model
 use the project's MIT OR Apache-2.0 policy.
+
+Initial CI 40368889099 failed before probe execution because a redundant accessor
+declaration conflicted with the SDK stdio.h DLL linkage (C4273 under /WX). The
+probe now uses the existing SDK declaration; warnings remain errors. This diagnosed
+build failure is separate from the historical process timeouts.
