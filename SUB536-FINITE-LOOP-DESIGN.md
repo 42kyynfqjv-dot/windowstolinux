@@ -140,3 +140,32 @@ from the same hashed PE on Windows/Linux before changing acceptance. Preserve al
 prior programs and remaining four held-out rejections. General loops/CRT/runtime input/
 PE32+ remain separate. Three historical Windows timeout causes remain unexplained;
 no silent retries. No merge/release. No known tool/resource blocker.
+
+## Medium contract review
+
+Rank and step algebra hold for the recognized graph. A u32 bound has no negative
+value; bytes representing a negative signed integer (high bit set) instead denote a
+large unsigned bound and fail the static budget. Do not reinterpret them as zero or
+use signed branch conditions. N=0 consumes five instructions, bypasses NOP/body, and
+returns with ZF=true/CF=false. N>0 consumes6+4N, with N=254 reaching1022; portable exit
+eligibility is a separate later check. No counter/sum wrap is possible in the admitted
+budget domain, while helper tests check architectural wrap semantics independently.
+
+Added a ninth independent test function to close an evidence gap: structural proof
+construction is tested while concrete trace/add/increment are disabled. It still
+certifies bound254 and rejects255, demonstrating that sampled execution is not used
+to create the certificate. The same test asserts the zero-path flags/join and mutates
+every non-address code byte, including all NOP bytes, to confirm complete recognition.
+Earlier eight-test count above is historical. No model behavior or production change
+was required; no architecture blocker found.
+
+SUB-537 must retain private certificate construction (Python dataclasses are only test
+artifacts), verify the full decoded graph before binding/proving, and bind graph/image/
+bound/budget through emission. Prove against the same immutable owned snapshot used
+by emitted constants, never a public digest or mutable descriptor. Add production
+regressions for all fixed graph bytes, high-bit bounds, zero join, static budget versus
+exit-domain diagnostics, and reject unproved cycles before any native execution. The
+model's action-level flag helpers do not establish a future Rust decoder or emitter's
+correctness; actual same-PE Windows/Linux native evidence remains mandatory. Ready
+for bounded Astra implementation after final review CI. Execution assumptions, NOP
+CPU support, unobserved actual load base and three historical timeouts remain explicit.

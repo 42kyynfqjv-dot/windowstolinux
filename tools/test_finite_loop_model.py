@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 from finite_loop_model import prove,trace,eligible,compare,increment,add,branch,Rejected
 from image_read_model import Image,Section,Relocation
 CODE=bytes.fromhex('33c0 33c9 390500304000 760f 0f1f4000 03c1 41 3b0d00304000 72f5 c3')
@@ -21,6 +22,23 @@ class FiniteLoops(unittest.TestCase):
                 with self.assertRaisesRegex(Rejected,'exit domain'):eligible(p)
         for n in (255,256,0x7fffffff,0x80000000,0xffffffff):
             with self.assertRaisesRegex(Rejected,'budget'):prove(example(n))
+    def test_structural_proof_does_not_sample_execution(self):
+        # Certificate construction must not call the concrete transition/trace
+        # machinery, even for the largest statically admitted bound.
+        with patch('finite_loop_model.trace',side_effect=AssertionError('sampled')), \
+             patch('finite_loop_model.add',side_effect=AssertionError('sampled')), \
+             patch('finite_loop_model.increment',side_effect=AssertionError('sampled')):
+            p=prove(example(254))
+            self.assertEqual((p.bound,p.steps,p.result),(254,1022,32131))
+            with self.assertRaisesRegex(Rejected,'budget'):prove(example(255))
+        zero=eligible(prove(example(0)))
+        self.assertEqual((zero['headers'],zero['flags'],zero['steps']),([], (False,True,False,False),5))
+        # Every non-address byte participates in graph recognition, including NOP
+        # bytes that must never accidentally authorize a memory operation.
+        for offset in set(range(28))-set(range(6,10))-set(range(21,25)):
+            code=bytearray(CODE);code[offset]^=1
+            with self.assertRaisesRegex(Rejected,'graph'):prove(example(code=code))
+
     def test_unsigned_compare_truth_table(self):
         for a,b,f,jb,jbe in [(0,0,(False,True,False,False),False,True),(0,1,(True,False,True,False),True,True),(0xffffffff,1,(False,False,True,False),False,False),(0x80000000,0x7fffffff,(False,False,False,True),False,False),(0x7fffffff,0x80000000,(True,False,True,True),True,True)]:
             self.assertEqual(compare(a,b),f);self.assertEqual(branch('jb',f),jb);self.assertEqual(branch('jbe',f),jbe)
