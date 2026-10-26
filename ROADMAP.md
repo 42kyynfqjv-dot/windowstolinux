@@ -116,3 +116,9 @@ and unknown-flag transition. See SUB522-TWO-WORD-CLEANUP.md. The unchanged share
 compiler experiment must now translate, while nested and conditional experiments
 retain rejection. Next is medium review of the narrow production/evidence change;
 backward tail transfers, argument stores and multi-register semantics remain open.
+
+SUB-523 specifies the exact ECX/EDX and signed conditional-selection contract in
+SUB523-CONDITIONAL-DESIGN.md, with an independent test-only model. Production
+conditional.c rejection remains until medium contract review and bounded typed
+state/call-clobber integration gates. The fixed entry's failure path alone cannot
+validate both CMOV outcomes; independent native boundary cases are required.

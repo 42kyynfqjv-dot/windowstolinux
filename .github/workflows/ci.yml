@@ -17,6 +17,7 @@ jobs:
       - run: python3 scripts/check_fixture_manifest.py
       - run: python3 -m unittest discover -s tools -p test_linker_intake.py -v
       - run: python3 -m unittest discover -s tools -p test_typed_abi_model.py -v
+      - run: python3 -m unittest discover -s tools -p test_conditional_register_model.py -v
       - name: Imported output translation and support checks
         run: |
           python3 scripts/check_output_probe.py
