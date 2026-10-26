@@ -27,7 +27,11 @@ intermediate-result branches were inspected against the actual emitted paths.
 
 SUB-509 implements the bounded two-section profile in [SUB509-MAPPING.md](SUB509-MAPPING.md).
 The new authored image retains helper exit12; read-only bytes remain unobservable.
-Next is medium review of checked file/RVA extents, alignment, permissions, entry
-slicing and independent fixture evidence. Then define bounded immutable-data access
-as a separate design gate toward a later console-output program. General memory,
-imports/APIs, writable data, relocations and application compatibility remain open.
+Medium mapping review found no production defect; added page-boundary virtual-tail,
+raw-gap and data-size regressions. Next SUB-510 defines exact A1 moffs32 EAX loads
+from validated immutable data. Use Astra High for image-context/address provenance
+and implementation, then medium review. Whole four-byte containment, little-endian
+values, flags preservation, strict invalid-address/form rejection and genuine
+Windows/Linux observations are required. Current data mapping alone grants no
+program data reads. Imports/APIs, writable/general memory and application
+compatibility remain later gates; Server2025 results do not validate XP/7.

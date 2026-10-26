@@ -132,3 +132,30 @@ fn code_bounds_do_not_authorize_padding_data_or_memory() {
         assert!(Pe::parse(&b).is_err());
     }
 }
+
+#[test]
+fn aligned_virtual_extent_and_raw_gap_boundaries() {
+    let mut b = image();
+    put(&mut b, 0x180, 0x1000);
+    assert!(Pe::parse(&b).is_ok()); // Exact page end remains adjacent to data2000.
+    put(&mut b, 0x180, 0x1001);
+    assert!(Pe::parse(&b).is_err()); // Virtual tail overlaps data despite tiny raw code.
+    put(&mut b, 0x1ac, 0x3000);
+    put(&mut b, 0xb0, 0x3000);
+    put(&mut b, 0xd0, 0x4000);
+    assert_eq!(Pe::parse(&b).unwrap().entry_bytes().unwrap().len(), 0x200);
+    put(&mut b, 0xa8, 0x1200);
+    assert!(Pe::parse(&b).unwrap().entry_bytes().is_err());
+    let mut b = image();
+    b.resize(0x800, 0);
+    b.copy_within(0x400..0x600, 0x600);
+    put(&mut b, 0x1b4, 0x600); // Permitted aligned raw gap, not an RVA gap.
+    put(&mut b, 0x1a8, 0x200);
+    let p = Pe::parse(&b).unwrap();
+    assert_eq!(
+        control::exit_for_test(p.entry_bytes().unwrap()).unwrap(),
+        12
+    );
+    put(&mut b, 0x1a8, 0x201);
+    assert!(Pe::parse(&b).is_err());
+}

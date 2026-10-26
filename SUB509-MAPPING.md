@@ -80,3 +80,22 @@ aggregate-header consistency, fixture independence and final CI verification.
 Then separately design bounded immutable-data access as the next prerequisite
 for an authored console-output program; do not infer permission for API/import
 support from this mapping milestone. No architecture blocker identified in scope.
+
+## Medium review
+
+No production mapping defect reproduced. Added a production-loader regression
+for code virtual extents ending exactly at and one byte beyond a page boundary:
+the latter requires moving data to the next page, and zero-filled code remains
+unavailable to entry decoding. Also verifies permitted raw-file gaps and exact
+data VirtualSize=raw size versus rejected zero-fill. Current root39 functions;
+isolated36 remains24 inherited control/stack+6 comparisons+6 design tests. The
+53 Windows/Linux cases are unchanged. The Rust fixture is independent of the
+Python builder; Windows/Linux execution intentionally shares the authored Python
+image and explicit expected observation. No new instruction evidence is inferred.
+
+Next SUB-510: exact A1 moffs32 immutable four-byte EAX load under a reviewed
+fixed-base image-context contract. Astra High for checked VA/RVA/file provenance
+and core implementation; medium review afterward. Require whole-width containment
+in declared read-only initialized data, literal endian/address boundaries, flag
+preservation, rejected invalid addresses/forms and genuine Windows/Linux evidence.
+Mapped data is not yet readable program data. APIs and general memory remain open.
