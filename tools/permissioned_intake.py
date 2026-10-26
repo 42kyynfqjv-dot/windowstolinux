@@ -156,7 +156,7 @@ class Image:
                    finish <= s.rva + (min(s.virtual, s.size) if backed else s.virtual)]
         need(len(matches) == 1, 'range: outside whole section')
         s = matches[0]
-        return s, s.raw + rva - s.rva
+        return s, (s.raw + rva - s.rva if finish <= s.rva + min(s.virtual, s.size) else None)
 
     def reserve(self, rva, size, name):
         s, at = self.locate(rva, size)

@@ -63,6 +63,7 @@ class PermissionedDesign(unittest.TestCase):
                          [(0x1001, 0x3000, 'writable', False), (0x1007, 0x3200, 'writable', False)])
         self.assertIn('writable-memory-unimplemented', p.blockers)
         self.assertEqual(p.locate(0x3200, 4, backed=False)[0].role, 'writable')
+        self.assertIsNone(p.locate(0x3200, 4, backed=False)[1])  # Zero-fill has no file offset.
         for rva, size in [(0x31ff, 2), (0x3200, 1), (0x3203, 2)]:
             with self.subTest(rva=rva), self.assertRaises(Rejected):
                 p.locate(rva, size)

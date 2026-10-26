@@ -286,3 +286,42 @@ medium review should first bound a harness evidence improvement (retain failing
 original/hash/stdout/stderr, PID and timing at the actual failing launch path) and
 safe reproduction before production expansion. This does not require new semantic
 features or imply the converter caused the original-program timeout.
+
+## Medium contract and launch-evidence review
+
+Reviewed layout/metadata/execution separation and all15 model functions. Exact
+permission classes, adjacent virtual placement, one code region and alignment
+remain deliberate policy boundaries, not universal PE validity rules. Import or
+startup metadata still prevents closure and every report still denies emission.
+The held-out checker imports no converter or fixture builder and compares literal
+roles/relocation observations plus independently frozen baseline outcomes.
+
+Corrected one prototype API ambiguity: virtual-only/zero-fill lookup now returns
+no file offset when the complete requested range is not file-backed. A regression
+assertion covers the writable zero-fill tail. This grants no memory access.
+
+The actual corpus execution path now persists each original binary and SHA-256,
+command/cwd, OS/Python and an allowlist of runner metadata (no environment dump),
+expected outcome, PID, spawn/wait/total timings, stdout/stderr and process exit/poll
+state. Reports are saved before spawn, after spawn, before timeout termination and
+in final cleanup under RUNNER_TEMP/w2l-corpus-launch, outside TemporaryDirectory.
+An always-upload Windows step retains these artifacts even when corpus execution
+fails. If an earlier step prevents corpus launch, artifact absence is explicitly
+reported; no evidence is fabricated. No security settings or credentials change.
+
+A new harness test function launches two real Python children: one completes and
+one times out, proving preserved binary/output/state and propagated failure. This
+is one harness test, not a new Windows/Linux equivalence pair. The production corpus
+keeps15-second waits and bounded5-second termination waits with no retry. A spawn
+stall cannot be timed out by Popen itself; the pre-spawn report and binary survive
+for runner cancellation/upload where available. Poll state does not reveal internal
+Windows loader/CRT stacks, so further diagnosis may still require a bounded follow-up.
+
+Case4 (finite arithmetic/branch/output) differs from corpus14 (nested calls/output)
+and imported max; all share original PE execution, redirected files and imported
+_write. Case4 was launched after0..3 at a reused path. Source inspection finds no
+intentional loop in case4. No controlled reproduction or causal link to path reuse,
+CRT, loader or runner is established. Later passing observations do not explain the
+three failures. Prioritize any recurrence's new retained evidence before expansion.
+SUB-529 is ready for bounded non-emitting intake implementation after this review;
+writable/loop/CRT/PE32+ execution and actual-load-base evidence remain separate gates.

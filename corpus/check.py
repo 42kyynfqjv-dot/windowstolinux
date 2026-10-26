@@ -1,12 +1,14 @@
 """Execute independent corpus through real converter and original Windows."""
 import hashlib
 import json
+import os
 from pathlib import Path
 import struct
 import subprocess
 import sys
 import tempfile
 from generate import build, VERSION, SEED
+from launch import execute
 
 windows='--windows' in sys.argv
 manifest=json.loads(Path(__file__).with_name('expected.json').read_text())
@@ -40,12 +42,9 @@ with tempfile.TemporaryDirectory() as directory:
         identity = dict(case=i, platform='windows' if windows else 'linux',
                         pe_sha256=hashlib.sha256(b).hexdigest())
         print('corpus launching '+json.dumps(identity), flush=True)
-        with open(root/'out','wb') as out,open(root/'err','wb') as err:
-            try:
-                p=subprocess.run([str(exe if windows else elf)],stdout=out,stderr=err,timeout=15)
-            except subprocess.TimeoutExpired:
-                print('corpus TIMEOUT '+json.dumps(identity), flush=True)
-                raise
+        evidence = Path(os.environ.get('RUNNER_TEMP', tempfile.gettempdir())) / 'w2l-corpus-launch' / f'case-{i:02}'
+        p=execute([str(exe if windows else elf)],root/'out',root/'err',evidence,identity,
+                  {k:spec[k] for k in ('stdout_hex','stderr_hex','exit')})
         observation=((root/'out').read_bytes().hex(),(root/'err').read_bytes().hex(),p.returncode)
         assert observation==(spec['stdout_hex'],spec['stderr_hex'],spec['exit']),(i,observation)
         print(f'corpus {i:02}: stdout={observation[0]} stderr={observation[1]} exit={observation[2]}')

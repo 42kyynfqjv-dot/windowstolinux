@@ -17,6 +17,7 @@ jobs:
       - run: python3 scripts/check_fixture_manifest.py
       - run: python3 -m unittest discover -s tools -p test_linker_intake.py -v
       - run: python3 -m unittest discover -s tools -p test_permissioned_intake.py -v
+      - run: python3 -m unittest discover -s tools -p test_launch_evidence.py -v
       - run: python3 -m unittest discover -s tools -p test_typed_abi_model.py -v
       - run: python3 -m unittest discover -s tools -p test_conditional_register_model.py -v
       - run: python3 -m unittest discover -s tools -p test_nested_stack_model.py -v
@@ -91,6 +92,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Imported output comparison failed' }
           python corpus/check.py --windows
           if ($LASTEXITCODE -ne 0) { throw 'Independent corpus failed' }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: corpus-launch-evidence
+          path: ${{ runner.temp }}/w2l-corpus-launch/*
+          if-no-files-found: warn
       - name: Execute authored PE32 fixture on Windows
         shell: pwsh
         run: |
