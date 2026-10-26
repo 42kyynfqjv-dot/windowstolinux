@@ -57,3 +57,8 @@ SUB-513 adds32 deterministic independent corpus instances in four composition
 families plus160 adversarial mutations; see corpus/README.md. Original70 native
 comparisons remain separate. Further hardening should follow reproduced failures
 and corpus diversity, before more APIs.
+
+Foundation/first vertical-slice acceptance is reconciled in
+[docs/FOUNDATION-M1-ACCEPTANCE.md](docs/FOUNDATION-M1-ACCEPTANCE.md). Next substantive
+gate: compiler-produced authored C PE characterization and fail-closed gap inventory,
+then a measured implementation slice toward converting that real compiler output.

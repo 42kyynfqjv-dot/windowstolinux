@@ -11,6 +11,7 @@ from generate import build, VERSION, SEED
 windows='--windows' in sys.argv
 manifest=json.loads(Path(__file__).with_name('expected.json').read_text())
 assert (manifest['version'],manifest['seed'])==(VERSION,SEED)
+assert [c['id'] for c in manifest['cases']] == list(range(32))
 converter=Path('target/debug/w2l').resolve()
 digest=hashlib.sha256()
 with tempfile.TemporaryDirectory() as directory:
@@ -28,6 +29,8 @@ with tempfile.TemporaryDirectory() as directory:
         assert b[128:132]==b'PE\0\0' and b[134:136]==b'\x03\0'
         assert struct.unpack_from('<I',b,432)[0]==512  # second-section raw size
         assert b[1712:1723]==b'msvcrt.dll\0' and b[1730:1737]==b'_write\0'
+        if i==0:
+            assert b[1279]==33 and b[1024]==0  # buffer is the final declared virtual byte
         digest.update(b);exe.write_bytes(b)
         if not windows:
             convert(b,True);first=rs.read_bytes();convert(b,True);assert first==rs.read_bytes()
@@ -38,8 +41,9 @@ with tempfile.TemporaryDirectory() as directory:
         assert observation==(spec['stdout_hex'],spec['stderr_hex'],spec['exit']),(i,observation)
         print(f'corpus {i:02}: stdout={observation[0]} stderr={observation[1]} exit={observation[2]}')
         if not windows:
-            for offset,value in [(1536,0x3080+i%8*4),(1548,0x30ff),(1552,0x30fc),(1600+i%8*4,0x80000001),(1024+i%8,10)]:
+            for offset,value in [(1536,0x3080+i%8*4),(1548,0x30ff),(1552,0x30fc),(1600+i%8*4,0x80000001),(1024+(255 if i==0 else i%8),10)]:
                 bad=bytearray(b);struct.pack_into('<I',bad,offset,value)
+                if offset==1552: struct.pack_into('<I',bad,344,value)  # keep IAT directory equal: reach range check
                 # Newline is only invalid if this payload is used; conservative path checks still see all imports.
                 convert(bad,False)
     print(f'corpus version={VERSION} seed={SEED} instances=32 families=4 sha256={digest.hexdigest()} rejected={rejected}')
