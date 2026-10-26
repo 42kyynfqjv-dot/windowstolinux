@@ -130,3 +130,8 @@ boundaries. Next is medium review of production effects and artifact evidence.
 The remaining frozen nested program rejects stack-copy/argument-store/backward
 tail-transfer forms; any such expansion needs a separate bounded architecture
 design, not another unmeasured register/opcode increment.
+
+SUB-525 specifies the fixed nested-program prerequisites in SUB525-NESTED-DESIGN.md.
+Eight independent test-only functions exercise scalar stack copies, borrowed
+argument writes and preserved tail-return context. Production remains rejecting;
+next medium review must assess the routine-graph and ownership implementation gates.
