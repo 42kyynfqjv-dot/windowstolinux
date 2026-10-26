@@ -3,6 +3,7 @@ fn main() {
     let code = match std::env::var("W2L_INPUT") {
         Err(std::env::VarError::NotPresent) => 200,
         Err(std::env::VarError::NotUnicode(_)) => 203,
+        Ok(s) if s.encode_utf16().take(65).count() > 64 => 203,
         Ok(s) if s.is_empty() => 200,
         Ok(s) if s.encode_utf16().count() > 2 => 201,
         Ok(s) if !s.bytes().all(|b| b.is_ascii_digit()) => 202,

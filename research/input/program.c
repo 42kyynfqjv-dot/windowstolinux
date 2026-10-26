@@ -5,6 +5,7 @@ int __stdcall entry(void) {
     DWORD n = GetEnvironmentVariableW(L"W2L_INPUT", buffer, 3);
     unsigned result;
     if (n == 0) return 200;
+    if (n > 65) return 203;
     if (n > 2) return 201;
     if (buffer[0] < L'0' || buffer[0] > L'9') return 202;
     result = buffer[0] - L'0';

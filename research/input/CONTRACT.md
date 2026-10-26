@@ -29,7 +29,7 @@ source port, runtime interpreter or AI runtime is used.
 Name: exactly `W2L_INPUT`. Input comes from the launch environment at execution,
 not conversion. Parent harness removes inherited variants of this name and sets
 only the exact uppercase spelling. Domain: at most one case-insensitive matching
-name, well-formed Unicode without embedded NUL, stable during execution. Other
+name, well-formed Unicode without embedded NUL, stable during execution, at most 64 UTF-16 units. Other
 variables have no application-visible role. Windows case-insensitivity versus
 Linux case-sensitivity is restricted by this domain; arbitrary aliases/duplicate
 names are outside it and must be rejected by future runtime admission.
@@ -41,6 +41,7 @@ capacity 3. No environment mutation, retries or buffer resizing.
 | Condition, in evaluation order | Process exit |
 | --- | --- |
 | API returns zero (including missing/empty or another failure) | 200 |
+| Required length exceeds 65 (64 units plus terminator) | 203 |
 | Returned length exceeds 2 | 201 |
 | Any of the one or two returned code units is outside ASCII 0..9 | 202 |
 | Otherwise | Decimal integer 0..99, allowing leading zero |
@@ -53,11 +54,13 @@ prototype maps missing/empty to 200; it does not simulate OS allocation/fault
 failures. Invalid Linux byte encoding returns 203, an unsupported-input diagnostic
 outside Windows differential equivalence, not an invented Windows API result.
 Lone UTF-16 surrogates and embedded NUL cannot be represented by the agreed input
-mapping and are excluded. Resource admission must reject oversized launch input
-before allocating unbounded conversion buffers; the eventual cap must be frozen
-in the implementation contract and checked before UTF-16 encoding.
+mapping and are excluded. Resource admission rejects values above 64 UTF-16 units with exit 203. The native
+prototype counts at most 65 units without allocating a UTF-16 buffer; acquisition
+through std::env still copies the OS value. A future bounded runtime must account
+for that host allocation explicitly; this prototype is not a resource-safe issuer.
+The Windows program recognizes overflow from the required-capacity result (>65).
 
-`vectors.json` freezes 15 independently enumerated expectations: absent/empty,
+`vectors.json` freezes 17 independently enumerated expectations: absent/empty,
 0/7/07/42/99, length overflow, whitespace/quote/backslash/letter, Unicode BMP,
 surrogate pair and UTF-16 length overflow. Distinct values must change the result
 of the SAME compiled artifact. Numeric results were specified before running the
@@ -113,7 +116,7 @@ freestanding experiment setting, not ordinary CRT coverage. Do not change flags
 or source merely to gain acceptance. The existing Windows toolchain version is
 recorded per run rather than falsely called pinned.
 
-`python research/input/check.py EVIDENCE` in an x86 MSVC environment records 15
+`python research/input/check.py EVIDENCE` in an x86 MSVC environment records 17
 original observations and requires current converter rejection. On Linux,
 `python3 research/input/check.py EVIDENCE --compare` builds a separately authored
 Rust contract prototype and compares the frozen table and original observations.
@@ -121,7 +124,7 @@ The prototype is NOT generated from the PE. CI retains PE/source hashes; source
 line endings are fixed. Failures/timeouts fail the run; no retries are hidden.
 
 Existing 12 compiler pairs,102 authored pairs and18 launch checks remain distinct.
-These 15 prototype comparisons add no converter compatibility cases. Modern
+These 17 prototype comparisons add no converter compatibility cases. Modern
 Windows observations establish no XP/7 claim. Four prior timeout causes remain
 unresolved. Full CRT effects, general heap/global memory, arbitrary loops, files,
 PE32+ and general Windows environment semantics are outside this gate.

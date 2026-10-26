@@ -24,10 +24,10 @@ for v in vectors:
     assert actual==dict(name=v['name'],exit=v['exit'],stdout_hex='',stderr_hex=''),actual
     results.append(actual)
 if a.compare:
-    assert results==old['observations'];print('INPUT_CONTRACT: 15 separate native prototype comparisons, not translations')
+    assert results==old['observations'];print('INPUT_CONTRACT: 17 separate native prototype comparisons, not translations')
 else:
     assert sha(exe)==before
     converter=run([str(repo/'target/debug/w2l.exe'),str(exe),str(root/'input-generated.rs')])
     assert converter.returncode!=0,'unexpected production acceptance requires review'
     report=dict(sources=sources,pe_sha256=before,compile_flags=flags,link_flags=link,observations=results,conversion_accepted=False,converter_error=converter.stderr.decode(errors='replace'),emission_allowed=False)
-    (root/'input-contract.json').write_text(json.dumps(report,indent=2)+'\n');print('INPUT_CONTRACT: 15 original observations; production rejected')
+    (root/'input-contract.json').write_text(json.dumps(report,indent=2)+'\n');print('INPUT_CONTRACT: 17 original observations; production rejected')

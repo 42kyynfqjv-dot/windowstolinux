@@ -1,17 +1,87 @@
 [
- {"name":"missing","value":null,"exit":200},
- {"name":"empty","value":"","exit":200},
- {"name":"zero","value":"0","exit":0},
- {"name":"seven","value":"7","exit":7},
- {"name":"leading-zero","value":"07","exit":7},
- {"name":"two-digit","value":"42","exit":42},
- {"name":"maximum","value":"99","exit":99},
- {"name":"too-long","value":"100","exit":201},
- {"name":"space","value":" 7","exit":202},
- {"name":"quote","value":"\"7","exit":202},
- {"name":"backslash","value":"\\7","exit":202},
- {"name":"letter","value":"a","exit":202},
- {"name":"unicode","value":"é","exit":202},
- {"name":"surrogate-pair","value":"😀","exit":202},
- {"name":"utf16-overflow","value":"😀7","exit":201}
+  {
+    "name": "missing",
+    "value": null,
+    "exit": 200
+  },
+  {
+    "name": "empty",
+    "value": "",
+    "exit": 200
+  },
+  {
+    "name": "zero",
+    "value": "0",
+    "exit": 0
+  },
+  {
+    "name": "seven",
+    "value": "7",
+    "exit": 7
+  },
+  {
+    "name": "leading-zero",
+    "value": "07",
+    "exit": 7
+  },
+  {
+    "name": "two-digit",
+    "value": "42",
+    "exit": 42
+  },
+  {
+    "name": "maximum",
+    "value": "99",
+    "exit": 99
+  },
+  {
+    "name": "too-long",
+    "value": "100",
+    "exit": 201
+  },
+  {
+    "name": "space",
+    "value": " 7",
+    "exit": 202
+  },
+  {
+    "name": "quote",
+    "value": "\"7",
+    "exit": 202
+  },
+  {
+    "name": "backslash",
+    "value": "\\7",
+    "exit": 202
+  },
+  {
+    "name": "letter",
+    "value": "a",
+    "exit": 202
+  },
+  {
+    "name": "unicode",
+    "value": "\u00e9",
+    "exit": 202
+  },
+  {
+    "name": "surrogate-pair",
+    "value": "\ud83d\ude00",
+    "exit": 202
+  },
+  {
+    "name": "utf16-overflow",
+    "value": "\ud83d\ude007",
+    "exit": 201
+  },
+  {
+    "name": "resource-boundary",
+    "value": "7777777777777777777777777777777777777777777777777777777777777777",
+    "exit": 201
+  },
+  {
+    "name": "resource-overflow",
+    "value": "77777777777777777777777777777777777777777777777777777777777777777",
+    "exit": 203
+  }
 ]
