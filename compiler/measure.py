@@ -25,6 +25,7 @@ def command(args, name):
 
 # /Bv with a real compile records the front/back-end versions without a no-input failure.
 command(['lib','/nologo','/machine:x86','/def:'+str(repo/'compiler/msvcrt.def'),'/out:legacy.lib'],'authored-import-library')
+command(['cl','/nologo','/W4','/O2',str(repo/'compiler/observe_base.c'),'/Feobserver.exe'],'observer-build')
 results=[]
 for kind in ['freestanding','crt']:
     obj=kind+'.obj';exe=kind+'.exe'
@@ -48,6 +49,10 @@ for kind in ['freestanding','crt']:
     observation=((root/(kind+'.stdout')).read_bytes().hex(),(root/(kind+'.stderr')).read_bytes().hex(),p.returncode)
     assert observation==('48656c6c6f','',0),(kind,observation)
     converter=subprocess.run([str(repo/'target/debug/w2l.exe'),str(root/exe),str(root/(kind+'.rs'))],capture_output=True,timeout=15)
+    if kind == 'freestanding':
+        assert converter.returncode == 1
+        assert 'linker intake validated; unsupported entry at RVA 0x1000 (opcode 0x56)' in converter.stderr.decode()
+        assert not (root/(kind+'.rs')).exists()
     result=dict(kind=kind,sha256=hashlib.sha256(b).hexdigest(),sections=sections,
         coff_characteristics=hex(struct.unpack_from('<H',b,pe+22)[0]),dll_characteristics=hex(struct.unpack_from('<H',b,o+70)[0]),
         directories=[dict(index=i,rva=hex(struct.unpack_from('<I',b,o+96+8*i)[0]),size=struct.unpack_from('<I',b,o+100+8*i)[0]) for i in range(16) if any(struct.unpack_from('<II',b,o+96+8*i))],
@@ -68,5 +73,21 @@ for kind in ['freestanding','crt']:
         assert candidate.blob == b
         (root/'linker-intake-prototype.json').write_text(json.dumps(intake,indent=2)+'\n')
         print('TEST_ONLY_LINKER_INTAKE '+json.dumps(intake))
+        # Separate instrumented run. Original non-debug execution above remains baseline.
+        with open(root/'observed.stdout','wb') as out,open(root/'observed.stderr','wb') as err:
+            observed=subprocess.run([str(root/'observer.exe'),str(root/exe),str(root/'actual-base.txt')],
+                                    stdout=out,stderr=err,timeout=15)
+        assert observed.returncode == 0
+        assert (root/'observed.stdout').read_bytes() == b'Hello'
+        assert (root/'observed.stderr').read_bytes() == b''
+        actual_base=int((root/'actual-base.txt').read_text().strip())
+        assert (root/exe).read_bytes() == b
+        base_report=dict(instrumentation='DEBUG_ONLY_THIS_PROCESS child creation event',
+                         actual_base=actual_base,preferred_base=candidate.base,
+                         relocated=actual_base != candidate.base,pe_sha256=hashlib.sha256(b).hexdigest(),
+                         stdout_hex='48656c6c6f',stderr_hex='',exit=observed.returncode)
+        candidate.rebase_words(actual_base)  # Check observed base is inside design domain.
+        (root/'observed-base.json').write_text(json.dumps(base_report,indent=2)+'\n')
+        print('OBSERVED_LOAD_BASE '+json.dumps(base_report))
 (root/'report.json').write_text(json.dumps(results,indent=2)+'\n')
 print('Compiler experiment: two originals verified; acceptance is reported, never assumed.')

@@ -1,6 +1,7 @@
 use std::env;
 mod control;
 mod imports;
+mod linker;
 use std::fs;
 use std::path::Path;
 
@@ -302,6 +303,16 @@ impl<'a> Pe<'a> {
     }
 }
 
+fn translate_image(bytes: &[u8]) -> Result<String, String> {
+    // Select the strict linker profile before parsing; never retry a failed parse.
+    let pe = u32_at(bytes, 0x3c)? as usize;
+    let characteristics = pe.checked_add(24 + 70).ok_or("header offset overflow")?;
+    if u16_at(bytes, characteristics)? == 0x8540 {
+        return linker::Candidate::parse(bytes)?.reject_emission();
+    }
+    Pe::parse(bytes)?.translate()
+}
+
 fn run() -> Result<(), String> {
     let mut args = env::args_os().skip(1);
     let input = args.next().ok_or("usage: w2l INPUT.exe OUTPUT.rs")?;
@@ -310,8 +321,7 @@ fn run() -> Result<(), String> {
         return Err("usage: w2l INPUT.exe OUTPUT.rs".into());
     }
     let bytes = fs::read(&input).map_err(|e| e.to_string())?;
-    let pe = Pe::parse(&bytes)?;
-    let source = pe.translate()?;
+    let source = translate_image(&bytes)?;
     fs::write(Path::new(&output), source).map_err(|e| e.to_string())
 }
 

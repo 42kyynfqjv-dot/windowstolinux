@@ -20,6 +20,7 @@ jobs:
           python3 scripts/check_output_probe.py
           python3 scripts/make_output_probe.py /tmp/output-probe.exe
           cargo build --locked
+          python3 tools/check_linker_production.py
           python3 scripts/check_imported_output.py
           python3 corpus/check.py
           rustfmt --check tools/output-probe.rs

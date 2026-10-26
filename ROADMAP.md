@@ -74,3 +74,6 @@ intake from emission, excludes loader/debug metadata from immutable reads, and
 requires typed relocation provenance. Medium contract review precedes production
 intake; actual compiler translation additionally requires the measured ABI slice
 and pointer-preserving stack state. Windows actual-base evidence remains absent.
+
+SUB-516 implements gated structural intake; see [SUB516-INTAKE.md](SUB516-INTAKE.md).
+Compiler-image emission remains blocked pending typed pointer/ABI integration.
