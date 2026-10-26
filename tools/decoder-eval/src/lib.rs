@@ -127,3 +127,6 @@ mod evaluation {
 use control as adapter;
 #[cfg(test)]
 mod adapter_tests;
+
+#[cfg(test)]
+mod stack_design;

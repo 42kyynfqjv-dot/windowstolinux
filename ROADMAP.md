@@ -1,57 +1,27 @@
 # Roadmap
 
-- M0: Rust workspace, strict PE parsing, CI, project governance, licensing.
-- M1: one actual PE32 program translated to Rust, built to ELF, and compared with its Windows execution.
-- M2: bounded carry/zero/sign/overflow flags, CMP and forward JC/JNC/JZ/JNZ/JL/JGE slice in draft review; wider instruction semantics remain open.
-- M3: executable structure, imports and relocation semantics remain open.
-- M4–M7: Windows compatibility runtime, dynamic observation, and desktop behavior.
-- M8–M10: PE32+/x86-64, measured corpus expansion, optimization and reproducible releases.
+- M0 foundation and M1 narrow modern-Windows PE32-to-native-ELF slice are in draft review.
+- M2 has bounded EAX arithmetic, four flags, forward conditions and direct calls/returns;
+  the strict iced adapter is integrated. General stack/data memory is still open.
+- M3 executable structure, imports, relocations and indirect calls remain open.
+- M4–M7 Windows APIs, advanced execution, instrumentation and desktop behavior remain open.
+- M8–M10 x64, representative corpus, optimization and reproducible releases remain open.
 
-No milestone is complete merely because generated Rust compiles. Each compatibility claim needs a versioned corpus, original execution baseline, and published comparison method.
+Current production evidence:42 authored Windows Server2025/Linux cases. This is
+not XP/7 validation or application compatibility; the99% objective is aspirational.
+No milestone is complete merely because generated Rust compiles.
 
-## Next meaningful native program gate
+## Next native program gate
 
-The original M2 includes stack, memory and branching; M3 includes imports,
-relocations and indirect calls. The current prototype has only a single EAX
-state, four flags, forward conditions and entry return. The strict decoder is
-in production, but this does not complete M2 or provide general function lifting.
+SUB-507 defines bounded stack arguments so an authored helper can consume caller
+supplied data. [SUB507-DESIGN.md](SUB507-DESIGN.md) proposes exact PUSH imm32,
+MOV EAX,[ESP+4] and flags-preserving LEA cleanup over one tagged stack containing
+data and return words. The five test-only prototype functions do not add production
+support. Review the address/ownership/flags contract at medium, then use Astra High
+for the bounded validator/emitter integration and genuine Windows/Linux evidence.
 
-Prioritize a bounded direct-call/return slice (SUB-506) over another immediate
-arithmetic opcode. SUB EAX,imm32 would reuse comparison arithmetic but leave the
-same structural barriers. A helper routine called from an authored entry point,
-returning a value that the caller uses, advances a multi-function native program.
-A restricted logical return-address stack can precede general stack memory only
-while the accepted instructions cannot observe or modify stack addresses.
-
-Next Astra High pass must specify and review that soundness boundary before
-implementing exact forward E8 calls and C3 internal/entry returns. Require typed
-IR, validated target/continuation boundaries, nonrecursive bounded call graphs,
-nesting and execution caps, preserved EAX/flags and independent expected tests.
-No PUSH/POP, ESP access, indirect calls, memory or APIs belong to this slice.
-Original Windows execution must match generated ELF for helper, nested and shared
-callee fixtures, in addition to existing regressions and deterministic source.
-Then return to medium for verification. If the boundary cannot be enforced,
-revise the scope before implementation rather than assuming stack semantics.
-
-General stack/data memory is the next prerequisite for useful compiler output;
-PE section mapping, relocation/import resolution and an independently implemented
-small API contract are later prerequisites for an observable console application.
-They should be separate evidence gates. XP/7 validation and a representative
-application corpus remain unfulfilled; the current34 modern-Windows experiments
-are prototype evidence only.
-
-SUB-506 implementation checkpoint: bounded forward direct calls, internal returns
-and entry sentinel now support authored helper, nested and shared-callee programs.
-The logical return-address stack has a 32-frame bound and remains unobservable to
-accepted instructions. Next is medium review of return contexts, all-path depth
-validation and the 41-case evidence. General stack/data memory and M3 import/API
-prerequisites above remain future work. No broad calling-convention claim follows.
-
-SUB-506 medium review adds state-dependent return paths in a shared callee and
-untaken-depth/unknown-flag checks; no production defect reproduced. Next SUB-507
-is an Astra High design gate for bounded stack arguments: a caller-supplied word
-read by a helper, with explicit data/return-address separation and cleanup.
-This advances M2 stack state toward a parameterized native program. Define entry
-assumptions, exact forms, capacity/access checks, and independent negative tests
-before implementing. A new logical data stack cannot silently coexist with
-unmodeled ESP or expose symbolic return addresses. General memory/APIs remain later.
+This advances original M2 stack-state prerequisites more than another arithmetic
+opcode. Native stack storage and exception assumptions remain explicit. General
+memory, PE sections/imports and a small independently implemented API contract are
+later separate gates toward an observable console application. General ABI support
+must not be inferred from a single argument-passing convention.
