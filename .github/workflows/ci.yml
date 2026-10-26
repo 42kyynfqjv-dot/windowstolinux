@@ -253,6 +253,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Nonlinear artifact binding failed' }
           python research/input/helper/check.py "$env:RUNNER_TEMP/w2l-compiler-measurement"
           if ($LASTEXITCODE -ne 0) { throw 'Helper artifact binding failed' }
+          cmd /c "`"$vcvars`" x86 && python research/input/heldout/measure.py %RUNNER_TEMP%/w2l-compiler-measurement"
+          if ($LASTEXITCODE -ne 0) { throw 'Held-out input measurement failed' }
       - name: Validate design-only permissioned intake against all held-out originals
         run: python tools/check_permissioned_corpus.py "${{ runner.temp }}/w2l-compiler-measurement"
       - name: Check scalar local-frame contract against unchanged compiler artifact
@@ -340,6 +342,7 @@ jobs:
           python3 research/input/diversity/measure.py evidence --compare
           python3 research/input/scalar/check_nonlinear.py evidence
           python3 research/input/helper/check.py evidence
+          python3 research/input/heldout/measure.py evidence --compare
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -349,4 +352,5 @@ jobs:
             evidence/input-translation.json
             evidence/input-native.rs
             evidence/input-diversity-native.json
+            evidence/held-input-native.json
           if-no-files-found: warn
