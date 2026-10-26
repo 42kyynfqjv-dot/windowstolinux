@@ -136,3 +136,29 @@ capabilities remain rejected. No writable globals, heap/general memory, loops, C
 PE32+ or load-base assumption expansion. No known external resource blocker.
 Three historical Windows timeouts remain unexplained. Windows Server2025 evidence
 alone does not establish XP/7 or general application compatibility. Draft/unmerged.
+
+## Medium contract review
+
+Added a ninth independent test function: known AL with unknown upper EAX bytes can
+be incremented/stored; full reads still reject. POP followed by PUSH without an ECX
+reset copies the modified partial value, retaining the known overwritten byte and
+unknown neighbors. The previous fresh-storage test intentionally reset ECX; it did
+not cover this real reuse path. MOVZX and cleanup preserve flags throughout. No
+production change or reproduced production defect.
+
+Knowledge is whole-byte Known/Unknown, not arbitrary bit masks. A partly known byte
+is conservatively Unknown. No unsupported operation may refine it into a known byte.
+Partial values must normalize to ordinary Integer only when all four bytes are known;
+low-byte access to an opaque full-register Unknown remains unknown unless a supported
+operation established that byte. Numeric scalar bytes cannot confer pointer authority.
+Audit each existing scalar consumer and symbolic ESI preservation independently.
+
+Ready for bounded SUB-533 Astra implementation after this review: exact compiled
+forms, distinct allocation-kind dispatch, partial EAX/ECX scalar state and independently
+known tracked flags; every legacy instruction consumer must retain conservative
+unknown/pointer/ownership checks. Production must test modified POP/PUSH reuse and
+known-AL/unknown-upper stores, flag-specific unknown reads, byte/word alias rejection
+and both allocation kinds through shared validator/emitted transitions. Prototype
+action tests do not prove prefix decoding or full graph/ABI behavior. Require actual
+unchanged hashed buffer PE->Rust->ELF exit132; retain other six held-out rejection
+gates and all earlier evidence. Three historical timeout causes remain unresolved.

@@ -172,6 +172,6 @@ initialization, register/flag and ownership semantics. Keep production rejection
 until separate reviewed implementation and same-PE exit132 acceptance gates.
 
 SUB-532 proposes owned byte-local storage and partial-register/per-flag semantics
-in [SUB532-BYTE-LOCAL-DESIGN.md](SUB532-BYTE-LOCAL-DESIGN.md). Eight independent model
+in [SUB532-BYTE-LOCAL-DESIGN.md](SUB532-BYTE-LOCAL-DESIGN.md). Nine independent model
 functions and exact unchanged-buffer artifact checks are design evidence only.
 Production still rejects held_buffer; medium contract review precedes implementation.

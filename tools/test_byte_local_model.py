@@ -60,6 +60,22 @@ class ByteLocals(unittest.TestCase):
         self.rejects(m,'call')
         m=Model();m.reg['eax']=(0,1,0,0);self.rejects(m,'ret')
         m.reg['eax']=(0,0,0,0);m.step('ret');self.rejects(m,'push_ecx')
+    def test_partial_al_store_and_pop_repush_copies_modified_bytes(self):
+        m=Model();m.step('push_ecx');m.reg['eax']=(255,None,0xab,None)
+        m.flags=dict(cf=True,zf=None,sf=None,of=None)
+        m.step('inc_al');flags=dict(m.flags)
+        self.assertEqual(m.reg['eax'],(0,None,0xab,None))
+        m.step('store_al',1)
+        self.assertEqual(m.window(),(None,0,None,None))
+        self.assertEqual(m.flags,flags)
+        self.rejects(m,'add');self.rejects(m,'ret')
+        m.step('pop_ecx');self.assertEqual(m.reg['ecx'],(None,0,None,None))
+        m.step('push_ecx') # current ECX carries the modified byte; no reset here
+        self.assertEqual(m.window(),(None,0,None,None))
+        self.rejects(m,'movzx','eax',0)
+        m.step('movzx','eax',1);self.assertEqual(m.reg['eax'],(0,0,0,0))
+        self.assertEqual(m.flags,flags)
+        m.step('pop_ecx');self.assertEqual(m.step('ret'),0)
     def test_scalar_add_independent_boundary_table(self):
         for a,b,result,c,z,s,o in [(0xffffffff,1,0,True,True,False,False),(0x7fffffff,1,0x80000000,False,False,True,True),(0x80000000,0x80000000,0,True,True,False,True)]:
             m=Model();m.reg['eax']=tuple(a.to_bytes(4,'little'));m.reg['ecx']=tuple(b.to_bytes(4,'little'));m.step('add')
