@@ -146,3 +146,11 @@ expectations and all conversions reject with cross-host matching diagnostics.
 See [compiler/heldout/RESULTS.md](compiler/heldout/RESULTS.md). No new translated
 pairs; next proposed gate is a bounded normalized PE32 image-intake design,
 with execution barriers retained for writable memory, loops and CRT.
+
+SUB-528 proposes a permissioned PE32 envelope with separate metadata and execution
+proofs in [SUB528-PE32-DESIGN.md](SUB528-PE32-DESIGN.md). Fifteen test-only model
+functions and all eight unchanged held-out artifacts exercise range/permission
+checks. Seven PE32 envelopes parse; PE32+ rejects; every case remains ineligible
+for emission. Production and the eight compiler/102 authored comparisons stay
+unchanged. Next: medium contract review, then bounded non-emitting production
+intake/diagnostics; writable memory, loops and CRT retain explicit barriers.
