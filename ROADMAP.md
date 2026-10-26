@@ -91,3 +91,9 @@ SUB-518 implements the bounded typed/compiler ABI path described in
 is unchanged MSVC PE -> Rust -> ELF execution matching the original Windows output.
 Next medium review audits that evidence and production proof boundaries before any
 additional compiler/CRT coverage.
+
+SUB-519 measures four frozen C variations without production changes: three retain
+baseline structure and pass cross-platform conversion/execution; one three-argument
+helper rejects. See [compiler/variations/RESULTS.md](compiler/variations/RESULTS.md).
+The next bounded semantic gate is third caller-owned argument ADD and six-word
+cleanup, with Astra High contract/core work before medium review.
