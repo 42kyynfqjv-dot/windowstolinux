@@ -55,4 +55,4 @@ for report in reports:
         print('SAME_PE_INDEPENDENT_LINUX_CONVERSION',name,report['sha256'],report['rust_sha256'],observation)
 
 if structural:
-    assert {r['kind'] for r in reports if r['conversion_accepted']} == {'variation_shared', 'variation_conditional'}, 'SUB-524 requires shared/conditional acceptance, nested rejection'
+    assert {r['kind'] for r in reports if r['conversion_accepted']} == {'variation_shared', 'variation_conditional', 'variation_nested'}, 'SUB-526 requires all three structural programs'

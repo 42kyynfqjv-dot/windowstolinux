@@ -504,3 +504,113 @@ fn volatile_register_call_effects_and_fresh_external_origins() {
         assert!(s.step(Op::SelectGe, 26, &mut no_output).is_err());
     }
 }
+
+#[test]
+fn nested_copy_store_tail_context_and_atomic_rejection() {
+    let mut s = State::new(0);
+    for op in [
+        Op::Push(5),
+        Op::Push(7),
+        Op::Call(0x1050),
+        Op::CopyArgument,
+        Op::CopyArgument,
+    ] {
+        s.step(op, 0x101b, &mut no_output).unwrap();
+    }
+    assert_eq!(
+        s.words,
+        vec![
+            Word::Entry,
+            Word::Data(0, Value::Integer(5)),
+            Word::Data(0, Value::Integer(7)),
+            Word::Return(1, 0x101b),
+            Word::Data(1, Value::Integer(5)),
+            Word::Data(1, Value::Integer(7))
+        ]
+    );
+    s.step(Op::Call(0x1040), 0x105d, &mut no_output).unwrap();
+    for op in [
+        Op::Argument,
+        Op::AddArgument,
+        Op::Ret,
+        Op::CleanupTwo,
+        Op::CompareEax(12),
+    ] {
+        s.step(op, 0, &mut no_output).unwrap();
+    }
+    assert_eq!(s.pc, 0);
+    assert_eq!(s.eax, Value::Integer(12));
+    s.step(Op::StoreSecond, 0, &mut no_output).unwrap();
+    s.step(Op::StoreFirst, 0, &mut no_output).unwrap();
+    let before = s.words.clone();
+    let flags = s.flags;
+    s.step(Op::Tail(0x1040), 0x1080, &mut no_output).unwrap();
+    assert_eq!(s.words, before);
+    assert_eq!(s.flags, flags);
+    assert_eq!(s.frames.len(), 2);
+    for op in [Op::Argument, Op::AddArgument, Op::Ret] {
+        s.step(op, 0, &mut no_output).unwrap();
+    }
+    assert_eq!(s.pc, 0x101b);
+    assert_eq!(s.eax, Value::Integer(15));
+    for position in [1, 2] {
+        for bad in [
+            Word::Entry,
+            Word::Saved(0, Value::Integer(5)),
+            Word::Return(0, 9),
+            Word::Data(99, Value::Integer(5)),
+            Word::Data(0, Value::Pointer(0x2008)),
+            Word::Data(0, Value::Unknown(8)),
+        ] {
+            let mut copy = State::new(0);
+            for op in [Op::Push(5), Op::Push(7), Op::Call(20)] {
+                copy.step(op, 5, &mut no_output).unwrap();
+            }
+            if position == 2 {
+                copy.step(Op::CopyArgument, 9, &mut no_output).unwrap();
+            }
+            copy.words[position] = bad.clone();
+            let before = copy.words.clone();
+            assert!(copy.step(Op::CopyArgument, 13, &mut no_output).is_err());
+            assert_eq!(copy.words, before);
+            for op in [Op::StoreFirst, Op::StoreSecond, Op::Tail(0x1040)] {
+                let mut t = State::new(0);
+                for op in [Op::Push(5), Op::Push(7), Op::Call(20)] {
+                    t.step(op, 5, &mut no_output).unwrap();
+                }
+                t.words[position] = bad.clone();
+                let before = t.words.clone();
+                assert!(t.step(op, 0, &mut no_output).is_err());
+                assert_eq!(t.words, before);
+            }
+        }
+    }
+}
+
+#[test]
+fn routine_graph_rejects_cycles_and_ambiguous_regions() {
+    let good = BTreeMap::from([
+        (0, (Op::Call(20), 5)),
+        (5, (Op::Ret, 6)),
+        (10, (Op::Mov(0), 15)),
+        (15, (Op::Ret, 16)),
+        (20, (Op::Tail(10), 25)),
+    ]);
+    validate_routines(0, &good).unwrap();
+    let mut bad = good.clone();
+    bad.insert(10, (Op::Call(20), 15));
+    assert!(validate_routines(0, &bad).unwrap_err().contains("cycle"));
+    let mut bad = good.clone();
+    bad.insert(20, (Op::Tail(20), 25));
+    bad.remove(&10);
+    bad.remove(&15);
+    assert!(validate_routines(0, &bad).unwrap_err().contains("cycle"));
+    let mut bad = good.clone();
+    bad.insert(0, (Op::Call(5), 5));
+    assert!(validate_routines(0, &bad).is_err());
+    let mut bad = good;
+    bad.insert(20, (Op::Equal(15), 25));
+    bad.insert(25, (Op::Ret, 26));
+    bad.insert(0, (Op::Call(10), 5));
+    assert!(validate_routines(0, &bad).is_err());
+}

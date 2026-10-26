@@ -46,6 +46,13 @@ impl Candidate<'_> {
                     };
                     (5, op)
                 }
+                0xff if b.get(..4) == Some(&[0xff, 0x74, 0x24, 8]) => (4, Op::CopyArgument),
+                0xc7 if b.get(..8) == Some(&[0xc7, 0x44, 0x24, 8, 3, 0, 0, 0]) => {
+                    (8, Op::StoreSecond)
+                }
+                0xc7 if b.get(..8) == Some(&[0xc7, 0x44, 0x24, 4, 12, 0, 0, 0]) => {
+                    (8, Op::StoreFirst)
+                }
                 0xff if byte(1)? == 0x15 => {
                     let site = pc + 2;
                     imm(2)?;
@@ -75,21 +82,35 @@ impl Candidate<'_> {
                     0xfe => (3, Op::CompareEsi(byte(2)? as i8 as i32 as u32)),
                     _ => return Err("unsupported 83 form".into()),
                 },
-                0xe8 => {
+                0xe8 | 0xe9 => {
                     let target = i64::from(pc) + 5 + i64::from(imm(1)? as i32);
                     need(
-                        target > i64::from(pc) && target <= i64::from(u32::MAX),
-                        "forward call target",
+                        target >= 0 && target <= i64::from(u32::MAX),
+                        "direct transfer target",
                     )?;
-                    (5, Op::Call(target as u32))
+                    (
+                        5,
+                        if b[0] == 0xe8 {
+                            Op::Call(target as u32)
+                        } else {
+                            Op::Tail(target as u32)
+                        },
+                    )
                 }
-                0x75 => {
+                0x74 | 0x75 => {
                     let target = i64::from(pc) + 2 + i64::from(byte(1)? as i8);
                     need(
                         target >= i64::from(pc) + 2 && target <= i64::from(u32::MAX),
                         "forward branch target",
                     )?;
-                    (2, Op::Branch(target as u32))
+                    (
+                        2,
+                        if b[0] == 0x74 {
+                            Op::Equal(target as u32)
+                        } else {
+                            Op::Branch(target as u32)
+                        },
+                    )
                 }
                 _ => return Err(format!("unsupported instruction at RVA {pc:#x}")),
             };
@@ -107,7 +128,8 @@ impl Candidate<'_> {
             let next = pc + size;
             match op {
                 Op::Ret => {}
-                Op::Call(t) | Op::Branch(t) => {
+                Op::Tail(t) => pending.push(t),
+                Op::Call(t) | Op::Branch(t) | Op::Equal(t) => {
                     pending.push(t);
                     pending.push(next)
                 }
@@ -119,6 +141,7 @@ impl Candidate<'_> {
             bound == self.pointers.keys().copied().collect(),
             "relocation operand bijection",
         )?;
+        validate_routines(self.entry, &graph)?;
         let mut buffers = BTreeMap::new();
         let mut states = vec![State::new(self.entry)];
         let mut explored = 0;
@@ -186,3 +209,64 @@ impl Candidate<'_> {
 #[cfg(test)]
 #[path = "tests.rs"]
 mod tests;
+
+// All local edges increase PC; transfers form a separate acyclic routine graph.
+fn validate_routines(entry: u32, graph: &BTreeMap<u32, (Op, u32)>) -> Result<(), String> {
+    let mut roots = BTreeSet::from([entry]);
+    for (op, _) in graph.values() {
+        if let Op::Call(t) | Op::Tail(t) = op {
+            roots.insert(*t);
+        }
+    }
+    let mut owners = BTreeMap::new();
+    let mut edges: BTreeMap<u32, BTreeSet<u32>> =
+        roots.iter().map(|r| (*r, BTreeSet::new())).collect();
+    for &root in &roots {
+        let mut pending = vec![root];
+        while let Some(pc) = pending.pop() {
+            if let Some(old) = owners.get(&pc) {
+                need(*old == root, "ambiguous routine region")?;
+                continue;
+            }
+            need(
+                pc == root || !roots.contains(&pc),
+                "cross-routine local edge",
+            )?;
+            owners.insert(pc, root);
+            let &(op, next) = graph.get(&pc).ok_or("routine target boundary")?;
+            match op {
+                Op::Ret => {}
+                Op::Tail(t) => {
+                    edges.get_mut(&root).unwrap().insert(t);
+                }
+                Op::Call(t) => {
+                    edges.get_mut(&root).unwrap().insert(t);
+                    pending.push(next);
+                }
+                Op::Branch(t) | Op::Equal(t) => {
+                    need(t >= next && next > pc, "local cycle")?;
+                    pending.extend([t, next]);
+                }
+                _ => {
+                    need(next > pc, "local cycle")?;
+                    pending.push(next);
+                }
+            }
+        }
+    }
+    need(owners.len() == graph.len(), "unowned code")?;
+    // Repeatedly remove leaves: bounded by the 1024 decoded-instruction cap.
+    while !edges.is_empty() {
+        let leaves: BTreeSet<u32> = edges
+            .iter()
+            .filter(|(_, v)| v.is_empty())
+            .map(|(k, _)| *k)
+            .collect();
+        need(!leaves.is_empty(), "routine transfer cycle")?;
+        edges.retain(|k, _| !leaves.contains(k));
+        for targets in edges.values_mut() {
+            targets.retain(|t| !leaves.contains(t));
+        }
+    }
+    Ok(())
+}

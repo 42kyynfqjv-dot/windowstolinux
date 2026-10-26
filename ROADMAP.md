@@ -135,3 +135,8 @@ SUB-525 specifies the fixed nested-program prerequisites in SUB525-NESTED-DESIGN
 Eight independent test-only functions exercise scalar stack copies, borrowed
 argument writes and preserved tail-return context. Production remains rejecting;
 next medium review must assess the routine-graph and ownership implementation gates.
+
+SUB-526 implements the reviewed bounded nested compiler path; see
+[SUB526-NESTED-IMPLEMENTATION.md](SUB526-NESTED-IMPLEMENTATION.md).
+CI now requires eight unchanged compiler programs, including nested.c, alongside
+102 authored comparisons and18 launch samples. Medium production review is next.

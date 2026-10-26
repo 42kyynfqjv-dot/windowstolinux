@@ -55,3 +55,8 @@ linker profile; see [SUB524-CONDITIONAL-IMPLEMENTATION.md](SUB524-CONDITIONAL-IM
 CI requires seven unchanged compiler-built programs, including conditional.c,
 alongside102 authored comparisons and18 original launch checks. Nested stack-copy/
 tail-transfer and ordinary CRT support remain open.
+
+SUB-526 implements the reviewed bounded nested compiler path; see
+[SUB526-NESTED-IMPLEMENTATION.md](SUB526-NESTED-IMPLEMENTATION.md).
+CI now requires eight unchanged compiler programs, including nested.c, alongside
+102 authored comparisons and18 launch samples. Medium production review is next.

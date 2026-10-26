@@ -50,6 +50,11 @@ enum Op {
     CompareEax(u32),
     CompareEsi(u32),
     Xor,
+    CopyArgument,
+    StoreFirst,
+    StoreSecond,
+    Tail(u32),
+    Equal(u32),
     Call(u32),
     Branch(u32),
     Ret,
@@ -112,6 +117,37 @@ impl State {
             Word::Data(o, v) if o == self.frames[self.frames.len() - 2].owner => Ok(v),
             _ => Err("argument ownership".into()),
         }
+    }
+    fn return_boundary(&self) -> Result<usize, String> {
+        if self.frames.len() < 2 {
+            return Err("entry frame".into());
+        }
+        self.words
+            .iter()
+            .rposition(|w| matches!(w, Word::Return(o,_) if *o == self.owner()))
+            .ok_or_else(|| "protected return".into())
+    }
+    fn scalar_at(&self, boundary: usize, at: usize) -> Result<u32, String> {
+        if at >= boundary || boundary - at > 2 {
+            return Err("argument range".into());
+        }
+        match self.words.get(at) {
+            Some(Word::Data(o, v)) if *o == self.frames[self.frames.len() - 2].owner => v.integer(),
+            _ => Err("argument ownership".into()),
+        }
+    }
+    fn scalar_window(&self) -> Result<usize, String> {
+        let boundary = self.return_boundary()?;
+        if boundary + 1 != self.words.len() {
+            return Err("unbalanced frame".into());
+        }
+        for index in 1..=2 {
+            self.scalar_at(
+                boundary,
+                boundary.checked_sub(index).ok_or("argument bounds")?,
+            )?;
+        }
+        Ok(boundary)
     }
     fn step(
         &mut self,
@@ -198,6 +234,38 @@ impl State {
                 self.words.truncate(at);
                 self.flags = None
             }
+            Op::CopyArgument => {
+                let boundary = self.return_boundary()?;
+                let extra = self.words.len() - boundary - 1;
+                if extra > 1
+                    || !self.words[boundary + 1..]
+                        .iter()
+                        .all(|w| matches!(w,Word::Data(o,_) if *o==self.owner()))
+                {
+                    return Err("copy shape".into());
+                }
+                let at = self.words.len().checked_sub(3).ok_or("argument bounds")?;
+                let value = self.scalar_at(boundary, at)?;
+                self.push(Word::Data(self.owner(), Value::Integer(value)))?;
+            }
+            Op::StoreFirst | Op::StoreSecond => {
+                let boundary = self.scalar_window()?;
+                let (index, value) = if matches!(op, Op::StoreFirst) {
+                    (1, 12)
+                } else {
+                    (2, 3)
+                };
+                let owner = self.frames[self.frames.len() - 2].owner;
+                self.words[boundary - index] = Word::Data(owner, Value::Integer(value));
+            }
+            Op::Tail(target) => {
+                self.scalar_window()?;
+                if self.esi != self.frames.last().unwrap().esi {
+                    return Err("ESI not restored".into());
+                }
+                // Static routine graph is acyclic; retain this frame/return unchanged.
+                self.pc = target;
+            }
             Op::Call(target) => {
                 if self.frames.len() > 32 {
                     return Err("call depth".into());
@@ -210,9 +278,9 @@ impl State {
                 });
                 self.pc = target
             }
-            Op::Branch(target) => {
+            Op::Branch(target) | Op::Equal(target) => {
                 let zero = self.flags.ok_or("unknown branch flags")?.zero;
-                if !zero {
+                if zero == matches!(op, Op::Equal(_)) {
                     self.pc = target;
                     return Ok(Some(next));
                 }
