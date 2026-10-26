@@ -61,18 +61,26 @@ with tempfile.TemporaryDirectory() as tmp:
             labels[label]=len(result)
             for part in parts:
                 if isinstance(part,tuple):
-                    calls.append((len(result),part[0]));result.extend(b'\xe8'+bytes(4))
+                    branch=len(part)==2 and part[1]=='jnz'
+                    calls.append((len(result),part[0],branch))
+                    result.extend(b'\x75\x00' if branch else b'\xe8'+bytes(4))
                 else:result.extend(bytes.fromhex(part))
-        for at,label in calls:
+        for at,label,branch in calls:
             assert labels[label]>at
-            struct.pack_into('<i',result,at+1,labels[label]-(at+5))
+            displacement=labels[label]-(at+(2 if branch else 5))
+            if branch:
+                assert 0<=displacement<=127
+                result[at+1]=displacement
+            else:struct.pack_into('<i',result,at+1,displacement)
         return result
     nested = composed([
         ('entry',['6a00 6a00 6a00',('outer',),'83c418 5e c3']),
-        ('outer',['6a00 6a00 6a00 6a09 6a08 6a07',('leaf',),'83c418',
+        ('outer',['6a00 6a00 6a00 6a09 6a08 6a07',('leaf',),'83c418 83f818',('bad','jnz'),
                   '6a00 6a00 6a00 6a03 6a02 6a01',('leaf',),'83c418 c3']),
+        ('bad',['b863000000 c3']),
         ('leaf',['8b442404 03442408 0344240c c3'])])
-    # leaf(7,8,9)=24, then the same leaf(1,2,3)=6 at nested depth2.
+    # Check leaf(7,8,9)=24 before the same leaf(1,2,3)=6 at nested depth2.
+    # CMP resets the unknown cleanup flags; a wrong first result returns99.
     execute(fixture(nested),6)
     new_bad=[]
     # Exact new forms: reject neighboring offsets, encodings, registers/prefixes.

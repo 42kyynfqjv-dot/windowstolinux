@@ -60,3 +60,15 @@ the offset12 case remains as the seventh native positive. Nested/shared helper
 execution, untaken invalid paths and protected cleanup are production CLI checks,
 not just independent model tests. The nine literal programs are not MSVC artifacts
 or additional Windows/Linux pairs. Full unchanged-compiler acceptance requires CI.
+
+## Medium review
+
+No production ownership/flags defect was reproduced. The native nested/shared
+case previously observed only its second result6. It now checks the first result24
+with CMP/JNZ after cleanup and returns99 if wrong, before making the second call.
+This exercises a flags reset and forward branch through the real emitter, while
+keeping nine native cases and48 rejection cases. Frozen C/manifest/compiler flags
+remain unchanged. Next validation should measure structurally different frozen C
+programs (nested/shared helpers and conditional arithmetic), preserving all rejects
+as evidence before any further semantic expansion. Medium effort is sufficient
+for measurement; a concrete newly observed ABI/flag requirement warrants Astra High.
