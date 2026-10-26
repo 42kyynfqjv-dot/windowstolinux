@@ -291,3 +291,8 @@ SUB-556: bounded nonlinear scalar design/model in
 seven-form inventory. Production squares/helper still reject. Next gate is medium
 contract review before private expression/proof/emitter integration and actual
 unchanged squares Windows/ELF evidence. See document for resource and proof limits.
+
+SUB-557 integrates the reviewed bounded nonlinear scalar DAG into the private
+input proof/emitter. See `research/input/scalar/NONLINEAR-INTEGRATION.md` for exact
+forms, proof limits and same-artifact execution gates. Frozen squares is the new
+acceptance target; helper calls require a separate ownership design.

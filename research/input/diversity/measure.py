@@ -36,7 +36,7 @@ for case in cases:
     p=run([str(converter),str(pe),str(output)])
     assert p.returncode in (0,1),(name,p.returncode,p.stderr)
     item.update(accepted=p.returncode==0,converter_error=p.stderr.decode('utf-8'))
-    assert item['accepted']==(name=='guard_join'),('SUB555 acceptance gate',name,item)
+    assert item['accepted']==(name in ('guard_join','squares')),('SUB557 acceptance gate',name,item)
     if item['accepted']:
         item['generated_sha256']=sha(output)
         if a.compare:
@@ -65,11 +65,11 @@ for case in cases:
             write(native_report if a.compare else report,out)
             assert actual==dict(name=v['name'],exit=v['exit'],stdout_hex='',stderr_hex=''),actual
         if a.compare:assert item['observations']==old['observations']
-    if a.compare and name=='guard_join':
+    if a.compare and name in ('guard_join','squares'):
         item['elf_sha256']=sha(executable)
         extra=[f'{i:02d}' for i in range(100)]+['/',':','９','😀','\x01']
         for value in extra:
-            expected=int(value) if all('0'<=c<='9' for c in value) else 202
+            expected=(sum(int(c)**2 for c in value) if name=='squares' else int(value)) if all('0'<=c<='9' for c in value) else 202
             p=run([str(executable)],env={'W2L_INPUT':value})
             assert (p.returncode,p.stdout,p.stderr)==(expected,b'',b'')
         item['additional_native_cases']=len(extra)
@@ -77,7 +77,8 @@ for case in cases:
         raw=struct.unpack_from('<I',blob,table+20)[0]
         bad=root/'guard-negative.exe';sink=root/'guard-negative.rs';rejected=0
         # Separate mutated files only. Frozen original PE never changed.
-        for offset,value in [(7,2),(0x32,0x76),(0x40,0x76),(0x45,4),(0x4d,0x76),(0x59,0x76),(0x49,0x67),(0x71,0x14),(0x89,1)]:
+        mutations=([(7,2),(0x32,0x76),(0x40,0x76),(0x45,4),(0x4d,0x76),(0x59,0x76),(0x49,0x67),(0x71,0x14),(0x89,1)] if name=='guard_join' else [(7,2),(0x18,0x76),(0x34,0x77),(0x49,0x76),(0x5c,4),(0x64,0x76),(0x52,0xae),(0x6d,0xae),(0x70,0xd9)])
+        for offset,value in mutations:
             b=bytearray(blob);b[raw+offset]=value;bad.write_bytes(b);sink.write_text('preserve')
             p=run([str(converter),str(bad),str(sink)])
             assert p.returncode==1 and sink.read_text()=='preserve',(offset,p.stderr)
@@ -86,4 +87,4 @@ for case in cases:
     assert sha(pe)==item['pe_sha256']
     write(native_report if a.compare else report,out)
     print(name,'ACCEPTED' if item['accepted'] else 'REJECTED: '+item['converter_error'].strip())
-print('DIVERSITY:3 frozen programs;51 Windows scenarios; guard_join17 translated pairs; squares/helper rejected')
+print('DIVERSITY:3 frozen programs;51 Windows scenarios; guard_join+squares34 translated pairs; helper rejected')
