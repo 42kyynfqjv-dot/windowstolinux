@@ -62,3 +62,8 @@ Foundation/first vertical-slice acceptance is reconciled in
 [docs/FOUNDATION-M1-ACCEPTANCE.md](docs/FOUNDATION-M1-ACCEPTANCE.md). Next substantive
 gate: compiler-produced authored C PE characterization and fail-closed gap inventory,
 then a measured implementation slice toward converting that real compiler output.
+
+SUB-514 measured unmodified MSVC output: both custom-entry and ordinary CRT builds
+run on Windows but conversion rejects. compiler/RESULTS.md identifies loader and
+register/stack gaps. Next bounded linker-image intake contract precedes the observed
+ABI/instruction slice; ordinary CRT remains a separate larger milestone.

@@ -1,0 +1,124 @@
+{
+  "observed_run": 40267760683,
+  "compiler": "MSVC 19.51.36260.0 x86",
+  "linker": "14.51.36260.0",
+  "os": "Windows Server 2025 NT10.0.26100.0",
+  "results": [
+    {
+      "kind": "freestanding",
+      "sha256": "fbe567c7f6f7adf8e2af4b39517d467d47f7cef0e4a12d1208ea84d5ccd978b3",
+      "sections": 3,
+      "coff_characteristics": "0x102",
+      "dll_characteristics": "0x8540",
+      "directories": [
+        {
+          "index": 1,
+          "rva": "0x2100",
+          "size": 40
+        },
+        {
+          "index": 5,
+          "rva": "0x3000",
+          "size": 12
+        },
+        {
+          "index": 6,
+          "rva": "0x2010",
+          "size": 28
+        },
+        {
+          "index": 12,
+          "rva": "0x2000",
+          "size": 8
+        }
+      ],
+      "expected_stdout_hex": "48656c6c6f",
+      "stdout_hex": "48656c6c6f",
+      "stderr_hex": "",
+      "exit": 0,
+      "converter_exit": 1,
+      "converter_stderr": "w2l: unsupported nonempty PE data directory 5\n",
+      "conversion_accepted": false,
+      "compile_flags": [
+        "/nologo",
+        "/Bv",
+        "/O2",
+        "/W4",
+        "/c",
+        "D:\\a\\windowstolinux\\windowstolinux\\compiler\\program.c",
+        "/Fofreestanding.obj",
+        "/DFREESTANDING",
+        "/GS-",
+        "/Zl"
+      ],
+      "link_flags": [
+        "/nologo",
+        "/machine:x86",
+        "/subsystem:console",
+        "freestanding.obj",
+        "/out:freestanding.exe",
+        "/nodefaultlib",
+        "/entry:entry@0",
+        "legacy.lib"
+      ]
+    },
+    {
+      "kind": "crt",
+      "sha256": "b3a512904836ff0cc151f218a90be5f389b62da0cde7361c09c34e3ec26637ea",
+      "sections": 4,
+      "coff_characteristics": "0x102",
+      "dll_characteristics": "0x8140",
+      "directories": [
+        {
+          "index": 1,
+          "rva": "0x24f4",
+          "size": 160
+        },
+        {
+          "index": 5,
+          "rva": "0x4000",
+          "size": 332
+        },
+        {
+          "index": 6,
+          "rva": "0x21a8",
+          "size": 28
+        },
+        {
+          "index": 10,
+          "rva": "0x20e8",
+          "size": 64
+        },
+        {
+          "index": 12,
+          "rva": "0x2000",
+          "size": 172
+        }
+      ],
+      "expected_stdout_hex": "48656c6c6f",
+      "stdout_hex": "48656c6c6f",
+      "stderr_hex": "",
+      "exit": 0,
+      "converter_exit": 1,
+      "converter_stderr": "w2l: only code with optional read-only data is supported\n",
+      "conversion_accepted": false,
+      "compile_flags": [
+        "/nologo",
+        "/Bv",
+        "/O2",
+        "/W4",
+        "/c",
+        "D:\\a\\windowstolinux\\windowstolinux\\compiler\\program.c",
+        "/Focrt.obj",
+        "/MD"
+      ],
+      "link_flags": [
+        "/nologo",
+        "/machine:x86",
+        "/subsystem:console",
+        "crt.obj",
+        "/out:crt.exe"
+      ]
+    }
+  ]
+}
