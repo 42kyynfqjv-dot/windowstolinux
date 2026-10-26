@@ -24,7 +24,7 @@ The evaluation suite has three new comparison tests and twelve inherited product
 | yaxpeax-x86 2.2.0 | [published package](https://crates.io/crates/yaxpeax-x86/2.2.0), packaged README, protected_mode API and LICENSE; [canonical repository](https://git.iximeow.net/yaxpeax-x86/) | 0BSD per Cargo metadata and packaged permission/disclaimer text, copyright iximeow. No copyleft/relinking requirement. Retain provenance even where attribution is not mandated. |
 | yaxpeax-arch 0.3.3 | [published package](https://crates.io/crates/yaxpeax-arch/0.3.3), packaged LICENSE | 0BSD, iximeow. |
 
-Selected dependency graph: iced -> lazy_static 1.5.1; yaxpeax-x86 -> cfg-if 1.0.5, num-traits 0.2.19 and yaxpeax-arch; yaxpeax-arch -> num-traits -> build-time autocfg 1.5.1. The packaged manifests declare MIT OR Apache-2.0 for these transitive crates. No dependency is added to the root Cargo.toml; no third-party source is vendored. Before shipping any evaluation/adopter binary, assemble its exact dependency notices; no binary is committed here. Original harness code remains MIT OR Apache-2.0.
+Selected dependency graph: iced -> lazy_static 1.5.1; yaxpeax-x86 -> cfg-if 1.0.5, num-traits 0.2.19 and yaxpeax-arch; yaxpeax-arch -> num-traits -> build-time autocfg 1.5.1. The packaged manifests declare MIT OR Apache-2.0 for these transitive crates. No dependency is added to the root Cargo.toml; no third-party source is vendored. Exact dependency notices are now assembled in [THIRD-PARTY-NOTICES.md](../tools/decoder-eval/THIRD-PARTY-NOTICES.md); no binary is committed here. Original harness code remains MIT OR Apache-2.0.
 
 ## Engineering comparison
 
@@ -45,3 +45,5 @@ Timestamps are package release/update evidence, not a judgment about current mai
 Trial an iced adapter behind an explicit test/evaluation gate, preserving the existing IR, control-flow policy and independent Flags helper. Require exact opcode/operand-size/register/prefix whitelisting; decoder validity alone never authorizes execution. Preserve PE bounds, all supported/rejected forms, known-state checks, forward-only targets, overlap rejection, instruction caps and exit domain. Require byte/IR parity on the existing corpus and rejection matrix, deterministic source, all existing Windows/Linux cases, and unchanged generated-runtime dependencies. Record exact third-party notices before distribution. Do not extend opcode coverage in the adapter trial.
 
 The library/policy boundary and handling of prefixes, target recovery and decoder errors are the concrete Astra High design questions for that next trial. Routine verification returns to Sol medium afterward. No current evaluation blocker remains.
+
+SUB-504 follow-through: the [gated adapter trial](DECODER-ADAPTER-TRIAL.md) now checks exact IR/source and rejection parity; production still uses its original byte decoder. The counts above describe the SUB-503 comparison; the combined isolated suite now has 18 test functions.

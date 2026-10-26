@@ -9,4 +9,4 @@
 
 No milestone is complete merely because generated Rust compiles. Each compatibility claim needs a versioned corpus, original execution baseline, and published comparison method.
 
-Next bounded M2 step: a gated decoder adapter trial after the [decoder evaluation](docs/DECODER-EVALUATION.md), preserving the current accepted subset. Broad x86 semantics and later milestones remain open.
+Next bounded M2 step: review the completed [gated decoder adapter trial](docs/DECODER-ADAPTER-TRIAL.md), then decide on a separately scoped integration that preserves the current accepted subset. Broad x86 semantics and later milestones remain open.

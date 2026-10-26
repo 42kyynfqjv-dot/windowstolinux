@@ -123,3 +123,8 @@ mod evaluation {
         }
     }
 }
+
+#[cfg(test)]
+mod adapter;
+#[cfg(test)]
+mod adapter_tests;

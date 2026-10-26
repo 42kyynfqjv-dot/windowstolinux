@@ -6,8 +6,8 @@ use std::fmt::Write;
 mod flags;
 use flags::Flags;
 
-#[derive(Debug, Clone, Copy)]
-enum Condition {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Condition {
     Carry,
     Zero,
     SignedLess,
@@ -29,8 +29,8 @@ impl Condition {
     }
 }
 const LIMIT: usize = 1024;
-#[derive(Debug, Clone, Copy)]
-enum Op {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Op {
     Mov(u32),
     Add(u32),
     Compare(u32),
@@ -42,14 +42,72 @@ enum Op {
         target: usize,
     },
 }
-#[derive(Debug)]
-struct Instruction {
-    op: Op,
-    next: usize,
+#[derive(Debug, PartialEq, Eq)]
+pub(super) struct Instruction {
+    pub(super) op: Op,
+    pub(super) next: usize,
 }
-type Program = BTreeMap<usize, Instruction>;
+pub(super) type Program = BTreeMap<usize, Instruction>;
 
-fn decode(bytes: &[u8]) -> Result<Program, String> {
+pub(super) fn decode(bytes: &[u8]) -> Result<Program, String> {
+    decode_with(bytes, decode_instruction)
+}
+
+pub(super) fn decode_instruction(bytes: &[u8], at: usize) -> Result<Instruction, String> {
+    let opcode = *bytes
+        .get(at)
+        .ok_or("control flow leaves executable bytes")?;
+    let (op, size) = match opcode {
+        0xb8 | 0x05 | 0x3d => {
+            let imm = super::u32_at(bytes, at + 1)?;
+            (
+                if opcode == 0xb8 {
+                    Op::Mov(imm)
+                } else if opcode == 0x05 {
+                    Op::Add(imm)
+                } else {
+                    Op::Compare(imm)
+                },
+                5,
+            )
+        }
+        0x31 if bytes.get(at + 1) == Some(&0xc0) => (Op::Xor, 2),
+        0xc3 => (Op::Ret, 1),
+        0x72..=0x75 | 0x7c..=0x7d => {
+            let displacement = *bytes.get(at + 1).ok_or("truncated branch")? as i8;
+            if displacement < 0 {
+                return Err("backward branches are unsupported".into());
+            }
+            let target = at
+                .checked_add(2 + displacement as usize)
+                .ok_or("branch overflow")?;
+            (
+                Op::Branch {
+                    condition: match opcode {
+                        0x72 | 0x73 => Condition::Carry,
+                        0x74 | 0x75 => Condition::Zero,
+                        _ => Condition::SignedLess,
+                    },
+                    when: opcode % 2 == 0,
+                    target,
+                },
+                2,
+            )
+        }
+        _ => {
+            return Err(format!(
+                "unsupported opcode {opcode:02x} at entry offset {at}"
+            ))
+        }
+    };
+    let next = at.checked_add(size).ok_or("instruction offset overflow")?;
+    Ok(Instruction { op, next })
+}
+
+pub(super) fn decode_with(
+    bytes: &[u8],
+    decode_one: impl Fn(&[u8], usize) -> Result<Instruction, String>,
+) -> Result<Program, String> {
     let mut pending = BTreeSet::from([0]);
     let mut program = Program::new();
     let mut occupied = BTreeSet::new();
@@ -60,53 +118,7 @@ fn decode(bytes: &[u8]) -> Result<Program, String> {
         if program.len() == LIMIT {
             return Err("decoded instruction limit exceeded".into());
         }
-        let opcode = *bytes
-            .get(at)
-            .ok_or("control flow leaves executable bytes")?;
-        let (op, size) = match opcode {
-            0xb8 | 0x05 | 0x3d => {
-                let imm = super::u32_at(bytes, at + 1)?;
-                (
-                    if opcode == 0xb8 {
-                        Op::Mov(imm)
-                    } else if opcode == 0x05 {
-                        Op::Add(imm)
-                    } else {
-                        Op::Compare(imm)
-                    },
-                    5,
-                )
-            }
-            0x31 if bytes.get(at + 1) == Some(&0xc0) => (Op::Xor, 2),
-            0xc3 => (Op::Ret, 1),
-            0x72..=0x75 | 0x7c..=0x7d => {
-                let displacement = *bytes.get(at + 1).ok_or("truncated branch")? as i8;
-                if displacement < 0 {
-                    return Err("backward branches are unsupported".into());
-                }
-                let target = at
-                    .checked_add(2 + displacement as usize)
-                    .ok_or("branch overflow")?;
-                (
-                    Op::Branch {
-                        condition: match opcode {
-                            0x72 | 0x73 => Condition::Carry,
-                            0x74 | 0x75 => Condition::Zero,
-                            _ => Condition::SignedLess,
-                        },
-                        when: opcode % 2 == 0,
-                        target,
-                    },
-                    2,
-                )
-            }
-            _ => {
-                return Err(format!(
-                    "unsupported opcode {opcode:02x} at entry offset {at}"
-                ))
-            }
-        };
-        let next = at.checked_add(size).ok_or("instruction offset overflow")?;
+        let Instruction { op, next } = decode_one(bytes, at)?;
         for byte in at..next {
             if !occupied.insert(byte) {
                 return Err("overlapping instruction boundaries".into());
@@ -164,8 +176,11 @@ fn validate(program: &Program) -> Result<u8, String> {
 }
 
 pub fn translate(bytes: &[u8]) -> Result<String, String> {
-    let program = decode(bytes)?;
-    validate(&program)?;
+    emit(&decode(bytes)?)
+}
+
+pub(super) fn emit(program: &Program) -> Result<String, String> {
+    validate(program)?;
     // Each match arm is a statically decoded instruction, with fixed successors.
     // The entry state is only read after validation proves it initialized on this
     // deterministic path. Options preserve the check in the generated program.
@@ -175,7 +190,7 @@ pub fn translate(bytes: &[u8]) -> Result<String, String> {
     ));
     out.push_str("\n}\nuse arithmetic::Flags;\n");
     out.push_str("// Statically decoded x86; bounded forward control flow.\nuse std::convert::TryFrom;\n#[allow(unused_assignments, unused_mut, unused_variables)]\nfn main() {\nlet mut eax: Option<u32> = None;\nlet mut flags: Option<Flags> = None;\nlet mut pc: usize = 0;\nfor _ in 0..1024 {\nmatch pc {\n");
-    for (at, instruction) in &program {
+    for (at, instruction) in program {
         writeln!(out, "{at} => {{").unwrap();
         match instruction.op {
             Op::Mov(value) => writeln!(out, "eax = Some({value});").unwrap(),
