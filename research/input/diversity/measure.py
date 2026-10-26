@@ -36,7 +36,7 @@ for case in cases:
     p=run([str(converter),str(pe),str(output)])
     assert p.returncode in (0,1),(name,p.returncode,p.stderr)
     item.update(accepted=p.returncode==0,converter_error=p.stderr.decode('utf-8'))
-    assert item['accepted']==(name in ('guard_join','squares')),('SUB557 acceptance gate',name,item)
+    assert item['accepted']==(name in ('guard_join','squares','helper')),('SUB559 acceptance gate',name,item)
     if item['accepted']:
         item['generated_sha256']=sha(output)
         if a.compare:
@@ -65,7 +65,7 @@ for case in cases:
             write(native_report if a.compare else report,out)
             assert actual==dict(name=v['name'],exit=v['exit'],stdout_hex='',stderr_hex=''),actual
         if a.compare:assert item['observations']==old['observations']
-    if a.compare and name in ('guard_join','squares'):
+    if a.compare and name in ('guard_join','squares','helper'):
         item['elf_sha256']=sha(executable)
         extra=[f'{i:02d}' for i in range(100)]+['/',':','９','😀','\x01']
         for value in extra:
@@ -78,6 +78,7 @@ for case in cases:
         bad=root/'guard-negative.exe';sink=root/'guard-negative.rs';rejected=0
         # Separate mutated files only. Frozen original PE never changed.
         mutations=([(7,2),(0x32,0x76),(0x40,0x76),(0x45,4),(0x4d,0x76),(0x59,0x76),(0x49,0x67),(0x71,0x14),(0x89,1)] if name=='guard_join' else [(7,2),(0x18,0x76),(0x34,0x77),(0x49,0x76),(0x5c,4),(0x64,0x76),(0x52,0xae),(0x6d,0xae),(0x70,0xd9)])
+        if name=='helper':mutations=[(0x47,2),(0x56,0x76),(0x72,0x77),(0x3b,0x90),(0x84,0x79),(0x84,0x78+0x40),(0x3,8),(0x1d,6),(0x89,0xc0)]
         for offset,value in mutations:
             b=bytearray(blob);b[raw+offset]=value;bad.write_bytes(b);sink.write_text('preserve')
             p=run([str(converter),str(bad),str(sink)])
@@ -87,4 +88,4 @@ for case in cases:
     assert sha(pe)==item['pe_sha256']
     write(native_report if a.compare else report,out)
     print(name,'ACCEPTED' if item['accepted'] else 'REJECTED: '+item['converter_error'].strip())
-print('DIVERSITY:3 frozen programs;51 Windows scenarios; guard_join+squares34 translated pairs; helper rejected')
+print('DIVERSITY:3 frozen programs;51 Windows scenarios; guard_join+squares+helper51 translated pairs')

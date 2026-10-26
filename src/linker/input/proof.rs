@@ -140,13 +140,24 @@ impl Value {
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Word {
     Return,
+    InternalReturn(u32),
     Local(u8),
     Saved,
     Arg(Value),
 }
 #[derive(Clone)]
+struct Frame {
+    target: u32,
+    next: u32,
+    stack: Vec<Word>,
+    saved: Value,
+    args: usize,
+    borrowed: bool,
+}
+#[derive(Clone)]
 struct State {
     regs: [Value; 4],
+    frames: Vec<Frame>,
     stack: Vec<Word>,
     allocated: bool,
     calls: u8,
@@ -157,6 +168,7 @@ struct State {
 impl State {
     fn new() -> Self {
         Self {
+            frames: Vec::new(),
             regs: [
                 Value::Unknown,
                 Value::Unknown,
@@ -169,6 +181,22 @@ impl State {
             initialized: 0,
             ranges: [(0, 65535), (0, 65535), (0, u32::MAX)],
             flags: None,
+        }
+    }
+    fn argument(&self, off: u8) -> Result<Value, String> {
+        let f = self.frames.last().ok_or("input: no argument context")?;
+        need(
+            off.is_multiple_of(4) && off >= 4 && usize::from(off / 4) <= f.args,
+            "input: argument bounds",
+        )?;
+        need(
+            self.stack.len() == f.stack.len() + 1
+                && self.stack.last() == Some(&Word::InternalReturn(f.next)),
+            "input: argument stack shape",
+        )?;
+        match &self.stack[self.stack.len() - 1 - usize::from(off / 4)] {
+            Word::Arg(v) => Ok(v.clone()),
+            _ => Err("input: protected argument".into()),
         }
     }
     fn local(&self, offset: u8, width: u8) -> Result<u8, String> {
@@ -265,6 +293,7 @@ fn refine(state: &State, condition: Condition, taken: bool) -> Result<Vec<State>
     Ok(out)
 }
 pub(super) fn prove(graph: Graph, entry: u32) -> Result<Proven, String> {
+    validate_calls(&graph, entry)?;
     let mut pending = vec![(entry, State::new())];
     let mut loads = BTreeMap::new();
     let mut steps = 0;
@@ -287,6 +316,71 @@ pub(super) fn prove(graph: Graph, entry: u32) -> Result<Proven, String> {
             Op::Buffer => {
                 need(s.local(0, 8)? == 0, "input: buffer base")?;
                 s.regs[0] = Value::Buffer;
+            }
+            Op::BufferAt(off) => {
+                need(
+                    s.frames.is_empty() && s.local(off, 8)? == 0,
+                    "input: caller buffer lifetime",
+                )?;
+                s.regs[0] = Value::Buffer;
+            }
+            Op::Call(t) => {
+                need(
+                    s.calls == 1
+                        && s.frames.len() < 4
+                        && t != entry
+                        && !s.frames.iter().any(|f| f.target == t),
+                    "input: internal call context",
+                )?;
+                let args = s
+                    .stack
+                    .iter()
+                    .rev()
+                    .take_while(|w| matches!(w, Word::Arg(_)))
+                    .count();
+                let borrowed = s
+                    .stack
+                    .iter()
+                    .rev()
+                    .take(args)
+                    .any(|w| *w == Word::Arg(Value::Buffer));
+                if borrowed {
+                    need(
+                        s.initialized > 0
+                            && s.stack
+                                .starts_with(&[Word::Return, Word::Local(4), Word::Local(0)]),
+                        "input: live borrow",
+                    )?;
+                }
+                need(s.stack.len() < 16, "input: stack bound")?;
+                s.frames.push(Frame {
+                    target: t,
+                    next,
+                    stack: s.stack.clone(),
+                    saved: s.regs[3].clone(),
+                    args,
+                    borrowed,
+                });
+                s.stack.push(Word::InternalReturn(next));
+                pending.push((t, s));
+                continue;
+            }
+            Op::Argument(d, off) => s.regs[d] = s.argument(off)?,
+            Op::CompareArgument(off, k) => s.flags = Some((s.argument(off)?.scalar()?, 32, k)),
+            Op::ReadWord(d, r, off) => {
+                need(
+                    s.regs[r] == Value::Buffer
+                        && s.frames.last().is_some_and(|f| f.borrowed)
+                        && matches!(off, 0 | 2)
+                        && off + 2 <= s.initialized
+                        && s.stack
+                            .starts_with(&[Word::Return, Word::Local(4), Word::Local(0)]),
+                    "input: borrowed initialized WORD",
+                )?;
+                if let Some(old) = loads.insert(pc, off) {
+                    need(old == off, "input: inconsistent borrowed alias")?;
+                }
+                s.regs[d] = Value::Scalar(Expr::variable(usize::from(off / 2)));
             }
             Op::Push(n) => s.stack.push(Word::Arg(Value::Scalar(Expr::constant(n)))),
             Op::PushEax => s.stack.push(Word::Arg(s.regs[0].clone())),
@@ -369,15 +463,42 @@ pub(super) fn prove(graph: Graph, entry: u32) -> Result<Proven, String> {
                 s.regs[3] = Value::OriginalEsi;
             }
             Op::Cleanup => {
-                need(
-                    s.stack == [Word::Return, Word::Local(4), Word::Local(0)],
-                    "input: local cleanup ownership",
-                )?;
-                s.stack.truncate(1);
-                s.initialized = 0;
+                let floor = s.frames.last().map_or(3, |f| f.stack.len() + 1);
+                if s.stack.len() >= floor + 2
+                    && s.stack[s.stack.len() - 2..]
+                        .iter()
+                        .all(|w| matches!(w, Word::Arg(_)))
+                {
+                    s.stack.truncate(s.stack.len() - 2);
+                } else {
+                    need(
+                        s.frames.is_empty()
+                            && s.stack == [Word::Return, Word::Local(4), Word::Local(0)],
+                        "input: local cleanup ownership",
+                    )?;
+                    s.stack.truncate(1);
+                    s.initialized = 0;
+                }
                 s.flags = None;
             }
             Op::Ret => {
+                if let Some(f) = s.frames.pop() {
+                    need(
+                        s.stack.len() == f.stack.len() + 1
+                            && s.stack.last() == Some(&Word::InternalReturn(f.next))
+                            && s.stack[..f.stack.len()] == f.stack
+                            && s.regs[3] == f.saved,
+                        "input: internal return ownership",
+                    )?;
+                    s.regs[0].expression()?;
+                    s.stack.pop();
+                    s.regs[1] = Value::Unknown;
+                    s.regs[2] = Value::Unknown;
+                    s.flags = None;
+                    pending.push((f.next, s));
+                    continue;
+                }
+
                 need(
                     s.calls == 1 && s.stack == [Word::Return] && s.regs[3] == Value::OriginalEsi,
                     "input: terminal ownership/ABI",
@@ -420,13 +541,13 @@ pub(super) fn prove(graph: Graph, entry: u32) -> Result<Proven, String> {
                 continue;
             }
         }
-        need(s.stack.len() <= 7, "input: stack bound")?;
+        need(s.stack.len() <= 16, "input: stack bound")?;
         pending.push((next, s));
     }
     need(returns > 0, "input: no terminal proof")?;
     // Every emitted read must have an established physical offset; unreachable reads fail.
     for (&pc, (op, _)) in &graph {
-        if matches!(op, Op::Load(..)) {
+        if matches!(op, Op::Load(..) | Op::ReadWord(..)) {
             need(loads.contains_key(&pc), "input: unproved emitted read")?;
         }
     }
@@ -551,5 +672,42 @@ mod nonlinear_tests {
         }
         assert_eq!(e.cost(), (23, 12));
         assert!(e.binary(x, false).is_err());
+    }
+}
+
+#[cfg(test)]
+mod borrow_tests {
+    use super::*;
+    #[test]
+    fn protected_context_argument_and_lifetime_boundaries() {
+        let mut s = State::new();
+        s.stack.extend([
+            Word::Local(4),
+            Word::Local(0),
+            Word::Arg(Value::Scalar(Expr::constant(2))),
+            Word::Arg(Value::Buffer),
+        ]);
+        let f = Frame {
+            target: 100,
+            next: 200,
+            stack: s.stack.clone(),
+            saved: Value::OriginalEsi,
+            args: 2,
+            borrowed: true,
+        };
+        s.frames.push(f);
+        s.stack.push(Word::InternalReturn(200));
+        assert_eq!(s.argument(4).unwrap(), Value::Buffer);
+        for off in [0, 1, 2, 3, 12, 255] {
+            assert!(s.argument(off).is_err());
+        }
+        s.stack.push(Word::Arg(Value::Unknown));
+        assert!(s.argument(4).is_err());
+        s.stack.pop();
+        s.stack.pop();
+        s.stack.push(Word::InternalReturn(201));
+        assert!(s.argument(4).is_err());
+        assert!(Value::Buffer.scalar().is_err());
+        assert!(Value::Name.expression().is_err());
     }
 }
