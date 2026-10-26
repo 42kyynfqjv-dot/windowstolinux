@@ -58,3 +58,29 @@ XP/7 compatibility. Medium substantive review precedes merging this research.
 
 Two independent Python tests use a literal synthetic PE layout to verify rebasing,
 unchanged preferred-base bytes and partial/duplicate/unsupported/unbacked rejection.
+
+## Measured leaf and next decision
+
+First CI40378191959 at022a1aa measured resolved RVA0x879d0 in the canonical x86
+UCRT file f4d768583fd3fc020d30fd3a2d9d2f39dd2a5a49c99cc5e2040dfb61424a4778.
+The analyzer reached RET after one immediate-register MOV, with no unresolved
+instruction. The refined report identifies exact B8-imm32/C3 form, EAX destination,
+returned object RVA and agreement with separate same-file pointer observations.
+No runtime bytes are published. The larger4096-byte window includes neighboring
+functions; only the reachable six-byte leaf is relevant to the effect argument.
+
+Under immutable captured-code, valid return/stack and no asynchronous-fault premises,
+this exact instruction pair writes EAX, reads/pops the return address and preserves
+other registers/arithmetic flags. It has no TLS read, conditional branch, external
+call or data write. This is a version-specific instruction argument, not a generic
+API promise or automatic production certificate. The return object lifetime,
+permissions/alias mapping at the original callback and all prior startup effects
+still need composition proof. Failure outside those premises remains excluded,
+not silently successful. Module replacements/other hashes require a fresh decision.
+
+Next concrete gate: review this leaf identity/effect argument and specify a private
+version-bound accessor-to-owned-cell composition certificate with exact object RVA,
+relocation, owner lifetime and original-caller prerequisites. No further samples
+are needed to establish the leaf instruction effects. If these original-context
+premises cannot be discharged, retain CRT rejection and use the documented
+freestanding runtime-input alternative rather than another isolated model.

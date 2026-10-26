@@ -46,7 +46,15 @@ def main():
             disk=Path(path).read_bytes();loaded=code.read_bytes();expected,sites,disk_size=normalized(disk,rva,n,base)
             assert len(loaded)==n and loaded==expected and size==disk_size
             q=subprocess.run([str(ROOT/'target/debug/examples/runtime_boundary.exe'),str(code),str(base+rva)],capture_output=True,timeout=15);assert q.returncode==0 and not q.stderr
-            result=dict(binding=binding,sources=sources,probe_sha256=sha(exe.read_bytes()),base=base,rva=rva,size=size,machine=machine,canonical_path=path,disk_sha256=sha(disk),window_size=n,loaded_window_sha256=sha(loaded),relocation_sites=sites,normalized_match=True,boundary=q.stdout.decode().splitlines(),effect_proof=False,emission_allowed=False)
+            leaf=None
+            if loaded[:1]==b'\xb8' and loaded[5:6]==b'\xc3':
+                value=struct.unpack_from('<I',loaded,1)[0]
+                assert base<=value and value+4<=base+size
+                prior=json.loads((root/'crt-accessor.json').read_text())
+                assert all(o['owner_sha256']==sha(disk) and o['rows'][0][1]-o['rows'][0][5]==value-base for o in prior['observations'])
+                leaf=dict(length=6,destination='EAX',value=value,object_rva=value-base,
+                          version=prior['observations'][0]['owner_version'],separate_pointer_observations_agree=True)
+            result=dict(leaf=leaf,binding=binding,sources=sources,probe_sha256=sha(exe.read_bytes()),base=base,rva=rva,size=size,machine=machine,canonical_path=path,disk_sha256=sha(disk),window_size=n,loaded_window_sha256=sha(loaded),relocation_sites=sites,normalized_match=True,boundary=q.stdout.decode().splitlines(),effect_proof=False,emission_allowed=False)
             report.write_text(json.dumps(result,indent=2)+'\n')
     r=json.loads(report.read_text());assert r['sources']==sources and r['binding']==binding and r['machine']==332 and r['normalized_match'] is True and r['effect_proof'] is False and r['emission_allowed'] is False
     assert r['probe_sha256']==sha((root/'crt_runtime_probe.exe').read_bytes()) and 0<r['window_size']<=4096
