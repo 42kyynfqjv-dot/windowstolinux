@@ -81,6 +81,29 @@ impl Stack {
         self.depth += 1;
         Ok(())
     }
+    pub fn output_arguments(&mut self, next: usize) -> Result<[u32; 3], &'static str> {
+        self.active()?;
+        let start = self
+            .words
+            .len()
+            .checked_sub(3)
+            .ok_or("missing output arguments")?;
+        let mut values = [0; 3];
+        for (i, word) in self.words[start..].iter().enumerate() {
+            match word {
+                Word::Data { owner, value } if *owner == self.frame => values[i] = *value,
+                _ => return Err("output argument ownership"),
+            }
+        }
+        if values[2] != 1 || !(1..=64).contains(&values[0]) {
+            return Err("output fd/count");
+        }
+        self.call(next)?;
+        if self.ret(None)? != Return::Resume(next) {
+            return Err("external return mismatch");
+        }
+        Ok(values)
+    }
     pub fn argument(&self) -> Result<u32, &'static str> {
         self.active()?;
         match self.words.as_slice() {

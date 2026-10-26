@@ -1,5 +1,6 @@
 use std::env;
 mod control;
+mod imports;
 use std::fs;
 use std::path::Path;
 
@@ -18,6 +19,7 @@ struct Pe<'a> {
     image_base: u32,
     entry_rva: u32,
     sections: Vec<Section>,
+    iat: Option<u32>,
 }
 
 fn range(bytes: &[u8], offset: usize, len: usize) -> Result<&[u8], String> {
@@ -53,7 +55,7 @@ impl<'a> Pe<'a> {
             return Err("only x86 PE32 is supported".into());
         }
         let section_count = u16_at(bytes, coff + 2)? as usize;
-        if !(1..=2).contains(&section_count) {
+        if !(1..=3).contains(&section_count) {
             return Err("only code with optional read-only data is supported".into());
         }
         if u16_at(bytes, coff + 18)? != 0x0102 {
@@ -73,6 +75,9 @@ impl<'a> Pe<'a> {
         }
         for index in 0..16 {
             let directory = optional + 96 + index * 8;
+            if section_count == 3 && matches!(index, 1 | 12) {
+                continue;
+            }
             if u32_at(bytes, directory)? != 0 || u32_at(bytes, directory + 4)? != 0 {
                 return Err(format!("unsupported nonempty PE data directory {index}"));
             }
@@ -152,7 +157,12 @@ impl<'a> Pe<'a> {
                 || section.virtual_address < headers_size
                 || virtual_end > image_size
                 || raw_end as usize > bytes.len()
-                || section.characteristics != if i == 0 { 0x6000_0020 } else { 0x4000_0040 }
+                || section.characteristics
+                    != match i {
+                        0 => 0x6000_0020,
+                        1 => 0x4000_0040,
+                        _ => 0xc000_0040,
+                    }
                 || u32_at(bytes, at + 24)? != 0
                 || u32_at(bytes, at + 28)? != 0
                 || u32_at(bytes, at + 32)? != 0
@@ -186,10 +196,10 @@ impl<'a> Pe<'a> {
             }
             sections.push(section);
         }
-        if section_count == 2 {
+        if section_count >= 2 {
             let code = sections[0];
             let data = sections[1];
-            let data_end = data
+            let data_end = sections[section_count - 1]
                 .virtual_address
                 .checked_add(data.raw_size)
                 .and_then(|end| end.checked_add(section_alignment - 1))
@@ -202,7 +212,11 @@ impl<'a> Pe<'a> {
             if code.virtual_address != first_rva
                 || image_size != data_end
                 || u32_at(bytes, optional + 4)? != code.raw_size
-                || u32_at(bytes, optional + 8)? != data.raw_size
+                || u32_at(bytes, optional + 8)?
+                    != sections[1..]
+                        .iter()
+                        .try_fold(0u32, |sum, s| sum.checked_add(s.raw_size))
+                        .ok_or("data size overflow")?
                 || u32_at(bytes, optional + 12)? != 0
                 || u32_at(bytes, optional + 20)? != code.virtual_address
                 || u32_at(bytes, optional + 24)? != data.virtual_address
@@ -210,11 +224,17 @@ impl<'a> Pe<'a> {
                 return Err("inconsistent two-section image layout".into());
             }
         }
+        let iat = if section_count == 3 {
+            Some(imports::parse(bytes, &sections[2], optional, image_base)?)
+        } else {
+            None
+        };
         Ok(Self {
             bytes,
             image_base,
             entry_rva,
             sections,
+            iat,
         })
     }
 
@@ -247,6 +267,14 @@ impl<'a> Pe<'a> {
     }
 
     fn translate(&self) -> Result<String, String> {
+        if let Some(iat) = self.iat {
+            return control::output::translate(
+                self.entry_bytes()?,
+                iat,
+                |address| self.read_immutable_u32(address),
+                |address, count| self.output_bytes(address, count),
+            );
+        }
         control::translate_with_reads(self.entry_bytes()?, |address| {
             self.read_immutable_u32(address)
         })

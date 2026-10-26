@@ -31,10 +31,14 @@ impl Condition {
         }
     }
 }
+#[path = "control/output.rs"]
+pub(super) mod output;
 const LIMIT: usize = 1024;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Op {
     Mov(u32),
+    Import(u32),
+    Output(u32),
     LoadAbsolute(u32),
     Add(u32),
     Compare(u32),
@@ -194,6 +198,15 @@ fn validate(program: &Program) -> Result<u8, String> {
         let instruction = program.get(&pc).ok_or("missing instruction")?;
         pc = instruction.next;
         match instruction.op {
+            Op::Import(_) => return Err("import context required".into()),
+            Op::Output(count) => {
+                let args = stack.output_arguments(instruction.next)?;
+                if args[0] != count {
+                    return Err("output count mismatch".into());
+                }
+                eax = Some(count);
+                flags = None;
+            }
             Op::LoadAbsolute(_) => return Err("immutable image context required".into()),
             Op::Mov(value) => eax = Some(value),
             Op::PushData(value) => stack.push(value)?,
@@ -255,6 +268,16 @@ pub(super) fn translate_with_reads(
 }
 
 pub(super) fn emit(program: &Program) -> Result<String, String> {
+    emit_outputs(program, &BTreeMap::new())
+}
+fn emit_outputs(program: &Program, payloads: &BTreeMap<usize, Vec<u8>>) -> Result<String, String> {
+    for (at, ins) in program {
+        if matches!(ins.op, Op::Import(_))
+            || (matches!(ins.op, Op::Output(_)) && !payloads.contains_key(at))
+        {
+            return Err("import context required".into());
+        }
+    }
     if program
         .values()
         .any(|ins| matches!(ins.op, Op::LoadAbsolute(_)))
@@ -277,10 +300,20 @@ pub(super) fn emit(program: &Program) -> Result<String, String> {
             .unwrap(),
     );
     out.push_str("\n}\nuse stack::{Stack, Return};\n");
+    if !payloads.is_empty() {
+        out.push_str(
+            include_str!("control/output_runtime.rs")
+                .split("\n#[cfg(test)]")
+                .next()
+                .unwrap(),
+        );
+    }
     out.push_str("// Statically decoded x86; bounded forward control flow.\n#[allow(unused_assignments, unused_mut, unused_variables)]\nfn main() {\nlet mut eax: Option<u32> = None;\nlet mut flags: Option<Flags> = None;\nlet mut pc: usize = 0;\nlet mut stack = Stack::new();\nfor _ in 0..1024 {\nmatch pc {\n");
     for (at, instruction) in program {
         writeln!(out, "{at} => {{").unwrap();
         match instruction.op {
+            Op::Import(_) => unreachable!(),
+            Op::Output(count) => writeln!(out, "stack.output_arguments({}).unwrap(); eax = Some(native_output(&{:?})); flags = None; assert_eq!(eax, Some({count}));", instruction.next, payloads[at]).unwrap(),
             Op::LoadAbsolute(_) => unreachable!("unresolved image read rejected above"),
             Op::Mov(value) => writeln!(out, "eax = Some({value});").unwrap(),
             Op::PushData(value) => writeln!(out, "stack.push({value}).unwrap();").unwrap(),
@@ -317,6 +350,7 @@ pub(super) fn records_for_comparison(bytes: &[u8]) -> Result<Vec<DecodeRecord>, 
         .iter()
         .map(|(&at, ins)| {
             let (name, immediate, target) = match ins.op {
+                Op::Import(v) | Op::Output(v) => ("output", Some(v), None),
                 Op::Mov(v) => ("mov", Some(v), None),
                 Op::LoadAbsolute(v) => ("load_absolute", Some(v), None),
                 Op::PushData(v) => ("push", Some(v), None),
@@ -659,3 +693,8 @@ mod tests {
 #[cfg(test)]
 #[path = "control/stack_program_tests.rs"]
 mod stack_program_tests;
+
+#[cfg(test)]
+#[allow(dead_code)]
+#[path = "control/output_runtime.rs"]
+mod output_runtime_tests;

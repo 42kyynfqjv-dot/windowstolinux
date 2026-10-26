@@ -43,3 +43,8 @@ SUB-511 selects a conditional one-import legacy CRT `_write` design; see
 native support probes are prerequisites, not translated output evidence. Medium
 contract review precedes bounded SUB-512 production integration. Imports remain
 unsupported in the converter.
+
+SUB-512 now implements the bounded one-import output profile;
+[SUB512-OUTPUT.md](SUB512-OUTPUT.md) supersedes the earlier design-only checkpoint.
+Six actual translated output fixtures extend the63-case baseline. Next medium
+review audits parser/argument/effect state and evidence before further expansion.

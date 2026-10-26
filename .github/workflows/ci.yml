@@ -14,14 +14,12 @@ jobs:
       - run: cargo clippy --all-targets --locked -- -D warnings
       - run: cargo test --locked
       - run: python3 scripts/check_fixture_manifest.py
-      - name: Test-only output contract probe (production must reject)
+      - name: Imported output translation and support checks
         run: |
           python3 scripts/check_output_probe.py
           python3 scripts/make_output_probe.py /tmp/output-probe.exe
-          if cargo run --locked -- /tmp/output-probe.exe /tmp/output-probe.rs; then
-            echo 'production unexpectedly accepted design-only imports' >&2
-            exit 1
-          fi
+          cargo build --locked
+          python3 scripts/check_imported_output.py
           rustfmt --check tools/output-probe.rs
           rustc -D warnings tools/output-probe.rs -o /tmp/output-probe
           /tmp/output-probe > /tmp/output-probe.stdout 2> /tmp/output-probe.stderr
@@ -62,7 +60,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Original-only imported output design probe
+      - name: Imported output Windows comparisons
         shell: pwsh
         run: |
           Write-Host "Output probe OS: $([System.Environment]::OSVersion.VersionString)"
@@ -70,6 +68,8 @@ jobs:
           Write-Host "32-bit CRT file version: $($crt.VersionInfo.FileVersion)"
           python scripts/check_output_probe.py --execute-windows
           if ($LASTEXITCODE -ne 0) { throw 'Output design probe failed' }
+          python scripts/check_imported_output.py --windows
+          if ($LASTEXITCODE -ne 0) { throw 'Imported output comparison failed' }
       - name: Execute authored PE32 fixture on Windows
         shell: pwsh
         run: |

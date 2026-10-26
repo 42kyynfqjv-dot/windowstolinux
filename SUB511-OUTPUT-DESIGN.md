@@ -1,3 +1,5 @@
+> Historical design and review: production implementation now follows SUB512-OUTPUT.md.
+
 # SUB-511: one imported output function — design only
 
 Decision: trial `msvcrt.dll!_write(1, immutable_ascii, count)` as a narrowly
