@@ -310,3 +310,10 @@ SUB-559: private helper graph/call/borrow/emission integration is documented in
 `research/input/helper/INTEGRATION.md`. Same-artifact execution gates now cover
 all three frozen input variants; broader owner lifetimes and mutable pointers
 remain excluded. Medium production/provenance review follows final CI.
+
+SUB-560 held-out measurement: four preregistered C programs under O1/O2 give eight
+artifacts and112 passing original Windows scenarios. All eight converters reject;
+no new translated programs. `research/input/heldout/RESULTS.md` separates first
+operand/prologue failures from deeper proof gaps. Next bounded architecture gate:
+post-call expression predicate entailment and reusable argument/WORD operands,
+using composed_O2 evidence before broader EBP/ESI/pointer/capacity expansion.
