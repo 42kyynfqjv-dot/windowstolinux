@@ -52,8 +52,8 @@ impl<'a> Pe<'a> {
             return Err("only x86 PE32 is supported".into());
         }
         let section_count = u16_at(bytes, coff + 2)? as usize;
-        if section_count != 1 {
-            return Err("only one-section PE32 images are supported".into());
+        if !(1..=2).contains(&section_count) {
+            return Err("only code with optional read-only data is supported".into());
         }
         if u16_at(bytes, coff + 18)? != 0x0102 {
             return Err("unsupported COFF characteristics".into());
@@ -120,7 +120,7 @@ impl<'a> Pe<'a> {
         {
             return Err("invalid PE image or header bounds".into());
         }
-        let mut sections = Vec::with_capacity(section_count);
+        let mut sections: Vec<Section> = Vec::with_capacity(section_count);
         for i in 0..section_count {
             let at = section_table
                 .checked_add(i.checked_mul(40).ok_or("offset overflow")?)
@@ -151,16 +151,63 @@ impl<'a> Pe<'a> {
                 || section.virtual_address < headers_size
                 || virtual_end > image_size
                 || raw_end as usize > bytes.len()
-                || section.characteristics != 0x6000_0020
+                || section.characteristics != if i == 0 { 0x6000_0020 } else { 0x4000_0040 }
+                || u32_at(bytes, at + 24)? != 0
+                || u32_at(bytes, at + 28)? != 0
+                || u32_at(bytes, at + 32)? != 0
             {
-                return Err("unsupported or invalid executable section".into());
+                return Err("unsupported or invalid section".into());
             }
             range(
                 bytes,
                 section.raw_offset as usize,
                 section.raw_size as usize,
             )?;
+            if let Some(previous) = sections.last() {
+                let previous_end = previous
+                    .virtual_address
+                    .checked_add(previous.virtual_size.max(previous.raw_size))
+                    .ok_or("section RVA overflow")?;
+                let adjacent = previous_end
+                    .checked_add(section_alignment - 1)
+                    .ok_or("aligned section RVA overflow")?
+                    & !(section_alignment - 1);
+                let previous_raw_end = previous
+                    .raw_offset
+                    .checked_add(previous.raw_size)
+                    .ok_or("section file offset overflow")?;
+                if section.virtual_address != adjacent || section.raw_offset < previous_raw_end {
+                    return Err("nonadjacent or overlapping section mappings".into());
+                }
+                if section.virtual_size > section.raw_size {
+                    return Err("zero-filled data is outside the two-section profile".into());
+                }
+            }
             sections.push(section);
+        }
+        if section_count == 2 {
+            let code = sections[0];
+            let data = sections[1];
+            let data_end = data
+                .virtual_address
+                .checked_add(data.raw_size)
+                .and_then(|end| end.checked_add(section_alignment - 1))
+                .ok_or("aligned image size overflow")?
+                & !(section_alignment - 1);
+            let first_rva = headers_size
+                .checked_add(section_alignment - 1)
+                .ok_or("aligned headers overflow")?
+                & !(section_alignment - 1);
+            if code.virtual_address != first_rva
+                || image_size != data_end
+                || u32_at(bytes, optional + 4)? != code.raw_size
+                || u32_at(bytes, optional + 8)? != data.raw_size
+                || u32_at(bytes, optional + 12)? != 0
+                || u32_at(bytes, optional + 20)? != code.virtual_address
+                || u32_at(bytes, optional + 24)? != data.virtual_address
+            {
+                return Err("inconsistent two-section image layout".into());
+            }
         }
         Ok(Self {
             bytes,
@@ -215,7 +262,7 @@ fn main() {
 mod tests {
     use super::*;
 
-    fn fixture(code: &[u8]) -> Vec<u8> {
+    pub(super) fn fixture(code: &[u8]) -> Vec<u8> {
         let mut bytes = vec![0u8; 0x400];
         bytes[0..2].copy_from_slice(b"MZ");
         bytes[0x3c..0x40].copy_from_slice(&0x80u32.to_le_bytes());
@@ -296,7 +343,7 @@ mod tests {
     }
 
     #[test]
-    fn rejects_dll_multisection_and_ambiguous_bounds() {
+    fn rejects_dll_incomplete_section_table_and_ambiguous_bounds() {
         let base = fixture(&[0xb8, 0, 0, 0, 0, 0xc3]);
 
         let mut dll = base.clone();
@@ -384,3 +431,6 @@ mod tests {
         assert!(control::translate(&[0x05, 1, 0, 0, 0, 0xc3]).is_err());
     }
 }
+
+#[cfg(test)]
+mod pe_mapping_tests;

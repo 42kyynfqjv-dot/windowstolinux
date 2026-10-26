@@ -118,6 +118,8 @@ for name, prefix, opcode in [
     CASES[name] = branch_case(prefix + push_data(7) + b"\xe8\x12\x00\x00\x00" + DROP_DATA, opcode) + LOAD_ARGUMENT + b"\xc3"
 
 
+CASES["two_section_helper"] = CASES["stack_argument"]
+
 def build(case: str) -> bytes:
     if case not in CASES:
         raise ValueError(f"unknown fixture case: {case}")
@@ -166,6 +168,20 @@ def build(case: str) -> bytes:
     data[0x200 : 0x200 + entry_offset] = b"\x90" * entry_offset
     start = 0x200 + entry_offset
     data[start : start + len(code)] = code
+    if case == "two_section_helper":
+        data.extend(bytes(0x200))
+        put(data, coff + 2, 2, 2)
+        put(data, optional + 8, 0x200, 4)
+        put(data, optional + 24, 0x2000, 4)
+        put(data, optional + 56, 0x3000, 4)
+        second = section + 40
+        data[second:second+8] = b".rdata\0\0"
+        put(data, second + 8, 16, 4)
+        put(data, second + 12, 0x2000, 4)
+        put(data, second + 16, 0x200, 4)
+        put(data, second + 20, 0x400, 4)
+        put(data, second + 36, 0x40000040, 4)
+        data[0x400:0x410] = b"authored data!\0\0"
     return bytes(data)
 
 
