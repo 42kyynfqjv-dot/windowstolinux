@@ -24,12 +24,12 @@ knowledge. Native support duplicates stdout into a File, verifies regular-file
 metadata and performs one unbuffered write. Errors/short writes abort with125 and
 a diagnostic, never fabricated success. It is independent std-only Rust support.
 
-Evidence harness scripts/check_imported_output.py constructs six authored programs:
-Hello, changed World payload, one byte,64 bytes, untaken output and helper output.
+Evidence harness scripts/check_imported_output.py constructs seven authored programs:
+Hello, changed World payload, one byte,64 bytes, untaken output helper output and alternate caller contexts sharing an output helper.
 Linux performs actual PE-to-Rust-to-ELF translation, repeated-source equality and
 exact stdout/stderr/exit assertions; Windows executes the identical fixture builder
 against independently specified expected bytes. It also checks2048 truncations and
-36 malformed metadata/address/argument/flag/cleanup cases through the real CLI.
+40 malformed metadata/address/argument/flag/cleanup cases through the real CLI.
 Nonregular Linux stdout produces explicit125 failure. Three new production Rust
 tests check exact encoding rejection, repeated calls, transient stack limits and
 injected short/zero/BrokenPipe/Interrupted/WriteZero outcomes with no retry.
@@ -48,3 +48,26 @@ is not XP7/application compatibility. No general APIs/memory/handles, Wine or AI
 Next medium review should independently audit metadata range/alias handling,
 hypothetical shared/nested contexts and state-budget rejection, production emitter
 payload binding and error paths. Keep PR draft/unmerged; no release.
+
+## Medium review
+
+The former harness printed36 malformed cases but executed35. It now counts actual
+rejections and adds five table/name-end and alias cases, yielding40. A seventh
+Windows/Linux fixture checks two hypothetical callers sharing one helper (one
+selected by native control flow). Production write failure tests now assert retained
+partial bytes as well as failure/no retry. No production acceptance defect was
+reproduced. Metadata reads are checked against raw and virtual section extents,
+then file bounds; disjoint spans prevent thunk/descriptor/name aliasing. The buffer
+resolver is an internal trusted callback bound by Pe::translate to this image;
+there is no public provenance type proof. The old byte-only decoder oracle does
+not independently cover imported call recognition.
+
+M0 foundation and narrow M1 translation/equivalence acceptance have reproducible
+CI evidence. That does not complete the original broad compiler/compatibility
+roadmap. The next highest-value step is an independently specified deterministic
+corpus within existing semantics, rather than another API: separate generation
+and expected observations from fixture helpers, compare Windows to generated ELF,
+exercise metadata relocation and shared/nested/untaken contexts, retain rejected
+cases and minimize failures. No Windows XP7 or real-application claim follows.
+Medium effort suffices for corpus design/evidence plumbing; Astra High is warranted
+only if a reproduced state-analysis or semantic defect requires redesign.

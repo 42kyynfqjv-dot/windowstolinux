@@ -48,3 +48,7 @@ SUB-512 now implements the bounded one-import output profile;
 [SUB512-OUTPUT.md](SUB512-OUTPUT.md) supersedes the earlier design-only checkpoint.
 Six actual translated output fixtures extend the63-case baseline. Next medium
 review audits parser/argument/effect state and evidence before further expansion.
+
+SUB-512 medium review adds shared-helper evidence and corrects the malformed-case
+count (35 historical,40 now). Next prioritize independent corpus/differential
+hardening within existing semantics before additional APIs or instructions.

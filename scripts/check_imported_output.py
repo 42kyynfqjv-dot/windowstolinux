@@ -17,7 +17,9 @@ def fixture(payload, skip=False, helper=False):
     code = bytes(b[0x200:0x234])
     if skip:
         code = b'\x31\xc0\x74\x34' + code + b'\xb8\0\0\0\0\xc3'
-    if helper:
+    if helper == 'shared':
+        code = bytes.fromhex('31c0 740b e811000000 b800000000 c3 e806000000 b800000000 c3') + code
+    elif helper:
         code = b'\xe8\x06\0\0\0\xb8\0\0\0\0\xc3' + code
     b[0x200:0x300] = bytes(256)
     b[0x200:0x200+len(code)] = code
@@ -25,13 +27,16 @@ def fixture(payload, skip=False, helper=False):
 
 CASES = [('hello', b'Hello', False, False), ('changed', b'World', False, False),
          ('one', b'!', False, False), ('max', b'A'*64, False, False),
-         ('untaken', b'Hello', True, False), ('helper', b'Hello', False, True)]
+         ('untaken', b'Hello', True, False), ('helper', b'Hello', False, True), ('shared', b'Hello', False, 'shared')]
 windows = '--windows' in sys.argv
 converter = Path('target/debug/w2l').resolve()
 with tempfile.TemporaryDirectory() as directory:
     root = Path(directory)
     exe, source, elf = root/'fixture.exe', root/'generated.rs', root/'generated'
+    rejected = 0
     def convert(data, accepted):
+        global rejected
+        if not accepted: rejected += 1
         exe.write_bytes(data)
         p = subprocess.run([str(converter), str(exe), str(source)], capture_output=True)
         assert (p.returncode == 0) == accepted, (accepted, p.stderr, data[0x200:0x240].hex())
@@ -57,13 +62,15 @@ with tempfile.TemporaryDirectory() as directory:
         good = fixture(b'Hello')
         for end in range(len(good)):
             convert(good[:end], False)
+        truncations = rejected
         # Literal offsets test descriptor/ILT/IAT/name/directory/permission failures.
         mutations = [(0x100,0x2fff),(0x104,39),(0x158,0x3054),(0x15c,4),
                      (0x600,0),(0x600,0x3050),(0x604,1),(0x608,1),(0x60c,0x3000),
                      (0x610,0x3054),(0x614,1),(0x640,0x80000001),(0x644,1),
                      (0x650,0x3084),(0x654,1),(0x1ec,0x40000040),(0x1d0,0x300),
                      (0x201,0),(0x201,65),(0x206,0x401fff),(0x206,0x40203e),
-                     (0x206,0x403000),(0x206,0xffffffff),(0x20b,2),(0x211,0x403040)]
+                     (0x206,0x403000),(0x206,0xffffffff),(0x20b,2),(0x211,0x403040), (0x600,0x30fc), (0x60c,0x30fa),
+                     (0x610,0x3040), (0x640,0x30f8), (0x650,0x30f8)]
         for at,value in mutations:
             b=good.copy();put(b,at,value,4);convert(b,False)
         for at in [0x660,0x66a,0x680,0x682,0x688,0x400]:
@@ -74,4 +81,4 @@ with tempfile.TemporaryDirectory() as directory:
         # Missing caller cleanup and wrong FF register form.
         b=good.copy();b[0x215]=0xc3;convert(b,False)
         b=good.copy();b[0x210]=0xd0;convert(b,False)
-        print(f'imported rejection checks: {len(good)} truncations, {len(mutations)+11} adversarial cases')
+        print(f'imported rejection checks: {len(good)} truncations, {rejected-truncations} adversarial cases')

@@ -37,10 +37,14 @@ mod tests {
     struct Writer {
         outcome: Result<usize, std::io::ErrorKind>,
         calls: usize,
+        observed: Vec<u8>,
     }
     impl std::io::Write for Writer {
-        fn write(&mut self, _: &[u8]) -> std::io::Result<usize> {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
             self.calls += 1;
+            if let Ok(n) = self.outcome {
+                self.observed.extend_from_slice(&bytes[..n]);
+            }
             self.outcome.map_err(std::io::Error::from)
         }
         fn flush(&mut self) -> std::io::Result<()> {
@@ -57,13 +61,19 @@ mod tests {
             Err(std::io::ErrorKind::Interrupted),
             Err(std::io::ErrorKind::WriteZero),
         ] {
-            let mut writer = Writer { outcome, calls: 0 };
+            let mut writer = Writer {
+                outcome,
+                calls: 0,
+                observed: vec![],
+            };
             assert!(write_output(&mut writer, b"Hello").is_err());
             assert_eq!(writer.calls, 1);
+            assert_eq!(writer.observed, &b"Hello"[..outcome.unwrap_or(0)]);
         }
         let mut writer = Writer {
             outcome: Ok(5),
             calls: 0,
+            observed: vec![],
         };
         assert_eq!(write_output(&mut writer, b"Hello"), Ok(5));
         for bytes in [&b""[..], &b"\n"[..], &b"\x1a"[..], &[b'A'; 65][..]] {
