@@ -39,3 +39,10 @@ small API contract are later prerequisites for an observable console application
 They should be separate evidence gates. XP/7 validation and a representative
 application corpus remain unfulfilled; the current34 modern-Windows experiments
 are prototype evidence only.
+
+SUB-506 implementation checkpoint: bounded forward direct calls, internal returns
+and entry sentinel now support authored helper, nested and shared-callee programs.
+The logical return-address stack has a 32-frame bound and remains unobservable to
+accepted instructions. Next is medium review of return contexts, all-path depth
+validation and the 41-case evidence. General stack/data memory and M3 import/API
+prerequisites above remain future work. No broad calling-convention claim follows.

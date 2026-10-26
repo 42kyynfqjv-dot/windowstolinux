@@ -12,6 +12,7 @@ pub(super) fn decode_instruction(bytes: &[u8], at: usize) -> Result<Instruction,
         0x05 => (Code::Add_EAX_imm32, 5),
         0x3d => (Code::Cmp_EAX_imm32, 5),
         0x31 if tail.get(1) == Some(&0xc0) => (Code::Xor_rm32_r32, 2),
+        0xe8 => (Code::Call_rel32_32, 5),
         0xc3 => (Code::Retnd, 1),
         0x72 => (Code::Jb_rel8_32, 2),
         0x73 => (Code::Jae_rel8_32, 2),
@@ -54,6 +55,22 @@ pub(super) fn decode_instruction(bytes: &[u8], at: usize) -> Result<Instruction,
                 return Err("unsupported XOR operands".into());
             }
             Op::Xor
+        }
+        Code::Call_rel32_32 => {
+            let displacement = i32::from_le_bytes(tail[1..5].try_into().unwrap());
+            if displacement < 0 {
+                return Err("backward calls are unsupported".into());
+            }
+            let target = next
+                .checked_add(displacement as usize)
+                .ok_or("call overflow")?;
+            if decoded.op_count() != 1
+                || decoded.op0_kind() != OpKind::NearBranch32
+                || usize::try_from(decoded.near_branch_target()).ok() != Some(target)
+            {
+                return Err("call target/operand disagrees with subset".into());
+            }
+            Op::Call { target }
         }
         Code::Retnd => {
             if decoded.op_count() != 0 {

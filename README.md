@@ -4,7 +4,7 @@ WindowsToLinux is an early research project for deterministic Windows PE to Rust
 
 ## Current prototype
 
-`w2l` accepts only a narrow PE32/x86 console profile: one executable section, no PE data directories, no DLL characteristics, a file-backed entry point, and instructions limited to `mov eax, imm32`, `add eax, imm32`, `xor eax, eax`, `cmp eax, imm32`, `ret`, and forward short `JC/JNC/JZ/JNZ/JL/JGE` branches. ADD, XOR and CMP model carry, zero, sign and overflow flags; MOV preserves them and CMP preserves EAX. Both branch successors must decode, all targets must be instruction boundaries, and decoding and execution are limited to 1,024 instructions. The returned EAX value must be in 0–255 so a Linux process exit status can represent it without truncation. Unsupported instructions, imports, TLS, relocations, other declared directories, and images outside this profile cause an error. This prototype does not implement general PE loading, Windows APIs, memory, stack, backward branches or other conditions/CPU flags. See [M2-CONTRACT.md](M2-CONTRACT.md) and [SUB502-CONTRACT.md](SUB502-CONTRACT.md) for the precise accepted subset.
+`w2l` accepts only a narrow PE32/x86 console profile: one executable section, no PE data directories, no DLL characteristics, a file-backed entry point, and instructions limited to `mov eax, imm32`, `add eax, imm32`, `xor eax, eax`, `cmp eax, imm32`, `ret`, forward short `JC/JNC/JZ/JNZ/JL/JGE` branches, and forward direct `CALL rel32`. Internal RET resumes a saved continuation; entry RET terminates. Calls use a private return-address stack capped at 32 internal frames, with no general stack memory access. ADD, XOR and CMP model carry, zero, sign and overflow flags; MOV preserves them and CMP preserves EAX. Both branch successors must decode, all targets must be instruction boundaries, and decoding and execution are limited to 1,024 instructions. The returned EAX value must be in 0–255 so a Linux process exit status can represent it without truncation. Unsupported instructions, imports, TLS, relocations, other declared directories, and images outside this profile cause an error. This prototype does not implement general PE loading, Windows APIs, memory, general stack access, backward branches/calls or other conditions/CPU flags. See [M2-CONTRACT.md](M2-CONTRACT.md) and [SUB502-CONTRACT.md](SUB502-CONTRACT.md) for the arithmetic/branch subset and [SUB506-CONTRACT.md](SUB506-CONTRACT.md) for calls and returns.
 
 ```sh
 cargo run -- sample.exe translated.rs
@@ -17,7 +17,7 @@ The authored `scripts/make_pe32_fixture.py` builds import-free PE32 cases within
 
 ## Status
 
-M0, M1 and the bounded M2 slice are in draft review. CI exercises 34 authored Windows/Linux cases, including taken and untaken outcomes for each supported branch. The [strict iced production adapter](docs/DECODER-INTEGRATION.md) preserves the exact subset and is compared against a handwritten test oracle. The 99% compatibility objective is aspirational and has no measured corpus result.
+M0, M1 and the bounded M2 slice are in draft review. CI exercises 41 authored Windows/Linux cases, including taken and untaken outcomes for each supported branch. The [strict iced production adapter](docs/DECODER-INTEGRATION.md) preserves the exact subset and is compared against a handwritten test oracle. The 99% compatibility objective is aspirational and has no measured corpus result.
 
 ## License
 

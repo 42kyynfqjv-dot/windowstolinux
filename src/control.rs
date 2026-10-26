@@ -34,6 +34,9 @@ pub(super) enum Op {
     Mov(u32),
     Add(u32),
     Compare(u32),
+    Call {
+        target: usize,
+    },
     Xor,
     Ret,
     Branch {
@@ -81,6 +84,17 @@ pub(super) fn oracle_instruction(bytes: &[u8], at: usize) -> Result<Instruction,
                 },
                 5,
             )
+        }
+        0xe8 => {
+            let displacement = super::u32_at(bytes, at + 1)? as i32;
+            if displacement < 0 {
+                return Err("backward calls are unsupported".into());
+            }
+            let target = at
+                .checked_add(5)
+                .and_then(|end| end.checked_add(displacement as usize))
+                .ok_or("call overflow")?;
+            (Op::Call { target }, 5)
         }
         0x31 if bytes.get(at + 1) == Some(&0xc0) => (Op::Xor, 2),
         0xc3 => (Op::Ret, 1),
@@ -138,10 +152,24 @@ pub(super) fn decode_with(
         if !matches!(op, Op::Ret) {
             pending.insert(next);
         }
-        if let Op::Branch { target, .. } = op {
+        if let Op::Branch { target, .. } | Op::Call { target } = op {
             pending.insert(target);
         }
         program.insert(at, Instruction { op, next });
+    }
+    // Every non-return edge is forward. Compute maximum extra nesting on all paths.
+    let mut depths: BTreeMap<usize, usize> = BTreeMap::new();
+    for (&at, ins) in program.iter().rev() {
+        let depth = match ins.op {
+            Op::Ret => 0,
+            Op::Call { target } => depths[&ins.next].max(1 + depths[&target]),
+            Op::Branch { target, .. } => depths[&ins.next].max(depths[&target]),
+            _ => depths[&ins.next],
+        };
+        if depth > 32 {
+            return Err("call nesting limit exceeded".into());
+        }
+        depths.insert(at, depth);
     }
     Ok(program)
 }
@@ -150,6 +178,7 @@ fn validate(program: &Program) -> Result<u8, String> {
     let mut eax = None;
     let mut flags = None;
     let mut pc = 0;
+    let mut returns = vec![None];
     for _ in 0..LIMIT {
         let instruction = program.get(&pc).ok_or("missing instruction")?;
         pc = instruction.next;
@@ -177,9 +206,20 @@ fn validate(program: &Program) -> Result<u8, String> {
                     pc = target;
                 }
             }
+            Op::Call { target } => {
+                if returns.len() > 32 {
+                    return Err("call nesting limit exceeded".into());
+                }
+                returns.push(Some(instruction.next));
+                pc = target;
+            }
             Op::Ret => {
+                if let Some(next) = returns.pop().ok_or("return stack underflow")? {
+                    pc = next;
+                    continue;
+                }
                 return u8::try_from(eax.ok_or("unknown return EAX")?)
-                    .map_err(|_| "Windows exit status exceeds Linux's 8-bit exit range".into())
+                    .map_err(|_| "Windows exit status exceeds Linux's 8-bit exit range".into());
             }
         }
     }
@@ -200,7 +240,7 @@ pub(super) fn emit(program: &Program) -> Result<String, String> {
         "//! Independently implemented 32-bit arithmetic contracts; see SUB502-CONTRACT.md.\n",
     ));
     out.push_str("\n}\nuse arithmetic::Flags;\n");
-    out.push_str("// Statically decoded x86; bounded forward control flow.\nuse std::convert::TryFrom;\n#[allow(unused_assignments, unused_mut, unused_variables)]\nfn main() {\nlet mut eax: Option<u32> = None;\nlet mut flags: Option<Flags> = None;\nlet mut pc: usize = 0;\nfor _ in 0..1024 {\nmatch pc {\n");
+    out.push_str("// Statically decoded x86; bounded forward control flow.\nuse std::convert::TryFrom;\n#[allow(unused_assignments, unused_mut, unused_variables)]\nfn main() {\nlet mut eax: Option<u32> = None;\nlet mut flags: Option<Flags> = None;\nlet mut pc: usize = 0;\nlet mut returns: Vec<Option<usize>> = vec![None];\nfor _ in 0..1024 {\nmatch pc {\n");
     for (at, instruction) in program {
         writeln!(out, "{at} => {{").unwrap();
         match instruction.op {
@@ -208,10 +248,14 @@ pub(super) fn emit(program: &Program) -> Result<String, String> {
             Op::Add(value) => writeln!(out, "let (value, updated) = Flags::add(eax.unwrap(), {value}); eax = Some(value); flags = Some(updated);").unwrap(),
             Op::Compare(value) => writeln!(out, "flags = Some(Flags::compare(eax.unwrap(), {value}));").unwrap(),
             Op::Xor => writeln!(out, "eax = Some(0); flags = Some(Flags::xor_self());").unwrap(),
-            Op::Ret => writeln!(out, "std::process::exit(u8::try_from(eax.unwrap()).unwrap() as i32);").unwrap(),
+            Op::Call { target } => writeln!(out, "assert!(returns.len() <= 32); returns.push(Some({})); pc = {target};", instruction.next).unwrap(),
+            Op::Ret => writeln!(out, "if let Some(next) = returns.pop().unwrap() {{ pc = next; }} else {{ std::process::exit(u8::try_from(eax.unwrap()).unwrap() as i32); }}").unwrap(),
             Op::Branch { condition, when, target } => writeln!(out, "if {} == {when} {{ pc = {target}; }} else {{ pc = {}; }}", condition.rust(), instruction.next).unwrap(),
         }
-        if !matches!(instruction.op, Op::Ret | Op::Branch { .. }) {
+        if !matches!(
+            instruction.op,
+            Op::Ret | Op::Branch { .. } | Op::Call { .. }
+        ) {
             writeln!(out, "pc = {};", instruction.next).unwrap();
         }
         out.push_str("}\n");
@@ -237,6 +281,7 @@ pub(super) fn records_for_comparison(bytes: &[u8]) -> Result<Vec<DecodeRecord>, 
                 Op::Compare(v) => ("cmp", Some(v), None),
                 Op::Xor => ("xor", None, None),
                 Op::Ret => ("ret", None, None),
+                Op::Call { target } => ("call", None, Some(target)),
                 Op::Branch {
                     condition,
                     when,
@@ -267,6 +312,71 @@ pub(super) fn exit_for_test(bytes: &[u8]) -> Result<u8, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn calls_return_to_each_continuation_and_preserve_state() {
+        // Two different return sites share one callee; independent expected result 8.
+        let bytes = [
+            0xb8, 1, 0, 0, 0, 0xe8, 11, 0, 0, 0, 0xe8, 6, 0, 0, 0, 0x05, 3, 0, 0, 0, 0xc3, 0x05, 2,
+            0, 0, 0, 0xc3,
+        ];
+        assert_eq!(exit_for_test(&bytes).unwrap(), 8);
+        // Internal return with unknown EAX is legal if caller initializes it.
+        assert_eq!(
+            exit_for_test(&[0xe8, 6, 0, 0, 0, 0xb8, 42, 0, 0, 0, 0xc3, 0xc3]).unwrap(),
+            42
+        );
+        assert!(translate(&[0xe8, 1, 0, 0, 0, 0xc3, 0xc3]).is_err());
+    }
+
+    #[test]
+    fn calls_reject_invalid_forms_targets_and_continuations() {
+        for bytes in [
+            &[0xe8, 0, 0, 0][..],
+            &[0xe8, 255, 255, 255, 255, 0xc3],
+            &[0xe8, 255, 255, 255, 127, 0xc3],
+            &[0xe8, 0, 0, 0, 0],
+            &[0xe8, 1, 0, 0, 0, 0xb8, 0, 0, 0, 0, 0xc3],
+            &[0xe8, 1, 0, 0, 0, 0x90, 0xc3],
+            &[0x66, 0xe8, 0, 0],
+            &[0xff, 0xd0],
+            &[0x9a, 0, 0, 0, 0, 0, 0],
+            &[0xc2, 0, 0],
+            &[0x50],
+            &[0x58],
+            &[0x8b, 0x04, 0x24],
+        ] {
+            assert!(translate(bytes).is_err(), "{bytes:02x?}");
+        }
+    }
+
+    #[test]
+    fn call_depth_and_dynamic_execution_limits() {
+        for depth in [32, 33] {
+            let mut code = vec![0x31, 0xc0];
+            for _ in 0..depth {
+                code.extend([0xe8, 1, 0, 0, 0, 0xc3]);
+            }
+            code.push(0xc3);
+            assert_eq!(translate(&code).is_ok(), depth == 32);
+        }
+        // Shared callee is executed twice: 1 MOV +2 CALL +2 RET +caller RET
+        // plus 2*n XORs. n509 ->1024 operations, n510 ->1026 (decode <1024).
+        for n in [509, 510] {
+            let mut code = vec![0xb8, 0, 0, 0, 0, 0xe8, 6, 0, 0, 0, 0xe8, 1, 0, 0, 0, 0xc3];
+            code.extend([0x31, 0xc0].repeat(n));
+            code.push(0xc3);
+            assert_eq!(translate(&code).is_ok(), n == 509);
+            if n == 509 {
+                // One extra MOV in caller makes exactly1025 dynamic operations.
+                let mut extra = vec![0xb8, 0, 0, 0, 0];
+                extra.extend(code);
+                assert!(translate(&extra)
+                    .unwrap_err()
+                    .contains("execution instruction limit"));
+            }
+        }
+    }
+
     #[test]
     fn production_decode_errors_report_offset_and_reason() {
         for (bytes, reason) in [

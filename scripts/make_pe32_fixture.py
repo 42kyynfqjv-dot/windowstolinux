@@ -78,6 +78,16 @@ for name, a, b in [("signed_join_taken", 0x80000000, 0x7fffffff), ("signed_join_
     CASES[name] = mov_eax(a) + cmp_eax(b) + b"\x7c\x05" + mov_eax(11) + cmp_eax(0) + b"\x7c\x06" + mov_eax(11) + b"\xc3" + mov_eax(22) + b"\xc3"
 
 
+# Independently authored helper programs; rel32 offsets are literal and reviewed.
+CASES["call_helper"] = b"\xe8\x06\x00\x00\x00" + add_eax(5) + b"\xc3" + mov_eax(7) + b"\xc3"
+CASES["call_nested"] = b"\xe8\x06\x00\x00\x00" + add_eax(5) + b"\xc3\xe8\x01\x00\x00\x00\xc3" + mov_eax(7) + b"\xc3"
+CASES["call_shared"] = mov_eax(1) + b"\xe8\x0b\x00\x00\x00\xe8\x06\x00\x00\x00" + add_eax(3) + b"\xc3" + add_eax(2) + b"\xc3"
+CASES["call_flags_preserved"] = b"\x31\xc0\xe8\x0e\x00\x00\x00\x74\x06" + mov_eax(11) + b"\xc3" + mov_eax(22) + b"\xc3" + mov_eax(7) + b"\xc3"
+CASES["call_flags_changed"] = mov_eax(0) + b"\xe8\x0e\x00\x00\x00\x74\x06" + mov_eax(11) + b"\xc3" + mov_eax(22) + b"\xc3" + add_eax(1) + b"\xc3"
+CASES["call_unknown_then_init"] = b"\xe8\x06\x00\x00\x00" + mov_eax(42) + b"\xc3\xc3"
+CASES["call_wide_internal"] = b"\xe8\x06\x00\x00\x00" + add_eax(0xffffff00) + b"\xc3" + mov_eax(256) + b"\xc3"
+
+
 def build(case: str) -> bytes:
     if case not in CASES:
         raise ValueError(f"unknown fixture case: {case}")

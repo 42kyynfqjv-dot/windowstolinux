@@ -120,12 +120,22 @@ fn independently_specified_policy_rejections_and_boundaries() {
             }
         );
     }
+    let mut call = vec![0x90; 17];
+    call.extend([0xe8, 0x7f, 0, 0, 0]);
+    assert_eq!(
+        adapter::decode_instruction(&call, 17).unwrap(),
+        Instruction {
+            op: Op::Call { target: 149 },
+            next: 22
+        }
+    );
     let forms: &[&[u8]] = &[
         &[0xb8, 0, 0, 0, 0],
         &[0x05, 0, 0, 0, 0],
         &[0x3d, 0, 0, 0, 0],
         &[0x31, 0xc0],
         &[0xc3],
+        &[0xe8, 0, 0, 0, 0],
         &[0x72, 0],
         &[0x73, 0],
         &[0x74, 0],

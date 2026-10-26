@@ -76,13 +76,12 @@ mod evaluation {
                 }
                 if let Some(destination) = target {
                     assert_eq!(i.near_branch32() as usize, destination);
-                    let Operand::ImmediateI8 { imm: displacement } = y.operand(0) else {
-                        panic!("branch operand")
+                    let displacement = match y.operand(0) {
+                        Operand::ImmediateI8 { imm } => i64::from(imm),
+                        Operand::ImmediateI32 { imm } if op == "call" => i64::from(imm),
+                        _ => panic!("branch/call operand"),
                     };
-                    assert_eq!(
-                        at as i64 + len as i64 + i64::from(displacement),
-                        destination as i64
-                    );
+                    assert_eq!(at as i64 + len as i64 + displacement, destination as i64);
                 }
                 // Repeat from the same bytes/IP to detect stateful output.
                 assert_eq!(i, Decoder::with_ip(32, &bytes[at..], at as u64, 0).decode());
