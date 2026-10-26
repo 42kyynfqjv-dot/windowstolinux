@@ -60,3 +60,9 @@ SUB-526 implements the reviewed bounded nested compiler path; see
 [SUB526-NESTED-IMPLEMENTATION.md](SUB526-NESTED-IMPLEMENTATION.md).
 CI now requires eight unchanged compiler programs, including nested.c, alongside
 102 authored comparisons and18 launch samples. Medium production review is next.
+
+SUB-527 held-out measurement: all eight configurations meet original Windows
+expectations and all conversions reject with cross-host matching diagnostics.
+See [compiler/heldout/RESULTS.md](compiler/heldout/RESULTS.md). No new translated
+pairs; next proposed gate is a bounded normalized PE32 image-intake design,
+with execution barriers retained for writable memory, loops and CRT.
