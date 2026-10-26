@@ -113,3 +113,23 @@ Astra High is justified for production typed-state/call-effect integration after
 medium contract review. No external blocker identified. More registers, arbitrary
 immediates, general memory and nested tail-transfer/argument-store support require
 separate evidence and design; no merge/release is authorized by this contract.
+
+## Medium contract review
+
+No semantic defect was reproduced. Literal expectations are not computed from the
+model's arithmetic function; the unused arithmetic import in tests is removed.
+Existing false-CMOV tests explicitly reject an invalid EDX source, so source type
+checking is not conditional on selection. Pointer/unknown destination rejection
+is stricter project policy, not a claim that x86 reads old EAX on a taken move.
+Memory CMOV fault behavior remains excluded. Signed overflow rows cover SF!=OF
+and SF==OF across the min/max boundary, and CMP operand order matches3BC8.
+
+Two justified regression gaps are closed: explicit MOV preservation of known and
+unknown flags plus internal CALL preservation, and pointer/unknown CMP/ADD operand
+rejections without register/flag mutation. External invalidation now asserts fresh,
+distinct origins across repeated calls. There are now10 prototype test functions,
+not10 native cases;54 root functions and production behavior remain unchanged.
+The prototype lacks full CFG/resource/ESI modeling, so SUB-524 must test actual
+production contexts and native emission rather than count this as integration.
+Ready for bounded Astra High integration after this review; no new architecture
+question identified. Existing timeout and compatibility limits still apply.

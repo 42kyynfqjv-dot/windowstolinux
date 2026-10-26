@@ -1,5 +1,5 @@
 import unittest
-from conditional_register_model import Model, Pointer, Unknown, arithmetic, decode
+from conditional_register_model import Model, Pointer, Unknown, decode
 
 TRACE=bytes.fromhex('8b442408 ba01000000 8b4c2404 3bc8 0f4dc2 03c1 c3')
 
@@ -59,6 +59,11 @@ class Contract(unittest.TestCase):
         m.external_write_success(6)
         self.assertIsNone(m.flags);self.assertIsInstance(m.regs['ecx'],Unknown)
         self.assertIsInstance(m.regs['edx'],Unknown)
+        old_ecx,old_edx=m.regs['ecx'],m.regs['edx']
+        self.assertIsNot(old_ecx.origin,old_edx.origin)
+        m.external_write_success(6)
+        self.assertIsNot(m.regs['ecx'].origin,old_ecx.origin)
+        self.assertIsNot(m.regs['edx'].origin,old_edx.origin)
         for op in ['cmp','add','cmov']:
             with self.assertRaises(ValueError):m.step(op)
         for op in decode(TRACE):m.step(op)
@@ -75,3 +80,25 @@ class Contract(unittest.TestCase):
         self.assertNotEqual(m.regs,outer.regs)
         m.external_write_success(5);outer.step('cmp')
         with self.assertRaises(ValueError):m.step('cmp')
+
+    def test_mov_and_cmov_preserve_known_and_unknown_flags(self):
+        for flags in [None,(True,False,False,True),(False,True,False,False)]:
+            m=Model();m.call([7,5]);m.flags=flags
+            for op in ['eax_arg2','edx_one','ecx_arg1']:
+                m.step(op);self.assertEqual(m.flags,flags)
+            before=dict(m.regs)
+            m.call([1,2]);self.assertEqual(m.flags,flags);self.assertEqual(m.regs,before)
+            if flags is None:
+                with self.assertRaises(ValueError):m.step('cmov')
+            else:
+                m.step('cmov');self.assertEqual(m.flags,flags)
+
+    def test_cmp_and_add_scalar_exclusions_are_atomic(self):
+        for op in ['cmp','add']:
+            for name in ['eax','ecx']:
+                for value in [Unknown('entry'),Pointer(object(),0x2060)]:
+                    m=Model();m.regs.update(eax=7,ecx=5);m.regs[name]=value
+                    m.flags=(True,False,True,False)
+                    before=dict(m.regs);flags=m.flags
+                    with self.assertRaises(ValueError):m.step(op)
+                    self.assertEqual(m.regs,before);self.assertEqual(m.flags,flags)
