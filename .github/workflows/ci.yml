@@ -237,6 +237,15 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Compiler measurement failed' }
           cmd /c "`"$vcvars`" x64 && python compiler/heldout/measure.py x64"
           if ($LASTEXITCODE -ne 0) { throw 'Held-out x64 measurement failed' }
+      - name: Measure frozen runtime-input compositions
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $installation = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (!$installation) { throw 'MSVC unavailable' }
+          $vcvars = Join-Path $installation 'VC\Auxiliary\Build\vcvarsall.bat'
+          cmd /c "`"$vcvars`" x86 && python research/input/diversity/measure.py %RUNNER_TEMP%/w2l-compiler-measurement"
+          if ($LASTEXITCODE -ne 0) { throw 'Input diversity measurement failed' }
       - name: Validate design-only permissioned intake against all held-out originals
         run: python tools/check_permissioned_corpus.py "${{ runner.temp }}/w2l-compiler-measurement"
       - name: Check scalar local-frame contract against unchanged compiler artifact
@@ -271,6 +280,7 @@ jobs:
             ${{ runner.temp }}/w2l-compiler-measurement/crt_sentinel_probe.exe
             ${{ runner.temp }}/w2l-compiler-measurement/crt_onexit_probe.exe
             ${{ runner.temp }}/w2l-compiler-measurement/crt_option_probe.exe
+            ${{ runner.temp }}/w2l-compiler-measurement/div_*.exe
             ${{ runner.temp }}/w2l-compiler-measurement/input.exe
             ${{ runner.temp }}/w2l-compiler-measurement/freestanding.exe
             ${{ runner.temp }}/w2l-compiler-measurement/variation_*.exe
@@ -320,6 +330,7 @@ jobs:
           cargo build --locked --example bounded_input
           python3 research/input/check_acquisition.py evidence
           python3 research/input/check_translation.py evidence
+          python3 research/input/diversity/measure.py evidence --compare
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -328,4 +339,5 @@ jobs:
             evidence/input-acquisition.json
             evidence/input-translation.json
             evidence/input-native.rs
+            evidence/input-diversity-native.json
           if-no-files-found: warn
