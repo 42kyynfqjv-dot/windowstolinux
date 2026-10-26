@@ -25,6 +25,7 @@ jobs:
           cargo build --locked
           python3 tools/check_linker_production.py
           python3 tools/check_compiler_subset.py
+          python3 tools/check_conditional_production.py
           python3 scripts/check_imported_output.py
           python3 corpus/check.py
           rustfmt --check tools/output-probe.rs

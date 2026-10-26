@@ -47,3 +47,11 @@ conditional movement need separate future architecture work.
 Ordinary CRT/XP7/general applications remain unsupported/unverified. Valid stack,
 no faults/asynchronous mutation and regular-file/full-write assumptions remain.
 The historical unrelated timeout is still unexplained.
+
+## Subsequent production gates
+
+SUB-522 requires unchanged shared.c acceptance. SUB-524 adds unchanged conditional.c
+acceptance under the exact six reviewed forms; see SUB524-CONDITIONAL-IMPLEMENTATION.md.
+The table above records the initial SUB-521 measurement, not current acceptance.
+Both host harnesses require these two structural programs to convert while nested
+continues rejecting RVA1050. Source/flag freeze and same-hashed-PE checks remain.

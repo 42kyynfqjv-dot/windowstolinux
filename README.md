@@ -49,3 +49,9 @@ and execution gates, in addition to the baseline and102 authored comparisons.
 SUB-522 adds exact83 C4 08 two-word cleanup under the same protected-stack and
 unknown-ESP flags contract; see [SUB522-TWO-WORD-CLEANUP.md](SUB522-TWO-WORD-CLEANUP.md).
 The unchanged shared-helper compiler program is now a mandatory acceptance gate.
+
+SUB-524 adds six exact scalar ECX/EDX and signed conditional-selection forms to the
+linker profile; see [SUB524-CONDITIONAL-IMPLEMENTATION.md](SUB524-CONDITIONAL-IMPLEMENTATION.md).
+CI requires seven unchanged compiler-built programs, including conditional.c,
+alongside102 authored comparisons and18 original launch checks. Nested stack-copy/
+tail-transfer and ordinary CRT support remain open.

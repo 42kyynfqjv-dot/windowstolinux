@@ -36,6 +36,12 @@ enum Op {
     MoveEsi,
     Mov(u32),
     Argument,
+    ScalarArgumentTwo,
+    EcxArgumentOne,
+    EdxOne,
+    CompareEcxEax,
+    SelectGe,
+    AddEcx,
     AddArgument,
     AddThirdArgument,
     Cleanup,
@@ -53,6 +59,8 @@ struct State {
     pc: u32,
     eax: Value,
     esi: Value,
+    ecx: Value,
+    edx: Value,
     flags: Option<Flags>,
     words: Vec<Word>,
     frames: Vec<Frame>,
@@ -66,6 +74,8 @@ impl State {
             pc,
             eax: Value::Unknown(0),
             esi: Value::Unknown(1),
+            ecx: Value::Unknown(2),
+            edx: Value::Unknown(3),
             flags: None,
             words: vec![Word::Entry],
             frames: vec![Frame {
@@ -128,6 +138,27 @@ impl State {
             Op::Mov(v) => self.eax = Value::Integer(v),
             Op::MoveEsi => self.esi = self.eax,
             Op::Argument => self.eax = self.argument(1)?,
+            Op::ScalarArgumentTwo => self.eax = Value::Integer(self.argument(2)?.integer()?),
+            Op::EcxArgumentOne => self.ecx = Value::Integer(self.argument(1)?.integer()?),
+            Op::EdxOne => self.edx = Value::Integer(1),
+            Op::CompareEcxEax => {
+                self.flags = Some(Flags::compare(self.ecx.integer()?, self.eax.integer()?))
+            }
+            Op::SelectGe => {
+                let flags = self.flags.ok_or("unknown conditional flags")?;
+                // Require both scalar operands even when the condition is false.
+                // Requiring old EAX on true is a conservative subset restriction.
+                self.eax.integer()?;
+                let source = self.edx.integer()?;
+                if flags.sign == flags.overflow {
+                    self.eax = Value::Integer(source)
+                }
+            }
+            Op::AddEcx => {
+                let (value, flags) = Flags::add(self.eax.integer()?, self.ecx.integer()?);
+                self.eax = Value::Integer(value);
+                self.flags = Some(flags)
+            }
             Op::AddArgument | Op::AddThirdArgument => {
                 let index = if matches!(op, Op::AddThirdArgument) {
                     3
@@ -199,7 +230,11 @@ impl State {
                         if *a == owner && *b == owner && *c == owner =>
                     {
                         self.eax = Value::Integer(output(*rva, *n)?);
-                        self.flags = None
+                        self.flags = None;
+                        // steps is unique along this path and bounded by 1024 above.
+                        // Origins 0..3 name entry values; clones retain their identity.
+                        self.ecx = Value::Unknown(4 + 2 * self.steps as u32);
+                        self.edx = Value::Unknown(5 + 2 * self.steps as u32)
                     }
                     _ => return Err("typed output arguments".into()),
                 }

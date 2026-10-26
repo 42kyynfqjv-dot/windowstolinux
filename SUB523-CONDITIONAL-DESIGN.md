@@ -1,7 +1,8 @@
 # SUB-523 bounded conditional register design
 
-Status: design and test-only model; production continues rejecting the frozen
-compiler/structures/conditional.c artifact. No compiler source/flag/PE alteration.
+Historical SUB-523 status: design and test-only model; production rejected the
+frozen compiler/structures/conditional.c artifact. SUB-524 implementation and
+current acceptance gates are in SUB524-CONDITIONAL-IMPLEMENTATION.md. No compiler source/flag/PE alteration.
 Observed helper RVA1050..1064 contains the six new forms below and existing RET.
 Entry already uses supported save/output/calls/checks and two-/five-word cleanup.
 

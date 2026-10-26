@@ -56,6 +56,12 @@ impl Candidate<'_> {
                     bound.insert(site);
                     (6, Op::Write)
                 }
+                0xba if b.get(..5) == Some(&[0xba, 1, 0, 0, 0]) => (5, Op::EdxOne),
+                0x8b if b.get(..4) == Some(&[0x8b, 0x44, 0x24, 8]) => (4, Op::ScalarArgumentTwo),
+                0x8b if b.get(..4) == Some(&[0x8b, 0x4c, 0x24, 4]) => (4, Op::EcxArgumentOne),
+                0x3b if byte(1)? == 0xc8 => (2, Op::CompareEcxEax),
+                0x0f if b.get(..3) == Some(&[0x0f, 0x4d, 0xc2]) => (3, Op::SelectGe),
+                0x03 if byte(1)? == 0xc1 => (2, Op::AddEcx),
                 0x8b if byte(1)? == 0xf0 => (2, Op::MoveEsi),
                 0x8b if b.get(..4) == Some(&[0x8b, 0x44, 0x24, 4]) => (4, Op::Argument),
                 0x03 if b.get(..4) == Some(&[0x03, 0x44, 0x24, 8]) => (4, Op::AddArgument),

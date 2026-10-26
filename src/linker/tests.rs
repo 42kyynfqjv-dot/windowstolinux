@@ -292,3 +292,215 @@ fn two_word_cleanup_ownership_flags_and_balance() {
     s.step(Op::Mov(0), 8, &mut no_output).unwrap();
     assert!(s.step(Op::Ret, 9, &mut no_output).is_err());
 }
+
+#[test]
+fn conditional_scalar_literal_boundaries() {
+    // CF/ZF/SF/OF and GE are literal expectations, not Flags helper results.
+    for (a, b, carry, zero, sign, overflow, ge) in [
+        (7, 5, false, false, false, false, true),
+        (3, 4, true, false, true, false, false),
+        (0, 0, false, true, false, false, true),
+        (0x8000_0000, 0x7fff_ffff, false, false, false, true, false),
+        (0x7fff_ffff, 0x8000_0000, true, false, true, true, true),
+        (0xffff_ffff, 0, false, false, true, false, false),
+        (0, 0xffff_ffff, true, false, false, false, true),
+    ] {
+        let mut s = State::new(0);
+        s.ecx = Value::Integer(a);
+        s.eax = Value::Integer(b);
+        s.step(Op::EdxOne, 5, &mut no_output).unwrap();
+        s.step(Op::CompareEcxEax, 7, &mut no_output).unwrap();
+        let flags = Some(Flags {
+            carry,
+            zero,
+            sign,
+            overflow,
+        });
+        assert_eq!(s.flags, flags);
+        assert_eq!(
+            (s.ecx, s.eax, s.edx),
+            (Value::Integer(a), Value::Integer(b), Value::Integer(1))
+        );
+        s.step(Op::SelectGe, 10, &mut no_output).unwrap();
+        assert_eq!(s.eax, Value::Integer(if ge { 1 } else { b }));
+        assert_eq!(s.flags, flags);
+    }
+    for (a, b, value, carry, zero, sign, overflow) in [
+        (0xffff_ffff, 1, 0, true, true, false, false),
+        (0x7fff_ffff, 1, 0x8000_0000, false, false, true, true),
+        (0x8000_0000, 0x8000_0000, 0, true, true, false, true),
+    ] {
+        let mut s = State::new(0);
+        s.eax = Value::Integer(a);
+        s.ecx = Value::Integer(b);
+        s.step(Op::AddEcx, 2, &mut no_output).unwrap();
+        assert_eq!(s.eax, Value::Integer(value));
+        assert_eq!(s.ecx, Value::Integer(b));
+        assert_eq!(
+            s.flags,
+            Some(Flags {
+                carry,
+                zero,
+                sign,
+                overflow
+            })
+        );
+    }
+}
+
+#[test]
+fn conditional_invalid_scalars_and_unknown_flags() {
+    for op in [Op::CompareEcxEax, Op::AddEcx, Op::SelectGe] {
+        for bad in [Value::Pointer(0x2060), Value::Unknown(20)] {
+            for operand in 0..2 {
+                for flags in [Some(Flags::compare(0, 1)), Some(Flags::compare(1, 0))] {
+                    let mut s = State::new(0);
+                    s.eax = Value::Integer(5);
+                    s.ecx = Value::Integer(3);
+                    s.edx = Value::Integer(1);
+                    s.flags = flags;
+                    if operand == 0 {
+                        s.eax = bad
+                    } else if matches!(op, Op::SelectGe) {
+                        s.edx = bad
+                    } else {
+                        s.ecx = bad
+                    }
+                    let before = (s.eax, s.ecx, s.edx, s.flags, s.words.clone());
+                    assert!(s.step(op, 3, &mut no_output).is_err());
+                    assert_eq!((s.eax, s.ecx, s.edx, s.flags, s.words), before);
+                }
+            }
+        }
+    }
+    let mut s = State::new(0);
+    s.eax = Value::Integer(0);
+    s.step(Op::EdxOne, 5, &mut no_output).unwrap();
+    assert!(s
+        .step(Op::SelectGe, 8, &mut no_output)
+        .unwrap_err()
+        .contains("unknown conditional flags"));
+    s.steps = 1024;
+    assert!(s
+        .step(Op::EdxOne, 13, &mut no_output)
+        .unwrap_err()
+        .contains("instruction limit"));
+}
+
+#[test]
+fn scalar_argument_ownership_and_mov_flags() {
+    for (op, index) in [(Op::ScalarArgumentTwo, 2), (Op::EcxArgumentOne, 1)] {
+        for bad in [
+            Word::Entry,
+            Word::Return(0, 9),
+            Word::Saved(0, Value::Integer(7)),
+            Word::Data(99, Value::Integer(7)),
+            Word::Data(0, Value::Pointer(0x2060)),
+            Word::Data(0, Value::Unknown(12)),
+        ] {
+            let mut s = State::new(0);
+            s.words.extend([
+                Word::Data(0, Value::Integer(5)),
+                Word::Data(0, Value::Integer(7)),
+            ]);
+            s.words[3 - index] = bad;
+            s.step(Op::Call(20), 5, &mut no_output).unwrap();
+            let before = (s.eax, s.ecx, s.words.clone());
+            assert!(s.step(op, 24, &mut no_output).is_err());
+            assert_eq!((s.eax, s.ecx, s.words), before);
+        }
+        let mut s = State::new(0);
+        s.step(Op::Call(20), 5, &mut no_output).unwrap();
+        assert!(s.step(op, 24, &mut no_output).is_err());
+    }
+    for flags in [None, Some(Flags::compare(0x8000_0000, 1))] {
+        let mut s = State::new(0);
+        s.flags = flags;
+        for op in [
+            Op::Push(5),
+            Op::Push(7),
+            Op::Call(20),
+            Op::ScalarArgumentTwo,
+            Op::EcxArgumentOne,
+            Op::EdxOne,
+        ] {
+            s.step(op, 5, &mut no_output).unwrap();
+            assert_eq!(s.flags, flags);
+        }
+        assert_eq!(
+            (s.eax, s.ecx, s.edx),
+            (Value::Integer(5), Value::Integer(7), Value::Integer(1))
+        );
+        s.step(Op::Push(0), 5, &mut no_output).unwrap();
+        assert!(s.step(Op::EcxArgumentOne, 9, &mut no_output).is_err());
+    }
+}
+
+#[test]
+fn volatile_register_call_effects_and_fresh_external_origins() {
+    let mut preserved = State::new(0);
+    preserved.ecx = Value::Integer(7);
+    preserved.edx = Value::Integer(1);
+    preserved.flags = Some(Flags::compare(3, 4));
+    let before = (preserved.ecx, preserved.edx, preserved.flags);
+    for op in [Op::Call(20), Op::Mov(8), Op::Ret] {
+        preserved.step(op, 5, &mut no_output).unwrap();
+        assert_eq!((preserved.ecx, preserved.edx, preserved.flags), before);
+    }
+    let mut s = State::new(0);
+    assert_ne!(s.ecx, s.edx);
+    assert_ne!(s.ecx, s.eax);
+    assert_ne!(s.edx, s.esi);
+    for op in [
+        Op::Push(5),
+        Op::Push(7),
+        Op::Call(20),
+        Op::EcxArgumentOne,
+        Op::EdxOne,
+        Op::Mov(8),
+        Op::Ret,
+    ] {
+        s.step(op, 5, &mut no_output).unwrap();
+    }
+    assert_eq!(
+        (s.eax, s.ecx, s.edx),
+        (Value::Integer(8), Value::Integer(7), Value::Integer(1))
+    );
+    let mut other = s.clone();
+    other.ecx = Value::Integer(3);
+    assert_eq!(s.ecx, Value::Integer(7));
+    s.step(Op::CleanupTwo, 8, &mut no_output).unwrap();
+    assert!(s.step(Op::SelectGe, 11, &mut no_output).is_err());
+    for op in [Op::Push(5), Op::Pointer(0x2060), Op::Push(1)] {
+        s.step(op, 12, &mut no_output).unwrap();
+    }
+    let words = s.words.clone();
+    let esi = s.esi;
+    let mut origins = vec![
+        Value::Unknown(0),
+        Value::Unknown(1),
+        Value::Unknown(2),
+        Value::Unknown(3),
+    ];
+    for _ in 0..3 {
+        s.step(Op::Write, 18, &mut |rva, n| {
+            assert_eq!((rva, n), (0x2060, 5));
+            Ok(5)
+        })
+        .unwrap();
+        assert_eq!(s.eax, Value::Integer(5));
+        assert_eq!(s.esi, esi);
+        assert_eq!(s.words, words);
+        assert!(s.flags.is_none());
+        for value in [s.ecx, s.edx] {
+            assert!(matches!(value, Value::Unknown(_)));
+            assert!(!origins.contains(&value));
+            origins.push(value);
+        }
+        let clone = s.clone();
+        assert_eq!((clone.ecx, clone.edx), (s.ecx, s.edx));
+        assert!(s.step(Op::AddEcx, 20, &mut no_output).is_err());
+        s.step(Op::CompareEax(5), 23, &mut no_output).unwrap();
+        assert!(s.step(Op::SelectGe, 26, &mut no_output).is_err());
+    }
+}

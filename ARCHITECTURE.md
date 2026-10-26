@@ -43,3 +43,9 @@ SUB-518 supersedes the design-only/unconditional-barrier checkpoint above with
 private per-Candidate typed validation and static Rust emission. See
 [SUB518-IMPLEMENTATION.md](SUB518-IMPLEMENTATION.md). Every graph path and relocation
 operand must validate before output; no conversion to the old scalar Pe emitter.
+
+SUB-524 extends only the linker-profile shared typed State with ECX/EDX and the
+six exact scalar forms in [SUB524-CONDITIONAL-IMPLEMENTATION.md](SUB524-CONDITIONAL-IMPLEMENTATION.md).
+Internal calls retain decoded effects; external _write invalidates volatile
+ECX/EDX and flags. New argument loads and arithmetic require scalar tags, with
+complete separate all-path states and unchanged ownership/resource barriers.

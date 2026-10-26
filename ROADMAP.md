@@ -122,3 +122,11 @@ SUB523-CONDITIONAL-DESIGN.md, with an independent test-only model. Production
 conditional.c rejection remains until medium contract review and bounded typed
 state/call-clobber integration gates. The fixed entry's failure path alone cannot
 validate both CMOV outcomes; independent native boundary cases are required.
+
+SUB-524 implements the reviewed conditional contract and makes the unchanged
+conditional.c compiler artifact a required same-PE Windows/Linux acceptance gate.
+See SUB524-CONDITIONAL-IMPLEMENTATION.md for exact forms and independent native
+boundaries. Next is medium review of production effects and artifact evidence.
+The remaining frozen nested program rejects stack-copy/argument-store/backward
+tail-transfer forms; any such expansion needs a separate bounded architecture
+design, not another unmeasured register/opcode increment.
