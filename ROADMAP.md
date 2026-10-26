@@ -20,13 +20,18 @@ and flags. The independent design prototype remains test-only. See
 [SUB508-IMPLEMENTATION.md](SUB508-IMPLEMENTATION.md) for implementation evidence
 and conditional native-stack assumptions.
 
-Next is focused medium review of owner/return integrity, caller cleanup, shared
-and nested contexts, production-versus-prototype independence and exact CI results.
-Resolve any confirmed gap before widening support. Then select a separately scoped
-program-level gate from the original roadmap; this slice does not establish a
-general ABI or permit arbitrary compiler-generated code.
-This advances original M2 stack-state prerequisites more than another arithmetic
-opcode. Native stack storage and exception assumptions remain explicit. General
-memory, PE sections/imports and a small independently implemented API contract are
-later separate gates toward an observable console application. General ABI support
-must not be inferred from a single argument-passing convention.
+Medium SUB-508 review found no production defect. Added a production-path
+regression for multiple caller words: only the nearest word is readable, and
+both words must be cleaned before entry RET. Existing fixture arithmetic and
+intermediate-result branches were inspected against the actual emitted paths.
+
+Next: SUB-509 bounded code plus read-only-data PE mapping, using Astra High for
+range/address design and implementation, then medium review. Specify the exact
+two-section profile from primary PE/COFF documentation, preserve the one-section
+baseline, and reject ambiguous/overlapping/truncated mappings, non-file-backed
+entry and entry in data. Keep code decoding confined to its executable extent.
+Add a genuine Windows/Linux two-section helper case and independent range tables.
+This supplies an M3 prerequisite for later immutable-data access and a separately
+designed output API; it adds no data reads or console output by itself. Imports,
+relocations, writable/general memory, general ABI and application compatibility
+remain open. See the existing Linear SUB-509 issue for measurable acceptance gates.

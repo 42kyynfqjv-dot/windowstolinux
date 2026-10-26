@@ -94,3 +94,21 @@ invariants, terminal state, shared/nested/join paths, fixture intermediate-resul
 checks and test independence. Verify final-head CI and documentation consistency;
 fix confirmed gaps within this slice before selecting another roadmap gate. No
 remaining architecture blocker was identified inside the stated execution domain.
+
+## Medium review
+
+No production defect was reproduced in ownership, protected returns, terminal
+state, nested/shared contexts or branch joins. Exact byte guards prevent prefixes
+and alternate addressing forms before iced metadata is examined. The validator
+and emitted match arms call the same checked transitions; shared helper code is
+not an independent oracle. Fixture shared/nested intermediate-result checks and
+all four SF/OF combinations were inspected. Valid-stack assumptions remain
+conditional and do not follow from PE headers.
+
+A new production-path test verifies two caller words expose only the nearest
+argument and require two cleanups. Current suites:35 root functions;36 isolated
+functions (24 inherited control/stack +6 comparisons +6 design-model functions).
+The52 native fixtures and decoder comparison counts are unchanged. Next SUB-509
+is bounded two-section code/read-only-data mapping, with Astra High for checked
+address/range design and medium review afterward; it is a prerequisite for later
+data access/output, not a new API or application-compatibility claim.

@@ -210,3 +210,20 @@ fn stack_capacity_and_instruction_limits_in_production_paths() {
         .unwrap_err()
         .contains("overlapping"));
 }
+
+#[test]
+fn nearest_argument_with_multiple_caller_words_requires_balanced_cleanup() {
+    let mut code = push(99);
+    code.extend(push(7));
+    code.extend([0xe8, 9, 0, 0, 0]);
+    code.extend(DROP);
+    code.extend(DROP);
+    code.push(0xc3);
+    code.extend(LOAD);
+    code.extend([0x05, 5, 0, 0, 0, 0xc3]);
+    assert_eq!(exit_for_test(&code).unwrap(), 12);
+    // Removing either cleanup leaves caller data above the entry return tag.
+    code.drain(15..19);
+    code[11..15].copy_from_slice(&5u32.to_le_bytes());
+    assert!(translate(&code).unwrap_err().contains("unbalanced return"));
+}
