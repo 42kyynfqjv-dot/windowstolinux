@@ -49,8 +49,16 @@ class Model:
         need(not self.done and self.steps < 1024, 'terminal/step limit')
         self.steps += 1
 
-    def allocate8(self):
+    def boundary(self):
         f = self.frame
+        need(0 <= f.boundary < len(self.words), 'protected boundary')
+        w = self.words[f.boundary]
+        need(w.tag == ('entry' if len(self.frames)==1 else 'return') and w.owner == f.owner,
+             'protected boundary')
+        return f
+
+    def allocate8(self):
+        f = self.boundary()
         need(f.allocation is None and len(self.words) == f.boundary+1, 'allocation shape')
         need(self.words[-1].tag in ('entry', 'return') and self.words[-1].owner == f.owner,
              'protected boundary')
@@ -63,7 +71,7 @@ class Model:
         self.flags = None  # All tracked flags depend on unknown absolute ESP.
 
     def window(self):
-        f = self.frame
+        f = self.boundary()
         need(f.allocation is not None and len(self.words) == f.boundary+3, 'local frame shape')
         need(all(w.tag == 'local' and w.owner == f.owner and w.allocation == f.allocation
                  for w in self.words[-2:]), 'local ownership')
@@ -96,7 +104,16 @@ class Model:
                       bool((~(a ^ b) & (a ^ result)) & 0x80000000))
 
     def cleanup8(self):
-        f = self.window()
+        f = self.boundary()
+        # Explicit invocation state selects the rule, never a trial/fallback.
+        if f.allocation is not None:
+            self.window()
+        else:
+            need(len(self.words) >= f.boundary+3, 'argument cleanup bounds')
+            need(not any(w.tag == 'local' for w in self.words[f.boundary+1:]),
+                 'untracked local allocation')
+            need(all(w.tag == 'data' and w.owner == f.owner for w in self.words[-2:]),
+                 'argument cleanup ownership')
         self.tick()
         del self.words[-2:]
         self.frames[-1] = replace(f, allocation=None)

@@ -86,6 +86,28 @@ class LocalFrames(unittest.TestCase):
         m=Model();m.eax=256
         with self.assertRaisesRegex(ValueError,'exit domain'):m.ret()
 
+    def test_explicit_cleanup_dispatch_and_atomic_protected_rejections(self):
+        m=Model();m.words.extend([Word('data',0,value=7),Word('data',0,value=5)])
+        m.flags=(True,False,False,False);m.cleanup8()
+        self.assertEqual(m.words,[Word('entry',0)]);self.assertIsNone(m.flags)
+        for live, tags in [(True,('data','data')), (True,('local','data')),
+                           (False,('local','data')), (False,('data','return')),
+                           (False,('saved','data'))]:
+            m=self.frame() if live else Model()
+            if not live:m.words.extend([Word('data',0,value=7),Word('data',0,value=5)])
+            for index,tag in enumerate(tags):
+                old=m.words[-2+index]
+                m.words[-2+index]=Word(tag,old.owner,old.allocation,old.value)
+            before=copy.deepcopy(m.__dict__)
+            with self.assertRaises(ValueError):m.cleanup8()
+            self.assertEqual(m.__dict__,before)
+        m=self.frame();m.words[-1]=Word('local',99,1,7)
+        with self.assertRaises(ValueError):m.cleanup8()
+        m=self.frame();m.words[0]=Word('return',0)
+        with self.assertRaisesRegex(ValueError,'protected boundary'):m.store(0,1)
+        m=Model()
+        with self.assertRaisesRegex(ValueError,'bounds'):m.cleanup8()
+
     def test_resource_caps_recursion_and_terminal_state(self):
         m=Model();m.steps=1024
         with self.assertRaisesRegex(ValueError,'step limit'):m.allocate8()

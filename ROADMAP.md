@@ -169,5 +169,5 @@ Linux comparison; no broad byte/global memory, loop or CRT expansion.
 
 SUB-530 defines the bounded scalar local-frame execution contract in
 [SUB530-LOCAL-FRAME-DESIGN.md](SUB530-LOCAL-FRAME-DESIGN.md), targeting unchanged
-structure.c exit12. Nine independent model tests and exact-artifact checks precede
+structure.c exit12. Ten independent model tests and exact-artifact checks include explicit cleanup dispatch before
 medium contract review; production still rejects all eight held-out programs.

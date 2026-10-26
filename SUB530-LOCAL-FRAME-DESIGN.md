@@ -202,3 +202,34 @@ unknown ESP flags, all-path initialization, inter-invocation ownership and the p
 intake promotion predicates. Resolve any substantive mismatch before implementing.
 No external-resource blocker is known. Evidence is Windows Server2025 only; XP/7 and
 ordinary application compatibility remain unvalidated. No merge/release.
+
+## Medium contract review
+
+The initial prototype exercised only local cleanup although the contract required
+explicit local-versus-Data dispatch. The reviewed model now selects solely from
+current invocation allocation state. Live allocation validates both Local words and
+token; no live allocation requires two trailing owned Data words above the protected
+boundary and rejects any untracked Local in the current frame. A failed Local check
+never falls through to Data cleanup. This is a test-only validation gap correction,
+not additional production support. Data values are discarded without reinterpretation;
+existing pointer-valued Data cleanup does not imply permission to store pointers locally.
+
+Added a tenth independent test function for successful Data cleanup and atomic
+rejection of live-local/Data substitutions, mixed slots, protected Saved/Return,
+foreign ownership, untracked Local and crossing the entry boundary. Local windows
+also validate the actual protected boundary tag/owner before writes/cleanup; malformed
+boundary substitution now rejects immediately. Prior nine tests retain initialization,
+unknown ESP flags, bounds, nested/shared calls, joins and exact seven-instruction trace.
+Production remains unchanged and all eight held-out conversions must still reject.
+
+Intake review confirms the proposed promotion remains private and requires fresh
+validation from the same owned snapshot, supported directory closure and full graph/
+ABI/stack proof; an inspection report or caller-supplied Boolean has no authority.
+The prototype takes decoded actions, so prefix/width rejection and graph exploration
+limits remain production gates, not model evidence. The exact-artifact checker pins
+literal observed code bytes and frozen source/PE hashes independently of the model;
+its exit12 trace is not native translated execution. SUB-531 must test both cleanup
+modes, failed-mode no-fallback, tag/owner/token mismatches and preservation of all
+protected words through the real validator and emitted runtime before acceptance.
+After this review the bounded Astra implementation is ready under those gates.
+Three historical original-Windows timeout causes remain unresolved.
