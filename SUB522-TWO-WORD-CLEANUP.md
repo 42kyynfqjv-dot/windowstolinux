@@ -42,3 +42,36 @@ script never invokes the converter in Windows mode. Cause remains unexplained;
 the failure is retained. Launch identity/PE hash and timeout stdout/stderr are
 now logged, with the same15-second bound and no automatic retries or acceptance
 relaxation. A subsequent pass would not establish that the cause is resolved.
+
+## Focused review and bounded timeout diagnosis
+
+Review found no production cleanup defect: exact byte guard, shared two-word
+validation before truncation, pointer Data disposal, protected-word rejection,
+flags None until CMP, and frozen shared-program provenance remain consistent.
+Existing54 root functions and10 native/52 rejection cases are retained.
+
+At least two distinct original-Windows waits are documented. Historical run
+40269378607 failed job121398673975 after corpus13, waiting15 seconds for corpus14;
+explicit retry job121398912221 passed. The connector lists only latest-attempt
+jobs, so that view alone conceals the original failure; direct old job logs and
+SUB515-LINKER-DESIGN.md preserve it. Recent run40279659683 job121429919088 timed
+out in imported max after hello/changed/one. These are different PE fixtures.
+Both fail in Python waiting for an original child, before conversion. Available
+logs do not distinguish loader/CRT/program execution from runner scheduling.
+Recent final run40279827103 is a separate changed-commit run, not an automatic
+in-test retry. Neither successful follow-up establishes a resolved cause.
+
+The new original-only Windows probe preregisters18 mandatory launches: max,
+corpus14 and Hello control, three repetitions each under reused and fresh paths.
+It records PE hash, PID, spawn duration, total duration, full stdout/stderr, exit
+and timeout, persists incremental JSON and failed authored PE bytes as artifacts.
+Every sample must pass; a failed sample fails the job even if later samples pass.
+The15-second wait and explicit failure remain unchanged. No converter, security
+setting changes, retry-until-green or compatibility expansion is involved. Byte
+construction for imported fixtures moves unchanged into an importable module;
+normal Windows/Linux comparisons still run separately with the same assertions.
+
+A non-reproduction narrows no root cause by itself. If a timeout reproduces, use
+its exact artifact/hash and timing to define a bounded process/loader investigation
+before more features. Medium suffices for this harness work; unsupported ABI/tail
+transfer design still needs a separate Astra High decision.

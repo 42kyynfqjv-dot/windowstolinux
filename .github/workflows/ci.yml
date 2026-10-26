@@ -66,6 +66,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Diagnose original fixture launches without retries
+        run: python scripts/diagnose_windows_launch.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-launch-diagnosis
+          path: ${{ runner.temp }}/w2l-launch-diagnosis/*
+          if-no-files-found: error
       - name: Imported output Windows comparisons
         shell: pwsh
         run: |
