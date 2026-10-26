@@ -14,10 +14,9 @@ enum Op {
     Name,
     Acquire,
     Move(usize, usize),
-    Mov(u32),
-    Test,
-    CompareLength(u32),
-    CompareAx(u16),
+    Mov(usize, u32),
+    Test(usize),
+    Compare(usize, u8, u32),
     Load(usize, u8),
     Save,
     Restore,
@@ -25,7 +24,7 @@ enum Op {
     Ret,
     Lea(usize, usize, usize, u32, u32),
     ZeroExtend(usize, usize),
-    SubEdx(u32),
+    Arithmetic(usize, u32, bool),
     Branch(Condition, u32),
 }
 #[derive(Clone, Copy, Debug)]
@@ -100,10 +99,11 @@ fn decode(image: &Candidate<'_>) -> Result<Graph, String> {
             }
             [0x8b, 0xc8] => Op::Move(1, 0),
             [0x8b, 0xc2] => Op::Move(0, 2),
-            [0xb8, _, _, _, _] => Op::Mov(u32_at(b, 1)?),
-            [0x85, 0xc9] => Op::Test,
-            [0x83, 0xf9, n] => Op::CompareLength(*n as i8 as i32 as u32),
-            [0x66, 0x83, 0xf8, n] => Op::CompareAx(*n as i8 as i16 as u16),
+            [0xb8, _, _, _, _] => Op::Mov(0, u32_at(b, 1)?),
+            [0x85, 0xc9] => Op::Test(1),
+            [0x85, 0xc0] => Op::Test(0),
+            [0x83, 0xf9, n] => Op::Compare(1, 32, *n as i8 as i32 as u32),
+            [0x66, 0x83, 0xf8, n] => Op::Compare(0, 16, u32::from(*n as i8 as i16 as u16)),
             [0x8b, 0x14, 0x24] => Op::Load(2, 0),
             [0x8b, 0x74, 0x24, n] => Op::Load(3, *n),
             [0x56] => Op::Save,
@@ -117,7 +117,17 @@ fn decode(image: &Candidate<'_>) -> Result<Graph, String> {
             [0x8d, 0x14, 0x50] => Op::Lea(2, 0, 2, 2, 0),
             [0x0f, 0xb7, 0xd2] => Op::ZeroExtend(2, 2),
             [0x0f, 0xb7, 0xc6] => Op::ZeroExtend(0, 3),
-            [0x83, 0xea, n] => Op::SubEdx(*n as i8 as i32 as u32),
+            [0x83, 0xea, n] => Op::Arithmetic(2, *n as i8 as i32 as u32, true),
+            [0x83, 0xf8, n] => Op::Compare(0, 32, *n as i8 as i32 as u32),
+            [0x8b, 0x54, 0x24, 2] => Op::Load(2, 2),
+            [0x8b, 0x0c, 0x24] => Op::Load(1, 0),
+            [0x8d, 0x41, n] => Op::Lea(0, 1, 1, 0, *n as i8 as i32 as u32),
+            [0x0f, 0xb7, 0xc1] => Op::ZeroExtend(0, 1),
+            [0x0f, 0xb7, 0xc2] => Op::ZeroExtend(0, 2),
+            [0x8d, 0x0c, 0x80] => Op::Lea(1, 0, 0, 4, 0),
+            [0x8d, 0x04, 0x48] => Op::Lea(0, 0, 1, 2, 0),
+            [0x05, _, _, _, _] => Op::Arithmetic(0, u32_at(b, 1)?, false),
+            [0x83, 0xe8, n] => Op::Arithmetic(0, *n as i8 as i32 as u32, true),
             [opcode @ (0x75..=0x77), _] => {
                 let target = u32::try_from(ins.near_branch_target())
                     .map_err(|_| "input: branch overflow")?;
@@ -173,10 +183,12 @@ impl Proven {
                 Op::Allocate|Op::Buffer|Op::Push(_)|Op::PushEax|Op::Name|Op::Cleanup => {}
                 Op::Acquire => s.push_str("let a=match acquisition::acquire(){Ok(v)=>v.project(),Err(_)=>return 203};s.r[0]=a.returned;s.r[1]=0;s.r[2]=0;for (i,v) in a.bytes.into_iter().enumerate(){if let Some(v)=v{s.bytes[i]=v;}}\n"),
                 Op::Move(d,v) => writeln!(s,"s.r[{d}]=s.r[{v}];").unwrap(),
-                Op::Mov(v) => writeln!(s,"s.r[0]={v};").unwrap(),
-                Op::Test => s.push_str("s.cf=false;s.zf=s.r[1]==0;\n"),
-                Op::CompareLength(v) => writeln!(s,"s.cf=s.r[1]<{v};s.zf=s.r[1]=={v};").unwrap(),
-                Op::CompareAx(v) => writeln!(s,"s.cf=(s.r[0] as u16)<{v};s.zf=(s.r[0] as u16)=={v};").unwrap(),
+                Op::Mov(r,v) => writeln!(s,"s.r[{r}]={v};").unwrap(),
+                Op::Test(r) => writeln!(s,"s.cf=false;s.zf=s.r[{r}]==0;").unwrap(),
+                Op::Compare(r,width,v) => {
+                    let mask=if width==16{65535}else{u32::MAX};
+                    writeln!(s,"let v=s.r[{r}] & {mask};s.cf=v<{v};s.zf=v=={v};").unwrap();
+                },
                 Op::Load(d,_) => {
                     let offset=self.loads[&pc];
                     writeln!(s,"s.r[{d}]=u32::from_le_bytes(s.bytes[{offset}..{}].try_into().unwrap());",offset+4).unwrap();
@@ -186,7 +198,10 @@ impl Proven {
                 Op::Ret => {s.push_str("s.r[0]}\n");continue;}
                 Op::Lea(d,a,b,k,c) => writeln!(s,"s.r[{d}]=s.r[{a}].wrapping_add(s.r[{b}].wrapping_mul({k})).wrapping_add({c});").unwrap(),
                 Op::ZeroExtend(d,v) => writeln!(s,"s.r[{d}]=s.r[{v}] & 65535;").unwrap(),
-                Op::SubEdx(v) => writeln!(s,"let old=s.r[2];s.r[2]=old.wrapping_sub({v});s.cf=old<{v};s.zf=s.r[2]==0;").unwrap(),
+                Op::Arithmetic(r,v,subtract) => {
+                    let method=if subtract{"overflowing_sub"}else{"overflowing_add"};
+                    writeln!(s,"let (v,c)=s.r[{r}].{method}({v});s.r[{r}]=v;s.cf=c;s.zf=v==0;").unwrap();
+                },
                 Op::Branch(c,t) => {
                     let condition=match c {Condition::Ne=>"!s.zf",Condition::Be=>"s.cf||s.zf",Condition::A=>"!s.cf&&!s.zf"};
                     writeln!(s,"if {condition} {{ b{t}(s) }} else {{ b{next}(s) }} }}").unwrap();continue;

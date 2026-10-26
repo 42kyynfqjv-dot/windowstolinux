@@ -260,10 +260,9 @@ pub(super) fn prove(graph: Graph, entry: u32) -> Result<Proven, String> {
                 continue;
             }
             Op::Move(d, v) => s.regs[d] = Value::Scalar(s.regs[v].scalar()?),
-            Op::Mov(v) => s.regs[0] = Value::Scalar(Expr::constant(v)),
-            Op::Test => s.flags = Some((s.regs[1].scalar()?, 32, 0)),
-            Op::CompareLength(v) => s.flags = Some((s.regs[1].scalar()?, 32, v)),
-            Op::CompareAx(v) => s.flags = Some((s.regs[0].scalar()?, 16, u32::from(v))),
+            Op::Mov(r, v) => s.regs[r] = Value::Scalar(Expr::constant(v)),
+            Op::Test(r) => s.flags = Some((s.regs[r].scalar()?, 32, 0)),
+            Op::Compare(r, width, v) => s.flags = Some((s.regs[r].scalar()?, width, v)),
             Op::Load(d, off) => {
                 let local = s.local(off, 4)?;
                 need(
@@ -323,11 +322,11 @@ pub(super) fn prove(graph: Graph, entry: u32) -> Result<Proven, String> {
                 s.regs[d] = Value::Scalar(s.regs[a].scalar()?.add(s.regs[b].scalar()?, k, c))
             }
             Op::ZeroExtend(d, v) => s.regs[d] = Value::Scalar(s.regs[v].scalar()?.low16()?),
-            Op::SubEdx(v) => {
-                s.regs[2] = Value::Scalar(s.regs[2].scalar()?.add(
+            Op::Arithmetic(r, v, subtract) => {
+                s.regs[r] = Value::Scalar(s.regs[r].scalar()?.add(
                     Expr::constant(0),
                     0,
-                    v.wrapping_neg(),
+                    if subtract { v.wrapping_neg() } else { v },
                 ));
                 s.flags = None;
             }

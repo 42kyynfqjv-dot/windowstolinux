@@ -279,3 +279,9 @@ refinement, snapshots, disjunctive joins and owned initialized reads. Eight mode
 tests exercise register permutations and guard order without production expansion.
 Next: medium contract review, then bounded normalization/proof/emission integration
 for unchanged guard_join. Nonlinear IMUL and pointer-helper calls remain separate.
+
+SUB-555 [integrates parameterized scalar operations](research/input/scalar/IMPLEMENTATION.md)
+for unchanged guard_join, requiring17new Windows/ELF input comparisons.
+All51original diversity scenarios remain; squares/helper retain explicit rejection
+pending nonlinear value and pointer-call ownership designs. Medium production review
+precedes merge. No fixture-result or graph-stencil admission is introduced.
