@@ -95,3 +95,14 @@ Check CPU probe source and its actual CI results independently of model expectat
 Keep complete_startup_proof=false and emission_allowed=false. Callbacks 0x1030 and
 0x10f0, external state/aliases, initialization and failure/exit paths still prevent
 ordinary CRT translation. This component alone grants no native startup replacement.
+
+## Initial CI finding
+
+Run 40358095814 at a714d16 passed Windows CPU checks and prior program checks,
+but the Linux option-report comparison failed: the JSON specification was checked
+out as CRLF on Windows and LF on Linux. Artifact 12665329708 establishes the only
+differing report field was spec_sha256; all five semantic results agreed. Existing
+attributes already pin Rust and C to LF. The JSON vector file now also has an
+explicit LF attribute. Raw-byte hashes remain strict; no normalization or ignored
+comparison field was added. This is a diagnosed harness provenance failure, not a
+retry or an explanation for the three historical process timeouts.
