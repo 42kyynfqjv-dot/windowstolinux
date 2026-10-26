@@ -246,3 +246,9 @@ exact frozen artifact: complete return intervals, guarded initialized bytes and
 16-bit digit refinement. Eight independent test functions and artifact binding
 add model evidence, no production eligibility. Native bounded input acquisition
 and private production ownership/path-state integration remain explicit gates.
+
+SUB-551 implements [isolated bounded native acquisition](research/input/ACQUISITION.md)
+using an explicit stable initial-environment/procfs domain. Eight component tests,
+17 inherited Windows/component comparisons and five Linux host rejections remain
+separate from translation evidence. Next medium review, then private production
+state/ownership integration with actual unchanged input PE conversion gates.
