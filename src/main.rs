@@ -254,7 +254,7 @@ mod tests {
         assert_eq!(control::exit_for_test(entry).unwrap(), 12);
         assert!(control::translate(entry)
             .unwrap()
-            .contains("overflowing_add(5)"));
+            .contains("Flags::add(eax.unwrap(), 5)"));
     }
 
     #[test]

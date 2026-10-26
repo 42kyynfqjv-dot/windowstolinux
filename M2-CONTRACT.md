@@ -1,3 +1,7 @@
+# Original M2 scope and SUB-502 extension
+
+The CF/ZF-only slice below is the original M2 baseline. The current accepted subset additionally includes CMP EAX,imm32, SF/OF tracking and short forward JL/JGE as specified in [SUB502-CONTRACT.md](SUB502-CONTRACT.md); that extension supersedes the baseline statements excluding signed conditions and other modeled flags.
+
 # Bounded M2 contract (SUB-501)
 
 The existing restricted PE console profile remains the input contract. The review additionally rejects sections overlapping the virtual header range. This is a source-level validation defect with a regression fixture; no claim of Windows execution for that malformed fixture is made.

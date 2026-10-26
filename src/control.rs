@@ -2,15 +2,41 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
 
+mod flags;
+use flags::Flags;
+
+#[derive(Debug, Clone, Copy)]
+enum Condition {
+    Carry,
+    Zero,
+    SignedLess,
+}
+impl Condition {
+    fn test(self, flags: Flags) -> bool {
+        match self {
+            Self::Carry => flags.carry,
+            Self::Zero => flags.zero,
+            Self::SignedLess => flags.sign != flags.overflow,
+        }
+    }
+    fn rust(self) -> &'static str {
+        match self {
+            Self::Carry => "flags.unwrap().carry",
+            Self::Zero => "flags.unwrap().zero",
+            Self::SignedLess => "(flags.unwrap().sign != flags.unwrap().overflow)",
+        }
+    }
+}
 const LIMIT: usize = 1024;
 #[derive(Debug, Clone, Copy)]
 enum Op {
     Mov(u32),
     Add(u32),
+    Compare(u32),
     Xor,
     Ret,
     Branch {
-        flag: usize,
+        condition: Condition,
         when: bool,
         target: usize,
     },
@@ -37,20 +63,22 @@ fn decode(bytes: &[u8]) -> Result<Program, String> {
             .get(at)
             .ok_or("control flow leaves executable bytes")?;
         let (op, size) = match opcode {
-            0xb8 | 0x05 => {
+            0xb8 | 0x05 | 0x3d => {
                 let imm = super::u32_at(bytes, at + 1)?;
                 (
                     if opcode == 0xb8 {
                         Op::Mov(imm)
-                    } else {
+                    } else if opcode == 0x05 {
                         Op::Add(imm)
+                    } else {
+                        Op::Compare(imm)
                     },
                     5,
                 )
             }
             0x31 if bytes.get(at + 1) == Some(&0xc0) => (Op::Xor, 2),
             0xc3 => (Op::Ret, 1),
-            0x72..=0x75 => {
+            0x72..=0x75 | 0x7c..=0x7d => {
                 let displacement = *bytes.get(at + 1).ok_or("truncated branch")? as i8;
                 if displacement < 0 {
                     return Err("backward branches are unsupported".into());
@@ -60,7 +88,11 @@ fn decode(bytes: &[u8]) -> Result<Program, String> {
                     .ok_or("branch overflow")?;
                 (
                     Op::Branch {
-                        flag: usize::from(opcode >= 0x74),
+                        condition: match opcode {
+                            0x72 | 0x73 => Condition::Carry,
+                            0x74 | 0x75 => Condition::Zero,
+                            _ => Condition::SignedLess,
+                        },
                         when: opcode % 2 == 0,
                         target,
                     },
@@ -90,11 +122,6 @@ fn decode(bytes: &[u8]) -> Result<Program, String> {
     Ok(program)
 }
 
-fn add_flags(a: u32, b: u32) -> (u32, [bool; 2]) {
-    let (value, carry) = a.overflowing_add(b);
-    (value, [carry, value == 0])
-}
-
 fn validate(program: &Program) -> Result<u8, String> {
     let mut eax = None;
     let mut flags = None;
@@ -105,17 +132,24 @@ fn validate(program: &Program) -> Result<u8, String> {
         match instruction.op {
             Op::Mov(value) => eax = Some(value),
             Op::Add(value) => {
-                let (result, updated) = add_flags(eax.ok_or("unknown entry EAX")?, value);
+                let (result, updated) = Flags::add(eax.ok_or("unknown entry EAX")?, value);
                 eax = Some(result);
                 flags = Some(updated);
             }
+            Op::Compare(value) => {
+                flags = Some(Flags::compare(eax.ok_or("unknown entry EAX")?, value));
+            }
             Op::Xor => {
                 eax = Some(0);
-                flags = Some([false, true]);
+                flags = Some(Flags::xor_self());
             }
-            Op::Branch { flag, when, target } => {
-                let known: [bool; 2] = flags.ok_or("branch reads unknown entry flags")?;
-                if known[flag] == when {
+            Op::Branch {
+                condition,
+                when,
+                target,
+            } => {
+                let known = flags.ok_or("branch reads unknown entry flags")?;
+                if condition.test(known) == when {
                     pc = target;
                 }
             }
@@ -134,15 +168,21 @@ pub fn translate(bytes: &[u8]) -> Result<String, String> {
     // Each match arm is a statically decoded instruction, with fixed successors.
     // The entry state is only read after validation proves it initialized on this
     // deterministic path. Options preserve the check in the generated program.
-    let mut out = String::from("// Statically decoded x86; bounded forward control flow.\nuse std::convert::TryFrom;\n#[allow(unused_assignments, unused_mut, unused_variables)]\nfn main() {\nlet mut eax: Option<u32> = None;\nlet mut flags: Option<[bool; 2]> = None;\nlet mut pc: usize = 0;\nfor _ in 0..1024 {\nmatch pc {\n");
+    let mut out = String::from("#[allow(dead_code)]\nmod arithmetic {\n");
+    out.push_str(include_str!("control/flags.rs").trim_start_matches(
+        "//! Independently implemented 32-bit arithmetic contracts; see SUB502-CONTRACT.md.\n",
+    ));
+    out.push_str("\n}\nuse arithmetic::Flags;\n");
+    out.push_str("// Statically decoded x86; bounded forward control flow.\nuse std::convert::TryFrom;\n#[allow(unused_assignments, unused_mut, unused_variables)]\nfn main() {\nlet mut eax: Option<u32> = None;\nlet mut flags: Option<Flags> = None;\nlet mut pc: usize = 0;\nfor _ in 0..1024 {\nmatch pc {\n");
     for (at, instruction) in &program {
         writeln!(out, "{at} => {{").unwrap();
         match instruction.op {
             Op::Mov(value) => writeln!(out, "eax = Some({value});").unwrap(),
-            Op::Add(value) => writeln!(out, "let (value, carry) = eax.unwrap().overflowing_add({value}); eax = Some(value); flags = Some([carry, value == 0]);").unwrap(),
-            Op::Xor => writeln!(out, "eax = Some(0); flags = Some([false, true]);").unwrap(),
+            Op::Add(value) => writeln!(out, "let (value, updated) = Flags::add(eax.unwrap(), {value}); eax = Some(value); flags = Some(updated);").unwrap(),
+            Op::Compare(value) => writeln!(out, "flags = Some(Flags::compare(eax.unwrap(), {value}));").unwrap(),
+            Op::Xor => writeln!(out, "eax = Some(0); flags = Some(Flags::xor_self());").unwrap(),
             Op::Ret => writeln!(out, "std::process::exit(u8::try_from(eax.unwrap()).unwrap() as i32);").unwrap(),
-            Op::Branch { flag, when, target } => writeln!(out, "if flags.unwrap()[{flag}] == {when} {{ pc = {target}; }} else {{ pc = {}; }}", instruction.next).unwrap(),
+            Op::Branch { condition, when, target } => writeln!(out, "if {} == {when} {{ pc = {target}; }} else {{ pc = {}; }}", condition.rust(), instruction.next).unwrap(),
         }
         if !matches!(instruction.op, Op::Ret | Op::Branch { .. }) {
             writeln!(out, "pc = {};", instruction.next).unwrap();
@@ -164,6 +204,90 @@ pub(super) fn exit_for_test(bytes: &[u8]) -> Result<u8, String> {
 mod tests {
     use super::*;
     #[test]
+    fn arithmetic_flags_match_wide_integer_oracle() {
+        let values = [
+            0u32,
+            1,
+            2,
+            0x7fff_ffff,
+            0x8000_0000,
+            0xffff_fffe,
+            0xffff_ffff,
+        ];
+        for a in values {
+            for b in values {
+                let signed_a = i64::from(a as i32);
+                let signed_b = i64::from(b as i32);
+                let (sum, add) = Flags::add(a, b);
+                let wide_sum = u64::from(a) + u64::from(b);
+                let signed_sum = signed_a + signed_b;
+                assert_eq!(sum, wide_sum as u32);
+                assert_eq!(
+                    add,
+                    Flags {
+                        carry: wide_sum > u64::from(u32::MAX),
+                        zero: sum == 0,
+                        sign: (sum as i32) < 0,
+                        overflow: signed_sum < i64::from(i32::MIN)
+                            || signed_sum > i64::from(i32::MAX)
+                    }
+                );
+                let difference = signed_a - signed_b;
+                let result = difference as i32;
+                let cmp = Flags::compare(a, b);
+                assert_eq!(
+                    cmp,
+                    Flags {
+                        carry: i64::from(a) - i64::from(b) < 0,
+                        zero: a == b,
+                        sign: result < 0,
+                        overflow: difference < i64::from(i32::MIN)
+                            || difference > i64::from(i32::MAX)
+                    }
+                );
+                assert_eq!(Condition::SignedLess.test(cmp), signed_a < signed_b);
+            }
+        }
+        assert_eq!(
+            Flags::xor_self(),
+            Flags {
+                carry: false,
+                zero: true,
+                sign: false,
+                overflow: false
+            }
+        );
+    }
+
+    #[test]
+    fn compare_preserves_eax_and_mov_preserves_signed_flags() {
+        assert_eq!(
+            exit_for_test(&[0xb8, 42, 0, 0, 0, 0x3d, 100, 0, 0, 0, 0xc3]).unwrap(),
+            42
+        );
+        let bytes = [
+            0xb8, 0, 0, 0, 128, 0x3d, 255, 255, 255, 127, 0xb8, 7, 0, 0, 0, 0x7c, 6, 0xb8, 11, 0,
+            0, 0, 0xc3, 0xb8, 22, 0, 0, 0, 0xc3,
+        ];
+        assert_eq!(exit_for_test(&bytes).unwrap(), 22);
+    }
+
+    #[test]
+    fn rejects_unsupported_comparison_forms_and_unknown_state() {
+        for bytes in [
+            &[0x3d, 1, 0, 0, 0, 0xc3][..],
+            &[0xb8, 1, 0, 0, 0, 0x7c, 0, 0xc3][..],
+            &[0x3d, 1, 2, 3][..],
+            &[0x31, 0xc0, 0x7d, 0xfe, 0xc3][..],
+            &[0x31, 0xc0, 0x7e, 0, 0xc3][..],
+            &[0x66, 0x3d, 0, 0, 0xc3][..],
+            &[0x0f, 0x8c, 0, 0, 0, 0][..],
+        ] {
+            assert!(translate(bytes).is_err());
+        }
+    }
+
+    #[test]
     fn carry_and_zero_truth_table() {
         for (a, b, value, carry, zero) in [
             (0, 0, 0, false, true),
@@ -171,7 +295,8 @@ mod tests {
             (u32::MAX, 2, 1, true, false),
             (0x7fffffff, 1, 0x80000000, false, false),
         ] {
-            assert_eq!(add_flags(a, b), (value, [carry, zero]));
+            let (result, flags) = Flags::add(a, b);
+            assert_eq!((result, flags.carry, flags.zero), (value, carry, zero));
         }
     }
     #[test]

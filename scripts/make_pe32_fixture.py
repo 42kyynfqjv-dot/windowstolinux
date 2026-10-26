@@ -53,6 +53,28 @@ CASES["same_successor"] = b"\x31\xc0\x74\x00" + add_eax(3) + b"\xc3"
 CASES["entry_offset"] = CASES["sum12"]
 
 
+def cmp_eax(value: int) -> bytes:
+    return b"\x3d" + value.to_bytes(4, "little")
+
+
+for name, prefix, opcode in [
+    ("cmp_min_max_jl", mov_eax(0x80000000) + cmp_eax(0x7fffffff), 0x7c),
+    ("cmp_max_min_jl", mov_eax(0x7fffffff) + cmp_eax(0x80000000), 0x7c),
+    ("cmp_equal_jge", mov_eax(7) + cmp_eax(7), 0x7d),
+    ("cmp_less_jge", mov_eax(0xffffffff) + cmp_eax(0), 0x7d),
+    ("cmp_borrow", mov_eax(0) + cmp_eax(1), 0x72),
+    ("cmp_no_borrow", mov_eax(0xffffffff) + cmp_eax(0), 0x73),
+    ("cmp_zero", mov_eax(7) + cmp_eax(7), 0x74),
+    ("cmp_nonzero", mov_eax(7) + cmp_eax(8), 0x75),
+    ("cmp_mov_flags", mov_eax(0x80000000) + cmp_eax(0x7fffffff) + mov_eax(7), 0x7c),
+    ("add_signed_overflow", mov_eax(0x7fffffff) + add_eax(1), 0x7c),
+    ("add_negative_overflow", mov_eax(0x80000000) + add_eax(0xffffffff), 0x7c),
+    ("xor_signed_reset", mov_eax(0x80000000) + add_eax(0) + b"\x31\xc0", 0x7d),
+]:
+    CASES[name] = branch_case(prefix, opcode)
+CASES["cmp_preserve_eax"] = mov_eax(42) + cmp_eax(100) + b"\xc3"
+
+
 def build(case: str) -> bytes:
     if case not in CASES:
         raise ValueError(f"unknown fixture case: {case}")
