@@ -54,6 +54,16 @@ entailment from each returning path, not fabricated range narrowing or sampled
 branch selection. Return paths already distinguish error constants from guarded
 success ranges; reusable bounded entailment can exploit those facts.
 
+Review reproduced that refiner limitation with test-only constant202 and
+multi-symbol affine expressions compared with202: both reject as unsupported
+predicates even though a constant equality or disjoint result bounds can decide
+that comparison. This is source/model evidence for a later proof prerequisite,
+not a newly observed semantic-stage rejection of the untouched PE: decoding stops
+first. It is relevant to composed_O2 and shared_O2 caller checks, not a shared
+first cause across all eight artifacts. EBP frames, larger capacity and nested
+pointer/CMOV effects remain separate blockers. The design must inventory those
+additional dependencies and cannot promise acceptance from predicate work alone.
+
 Prioritize a bounded design/model for post-call scalar predicate entailment and
 register-independent argument/WORD operands. Start from composed_O2's immutable
 return expressions/path ranges; prove comparison outcomes when bounds entail them,
