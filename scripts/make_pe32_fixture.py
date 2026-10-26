@@ -120,6 +120,25 @@ for name, prefix, opcode in [
 
 CASES["two_section_helper"] = CASES["stack_argument"]
 
+def load_data(offset: int = 0) -> bytes:
+    return b"\xa1" + (0x402000 + offset).to_bytes(4, "little")
+
+DATA_WORDS = {"data_sum": (0, 7), "data_unaligned": (1, 7), "data_last": (12, 255), "data_wrap": (0, 0xffffffff)}
+CASES["data_sum"] = load_data() + add_eax(5) + b"\xc3"
+CASES["data_unaligned"] = load_data(1) + add_eax(5) + b"\xc3"
+CASES["data_last"] = load_data(12) + b"\xc3"
+CASES["data_wrap"] = load_data() + add_eax(3) + b"\xc3"
+for name, prefix, opcode in [
+    ("data_zero", b"\x31\xc0", 0x74),
+    ("data_carry", mov_eax(0xffffffff)+add_eax(1), 0x72),
+    ("data_overflow", mov_eax(0x7fffffff)+add_eax(1), 0x7c),
+    ("data_negative_overflow", mov_eax(0x80000000)+add_eax(0xffffffff), 0x7c),
+]:
+    CASES[name] = branch_case(prefix + load_data(), opcode)
+    DATA_WORDS[name] = (0, 7)
+CASES["data_call"] = b"\xe8\x06\0\0\0" + add_eax(5) + b"\xc3" + load_data() + b"\xc3"
+DATA_WORDS["data_call"] = (0, 7)
+
 def build(case: str) -> bytes:
     if case not in CASES:
         raise ValueError(f"unknown fixture case: {case}")
@@ -168,7 +187,7 @@ def build(case: str) -> bytes:
     data[0x200 : 0x200 + entry_offset] = b"\x90" * entry_offset
     start = 0x200 + entry_offset
     data[start : start + len(code)] = code
-    if case == "two_section_helper":
+    if case == "two_section_helper" or case in DATA_WORDS:
         data.extend(bytes(0x200))
         put(data, coff + 2, 2, 2)
         put(data, optional + 8, 0x200, 4)
@@ -182,6 +201,9 @@ def build(case: str) -> bytes:
         put(data, second + 20, 0x400, 4)
         put(data, second + 36, 0x40000040, 4)
         data[0x400:0x410] = b"authored data!\0\0"
+    if case in DATA_WORDS:
+        offset, value = DATA_WORDS[case]
+        put(data, 0x400 + offset, value, 4)
     return bytes(data)
 
 

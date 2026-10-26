@@ -37,7 +37,7 @@ mod evaluation {
                 assert_eq!(i.len(), len, "{name}:{at}");
                 assert_eq!(y.len().to_const() as usize, len, "{name}:{at}");
                 let mnemonic = match op.as_str() {
-                    "load_argument" => "mov",
+                    "load_argument" | "load_absolute" => "mov",
                     "drop_data" => "lea",
                     other => other,
                 };
@@ -55,7 +55,17 @@ mod evaluation {
                     other => other,
                 };
                 assert_eq!(y_name, mnemonic, "{name}:{at}");
-                if op == "push" {
+                if op == "load_absolute" {
+                    assert_eq!(i.op0_register(), Register::EAX);
+                    assert_eq!(i.memory_displacement64(), u64::from(imm.unwrap()));
+                    assert_eq!(
+                        y.operand(0),
+                        Operand::Register {
+                            reg: RegSpec::eax()
+                        }
+                    );
+                    assert_eq!(y.operand(1), Operand::AbsoluteU32 { addr: imm.unwrap() });
+                } else if op == "push" {
                     assert_eq!(i.immediate32(), imm.unwrap());
                     assert_eq!(
                         y.operand(0),

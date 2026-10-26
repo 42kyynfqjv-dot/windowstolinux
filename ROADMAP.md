@@ -7,7 +7,7 @@
 - M4–M7 Windows APIs, advanced execution, instrumentation and desktop behavior remain open.
 - M8–M10 x64, representative corpus, optimization and reproducible releases remain open.
 
-Current production evidence:53 authored Windows Server2025/Linux cases. This is
+Current production evidence:62 authored Windows Server2025/Linux cases. This is
 not XP/7 validation or application compatibility; the99% objective is aspirational.
 No milestone is complete merely because generated Rust compiles.
 
@@ -27,11 +27,10 @@ intermediate-result branches were inspected against the actual emitted paths.
 
 SUB-509 implements the bounded two-section profile in [SUB509-MAPPING.md](SUB509-MAPPING.md).
 The new authored image retains helper exit12; read-only bytes remain unobservable.
-Medium mapping review found no production defect; added page-boundary virtual-tail,
-raw-gap and data-size regressions. Next SUB-510 defines exact A1 moffs32 EAX loads
-from validated immutable data. Use Astra High for image-context/address provenance
-and implementation, then medium review. Whole four-byte containment, little-endian
-values, flags preservation, strict invalid-address/form rejection and genuine
-Windows/Linux observations are required. Current data mapping alone grants no
-program data reads. Imports/APIs, writable/general memory and application
-compatibility remain later gates; Server2025 results do not validate XP/7.
+SUB-510 now implements exact A1 immutable EAX loads with complete four-byte
+VA/RVA/file provenance and preferred-base/flat-DS/no-fault assumptions; see
+[SUB510-IMMUTABLE-LOAD.md](SUB510-IMMUTABLE-LOAD.md). Data can now affect bounded
+program results. Next medium review audits context, whole-width bounds, flags,
+independent fixtures and final CI. Afterward separately design the smallest
+observable output/import/API gate. General memory, writes, dynamic pointers and
+rebasing remain unsupported. Server2025 evidence does not validate XP/7.

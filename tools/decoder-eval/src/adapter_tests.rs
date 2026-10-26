@@ -26,14 +26,14 @@ fn corpus_ir_source_and_single_byte_mutations_match() {
     let mut cases = 0;
     let mut mutations = 0;
     for line in corpus.lines() {
-        let (_, hex) = line.split_once('\t').unwrap();
+        let (name, hex) = line.split_once('\t').unwrap();
         let mut bytes: Vec<u8> = (0..hex.len())
             .step_by(2)
             .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap())
             .collect();
-        assert!(parity(&bytes));
-        // Every proper truncation, including empty, is compared. Some prefixes
-        // ending in RET remain valid: never assume every truncation must fail.
+        assert_eq!(parity(&bytes), !name.starts_with("data_")); // Image-dependent streams reject without context.
+                                                                // Every proper truncation, including empty, is compared. Some prefixes
+                                                                // ending in RET remain valid: never assume every truncation must fail.
         for end in 0..bytes.len() {
             parity(&bytes[..end]);
         }
@@ -87,6 +87,7 @@ fn independently_specified_policy_rejections_and_boundaries() {
         (vec![0x3d, 0, 0, 0, 128], Op::Compare(0x80000000)),
         (vec![0x31, 0xc0], Op::Xor),
         (vec![0xc3], Op::Ret),
+        (vec![0xa1, 1, 0x20, 0x40, 0], Op::LoadAbsolute(0x402001)),
         (vec![0x68, 0x78, 0x56, 0x34, 0x12], Op::PushData(0x12345678)),
         (vec![0x8b, 0x44, 0x24, 4], Op::LoadArgument),
         (vec![0x8d, 0x64, 0x24, 4], Op::DropData),
@@ -138,6 +139,7 @@ fn independently_specified_policy_rejections_and_boundaries() {
         &[0x3d, 0, 0, 0, 0],
         &[0x31, 0xc0],
         &[0xc3],
+        &[0xa1, 0, 0x20, 0x40, 0],
         &[0x68, 0, 0, 0, 0],
         &[0x8b, 0x44, 0x24, 4],
         &[0x8d, 0x64, 0x24, 4],

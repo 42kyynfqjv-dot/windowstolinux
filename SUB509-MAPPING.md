@@ -1,5 +1,9 @@
 # SUB-509 bounded code and read-only-data profile
 
+Historical mapping checkpoint. SUB-510 adds the exact immutable read specified in
+[SUB510-IMMUTABLE-LOAD.md](SUB510-IMMUTABLE-LOAD.md); statements below about data
+being unobservable describe SUB-509 before that extension. Mapping rules still apply.
+
 Primary contract: Microsoft PE/COFF specification, read 2026-10-26:
 https://learn.microsoft.com/en-us/windows/win32/debug/pe-format
 Sections consulted: optional header standard/Windows fields, section table, section

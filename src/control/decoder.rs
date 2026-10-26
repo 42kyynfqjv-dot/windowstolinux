@@ -12,6 +12,7 @@ pub(super) fn decode_instruction(bytes: &[u8], at: usize) -> Result<Instruction,
         0x05 => (Code::Add_EAX_imm32, 5),
         0x3d => (Code::Cmp_EAX_imm32, 5),
         0x31 if tail.get(1) == Some(&0xc0) => (Code::Xor_rm32_r32, 2),
+        0xa1 => (Code::Mov_EAX_moffs32, 5),
         0x68 => (Code::Pushd_imm32, 5),
         0x8b if tail.get(..4) == Some(&[0x8b, 0x44, 0x24, 4]) => (Code::Mov_r32_rm32, 4),
         0x8d if tail.get(..4) == Some(&[0x8d, 0x64, 0x24, 4]) => (Code::Lea_r32_m, 4),
@@ -58,6 +59,20 @@ pub(super) fn decode_instruction(bytes: &[u8], at: usize) -> Result<Instruction,
                 return Err("unsupported XOR operands".into());
             }
             Op::Xor
+        }
+        Code::Mov_EAX_moffs32 => {
+            if decoded.op_count() != 2
+                || !eax(0)
+                || decoded.op1_kind() != OpKind::Memory
+                || decoded.memory_base() != Register::None
+                || decoded.memory_index() != Register::None
+                || decoded.memory_displ_size() != 4
+                || decoded.memory_segment() != Register::DS
+                || decoded.memory_displacement64() > u64::from(u32::MAX)
+            {
+                return Err("unsupported absolute data load operands".into());
+            }
+            Op::LoadAbsolute(decoded.memory_displacement64() as u32)
         }
         Code::Pushd_imm32 => {
             if decoded.op_count() != 1 || decoded.op0_kind() != OpKind::Immediate32 {

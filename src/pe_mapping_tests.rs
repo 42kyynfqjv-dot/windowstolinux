@@ -159,3 +159,147 @@ fn aligned_virtual_extent_and_raw_gap_boundaries() {
     put(&mut b, 0x1a8, 0x201);
     assert!(Pe::parse(&b).is_err());
 }
+
+fn load_code(address: u32) -> Vec<u8> {
+    let mut code = vec![0xa1];
+    code.extend(address.to_le_bytes());
+    code
+}
+fn with_code(code: &[u8]) -> Vec<u8> {
+    let mut b = image();
+    b[0x200..0x300].fill(0);
+    b[0x200..0x200 + code.len()].copy_from_slice(code);
+    b
+}
+#[test]
+fn immutable_reads_use_full_width_little_endian_and_preferred_base() {
+    let mut b = image();
+    b[0x400..0x410].copy_from_slice(&[
+        7, 0, 0, 0, 0x78, 0x56, 0x34, 0x12, 255, 255, 255, 255, 12, 0, 0, 0,
+    ]);
+    for (address, expected) in [
+        (0x402000, 7),
+        (0x402001, 0x78000000),
+        (0x402004, 0x12345678),
+        (0x402008, u32::MAX),
+        (0x40200c, 12),
+    ] {
+        assert_eq!(
+            Pe::parse(&b).unwrap().read_immutable_u32(address).unwrap(),
+            expected
+        );
+    }
+    put(&mut b, 0xb4, 0x500000);
+    assert_eq!(
+        Pe::parse(&b).unwrap().read_immutable_u32(0x502000).unwrap(),
+        7
+    );
+    assert!(Pe::parse(&b).unwrap().read_immutable_u32(0x402000).is_err());
+    for address in [
+        0, 0x4fffff, 0x500000, 0x501000, 0x501fff, 0x50200d, 0x502010, 0x5021fc, 0x503000,
+        0xfffffffe,
+    ] {
+        assert!(
+            Pe::parse(&b).unwrap().read_immutable_u32(address).is_err(),
+            "{address:x}"
+        );
+    }
+    b[0x410..0x600].fill(7);
+    assert!(Pe::parse(&b).unwrap().read_immutable_u32(0x502010).is_err());
+    let one = tests::fixture(&[0xc3]);
+    assert!(Pe::parse(&one)
+        .unwrap()
+        .read_immutable_u32(0x402000)
+        .is_err());
+}
+#[test]
+fn production_translation_resolves_data_preserves_flags_and_rejects_untaken_reads() {
+    let mut code = load_code(0x402000);
+    code.extend([0x05, 5, 0, 0, 0, 0xc3]);
+    let mut b = with_code(&code);
+    put(&mut b, 0x400, 7);
+    let expected = control::translate(&[0xb8, 7, 0, 0, 0, 0x05, 5, 0, 0, 0, 0xc3]).unwrap();
+    assert_eq!(Pe::parse(&b).unwrap().translate().unwrap(), expected);
+    put(&mut b, 0x400, 9);
+    assert_eq!(
+        Pe::parse(&b).unwrap().translate().unwrap(),
+        control::translate(&[0xb8, 9, 0, 0, 0, 0x05, 5, 0, 0, 0, 0xc3]).unwrap()
+    );
+    assert!(control::translate(&code).unwrap_err().contains("context"));
+    let mut untaken = vec![0x31, 0xc0, 0x74, 5];
+    untaken.extend(load_code(0x401000));
+    untaken.push(0xc3);
+    assert!(Pe::parse(&with_code(&untaken))
+        .unwrap()
+        .translate()
+        .is_err());
+    for prefix in [
+        vec![],
+        vec![0x31, 0xc0],
+        vec![0xb8, 255, 255, 255, 255, 0x05, 1, 0, 0, 0],
+    ] {
+        let mut code = prefix.clone();
+        code.extend(load_code(0x402000));
+        code.extend([0x74, 0, 0xc3]);
+        let mut b = with_code(&code);
+        put(&mut b, 0x400, 7);
+        let result = Pe::parse(&b).unwrap().translate();
+        if prefix.is_empty() {
+            assert!(result.unwrap_err().contains("unknown entry flags"));
+        } else {
+            let mut expected = prefix;
+            expected.extend([0xb8, 7, 0, 0, 0, 0x74, 0, 0xc3]);
+            assert_eq!(result.unwrap(), control::translate(&expected).unwrap());
+        }
+    }
+    // Shared helper and a branch join resolve the same data with preserved context.
+    let mut code = vec![
+        0x31, 0xc0, 0xe8, 8, 0, 0, 0, 0xe8, 3, 0, 0, 0, 0x74, 0, 0xc3,
+    ];
+    code.extend(load_code(0x402000));
+    code.push(0xc3);
+    let mut b = with_code(&code);
+    put(&mut b, 0x400, 7);
+    assert!(Pe::parse(&b).unwrap().translate().is_ok());
+}
+#[test]
+fn exact_absolute_load_policy_and_production_negative_addresses() {
+    let code = load_code(0x402000);
+    assert_eq!(
+        control::decode_instruction(&code, 0).unwrap().op,
+        control::Op::LoadAbsolute(0x402000)
+    );
+    for end in 0..5 {
+        assert!(control::decode_instruction(&code[..end], 0).is_err());
+    }
+    for prefix in [
+        0xf0, 0xf2, 0xf3, 0x2e, 0x36, 0x3e, 0x26, 0x64, 0x65, 0x66, 0x67,
+    ] {
+        let mut bytes = vec![prefix];
+        bytes.extend(&code);
+        bytes.push(0xc3);
+        assert!(Pe::parse(&with_code(&bytes)).unwrap().translate().is_err());
+    }
+    for bytes in [
+        &[0xa0, 0, 0x20, 0x40, 0][..],
+        &[0xa3, 0, 0x20, 0x40, 0],
+        &[0x8b, 0x05, 0, 0x20, 0x40, 0],
+        &[0x8b, 0x0d, 0, 0x20, 0x40, 0],
+    ] {
+        assert!(Pe::parse(&with_code(bytes)).unwrap().translate().is_err());
+    }
+    for address in [
+        0x3fffff,
+        0x400000,
+        0x401000,
+        0x401fff,
+        0x40200d,
+        0x402010,
+        0x4021ff,
+        u32::MAX,
+    ] {
+        let mut bytes = load_code(address);
+        bytes.push(0xc3);
+        assert!(Pe::parse(&with_code(&bytes)).unwrap().translate().is_err());
+    }
+}

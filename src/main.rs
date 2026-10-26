@@ -15,6 +15,7 @@ struct Section {
 #[derive(Debug)]
 struct Pe<'a> {
     bytes: &'a [u8],
+    image_base: u32,
     entry_rva: u32,
     sections: Vec<Section>,
 }
@@ -211,8 +212,43 @@ impl<'a> Pe<'a> {
         }
         Ok(Self {
             bytes,
+            image_base,
             entry_rva,
             sections,
+        })
+    }
+
+    fn read_immutable_u32(&self, address: u32) -> Result<u32, String> {
+        address.checked_add(3).ok_or("data address wraps")?;
+        let rva = address
+            .checked_sub(self.image_base)
+            .ok_or("data address below image base")?;
+        let data = self
+            .sections
+            .get(1)
+            .ok_or("immutable data section required")?;
+        if data.characteristics != 0x4000_0040 {
+            return Err("immutable data permissions required".into());
+        }
+        let delta = rva
+            .checked_sub(data.virtual_address)
+            .ok_or("address outside immutable data")?;
+        let end = delta.checked_add(4).ok_or("data read extent overflow")?;
+        if end > data.virtual_size || end > data.raw_size {
+            return Err(
+                "whole data read must be within declared file-backed immutable bytes".into(),
+            );
+        }
+        let offset = data
+            .raw_offset
+            .checked_add(delta)
+            .ok_or("data file offset overflow")?;
+        u32_at(self.bytes, offset as usize)
+    }
+
+    fn translate(&self) -> Result<String, String> {
+        control::translate_with_reads(self.entry_bytes()?, |address| {
+            self.read_immutable_u32(address)
         })
     }
 
@@ -247,7 +283,7 @@ fn run() -> Result<(), String> {
     }
     let bytes = fs::read(&input).map_err(|e| e.to_string())?;
     let pe = Pe::parse(&bytes)?;
-    let source = control::translate(pe.entry_bytes()?)?;
+    let source = pe.translate()?;
     fs::write(Path::new(&output), source).map_err(|e| e.to_string())
 }
 

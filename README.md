@@ -17,9 +17,11 @@ Only use independently authored or appropriately licensed fixtures. See [ARCHITE
 
 The authored `scripts/make_pe32_fixture.py` builds import-free PE32 cases within that profile. CI runs them on a GitHub hosted Windows Server 2025 runner and compares their exit status and empty stdout/stderr with generated Linux ELFs. These are small modern Windows fixtures, not evidence of Windows XP–7 compatibility.
 
+Exact unprefixed `A1 moffs32` loads EAX from four validated immutable data bytes under [SUB510-IMMUTABLE-LOAD.md](SUB510-IMMUTABLE-LOAD.md). Reads require the preferred image base, flat DS and fault-free immutable data; unaligned reads require alignment checking disabled. General memory and rebasing remain unsupported.
+
 ## Status
 
-M0, M1 and the bounded M2 slice are in draft review. CI exercises 53 authored Windows/Linux cases, including taken and untaken outcomes for each supported branch. The [strict iced production adapter](docs/DECODER-INTEGRATION.md) preserves the exact subset and is compared against a handwritten test oracle. The 99% compatibility objective is aspirational and has no measured corpus result.
+M0, M1 and the bounded M2 slice are in draft review. CI exercises 62 authored Windows/Linux cases, including taken and untaken outcomes for each supported branch. The [strict iced production adapter](docs/DECODER-INTEGRATION.md) preserves the exact subset and is compared against a handwritten test oracle. The 99% compatibility objective is aspirational and has no measured corpus result.
 
 ## License
 

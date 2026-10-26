@@ -35,6 +35,7 @@ const LIMIT: usize = 1024;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Op {
     Mov(u32),
+    LoadAbsolute(u32),
     Add(u32),
     Compare(u32),
     PushData(u32),
@@ -91,6 +92,7 @@ pub(super) fn oracle_instruction(bytes: &[u8], at: usize) -> Result<Instruction,
                 5,
             )
         }
+        0xa1 => (Op::LoadAbsolute(super::u32_at(bytes, at + 1)?), 5),
         0x68 => (Op::PushData(super::u32_at(bytes, at + 1)?), 5),
         0x8b if bytes.get(at..at + 4) == Some(&[0x8b, 0x44, 0x24, 4]) => (Op::LoadArgument, 4),
         0x8d if bytes.get(at..at + 4) == Some(&[0x8d, 0x64, 0x24, 4]) => (Op::DropData, 4),
@@ -192,6 +194,7 @@ fn validate(program: &Program) -> Result<u8, String> {
         let instruction = program.get(&pc).ok_or("missing instruction")?;
         pc = instruction.next;
         match instruction.op {
+            Op::LoadAbsolute(_) => return Err("immutable image context required".into()),
             Op::Mov(value) => eax = Some(value),
             Op::PushData(value) => stack.push(value)?,
             Op::LoadArgument => eax = Some(stack.argument()?),
@@ -231,11 +234,33 @@ fn validate(program: &Program) -> Result<u8, String> {
     Err("execution instruction limit exceeded".into())
 }
 
+#[allow(dead_code)] // Byte-only translation intentionally rejects image reads.
 pub fn translate(bytes: &[u8]) -> Result<String, String> {
     emit(&decode(bytes)?)
 }
 
+pub(super) fn translate_with_reads(
+    bytes: &[u8],
+    mut read: impl FnMut(u32) -> Result<u32, String>,
+) -> Result<String, String> {
+    let mut program = decode(bytes)?;
+    // Resolve every decoded path before validation, including untaken branches.
+    // This lowering is valid only for the caller's validated immutable image.
+    for instruction in program.values_mut() {
+        if let Op::LoadAbsolute(address) = instruction.op {
+            instruction.op = Op::Mov(read(address)?);
+        }
+    }
+    emit(&program)
+}
+
 pub(super) fn emit(program: &Program) -> Result<String, String> {
+    if program
+        .values()
+        .any(|ins| matches!(ins.op, Op::LoadAbsolute(_)))
+    {
+        return Err("immutable image context required".into());
+    }
     validate(program)?;
     // Each match arm is a statically decoded instruction, with fixed successors.
     // The entry state is only read after validation proves it initialized on this
@@ -256,6 +281,7 @@ pub(super) fn emit(program: &Program) -> Result<String, String> {
     for (at, instruction) in program {
         writeln!(out, "{at} => {{").unwrap();
         match instruction.op {
+            Op::LoadAbsolute(_) => unreachable!("unresolved image read rejected above"),
             Op::Mov(value) => writeln!(out, "eax = Some({value});").unwrap(),
             Op::PushData(value) => writeln!(out, "stack.push({value}).unwrap();").unwrap(),
             Op::LoadArgument => writeln!(out, "eax = Some(stack.argument().unwrap());").unwrap(),
@@ -292,6 +318,7 @@ pub(super) fn records_for_comparison(bytes: &[u8]) -> Result<Vec<DecodeRecord>, 
         .map(|(&at, ins)| {
             let (name, immediate, target) = match ins.op {
                 Op::Mov(v) => ("mov", Some(v), None),
+                Op::LoadAbsolute(v) => ("load_absolute", Some(v), None),
                 Op::PushData(v) => ("push", Some(v), None),
                 Op::LoadArgument => ("load_argument", None, None),
                 Op::DropData => ("drop_data", None, None),
