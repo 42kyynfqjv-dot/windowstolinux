@@ -37,3 +37,9 @@ Compare primary CRT/Win32 contracts and specify exact output, import/IAT policy,
 calling convention, immutable buffers, clobbers and error/short-write behavior.
 Production integration requires separate bounded gates. General memory, writes,
 dynamic pointers and rebasing remain unsupported; Server2025 is not XP/7 evidence.
+
+SUB-511 selects a conditional one-import legacy CRT `_write` design; see
+[SUB511-OUTPUT-DESIGN.md](SUB511-OUTPUT-DESIGN.md). Original Windows and separate
+native support probes are prerequisites, not translated output evidence. Medium
+contract review precedes bounded SUB-512 production integration. Imports remain
+unsupported in the converter.

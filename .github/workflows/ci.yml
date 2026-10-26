@@ -14,6 +14,24 @@ jobs:
       - run: cargo clippy --all-targets --locked -- -D warnings
       - run: cargo test --locked
       - run: python3 scripts/check_fixture_manifest.py
+      - name: Test-only output contract probe (production must reject)
+        run: |
+          python3 scripts/check_output_probe.py
+          python3 scripts/make_output_probe.py /tmp/output-probe.exe
+          if cargo run --locked -- /tmp/output-probe.exe /tmp/output-probe.rs; then
+            echo 'production unexpectedly accepted design-only imports' >&2
+            exit 1
+          fi
+          rustfmt --check tools/output-probe.rs
+          rustc -D warnings tools/output-probe.rs -o /tmp/output-probe
+          /tmp/output-probe > /tmp/output-probe.stdout 2> /tmp/output-probe.stderr
+          python3 -c "from pathlib import Path; assert Path('/tmp/output-probe.stdout').read_bytes() == b'Hello'; assert Path('/tmp/output-probe.stderr').read_bytes() == b''"
+          set +e
+          /tmp/output-probe > /dev/null 2> /tmp/output-probe-rejected.stderr
+          result=$?
+          set -e
+          test "$result" -eq 125
+          test -s /tmp/output-probe-rejected.stderr
       - name: Translate authored PE32 fixture to ELF
         run: |
           for specification in sum12:12 wrap2:2 xor9:9 zero:0 max255:255 jc_taken:22 jc_clear:11 jnc_taken:22 jnc_clear:11 jz_taken:22 jz_clear:11 jnz_taken:22 jnz_clear:11 mov_flags:22 xor_carry:11 join_taken:1 join_fallthrough:12 same_successor:3 entry_offset:12 cmp_min_max_jl:22 cmp_max_min_jl:11 cmp_equal_jge:22 cmp_less_jge:11 cmp_borrow:22 cmp_no_borrow:22 cmp_zero:22 cmp_nonzero:22 cmp_mov_flags:22 add_signed_overflow:11 add_negative_overflow:22 xor_signed_reset:22 cmp_preserve_eax:42 signed_join_taken:22 signed_join_fallthrough:11 call_helper:12 call_nested:12 call_shared:8 call_flags_preserved:22 call_flags_changed:11 call_unknown_then_init:42 call_wide_internal:0 call_shared_branch:5 stack_argument:12 stack_shared:14 stack_nested:12 stack_shared_join:14 stack_flags_zero:22 stack_flags_carry:22 stack_flags_overflow:11 stack_flags_negative_overflow:22 stack_flags_negative:22 stack_flags_clear:11 two_section_helper:12 data_sum:12 data_unaligned:12 data_last:255 data_wrap:2 data_zero:22 data_carry:22 data_overflow:11 data_negative_overflow:22 data_call:12 data_sum_alt:14; do
@@ -44,6 +62,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Original-only imported output design probe
+        shell: pwsh
+        run: |
+          Write-Host "Output probe OS: $([System.Environment]::OSVersion.VersionString)"
+          $crt = Get-Item "$env:WINDIR\SysWOW64\msvcrt.dll"
+          Write-Host "32-bit CRT file version: $($crt.VersionInfo.FileVersion)"
+          python scripts/check_output_probe.py --execute-windows
+          if ($LASTEXITCODE -ne 0) { throw 'Output design probe failed' }
       - name: Execute authored PE32 fixture on Windows
         shell: pwsh
         run: |

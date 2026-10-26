@@ -177,3 +177,6 @@ mod adapter_tests;
 
 #[cfg(test)]
 mod stack_design;
+
+#[cfg(test)]
+mod output_design;
