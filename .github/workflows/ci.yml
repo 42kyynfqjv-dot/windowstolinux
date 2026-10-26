@@ -20,6 +20,7 @@ jobs:
           python3 scripts/make_output_probe.py /tmp/output-probe.exe
           cargo build --locked
           python3 scripts/check_imported_output.py
+          python3 corpus/check.py
           rustfmt --check tools/output-probe.rs
           rustc -D warnings tools/output-probe.rs -o /tmp/output-probe
           /tmp/output-probe > /tmp/output-probe.stdout 2> /tmp/output-probe.stderr
@@ -70,6 +71,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Output design probe failed' }
           python scripts/check_imported_output.py --windows
           if ($LASTEXITCODE -ne 0) { throw 'Imported output comparison failed' }
+          python corpus/check.py --windows
+          if ($LASTEXITCODE -ne 0) { throw 'Independent corpus failed' }
       - name: Execute authored PE32 fixture on Windows
         shell: pwsh
         run: |

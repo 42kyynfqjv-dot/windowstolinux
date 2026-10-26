@@ -52,3 +52,8 @@ review audits parser/argument/effect state and evidence before further expansion
 SUB-512 medium review adds shared-helper evidence and corrects the malformed-case
 count (35 historical,40 now). Next prioritize independent corpus/differential
 hardening within existing semantics before additional APIs or instructions.
+
+SUB-513 adds32 deterministic independent corpus instances in four composition
+families plus160 adversarial mutations; see corpus/README.md. Original70 native
+comparisons remain separate. Further hardening should follow reproduced failures
+and corpus diversity, before more APIs.
