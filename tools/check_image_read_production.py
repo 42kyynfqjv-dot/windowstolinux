@@ -48,6 +48,16 @@ for length in range(1,len(CODE)):negative.append(('truncate',image(code=CODE[:le
 negative += [('tail',image(code=CODE+b'\xcc'),'code after return'),('exit256',image(data=H('00000000 00010000 00000000')),'exit domain'),('virtualtail',put(image(),424,513),None),('rawalias',put(image(),436,512),None),('entry',put(image(),168,4097),None)]
 # An extra complete optional-directory range must prevent executable eligibility.
 b=put(put(image(),320,8192),324,4);negative.append(('tls',b,'metadata closure'))
+# Complete valid mapping with >1024 otherwise admitted instructions. Preserve
+# literal operand RVAs while moving raw data/relocation backing after larger code.
+code=CODE[:-1]+H('03c1')*1020+b'\xc3'
+b=image();data=bytes(b[1024:1536]);reloc=bytes(b[1536:2048])
+b=b[:512]+bytearray(2560)+data+reloc
+b[512:512+len(code)]=code
+# This authored code uses data RVA2000 rather than frozen RVA3000.
+for pos in (2,7,14):b[512+pos+1]=0x20
+for at,n in [(384,len(code)),(392,2560),(436,3072),(476,3584)]:b=put(b,at,n)
+negative.append(('instruction-cap',b,'instruction cap'))
 converter=Path('target/debug/w2l').resolve()
 with tempfile.TemporaryDirectory() as d:
     p=Path(d);pe=p/'in.exe';rs=p/'native.rs';elf=p/'native'

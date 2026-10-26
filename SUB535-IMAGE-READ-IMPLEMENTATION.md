@@ -43,3 +43,22 @@ applications. Loops/general writes/heap/CRT/PE32+ remain unsupported. Three hist
 Windows timeout causes remain unresolved. Next medium review: private selection/proof
 isolation, exact operand accounting and full-width bounds, shared transitions, fixture
 provenance and rejection evidence. No merge/release.
+
+## Medium production/provenance review
+
+No production defect reproduced. The exact whitelist has no branch/call path; the
+entire code body is decoded before evaluation, every loader field accounted for and
+all data accesses resolved from the same owned envelope. Inspection remains diagnostic.
+The independent seven-native/62-rejection harness was verified, including its special
+high-base unbound-relocation case. Added one missing production CLI resource regression:
+a structurally valid larger code section with >1024 otherwise admitted instructions
+must reach the instruction-cap gate and preserve an existing output file. Current
+counts are seven native cases and63 CLI rejections,77 Rust functions. Earlier62 count
+above records implementation history. No opcode/production behavior changed.
+
+Next highest-value gate is bounded loop design for the frozen held_loop program:
+initialized global bound5 and exit10. It requires memory comparison forms, unsigned
+conditions, scalar INC ECX and a backward edge, with an explicit finite-termination
+proof/resource contract and stable-data ownership. Prototype/design first on Astra
+High; do not simply relax the current straight-line gate. Ordinary CRT/runtime input
+and PE32+ require wider architecture than this remaining custom-entry artifact.
