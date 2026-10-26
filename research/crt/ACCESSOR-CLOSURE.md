@@ -20,6 +20,7 @@ specified; no Microsoft or Wine implementation source is imported or translated.
 | [x86 arguments and returns](https://learn.microsoft.com/en-us/cpp/cpp/argument-passing-and-naming-conventions?view=msvc-170), [cdecl](https://learn.microsoft.com/en-us/cpp/cpp/cdecl?view=msvc-170) | EAX return, preserved ESI/EDI/EBX/EBP and caller argument cleanup for a conforming x86 call | Known ECX/EDX/arithmetic flags, numeric initial ESP, or memory purity |
 | [errno and _doserrno](https://learn.microsoft.com/en-us/cpp/c-runtime-library/errno-doserrno-sys-errlist-and-sys-nerr?view=msvc-170) | Startup initializes these error values; the macros access runtime-managed cells; later calls can change them | An accessor-specific promise that all error or TLS state is preserved |
 | [GetLastError](https://learn.microsoft.com/en-us/windows/win32/api/errhandlingapi/nf-errhandlingapi-getlasterror), [SetLastError](https://learn.microsoft.com/en-us/windows/win32/api/errhandlingapi/nf-errhandlingapi-setlasterror) | Per-thread last-error storage and immediate observation; setting an application-defined value is supported | A general no-write property for functions returning successfully |
+| [WOW64 file redirection](https://learn.microsoft.com/en-us/windows/win32/winprog64/file-system-redirector), [final handle path](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfinalpathnamebyhandlea) | A 32-bit process can resolve System32 to a different file than a 64-bit observer; the final file-handle path identifies the opened file | A path string alone does not identify loaded bytes |
 | [SEH](https://learn.microsoft.com/en-us/cpp/cpp/structured-exception-handling-c-cpp?view=msvc-170) | Faults/unwinding can affect control flow and cleanup | That this accessor raises an exception, or that all its executions are exception-free |
 
 The absence of a listed failure code is not evidence of a hidden failure code. We
@@ -118,10 +119,10 @@ joined worker, and more samples do not supply the missing effect proof.
 
 `check_accessor.py` runs two fresh processes with a15-second bound and no retry,
 retains raw output/exit/command/platform/timing and timeout diagnostics, source and
-probe hashes, unchanged original binding, owner path/on-disk hash/version and
+probe hashes, unchanged original binding, owner path, canonical file-handle path, checked x86 on-disk hash/version and
 observed data-owner base. Linux parses the same downloaded evidence. These are
 four observations from two processes, not four programs or native translations.
-Five test functions cover literal expected records, changed values, malformed
+Six test functions cover literal expected records, changed values, malformed
 records and conservative sticky negative composition using the pre-existing model.
 No new cell implementation or proof issuer is introduced.
 
@@ -132,6 +133,26 @@ python research/crt/check_accessor.py EVIDENCE
 python3 research/crt/check_accessor.py EVIDENCE --compare
 python3 -m unittest discover -s research/crt -p test_accessor_evidence.py -v
 ```
+
+## Provenance correction during artifact review
+
+First candidate40de79c/CI40375232471 passed all five jobs and all four error
+observations matched. Its probe reported `C:\Windows\System32\ucrtbase.dll`.
+The 64-bit harness hashed that string without resolving the 32-bit process's
+WOW64 redirection. That hash cannot be attributed to the mapped x86 owner. The
+same limitation applies to earlier commode metadata collected with that protocol;
+pointer/value observations remain observations, but those hashes are not evidence
+of the loaded x86 implementation. The on-disk version alone does not repair this.
+
+The corrected probe opens the reported module path inside its x86 process after
+measurement and records GetFinalPathNameByHandle's canonical path, closing the
+handle on every subsequent path. The harness hashes that resolved file and rejects
+any PE Machine other than I386. The independent regression distinguishes a
+synthetic x86 header from an x64 header and requires both original/canonical path
+records. This fixes file-selection ambiguity; loaded-code equivalence and possible
+file replacement still belong to the next proof gate. No redirection or security
+setting is modified. Earlier successful CI is retained as historical evidence,
+not substituted for final-head verification.
 
 ## Next finite gate: runtime-specific effect proof feasibility
 

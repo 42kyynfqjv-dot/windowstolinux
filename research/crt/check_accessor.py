@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import platform
+import struct
 import subprocess
 import time
 from pathlib import Path
@@ -17,6 +18,30 @@ EXPECTED = [[0, 0, 0], [33, 87, 0x20001234]]
 
 def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def machine(data):
+    if len(data) < 64 or data[:2] != b'MZ':
+        raise ValueError('owner DOS header')
+    offset = struct.unpack_from('<I', data, 60)[0]
+    if offset + 6 > len(data) or data[offset:offset+4] != b'PE\0\0':
+        raise ValueError('owner PE header')
+    result = struct.unpack_from('<H', data, offset+4)[0]
+    if result != 0x14c:
+        raise ValueError('owner file must be x86, not redirected x64')
+    return result
+
+
+def owner_paths(stderr):
+    lines = stderr.decode().splitlines()
+    if len(lines) != 2:
+        raise ValueError('owner path records')
+    a, b = (line.split('\t') for line in lines)
+    if len(a) != 2 or len(b) != 2 or a[0] != 'OWNER' or b[0] != 'OWNER_FILE':
+        raise ValueError('owner path tags')
+    if not b[1].startswith('\\\\?\\'):
+        raise ValueError('canonical file path required')
+    return a[1], b[1]
 
 
 def parse(stdout):
@@ -78,9 +103,11 @@ def main():
             diagnostic_path.write_text(json.dumps(diagnostic, indent=2) + '\n')
             assert run.returncode == 0, diagnostic
             rows = parse(run.stdout)
-            tag, name = run.stderr.decode().strip().split('\t')
-            owner = Path(name)
-            assert tag == 'OWNER' and owner.name.lower() == 'ucrtbase.dll'
+            name, file_name = owner_paths(run.stderr)
+            owner = Path(file_name)
+            assert owner.name.lower() == 'ucrtbase.dll'
+            owner_data = owner.read_bytes()
+            owner_machine = machine(owner_data)
             env = dict(os.environ, ACCESSOR_OWNER=str(owner))
             version = subprocess.run(['powershell', '-NoProfile', '-Command',
                 '(Get-Item -LiteralPath $env:ACCESSOR_OWNER).VersionInfo.FileVersion'],
@@ -88,7 +115,8 @@ def main():
             assert version.returncode == 0 and version.stdout.strip() and not version.stderr
             observations.append(dict(trial=trial, rows=rows, assessment=assess(rows),
                 stdout_hex=run.stdout.hex(), stderr_hex=run.stderr.hex(), exit=run.returncode,
-                owner_path=str(owner), owner_sha256=sha(owner),
+                owner_path=name, owner_file_path=file_name, owner_machine=owner_machine,
+                owner_sha256=hashlib.sha256(owner_data).hexdigest(),
                 owner_version=version.stdout.decode().strip(), probe_sha256=sha(probe)))
         report.write_text(json.dumps(dict(binding=binding, sources=sources, command=command,
             platform=platform.platform(), expected=EXPECTED, observations=observations,
@@ -101,8 +129,8 @@ def main():
         rows = parse(bytes.fromhex(o['stdout_hex']))
         assert rows == o['rows'] and o['assessment'] == assess(rows)
         assert o['exit'] == 0 and o['probe_sha256'] == sha(probe)
-        assert len(o['owner_sha256']) == 64 and o['owner_version']
-        assert bytes.fromhex(o['stderr_hex']).decode().strip() == 'OWNER\t' + o['owner_path']
+        assert len(o['owner_sha256']) == 64 and o['owner_version'] and o['owner_machine'] == 0x14c
+        assert owner_paths(bytes.fromhex(o['stderr_hex'])) == (o['owner_path'], o['owner_file_path'])
     print('ACCESSOR: two separate processes/four observations; no-go remains; hypotheses:',
           [o['assessment']['error_hypotheses_match'] for o in out['observations']])
 

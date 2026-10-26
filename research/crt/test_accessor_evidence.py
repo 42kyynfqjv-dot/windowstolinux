@@ -1,11 +1,33 @@
 """Independent literal records and negative composition checks; no effect proof."""
 import unittest
+import struct
 
-from check_accessor import assess, parse
+from check_accessor import assess, parse, machine, owner_paths
 from commode_model import Pointer, State, foreign, write_zero
 
 
 class Evidence(unittest.TestCase):
+    def test_owner_file_requires_x86_and_canonical_handle_path(self):
+        # Independent minimal header: this tests metadata provenance, not PE loading.
+        data = bytearray(70)
+        data[:2] = b'MZ'
+        struct.pack_into('<I', data, 60, 64)
+        data[64:68] = b'PE\0\0'
+        struct.pack_into('<H', data, 68, 0x14c)
+        self.assertEqual(machine(data), 0x14c)
+        struct.pack_into('<H', data, 68, 0x8664)
+        with self.assertRaises(ValueError):
+            machine(data)
+        for bad in [b'', data[:69], b'MZ' + b'\xff' * 68]:
+            with self.assertRaises(ValueError):
+                machine(bad)
+        raw = b'OWNER\tC:\\Windows\\System32\\ucrtbase.dll\r\nOWNER_FILE\t\\\\?\\C:\\Windows\\SysWOW64\\ucrtbase.dll\r\n'
+        a, b = owner_paths(raw)
+        self.assertNotEqual(a, b)
+        self.assertIn('SysWOW64', b)
+        with self.assertRaises(ValueError):
+            owner_paths(raw.replace(b'\\\\?\\', b''))
+
     def test_expected_samples_do_not_close_frame(self):
         rows = parse(b'0 1879052288 0 0 0 1879048192\n1 1879052288 33 87 536875572 1879048192\n')
         self.assertEqual(assess(rows), dict(error_hypotheses_match=[True, True],
