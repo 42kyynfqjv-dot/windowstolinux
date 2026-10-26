@@ -46,5 +46,5 @@ def main():
     path=root/'input-model.json'
     if a.compare:assert json.loads(path.read_text(encoding='utf-8'))==json.loads(json.dumps(out))
     else:path.write_text(json.dumps(out,indent=2)+'\n')
-    print('INPUT_MODEL: complete result intervals, guarded reads, production blocked')
+    print('INPUT_MODEL: complete result intervals, guarded reads; model grants no emission authority')
 if __name__=='__main__':main()
