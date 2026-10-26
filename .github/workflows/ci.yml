@@ -188,7 +188,7 @@ jobs:
           $installation = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
           if (!$installation) { throw 'Required existing MSVC toolchain unavailable' }
           $vcvars = Join-Path $installation 'VC\Auxiliary\Build\vcvarsall.bat'
-          cmd /c "`"$vcvars`" x86 && python compiler/measure.py && python compiler/diversity.py"
+          cmd /c "`"$vcvars`" x86 && python compiler/measure.py && python compiler/diversity.py && python compiler/diversity.py --structures"
           if ($LASTEXITCODE -ne 0) { throw 'Compiler measurement failed' }
       - uses: actions/upload-artifact@v4
         if: always()
@@ -217,3 +217,4 @@ jobs:
         run: |
           python3 compiler/check_native.py evidence
           python3 compiler/check_native.py evidence diversity-report.json
+          python3 compiler/check_native.py evidence structures-report.json

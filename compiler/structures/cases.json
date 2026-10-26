@@ -1,0 +1,23 @@
+[
+  {
+    "kind": "variation_nested",
+    "source": "compiler/structures/nested.c",
+    "stdout_hex": "4e6573746564",
+    "stderr_hex": "",
+    "exit": 0
+  },
+  {
+    "kind": "variation_shared",
+    "source": "compiler/structures/shared.c",
+    "stdout_hex": "536861726564",
+    "stderr_hex": "",
+    "exit": 0
+  },
+  {
+    "kind": "variation_conditional",
+    "source": "compiler/structures/conditional.c",
+    "stdout_hex": "4272616e6368",
+    "stderr_hex": "",
+    "exit": 99
+  }
+]

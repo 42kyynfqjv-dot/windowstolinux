@@ -9,7 +9,10 @@ import tempfile
 root=Path(sys.argv[1]).resolve()
 report_name=sys.argv[2] if len(sys.argv)>2 else 'report.json'
 reports=json.loads((root/report_name).read_text())
-cases=json.loads(Path('compiler/variations/cases.json').read_text())
+structural=report_name=='structures-report.json'
+cases=json.loads(Path('compiler/structures/cases.json' if structural else 'compiler/variations/cases.json').read_text())
+if structural:
+    assert {r['kind'] for r in reports}=={c['kind'] for c in cases} and len(reports)==3
 expected={c['kind']:c for c in cases}
 if report_name=='diversity-report.json':
     assert {r['kind'] for r in reports}==set(expected) and len(reports)==4

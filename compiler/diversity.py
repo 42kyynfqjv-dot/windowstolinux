@@ -4,10 +4,14 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 
 repo=Path.cwd()
 root=Path(os.environ['RUNNER_TEMP'])/'w2l-compiler-measurement'
-cases=json.loads((repo/'compiler/variations/cases.json').read_text())
+structural=len(sys.argv)>1
+manifest='compiler/structures/cases.json' if structural else 'compiler/variations/cases.json'
+report_name='structures-report.json' if structural else 'diversity-report.json'
+cases=json.loads((repo/manifest).read_text())
 results=[]
 for case in cases:
     name=case['kind']; source=repo/case['source']; original_source=source.read_bytes()
@@ -39,6 +43,7 @@ for case in cases:
     assert source.read_bytes()==original_source and pe.read_bytes()==before
     print('DIVERSITY_MEASUREMENT '+json.dumps(result))
     results.append(result)
-(root/'diversity-report.json').write_text(json.dumps(results,indent=2)+'\n')
-assert len(results)==4
-assert all(r["conversion_accepted"] for r in results), "SUB-520 requires all four frozen variants"
+(root/report_name).write_text(json.dumps(results,indent=2)+'\n')
+assert len(results)==(3 if structural else 4)
+if not structural:
+    assert all(r["conversion_accepted"] for r in results), "SUB-520 requires all four frozen variants"
