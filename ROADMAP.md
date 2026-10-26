@@ -190,3 +190,9 @@ production still rejects both. A writable section becomes usable only after chec
 full-word provenance, loader-write exclusion and a complete no-write/no-escape proof.
 Next: medium contract review, then separately gated production implementation for
 same-PE exit9. Loops, ordinary CRT, PE32+ and general memory remain separate work.
+
+SUB-535 implements the reviewed private initialized-data read/add/return profile.
+See [SUB535-IMAGE-READ-IMPLEMENTATION.md](SUB535-IMAGE-READ-IMPLEMENTATION.md).
+CI now requires unchanged held_array same-PE Windows/Linux empty output/exit9:
+eleven compiler programs total, five held-out rejections. Next medium production
+and provenance review; loops/general memory/CRT remain separate capability gates.

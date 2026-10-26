@@ -96,3 +96,9 @@ program now requires same-PE Windows/Linux empty output/exit132. Ten compiler
 comparisons,102 authored pairs and18 launches are required; six held-out conversions
 remain rejected. Next is medium production/provenance review of partial values,
 per-flag knowledge, ownership and exact artifact evidence.
+
+SUB-535 adds the bounded initialized image-read profile documented in
+[SUB535-IMAGE-READ-IMPLEMENTATION.md](SUB535-IMAGE-READ-IMPLEMENTATION.md).
+Writable data is read only after complete no-write/relocation proof for a five-form
+straight-line body. The frozen array program joins ten previous compiler comparisons;
+five held-out programs remain unsupported. Conditional execution assumptions apply.

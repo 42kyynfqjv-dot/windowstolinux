@@ -496,3 +496,13 @@ impl Importless {
         crate::linker::translate_importless(self)
     }
 }
+
+mod reads;
+pub(crate) fn translate_importless(bytes: Vec<u8>) -> Result<String> {
+    let image = Envelope::parse(bytes.clone())?;
+    if image.sections.iter().any(|s| s.role.writable()) {
+        reads::translate(image)
+    } else {
+        Importless::parse(bytes)?.translate()
+    }
+}

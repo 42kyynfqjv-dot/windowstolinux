@@ -321,7 +321,7 @@ fn translate_image(bytes: &[u8]) -> Result<String, String> {
         let importless =
             count < 2 || (u32_at(bytes, pe + 24 + 104)? == 0 && u32_at(bytes, pe + 24 + 108)? == 0);
         if importless {
-            return inspection::Importless::parse(bytes.to_vec())?.translate();
+            return inspection::translate_importless(bytes.to_vec());
         }
         return linker::Candidate::parse(bytes)?.translate();
     }

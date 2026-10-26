@@ -1,4 +1,4 @@
 {
-  "accepted": ["held_structure", "held_buffer"],
-  "milestone": "SUB-533"
+  "accepted": ["held_structure", "held_buffer", "held_array"],
+  "milestone": "SUB-535"
 }

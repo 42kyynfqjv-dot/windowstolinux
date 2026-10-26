@@ -22,7 +22,7 @@ for name, expected_exit, expected_code, expected_data, expected_sites in [
     r = next(x for x in records if x['kind']==kind)
     blob = (root/(kind+'.exe')).read_bytes()
     digest = hashlib.sha256(blob).hexdigest()
-    assert digest == r['sha256'] and not r['conversion_accepted']
+    assert digest == r['sha256'] and r['conversion_accepted']==(name=='array')
     assert r['freeze_commit']=='cf042295303dccedb8506564f1e466ef9d353acd'
     assert hashlib.sha256(Path('compiler/heldout/'+name+'.c').read_bytes()).hexdigest()==r['source_sha256']
     assert json.loads((root/(kind+'-baseline.json')).read_text())==dict(stdout_hex='',stderr_hex='',exit=expected_exit,files={})
@@ -60,4 +60,4 @@ for name, expected_exit, expected_code, expected_data, expected_sites in [
             raise AssertionError('loop model must reject')
         outcome='model_rejected=unsupported-effect-at-entry backedge=+25-to-+16'
     assert hashlib.sha256((root/(kind+'.exe')).read_bytes()).hexdigest()==digest
-    print('IMAGE_READ_CONTRACT',kind,digest,outcome,'production_conversion=rejected native_execution=not_added')
+    print('IMAGE_READ_CONTRACT',kind,digest,outcome,'production_conversion='+('accepted native_execution=separate_check' if name=='array' else 'rejected native_execution=not_added'))
