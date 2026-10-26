@@ -42,5 +42,8 @@ class Model(unittest.TestCase):
         # Actual scaled LEAs: 5*(c0-48), then -24, then c1+2*intermediate.
         for first,second,expected in [(48,48,0),(48,55,7),(52,50,42),(57,57,99)]:
             self.assertEqual(second+2*(5*(first-48)-24),expected)
+            edx = (5*(first-48)-24) & 0xffffffff
+            self.assertEqual((second+2*edx) & 0xffffffff, expected)
+        self.assertEqual((5*(48-48)-24) & 0xffffffff, 0xffffffe8)
 
 if __name__=='__main__':unittest.main()

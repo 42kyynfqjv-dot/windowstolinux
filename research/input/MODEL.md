@@ -62,7 +62,11 @@ require separate semantics.
 MOVZX discards the upper half of the DWORD. The digit branch rejects before any
 numeric interpretation of an invalid low half. For two valid digits the measured
 LEAs compute `c1 + 2*(5*(c0-48)-24) = 10*(c0-48)+(c1-48)`, range0..99. No accepted
-arithmetic overflows. All application branches and returns in the exact body are
+final value falls outside0..99, but an intermediate wraps: for c0=48,
+`5*(c0-48)-24` is0xffffffe8 in EDX. The scaled LEAs operate modulo2^32,
+so the identity above holds modulo2^32 and its final residue is the unique
+integer0..99. LEA leaves flags unchanged; later control does not consume flags
+from these arithmetic intermediates. All application branches and returns in the exact body are
 covered by this manual machine-to-model relation. The checker does not derive
 the relation automatically or validate arbitrary changed graphs.
 
