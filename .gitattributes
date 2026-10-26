@@ -7,3 +7,5 @@ research/crt/option-state-vectors.json text eol=lf
 
 # Research source provenance is checked byte-for-byte across hosts.
 research/crt/*onexit*.py text eol=lf
+research/crt/*sentinel*.py text eol=lf
+research/crt/sentinel-vectors.json text eol=lf

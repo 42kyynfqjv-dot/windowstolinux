@@ -1,0 +1,13 @@
+{
+  "description": "Literal independent isolated expectations, not translated ordinary CRT programs",
+  "positive": [
+    {"name":"mode-zero", "flag":0,"mode":0,"policy":1,"eax":3735928559,"known":4294967295,"before":"000102030405060708090a0b0c0d0e0f1011121314151617", "after":"ffffffffffffffffffffffffffffffffffffffffffffffff","result_eax":1,"result_known":4294967295,"flags":68,"af":null,"peak":12},
+    {"name":"mode-one", "flag":0,"mode":1,"policy":1,"eax":4294967295,"known":4294967295,"before":"fedcba98765432100123456789abcdef00000000ffffffff", "after":"ffffffffffffffffffffffffffffffffffffffffffffffff","result_eax":1,"result_known":4294967295,"flags":0,"af":null,"peak":12},
+    {"name":"mode-high-bit", "flag":0,"mode":2147483648,"policy":1,"eax":0,"known":0,"before":"555555555555555555555555555555555555555555555555", "after":"ffffffffffffffffffffffffffffffffffffffffffffffff","result_eax":1,"result_known":4294967295,"flags":0,"af":null,"peak":12},
+    {"name":"mode-max", "flag":0,"mode":4294967295,"policy":1,"eax":0,"known":0,"before":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "after":"ffffffffffffffffffffffffffffffffffffffffffffffff","result_eax":1,"result_known":4294967295,"flags":0,"af":null,"peak":12},
+    {"name":"early-preserve-upper", "flag":1,"mode":0,"policy":0,"eax":3735928559,"known":4294967295,"before":"000102030405060708090a0b0c0d0e0f1011121314151617", "after":"000102030405060708090a0b0c0d0e0f1011121314151617","result_eax":3735928321,"result_known":4294967295,"flags":0,"af":false,"peak":4},
+    {"name":"early-sign", "flag":128,"mode":1,"policy":7,"eax":4294967295,"known":4294967295,"before":"fedcba98765432100123456789abcdef00000000ffffffff", "after":"fedcba98765432100123456789abcdef00000000ffffffff","result_eax":4294967041,"result_known":4294967295,"flags":128,"af":false,"peak":4},
+    {"name":"early-parity", "flag":255,"mode":4294967295,"policy":4294967295,"eax":2147483648,"known":4294967295,"before":"555555555555555555555555555555555555555555555555", "after":"555555555555555555555555555555555555555555555555","result_eax":2147483649,"result_known":4294967295,"flags":132,"af":false,"peak":4},
+    {"name":"early-unknown-upper", "flag":3,"mode":0,"policy":null,"eax":0,"known":0,"before":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "after":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","result_eax":1,"result_known":255,"flags":4,"af":false,"peak":4}
+  ]
+}
