@@ -103,3 +103,10 @@ SUB-520 implements the two measured three-argument forms under
 compiler program must now pass the same hashed-PE conversion/execution gates.
 Next is focused medium review of ownership, unknown cleanup flags, exact forms
 and the final CI artifact provenance; no broader stack or CRT support is implied.
+
+SUB-521 measures three frozen structurally varied C sources. All originals meet
+Windows expectations; all conversions reject. See compiler/structures/RESULTS.md.
+Shared calls expose the smallest next gate: exact two-word ADD ESP cleanup, retaining
+unknown flags and owned Data constraints. Nested tail transfers and conditional
+movement/register support remain separate larger prerequisites. No new translated
+comparison is claimed from the three rejections.
