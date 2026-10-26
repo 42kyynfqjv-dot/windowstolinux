@@ -243,3 +243,52 @@ fn new_forms_preserve_resource_limits() {
     assert!(s.step(Op::CleanupSix, 3, &mut no_output).is_err());
     assert_eq!(s.words, before);
 }
+
+#[test]
+fn two_word_cleanup_ownership_flags_and_balance() {
+    for protected in [
+        Word::Entry,
+        Word::Saved(0, Value::Unknown(1)),
+        Word::Return(0, 9),
+        Word::Data(99, Value::Integer(0)),
+    ] {
+        for position in 0..2 {
+            let mut s = State::new(0);
+            s.words.extend([
+                Word::Data(0, Value::Integer(1)),
+                Word::Data(0, Value::Integer(2)),
+            ]);
+            s.words[position + 1] = protected.clone();
+            let before = s.words.clone();
+            assert!(s.step(Op::CleanupTwo, 3, &mut no_output).is_err());
+            assert_eq!(s.words, before);
+        }
+    }
+    let mut s = State::new(0);
+    assert!(s.step(Op::CleanupTwo, 3, &mut no_output).is_err());
+    s.step(Op::Save, 1, &mut no_output).unwrap();
+    let saved = s.words.clone();
+    s.step(Op::Push(7), 3, &mut no_output).unwrap();
+    s.step(Op::Pointer(0x2060), 8, &mut no_output).unwrap();
+    s.step(Op::Xor, 10, &mut no_output).unwrap();
+    s.step(Op::CleanupTwo, 13, &mut no_output).unwrap();
+    assert_eq!(s.words, saved);
+    assert!(s.flags.is_none());
+    s.step(Op::Mov(0), 18, &mut no_output).unwrap();
+    assert!(s.step(Op::Branch(30), 20, &mut no_output).is_err());
+    s.step(Op::CompareEax(0), 23, &mut no_output).unwrap();
+    assert_eq!(
+        s.step(Op::Branch(30), 25, &mut no_output).unwrap(),
+        Some(30)
+    );
+    s.step(Op::Restore, 26, &mut no_output).unwrap();
+    s.step(Op::Ret, 27, &mut no_output).unwrap();
+    assert!(s.done);
+    let mut s = State::new(0);
+    for _ in 0..3 {
+        s.step(Op::Push(0), 0, &mut no_output).unwrap();
+    }
+    s.step(Op::CleanupTwo, 3, &mut no_output).unwrap();
+    s.step(Op::Mov(0), 8, &mut no_output).unwrap();
+    assert!(s.step(Op::Ret, 9, &mut no_output).is_err());
+}

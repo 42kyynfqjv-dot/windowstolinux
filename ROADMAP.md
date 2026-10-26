@@ -110,3 +110,9 @@ Shared calls expose the smallest next gate: exact two-word ADD ESP cleanup, reta
 unknown flags and owned Data constraints. Nested tail transfers and conditional
 movement/register support remain separate larger prerequisites. No new translated
 comparison is claimed from the three rejections.
+
+SUB-522 implements exact two-word ADD ESP cleanup using the reviewed ownership
+and unknown-flag transition. See SUB522-TWO-WORD-CLEANUP.md. The unchanged shared
+compiler experiment must now translate, while nested and conditional experiments
+retain rejection. Next is medium review of the narrow production/evidence change;
+backward tail transfers, argument stores and multi-register semantics remain open.

@@ -62,6 +62,7 @@ impl Candidate<'_> {
                 0x03 if b.get(..4) == Some(&[0x03, 0x44, 0x24, 12]) => (4, Op::AddThirdArgument),
                 0x33 if byte(1)? == 0xc0 => (2, Op::Xor),
                 0x83 => match byte(1)? {
+                    0xc4 if byte(2)? == 8 => (3, Op::CleanupTwo),
                     0xc4 if byte(2)? == 20 => (3, Op::Cleanup),
                     0xc4 if byte(2)? == 24 => (3, Op::CleanupSix),
                     0xf8 => (3, Op::CompareEax(byte(2)? as i8 as i32 as u32)),

@@ -40,6 +40,7 @@ enum Op {
     AddThirdArgument,
     Cleanup,
     CleanupSix,
+    CleanupTwo,
     CompareEax(u32),
     CompareEsi(u32),
     Xor,
@@ -146,8 +147,12 @@ impl State {
                 self.eax = Value::Integer(0);
                 self.flags = Some(Flags::xor_self())
             }
-            Op::Cleanup | Op::CleanupSix => {
-                let count = if matches!(op, Op::CleanupSix) { 6 } else { 5 };
+            Op::Cleanup | Op::CleanupSix | Op::CleanupTwo => {
+                let count = match op {
+                    Op::CleanupTwo => 2,
+                    Op::CleanupSix => 6,
+                    _ => 5,
+                };
                 let at = self
                     .words
                     .len()

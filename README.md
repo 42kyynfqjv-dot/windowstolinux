@@ -45,3 +45,7 @@ The third argument must be caller-owned scalar data; cleanup removes six owned
 words and invalidates tracked flags. See [SUB520-THIRD-ARGUMENT.md](SUB520-THIRD-ARGUMENT.md).
 The frozen four C variants now have mandatory same-PE Windows/Linux conversion
 and execution gates, in addition to the baseline and102 authored comparisons.
+
+SUB-522 adds exact83 C4 08 two-word cleanup under the same protected-stack and
+unknown-ESP flags contract; see [SUB522-TWO-WORD-CLEANUP.md](SUB522-TWO-WORD-CLEANUP.md).
+The unchanged shared-helper compiler program is now a mandatory acceptance gate.

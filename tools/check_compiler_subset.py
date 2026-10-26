@@ -82,6 +82,12 @@ with tempfile.TemporaryDirectory() as tmp:
     # Check leaf(7,8,9)=24 before the same leaf(1,2,3)=6 at nested depth2.
     # CMP resets the unknown cleanup flags; a wrong first result returns99.
     execute(fixture(nested),6)
+    shared = composed([
+        ('entry',['6a05 6a07',('leaf',),'83c414 83f80c',('bad','jnz'),
+                  '6a04 6a03',('leaf',),'83c408 83f807',('bad','jnz'),'33c0 5e c3']),
+        ('bad',['b863000000 5e c3']),
+        ('leaf',['8b442404 03442408 c3'])])
+    execute(fixture(shared),0)
     new_bad=[]
     # Exact new forms: reject neighboring offsets, encodings, registers/prefixes.
     for at,value in [(0x1d,0x66),(0x1e,0xc0),(0x1f,0x19),(0x1f,0x1c),
@@ -116,6 +122,18 @@ with tempfile.TemporaryDirectory() as tmp:
     # EAX=7 makes JNZ untaken. Its invalid third-argument path must still reject.
     reject_program(['6a03 6a05 6a07',('leaf',),'83c418 5e c3'],
                    '8b442404 83f807 7505 0344240c c3 56 0344240c c3','argument return boundary')
+    # Cleanup2 cannot consume the saved ESI adjacent to one Data word.
+    reject_program(['6a00 6a00 83c414 6a07 83c408 5e c3'],
+                   'b800000000 c3','cleanup ownership')
+    # Cleanup2 cannot remove a callee Return, including on an untaken path.
+    reject_program(['6a05 6a07',('leaf',),'83c414 5e c3'],
+                   'b800000000 83f800 7501 c3 6a00 83c408 c3','cleanup ownership')
+    reject_program(['6a05 6a07',('leaf',),'83c414 6a04 6a03',('leaf',),
+                    '83c408 b800000000 7502 5e c3 5e c3'],
+                   '8b442404 03442408 c3','unknown branch flags')
+    # An extra leftover Data word prevents the epilogue from restoring ESI.
+    reject_program(['6a05 6a07',('leaf',),'83c414 6a00 6a04 6a03',('leaf',),
+                    '83c408 5e c3'],'8b442404 03442408 c3','saved ESI ownership')
     for program,diagnostic in new_bad:
         rs.write_text('preserve')
         p=convert(fixture(program))
@@ -126,4 +144,4 @@ with tempfile.TemporaryDirectory() as tmp:
         b=fixture(third);struct.pack_into('<I',b,0x180,end)
         rs.write_text('preserve');p=convert(b)
         assert p.returncode==1 and rs.read_text()=='preserve',p.stderr
-print(f'compiler-shaped production: {len(positives)+2} deterministic native cases, {len(bads)} existing-policy rejection slots and {len(new_bad)} new rejections plus 5 executable-bound truncations; separate from unchanged MSVC evidence')
+print(f'compiler-shaped production: {len(positives)+3} deterministic native cases, {len(bads)} existing-policy rejection slots and {len(new_bad)} new rejections plus 5 executable-bound truncations; separate from unchanged MSVC evidence')

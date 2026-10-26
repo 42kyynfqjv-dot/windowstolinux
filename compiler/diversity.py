@@ -47,3 +47,6 @@ for case in cases:
 assert len(results)==(3 if structural else 4)
 if not structural:
     assert all(r["conversion_accepted"] for r in results), "SUB-520 requires all four frozen variants"
+
+if structural:
+    assert {r['kind'] for r in results if r['conversion_accepted']} == {'variation_shared'}, 'SUB-522 requires shared acceptance, nested/conditional rejection'
