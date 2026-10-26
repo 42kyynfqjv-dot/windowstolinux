@@ -233,3 +233,10 @@ Next: design an independently authored freestanding public-API runtime-input tar
 with explicit Windows/Linux input mapping, frozen source/flags and independent
 oracles. This advances runtime-input validation without skipping the held-out CRT
 program's startup. No production capability changes in this decision.
+
+SUB-549 selects a separate [bounded environment-input contract](research/input/CONTRACT.md)
+using GetEnvironmentVariableW after declining raw command-line reconstruction.
+Fifteen frozen expected vectors compare an authored freestanding Windows program
+with a separate native Rust prototype; these are not converter comparisons.
+Production rejection remains mandatory. Next review and measured instruction/
+unknown-state/owned-buffer prerequisites precede any implementation.
