@@ -1,8 +1,6 @@
 /* Independently authored WindowsToLinux fixture, MIT OR Apache-2.0. */
 #ifdef FREESTANDING
-__declspec(dllimport) int __cdecl write(int, const void *, unsigned int);
-/* The authored import library maps COFF _write to DLL export _write. */
-#define _write write
+__declspec(dllimport) int __cdecl _write(int, const void *, unsigned int);
 #else
 #include <io.h>
 #endif

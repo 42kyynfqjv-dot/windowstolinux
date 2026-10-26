@@ -7,10 +7,10 @@ exit0 is specified independently of compiler/converter output. No binary rewriti
 Two experiments use existing official Microsoft MSVC tools on windows-latest:
 
 - Freestanding/custom-entry: /O2 /W4 /DFREESTANDING /GS- /Zl, with /NODEFAULTLIB,
-  /ENTRY:_entry@0 and an import library generated from our msvcrt.def. /GS- avoids
+  /ENTRY:entry@0 and an import library generated from our msvcrt.def. /GS- avoids
   a CRT cookie initialization dependency in this tiny custom-entry experiment;
   /Zl and /NODEFAULTLIB explicitly exclude ordinary CRT startup. The C identifier
-  write uses x86 COFF decoration to reference the DLL's _write export. This is a
+  _write is resolved through the import library's x86 COFF decoration. This is a
   controlled legacy-import experiment, not a normal CRT-linked application.
 - Ordinary CRT main: same program /O2 /W4 /MD, default CRT startup and defaults
   for security settings. It measures the much larger real startup/import surface.

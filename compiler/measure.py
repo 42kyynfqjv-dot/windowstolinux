@@ -28,7 +28,7 @@ for kind in ['freestanding','crt']:
     else: flags+=['/MD']
     command(['cl']+flags,kind+'-compile')
     link=['link','/nologo','/machine:x86','/subsystem:console',obj,'/out:'+exe]
-    if kind=='freestanding': link+=['/nodefaultlib','/entry:_entry@0','legacy.lib']
+    if kind=='freestanding': link+=['/nodefaultlib','/entry:entry@0','legacy.lib']
     command(link,kind+'-link')
     command(['dumpbin','/headers','/imports',exe],kind+'-headers-imports')
     # Disassemble only our freestanding authored program, not linked CRT startup code.
