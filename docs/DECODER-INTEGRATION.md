@@ -75,3 +75,16 @@ notices and exact final CI evidence. Then define a bounded M2 arithmetic extensi
 with independent flag truth tables and Windows/Linux fixtures; do not combine it
 with memory, APIs or general PE loading. Production integration alone does not
 complete the wider M2 milestone.
+
+## Post-integration review
+
+Source inspection confirms production decode selects iced while the retained
+handwritten oracle is cfg(test) only; the harness compares those distinct paths.
+Cargo's locked feature graph confirms only std/decoder plus lazy_static in the
+converter. Root notices include both exact license texts. The emitter and flag
+module have no integration diff; pre/post CLI source equality and final CI provide
+the bounded emission evidence. No production regression was reproduced.
+
+The roadmap now prioritizes bounded call/return structure (SUB-506) over another
+immediate arithmetic opcode, with a separate Astra High soundness/design gate.
+See ROADMAP.md; this review adds no execution support.
