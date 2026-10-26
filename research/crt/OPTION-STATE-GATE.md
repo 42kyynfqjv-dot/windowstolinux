@@ -17,7 +17,7 @@ inside data, protected callback/return/cookie/onexit-state overlap and unresolve
 Addresses may vary only if all provenance and region checks are repeated.
 
 Model bytes, initialization and ownership for the full ranges before any effect.
-Little-endian low dword1 becomes old|24; low dword2 becomes old|2. Adjacent high dwords
+Little-endian low dword1 becomes old|0x24; low dword2 becomes old|0x02. Adjacent high dwords
 are read then written back unchanged; do not erase those reads/writes or grant access
 to uninitialized high bytes. EAX returns0 from callback10e0; final tracked CF/OF=0,
 ZF=1,SF=0 come from its XOR EAX,EAX. OR and intervening MOV/CALL/RET flag effects must

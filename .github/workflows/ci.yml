@@ -14,6 +14,7 @@ jobs:
       - run: rustfmt --check src/linker/state.rs src/inspection/read_state.rs src/inspection/loop_state.rs
       - run: cargo clippy --all-targets --locked -- -D warnings
       - run: cargo test --locked
+      - run: cargo test --locked --example crt_option_state
       - run: cargo build --locked --example crt_graph
       - run: python3 research/crt/check_graph.py
       - run: python3 -m unittest discover -s research/crt -p test_initializer_model.py -v
@@ -221,7 +222,7 @@ jobs:
           $installation = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
           if (!$installation) { throw 'Required existing MSVC toolchain unavailable' }
           $vcvars = Join-Path $installation 'VC\Auxiliary\Build\vcvarsall.bat'
-          cmd /c "`"$vcvars`" x86 && python compiler/measure.py && python compiler/diversity.py && python compiler/diversity.py --structures && python compiler/heldout/measure.py x86 && python research/crt/probe.py"
+          cmd /c "`"$vcvars`" x86 && python compiler/measure.py && python compiler/diversity.py && python compiler/diversity.py --structures && python compiler/heldout/measure.py x86 && python research/crt/probe.py && python research/crt/check_option_state.py --windows-probe"
           if ($LASTEXITCODE -ne 0) { throw 'Compiler measurement failed' }
           cmd /c "`"$vcvars`" x64 && python compiler/heldout/measure.py x64"
           if ($LASTEXITCODE -ne 0) { throw 'Held-out x64 measurement failed' }
@@ -249,6 +250,7 @@ jobs:
         with:
           name: compiler-measurement-reports
           path: |
+            ${{ runner.temp }}/w2l-compiler-measurement/crt_option_probe.exe
             ${{ runner.temp }}/w2l-compiler-measurement/freestanding.exe
             ${{ runner.temp }}/w2l-compiler-measurement/variation_*.exe
             ${{ runner.temp }}/w2l-compiler-measurement/held_*.exe
@@ -283,3 +285,4 @@ jobs:
           cargo run --locked --example crt_graph -- evidence/held_crt.exe > /tmp/crt-graph.json
           python3 -c 'import json; assert json.load(open("/tmp/crt-graph.json")) == json.load(open("evidence/crt-graph.json"))'
           python3 research/crt/callback_inventory.py evidence --compare
+          python3 research/crt/check_option_state.py evidence --compare

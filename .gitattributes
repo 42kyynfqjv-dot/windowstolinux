@@ -2,3 +2,5 @@
 *.rs text eol=lf
 # Compiler fixture provenance compares the actual compiled source bytes.
 *.c text eol=lf
+# Cross-host option vectors are hashed as exact source bytes.
+research/crt/option-state-vectors.json text eol=lf
