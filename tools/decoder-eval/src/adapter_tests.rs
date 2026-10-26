@@ -1,8 +1,8 @@
 use crate::{adapter, control};
 
 fn parity(bytes: &[u8]) -> bool {
-    let original = control::decode(bytes);
-    let trial = control::decode_with(bytes, adapter::decode_instruction);
+    let original = control::decode_with(bytes, control::oracle_instruction);
+    let trial = control::decode(bytes);
     match (original, trial) {
         (Ok(original), Ok(trial)) => {
             assert_eq!(trial, original, "IR differs for {bytes:02x?}");
@@ -64,7 +64,7 @@ fn all_first_two_bytes_have_instruction_acceptance_and_ir_parity() {
                 bytes[at] = first;
                 bytes[at + 1] = second;
                 match (
-                    control::decode_instruction(&bytes, at),
+                    control::oracle_instruction(&bytes, at),
                     adapter::decode_instruction(&bytes, at),
                 ) {
                     (Ok(a), Ok(b)) => assert_eq!(a, b),

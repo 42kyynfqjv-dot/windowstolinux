@@ -1,8 +1,8 @@
-//! SUB-504 test-only trial. Library validity is necessary but never sufficient.
-use crate::control::{Condition, Instruction, Op};
+//! Strict production policy over iced decoding; library validity alone is insufficient.
+use super::{Condition, Instruction, Op};
 use iced_x86::{Code, Decoder, DecoderOptions, OpKind, Register};
 
-pub(crate) fn decode_instruction(bytes: &[u8], at: usize) -> Result<Instruction, String> {
+pub(super) fn decode_instruction(bytes: &[u8], at: usize) -> Result<Instruction, String> {
     let tail = bytes.get(at..).ok_or("offset outside executable bytes")?;
     let opcode = *tail.first().ok_or("control flow leaves executable bytes")?;
     // A whitelist on the FIRST byte rejects every legacy prefix, including those
@@ -21,7 +21,7 @@ pub(crate) fn decode_instruction(bytes: &[u8], at: usize) -> Result<Instruction,
         0x7d => (Code::Jge_rel8_32, 2),
         _ => return Err("encoding outside exact subset".into()),
     };
-    let ip = u32::try_from(at).map_err(|_| "offset exceeds 32-bit trial domain")?;
+    let ip = u32::try_from(at).map_err(|_| "offset exceeds 32-bit decoder domain")?;
     let mut decoder = Decoder::with_ip(32, tail, u64::from(ip), DecoderOptions::NONE);
     let decoded = decoder.decode();
     if decoded.is_invalid() {

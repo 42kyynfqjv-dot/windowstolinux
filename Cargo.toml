@@ -12,3 +12,6 @@ description = "Experimental deterministic PE-to-Rust static recompiler"
 [[bin]]
 name = "w2l"
 path = "src/main.rs"
+
+[dependencies]
+iced-x86 = { version = "=1.21.0", default-features = false, features = ["std", "decoder"] }

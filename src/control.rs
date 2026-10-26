@@ -53,7 +53,18 @@ pub(super) fn decode(bytes: &[u8]) -> Result<Program, String> {
     decode_with(bytes, decode_instruction)
 }
 
+#[path = "control/decoder.rs"]
+mod decoder;
+
 pub(super) fn decode_instruction(bytes: &[u8], at: usize) -> Result<Instruction, String> {
+    decoder::decode_instruction(bytes, at)
+        .map_err(|error| format!("decode at entry offset {at}: {error}"))
+}
+
+// Frozen handwritten subset decoder: regression oracle only, never a fallback.
+#[cfg(test)]
+#[allow(dead_code)]
+pub(super) fn oracle_instruction(bytes: &[u8], at: usize) -> Result<Instruction, String> {
     let opcode = *bytes
         .get(at)
         .ok_or("control flow leaves executable bytes")?;
@@ -256,6 +267,25 @@ pub(super) fn exit_for_test(bytes: &[u8]) -> Result<u8, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn production_decode_errors_report_offset_and_reason() {
+        for (bytes, reason) in [
+            (
+                vec![0x31, 0xc0, 0x66, 0xc3],
+                "encoding outside exact subset",
+            ),
+            (
+                vec![0x31, 0xc0, 0xb8, 1],
+                "invalid or truncated instruction",
+            ),
+            (vec![0x31, 0xc0, 0x74, 0xfe], "backward branches"),
+        ] {
+            let error = translate(&bytes).unwrap_err();
+            assert!(error.contains("entry offset 2"), "{error}");
+            assert!(error.contains(reason), "{error}");
+        }
+    }
+
     #[test]
     fn arithmetic_flags_match_wide_integer_oracle() {
         let values = [

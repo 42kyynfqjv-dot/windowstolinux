@@ -125,6 +125,6 @@ mod evaluation {
 }
 
 #[cfg(test)]
-mod adapter;
+use control as adapter;
 #[cfg(test)]
 mod adapter_tests;

@@ -1,5 +1,7 @@
 # SUB-504 gated iced adapter trial
 
+Historical evaluation/trial record. Current production integration and test counts are documented in [DECODER-INTEGRATION.md](DECODER-INTEGRATION.md).
+
 The trial preserves the existing instruction subset. It is compiled only by tests
 in the isolated `tools/decoder-eval` workspace. The root CLI still selects the
 handwritten decoder and has no new dependency or runtime switch. This is evidence

@@ -1,5 +1,7 @@
 # SUB-503 decoder evaluation
 
+Historical evaluation/trial record. Current production integration and test counts are documented in [DECODER-INTEGRATION.md](DECODER-INTEGRATION.md).
+
 Decision: recommend iced-x86 1.21.0 for a bounded, separately reviewed adapter trial. Keep the current production decoder until that adapter preserves the exact accepted subset and rejection policy. This evaluation adds no production dependency or execution semantics. Both candidates matched the present small corpus; the recommendation is about integration fit, not a broad correctness ranking.
 
 ## Reproduction and measured evidence

@@ -11,8 +11,8 @@ jobs:
         with:
           components: clippy, rustfmt
       - run: cargo fmt --check
-      - run: cargo clippy --all-targets -- -D warnings
-      - run: cargo test
+      - run: cargo clippy --all-targets --locked -- -D warnings
+      - run: cargo test --locked
       - run: python3 scripts/check_fixture_manifest.py
       - name: Translate authored PE32 fixture to ELF
         run: |
@@ -20,8 +20,8 @@ jobs:
             case_name=${specification%:*}
             expected=${specification#*:}
             python3 scripts/make_pe32_fixture.py "$case_name" /tmp/w2l-fixture.exe
-            cargo run -- /tmp/w2l-fixture.exe /tmp/w2l-translated.rs
-            cargo run -- /tmp/w2l-fixture.exe /tmp/w2l-translated-again.rs
+            cargo run --locked -- /tmp/w2l-fixture.exe /tmp/w2l-translated.rs
+            cargo run --locked -- /tmp/w2l-fixture.exe /tmp/w2l-translated-again.rs
             cmp /tmp/w2l-translated.rs /tmp/w2l-translated-again.rs
             rustc -D warnings /tmp/w2l-translated.rs -o /tmp/w2l-translated
             set +e
@@ -33,7 +33,7 @@ jobs:
             test ! -s /tmp/w2l-translated.stderr
           done
           python3 scripts/make_pe32_fixture.py out_of_range /tmp/w2l-fixture.exe
-          if cargo run -- /tmp/w2l-fixture.exe /tmp/w2l-rejected.rs; then
+          if cargo run --locked -- /tmp/w2l-fixture.exe /tmp/w2l-rejected.rs; then
             echo 'converter unexpectedly accepted exit status 256' >&2
             exit 1
           fi
