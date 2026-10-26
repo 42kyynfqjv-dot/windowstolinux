@@ -37,7 +37,9 @@ enum Op {
     Mov(u32),
     Argument,
     AddArgument,
+    AddThirdArgument,
     Cleanup,
+    CleanupSix,
     CompareEax(u32),
     CompareEsi(u32),
     Xor,
@@ -125,8 +127,13 @@ impl State {
             Op::Mov(v) => self.eax = Value::Integer(v),
             Op::MoveEsi => self.esi = self.eax,
             Op::Argument => self.eax = self.argument(1)?,
-            Op::AddArgument => {
-                let (v, f) = Flags::add(self.eax.integer()?, self.argument(2)?.integer()?);
+            Op::AddArgument | Op::AddThirdArgument => {
+                let index = if matches!(op, Op::AddThirdArgument) {
+                    3
+                } else {
+                    2
+                };
+                let (v, f) = Flags::add(self.eax.integer()?, self.argument(index)?.integer()?);
                 self.eax = Value::Integer(v);
                 self.flags = Some(f)
             }
@@ -139,8 +146,13 @@ impl State {
                 self.eax = Value::Integer(0);
                 self.flags = Some(Flags::xor_self())
             }
-            Op::Cleanup => {
-                let at = self.words.len().checked_sub(5).ok_or("cleanup bounds")?;
+            Op::Cleanup | Op::CleanupSix => {
+                let count = if matches!(op, Op::CleanupSix) { 6 } else { 5 };
+                let at = self
+                    .words
+                    .len()
+                    .checked_sub(count)
+                    .ok_or("cleanup bounds")?;
                 if !self.words[at..]
                     .iter()
                     .all(|w| matches!(w,Word::Data(o,_) if *o==self.owner()))

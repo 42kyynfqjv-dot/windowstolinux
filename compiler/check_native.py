@@ -13,6 +13,7 @@ cases=json.loads(Path('compiler/variations/cases.json').read_text())
 expected={c['kind']:c for c in cases}
 if report_name=='diversity-report.json':
     assert {r['kind'] for r in reports}==set(expected) and len(reports)==4
+    assert all(r['conversion_accepted'] for r in reports), 'SUB-520 requires all four frozen variants'
 converter=Path('target/debug/w2l').resolve()
 def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()

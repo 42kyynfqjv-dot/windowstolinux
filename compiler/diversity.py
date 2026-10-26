@@ -41,3 +41,4 @@ for case in cases:
     results.append(result)
 (root/'diversity-report.json').write_text(json.dumps(results,indent=2)+'\n')
 assert len(results)==4
+assert all(r["conversion_accepted"] for r in results), "SUB-520 requires all four frozen variants"

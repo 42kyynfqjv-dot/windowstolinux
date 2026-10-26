@@ -97,3 +97,9 @@ baseline structure and pass cross-platform conversion/execution; one three-argum
 helper rejects. See [compiler/variations/RESULTS.md](compiler/variations/RESULTS.md).
 The next bounded semantic gate is third caller-owned argument ADD and six-word
 cleanup, with Astra High contract/core work before medium review.
+
+SUB-520 implements the two measured three-argument forms under
+[SUB520-THIRD-ARGUMENT.md](SUB520-THIRD-ARGUMENT.md). The unchanged three-argument
+compiler program must now pass the same hashed-PE conversion/execution gates.
+Next is focused medium review of ownership, unknown cleanup flags, exact forms
+and the final CI artifact provenance; no broader stack or CRT support is implied.

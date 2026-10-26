@@ -31,11 +31,17 @@ SUB-512 adds one strict three-section `msvcrt.dll!_write` profile with exact FF1
 call, immutable printable ASCII1..64 and regular-file/full-success assumptions.
 See [SUB512-OUTPUT.md](SUB512-OUTPUT.md) for validation, runtime failures and limits.
 
-Linker-produced minimal MSVC images now have bounded structural intake, with
-emission deliberately gated pending typed pointer/ABI support. See
+Linker-produced minimal MSVC images have bounded structural intake and typed
+all-path validation before emission. See
 [SUB516-INTAKE.md](SUB516-INTAKE.md) for exact limits and instrumented load-base evidence.
 
 SUB-518 replaces the linker-image emission block with typed all-path validation
 for the exact observed minimal MSVC program. See [SUB518-IMPLEMENTATION.md](SUB518-IMPLEMENTATION.md)
 for supported forms, conditional ABI assumptions and unchanged-compiler CI gate.
 Ordinary CRT applications remain unsupported.
+
+SUB-520 adds exactly ADD EAX,[ESP+12] and ADD ESP,24 to that linker profile.
+The third argument must be caller-owned scalar data; cleanup removes six owned
+words and invalidates tracked flags. See [SUB520-THIRD-ARGUMENT.md](SUB520-THIRD-ARGUMENT.md).
+The frozen four C variants now have mandatory same-PE Windows/Linux conversion
+and execution gates, in addition to the baseline and102 authored comparisons.
