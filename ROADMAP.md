@@ -240,3 +240,9 @@ Seventeen frozen expected vectors compare an authored freestanding Windows progr
 with a separate native Rust prototype; these are not converter comparisons.
 Production rejection remains mandatory. Next review and measured instruction/
 unknown-state/owned-buffer prerequisites precede any implementation.
+
+SUB-550 adds a [conditional unknown-input model](research/input/MODEL.md) for the
+exact frozen artifact: complete return intervals, guarded initialized bytes and
+16-bit digit refinement. Eight independent test functions and artifact binding
+add model evidence, no production eligibility. Native bounded input acquisition
+and private production ownership/path-state integration remain explicit gates.

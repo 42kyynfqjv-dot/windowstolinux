@@ -16,6 +16,7 @@ jobs:
       - run: cargo test --locked
       - run: python3 -m unittest discover -s research/crt -p test_runtime_identity.py -v
       - run: python3 -m unittest discover -s research/crt -p test_composition_audit.py -v
+      - run: python3 -m unittest discover -s research/input -p test_model.py -v
       - run: cargo test --locked --example runtime_boundary
       - run: cargo test --locked --example crt_external_cell
       - run: cargo test --locked --example crt_sentinel
@@ -253,6 +254,8 @@ jobs:
         run: python research/crt/callback_inventory.py "${{ runner.temp }}/w2l-compiler-measurement"
       - name: Audit original startup composition prerequisites
         run: python research/crt/composition_audit.py "${{ runner.temp }}/w2l-compiler-measurement"
+      - name: Bind guarded runtime-input model to frozen compiler artifact
+        run: python research/input/check_model.py "${{ runner.temp }}/w2l-compiler-measurement"
       - name: Inventory ordinary CRT dependencies without emission
         run: python research/crt/inventory.py "${{ runner.temp }}/w2l-compiler-measurement"
       - uses: actions/upload-artifact@v4
@@ -311,3 +314,4 @@ jobs:
           python3 research/crt/check_runtime.py evidence --compare
           python3 research/crt/composition_audit.py evidence --compare
           python3 research/input/check.py evidence --compare
+          python3 research/input/check_model.py evidence --compare
