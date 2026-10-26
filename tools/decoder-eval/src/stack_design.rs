@@ -15,6 +15,7 @@ enum Slot {
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Model {
     slots: Vec<Slot>,
+    halted: bool,
     frame: usize,
     serial: usize,
     depth: usize,
@@ -25,6 +26,7 @@ impl Model {
     fn new() -> Self {
         Self {
             slots: vec![Slot::Entry],
+            halted: false,
             frame: 0,
             serial: 0,
             depth: 0,
@@ -32,8 +34,16 @@ impl Model {
             flags: None,
         }
     }
+    fn active(&self) -> Result<(), &'static str> {
+        if self.halted {
+            Err("execution already terminated")
+        } else {
+            Ok(())
+        }
+    }
     fn room(&self) -> Result<(), &'static str> {
-        if self.slots.len() == 129 {
+        self.active()?;
+        if self.slots.len() >= 129 {
             Err("stack capacity")
         } else {
             Ok(())
@@ -49,7 +59,7 @@ impl Model {
     }
     fn call(&mut self, pc: usize) -> Result<(), &'static str> {
         self.room()?;
-        if self.depth == 32 {
+        if self.depth >= 32 {
             return Err("call depth");
         }
         self.serial += 1;
@@ -63,6 +73,7 @@ impl Model {
         Ok(())
     }
     fn load_argument(&mut self) -> Result<(), &'static str> {
+        self.active()?;
         match self.slots.as_slice() {
             [.., Slot::Data { owner, value }, Slot::Return { frame, parent, .. }]
                 if *frame == self.frame && owner == parent =>
@@ -74,6 +85,7 @@ impl Model {
         }
     }
     fn cleanup(&mut self) -> Result<(), &'static str> {
+        self.active()?;
         match self.slots.last() {
             Some(Slot::Data { owner, .. }) if *owner == self.frame => {
                 self.slots.pop();
@@ -83,6 +95,7 @@ impl Model {
         }
     }
     fn ret(&mut self) -> Result<Option<usize>, &'static str> {
+        self.active()?;
         match self.slots.last().cloned() {
             Some(Slot::Return { frame, parent, pc }) if frame == self.frame => {
                 self.slots.pop();
@@ -94,7 +107,8 @@ impl Model {
                 if self.eax.is_none_or(|v| v > 255) {
                     return Err("entry exit unknown/out of range");
                 }
-                Ok(None) // Terminal; never invoke another transition after this.
+                self.halted = true;
+                Ok(None)
             }
             _ => Err("unbalanced return"),
         }
@@ -227,5 +241,67 @@ fn instruction_metadata_and_esp_flag_counterexample() {
         &[0x8d, 0x64, 0x24, 4],
     ] {
         assert!(crate::control::decode_instruction(bytes, 0).is_err());
+    }
+}
+
+#[test]
+fn terminal_ownership_and_address_correspondence() {
+    let mut m = Model::new();
+    m.eax = Some(256);
+    let before = m.clone();
+    assert!(m.ret().is_err());
+    assert_eq!(m, before);
+    m.eax = Some(12);
+    assert_eq!(m.ret(), Ok(None));
+    let terminal = m.clone();
+    assert!(m.push(7).is_err());
+    assert!(m.call(10).is_err());
+    assert!(m.load_argument().is_err());
+    assert!(m.cleanup().is_err());
+    assert!(m.ret().is_err());
+    assert_eq!(m, terminal);
+
+    // Invariant defenses: foreign-owned data cannot be discarded or read.
+    let mut foreign = Model::new();
+    foreign.slots.push(Slot::Data {
+        owner: 99,
+        value: 7,
+    });
+    let before = foreign.clone();
+    assert!(foreign.cleanup().is_err());
+    assert_eq!(foreign, before);
+    foreign.call(10).unwrap();
+    let before = foreign.clone();
+    assert!(foreign.load_argument().is_err());
+    assert_eq!(foreign, before);
+
+    // Independent concrete byte layout for PUSH immediate / CALL / MOV / RET /
+    // LEA cleanup. Concrete addresses exist only in this test oracle.
+    for incoming in [0x1000u32, 0x7ffffffc, 0x80000000] {
+        let mut memory = std::collections::BTreeMap::new();
+        let mut esp = incoming;
+        esp -= 4;
+        for (i, byte) in 0x12345678u32.to_le_bytes().into_iter().enumerate() {
+            memory.insert(esp + i as u32, byte);
+        }
+        esp -= 4;
+        for (i, byte) in 0x00abcde0u32.to_le_bytes().into_iter().enumerate() {
+            memory.insert(esp + i as u32, byte);
+        }
+        let loaded = u32::from_le_bytes(std::array::from_fn(|i| memory[&(esp + 4 + i as u32)]));
+        let mut abstract_state = Model::new();
+        abstract_state.push(0x12345678).unwrap();
+        abstract_state.call(10).unwrap();
+        abstract_state.load_argument().unwrap();
+        assert_eq!(loaded, 0x12345678);
+        assert_eq!(abstract_state.eax, Some(loaded));
+        assert_eq!(esp, incoming - 4 * (abstract_state.slots.len() as u32 - 1));
+        esp += 4;
+        assert_eq!(abstract_state.ret(), Ok(Some(10)));
+        assert_eq!(esp, incoming - 4 * (abstract_state.slots.len() as u32 - 1));
+        esp += 4;
+        abstract_state.cleanup().unwrap();
+        assert_eq!(esp, incoming);
+        assert_eq!(abstract_state.slots, vec![Slot::Entry]);
     }
 }

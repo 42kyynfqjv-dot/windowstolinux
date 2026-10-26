@@ -119,9 +119,11 @@ must be tested independently; many encodings are valid x86 outside this policy.
 
 ## Prototype evidence and implementation gates
 
-`tools/decoder-eval/src/stack_design.rs` is cfg(test) only. Five functions exercise
+`tools/decoder-eval/src/stack_design.rs` is cfg(test) only. Six functions exercise
 literal ownership snapshots, nested/repeated calls, rejection without mutation,
-capacity/depth limits and iced metadata/flag effects. It is a state-machine sketch,
+capacity/depth limits and iced metadata/flag effects. The review adds an enforced terminal state, wrong-owner failure checks and an
+independent concrete byte-layout oracle at three aligned starting ESP values.
+It is a state-machine sketch,
 not a lifter or emitter. Tests explicitly confirm production rejects all three
 candidate new forms. There is no new Windows baseline or generated ELF for this
 contract yet. Existing42 Windows/Linux cases validate only existing production.
@@ -149,3 +151,20 @@ scoped engineering turn should implement only after the contract review confirms
 these gates; user keep-going authorization already covers ordinary project work.
 Astra High is recommended for that validator/emitter stack replacement, with
 medium verification afterward. Wider memory/API/ABI support remains separate.
+
+## Medium review outcome
+
+The terminal-state documentation gap in the prototype is fixed: successful entry
+RET halts the model and every later transition fails without mutation. Invalid
+entry EAX and wrong-owner load/cleanup preserve state. A byte-addressed test oracle
+checks little-endian data/return placement and ESP-relative load, internal return
+and cleanup at three starting ESP values. This illustrates the conditional address
+relation; it does not prove valid Windows storage or model native stack faults.
+
+Implementation is ready for the exact SUB-508 slice after this review. No unresolved
+architecture blocker was identified within the stated native-environment domain.
+POP and return-address observation remain excluded; LEA cleanup preserves unknown
+flags and avoids the unmodeled absolute-ESP ADD flag effects. Full decoding,
+branch joins and actual parameterized Windows/ELF execution remain implementation
+gates, not claims made by this straight-line state prototype. Keep the six model
+tests as a test-only specification; do not mistake them for production coverage.
