@@ -16,7 +16,7 @@ jobs:
       - run: python3 scripts/check_fixture_manifest.py
       - name: Translate authored PE32 fixture to ELF
         run: |
-          for specification in sum12:12 wrap2:2 xor9:9 zero:0 max255:255 jc_taken:22 jc_clear:11 jnc_taken:22 jnc_clear:11 jz_taken:22 jz_clear:11 jnz_taken:22 jnz_clear:11 mov_flags:22 xor_carry:11 join_taken:1 join_fallthrough:12 same_successor:3 entry_offset:12 cmp_min_max_jl:22 cmp_max_min_jl:11 cmp_equal_jge:22 cmp_less_jge:11 cmp_borrow:22 cmp_no_borrow:22 cmp_zero:22 cmp_nonzero:22 cmp_mov_flags:22 add_signed_overflow:11 add_negative_overflow:22 xor_signed_reset:22 cmp_preserve_eax:42 signed_join_taken:22 signed_join_fallthrough:11 call_helper:12 call_nested:12 call_shared:8 call_flags_preserved:22 call_flags_changed:11 call_unknown_then_init:42 call_wide_internal:0; do
+          for specification in sum12:12 wrap2:2 xor9:9 zero:0 max255:255 jc_taken:22 jc_clear:11 jnc_taken:22 jnc_clear:11 jz_taken:22 jz_clear:11 jnz_taken:22 jnz_clear:11 mov_flags:22 xor_carry:11 join_taken:1 join_fallthrough:12 same_successor:3 entry_offset:12 cmp_min_max_jl:22 cmp_max_min_jl:11 cmp_equal_jge:22 cmp_less_jge:11 cmp_borrow:22 cmp_no_borrow:22 cmp_zero:22 cmp_nonzero:22 cmp_mov_flags:22 add_signed_overflow:11 add_negative_overflow:22 xor_signed_reset:22 cmp_preserve_eax:42 signed_join_taken:22 signed_join_fallthrough:11 call_helper:12 call_nested:12 call_shared:8 call_flags_preserved:22 call_flags_changed:11 call_unknown_then_init:42 call_wide_internal:0 call_shared_branch:5; do
             case_name=${specification%:*}
             expected=${specification#*:}
             python3 scripts/make_pe32_fixture.py "$case_name" /tmp/w2l-fixture.exe
@@ -89,7 +89,8 @@ jobs:
             @{ Name = 'call_flags_preserved'; Expected = 22 },
             @{ Name = 'call_flags_changed'; Expected = 11 },
             @{ Name = 'call_unknown_then_init'; Expected = 42 },
-            @{ Name = 'call_wide_internal'; Expected = 0 }
+            @{ Name = 'call_wide_internal'; Expected = 0 },
+            @{ Name = 'call_shared_branch'; Expected = 5 }
           )
           foreach ($testCase in $cases) {
             $exe = "fixture_$($testCase.Name).exe"

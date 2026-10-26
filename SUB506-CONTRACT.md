@@ -47,3 +47,11 @@ comparisons pass. These counts include duplicates and shared semantics. Seven ne
 call fixtures execute generated ELF with expected exit and empty output; genuine
 Windows results are an independent CI acceptance gate. Native stack fault and
 asynchronous exception behavior remain outside the supported contract.
+
+Post-core review adds an independent shared-callee conditional-return case: first
+invocation returns1, second returns2, and caller adds3 for exit5. This exercises
+distinct return sites under different invocation states. Unknown flags remain
+unknown across CALL/RET; an untaken33-deep path is rejected by all-path policy.
+No production change was required. The corpus now contains42 authored cases;
+current final counts are recorded in Linear/PR CI evidence rather than inferred
+from the earlier41-case checkpoint above.

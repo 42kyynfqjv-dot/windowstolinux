@@ -46,3 +46,12 @@ The logical return-address stack has a 32-frame bound and remains unobservable t
 accepted instructions. Next is medium review of return contexts, all-path depth
 validation and the 41-case evidence. General stack/data memory and M3 import/API
 prerequisites above remain future work. No broad calling-convention claim follows.
+
+SUB-506 medium review adds state-dependent return paths in a shared callee and
+untaken-depth/unknown-flag checks; no production defect reproduced. Next SUB-507
+is an Astra High design gate for bounded stack arguments: a caller-supplied word
+read by a helper, with explicit data/return-address separation and cleanup.
+This advances M2 stack state toward a parameterized native program. Define entry
+assumptions, exact forms, capacity/access checks, and independent negative tests
+before implementing. A new logical data stack cannot silently coexist with
+unmodeled ESP or expose symbolic return addresses. General memory/APIs remain later.

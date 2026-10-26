@@ -88,6 +88,10 @@ CASES["call_unknown_then_init"] = b"\xe8\x06\x00\x00\x00" + mov_eax(42) + b"\xc3
 CASES["call_wide_internal"] = b"\xe8\x06\x00\x00\x00" + add_eax(0xffffff00) + b"\xc3" + mov_eax(256) + b"\xc3"
 
 
+# Shared callee takes a different conditional return path on its second call.
+CASES["call_shared_branch"] = mov_eax(0) + b"\xe8\x11\x00\x00\x00" + add_eax(0) + b"\xe8\x07\x00\x00\x00" + add_eax(3) + b"\xc3\x90" + cmp_eax(0) + b"\x74\x06" + mov_eax(2) + b"\xc3" + mov_eax(1) + b"\xc3"
+
+
 def build(case: str) -> bytes:
     if case not in CASES:
         raise ValueError(f"unknown fixture case: {case}")

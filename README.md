@@ -17,7 +17,7 @@ The authored `scripts/make_pe32_fixture.py` builds import-free PE32 cases within
 
 ## Status
 
-M0, M1 and the bounded M2 slice are in draft review. CI exercises 41 authored Windows/Linux cases, including taken and untaken outcomes for each supported branch. The [strict iced production adapter](docs/DECODER-INTEGRATION.md) preserves the exact subset and is compared against a handwritten test oracle. The 99% compatibility objective is aspirational and has no measured corpus result.
+M0, M1 and the bounded M2 slice are in draft review. CI exercises 42 authored Windows/Linux cases, including taken and untaken outcomes for each supported branch. The [strict iced production adapter](docs/DECODER-INTEGRATION.md) preserves the exact subset and is compared against a handwritten test oracle. The 99% compatibility objective is aspirational and has no measured corpus result.
 
 ## License
 

@@ -320,6 +320,22 @@ mod tests {
             0, 0, 0, 0xc3,
         ];
         assert_eq!(exit_for_test(&bytes).unwrap(), 8);
+        // Shared callee chooses distinct RET sites using each invocation's EAX.
+        assert_eq!(
+            exit_for_test(&[
+                0xb8, 0, 0, 0, 0, 0xe8, 17, 0, 0, 0, 0x05, 0, 0, 0, 0, 0xe8, 7, 0, 0, 0, 0x05, 3,
+                0, 0, 0, 0xc3, 0x90, 0x3d, 0, 0, 0, 0, 0x74, 6, 0xb8, 2, 0, 0, 0, 0xc3, 0xb8, 1, 0,
+                0, 0, 0xc3
+            ])
+            .unwrap(),
+            5
+        );
+        // CALL/RET cannot make unknown flags known.
+        assert!(
+            translate(&[0xe8, 8, 0, 0, 0, 0xb8, 0, 0, 0, 0, 0x74, 0, 0xc3, 0xc3])
+                .unwrap_err()
+                .contains("unknown entry flags")
+        );
         // Internal return with unknown EAX is legal if caller initializes it.
         assert_eq!(
             exit_for_test(&[0xe8, 6, 0, 0, 0, 0xb8, 42, 0, 0, 0, 0xc3, 0xc3]).unwrap(),
@@ -359,6 +375,16 @@ mod tests {
             code.push(0xc3);
             assert_eq!(translate(&code).is_ok(), depth == 32);
         }
+        // Actual zero-flag path exits immediately, but an untaken call path
+        // would nest33 calls. All-path policy must reject it before execution.
+        let mut untaken = vec![0x31, 0xc0, 0x74, 6, 0xe8, 2, 0, 0, 0, 0xc3, 0xc3];
+        for _ in 0..32 {
+            untaken.extend([0xe8, 1, 0, 0, 0, 0xc3]);
+        }
+        untaken.push(0xc3);
+        assert!(translate(&untaken)
+            .unwrap_err()
+            .contains("call nesting limit"));
         // Shared callee is executed twice: 1 MOV +2 CALL +2 RET +caller RET
         // plus 2*n XORs. n509 ->1024 operations, n510 ->1026 (decode <1024).
         for n in [509, 510] {
