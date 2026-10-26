@@ -74,6 +74,7 @@ class Scalar(unittest.TestCase):
     def test_invalid_model_values_reject(self):
         for value in [-1,U32+1,1.5,True]:
             with self.assertRaises(ValueError):Expr(value)
+        with self.assertRaises(ValueError):Expr(0,[1,0,0])
         s=State()
         with self.assertRaises(ValueError):s.mov('eax','ecx')
         with self.assertRaises(ValueError):s.compare('eax',0,8)

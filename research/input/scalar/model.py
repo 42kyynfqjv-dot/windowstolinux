@@ -7,7 +7,7 @@ class Expr:
     c:int=0
     coefficients:tuple=(0,0,0) # two UTF16 units, API result
     def __post_init__(self):
-        if type(self.c) is not int or not 0<=self.c<=U32 or len(self.coefficients)!=3 or any(type(x) is not int or not 0<=x<=U32 for x in self.coefficients):raise ValueError('expression width')
+        if type(self.c) is not int or not 0<=self.c<=U32 or type(self.coefficients) is not tuple or len(self.coefficients)!=3 or any(type(x) is not int or not 0<=x<=U32 for x in self.coefficients):raise ValueError('expression width')
     @staticmethod
     def symbol(i):
         if i not in (0,1,2):raise ValueError('symbol')
