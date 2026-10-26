@@ -1,0 +1,35 @@
+{
+  "configurations": {
+    "O1": [
+      "/O1"
+    ],
+    "O2": [
+      "/O2"
+    ]
+  },
+  "compile_flags": [
+    "/nologo",
+    "/Bv",
+    "/W4",
+    "/GS-",
+    "/Zl",
+    "/c"
+  ],
+  "link_flags": [
+    "/nologo",
+    "/machine:x86",
+    "/subsystem:console",
+    "/nodefaultlib",
+    "/entry:entry@0"
+  ],
+  "libraries": [
+    "kernel32.lib"
+  ],
+  "sha256": {
+    "filter.c": "586d5af4163763919154565bbaa5d1577bc4699981a947a27c76f4b59075b741",
+    "cases.json": "8b958c3df8b9e115adb9fc26e0a48e3d899fc16d8a6549a0eb5528de88f40e32",
+    "expectations.json": "520cd648c3df8afb29f7a68b58150ebb62e29ce087e5d40830073c1c5448f686"
+  },
+  "version": 2,
+  "parent_source_sha256": "315cbc9250ffedf00a9357cc6bf0df396a184bfe92db7e91bb68f1d7209ed258"
+}
