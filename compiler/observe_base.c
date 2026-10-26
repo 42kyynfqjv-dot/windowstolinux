@@ -29,7 +29,7 @@ int main(int argc, char **argv) {
             else action = DBG_EXCEPTION_NOT_HANDLED;
         } else if (ev.dwDebugEventCode == EXIT_PROCESS_DEBUG_EVENT) {
             result = ev.u.ExitProcess.dwExitCode;
-            ContinueDebugEvent(ev.dwProcessId, ev.dwThreadId, action);
+            if (!ContinueDebugEvent(ev.dwProcessId, ev.dwThreadId, action)) result = 125;
             break;
         }
         if (!ContinueDebugEvent(ev.dwProcessId, ev.dwThreadId, action)) {

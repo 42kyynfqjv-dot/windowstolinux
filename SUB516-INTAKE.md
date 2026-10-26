@@ -46,3 +46,30 @@ e6e9ee50d418e7913a2578d2302c1730099b72006f74b957ee7b5c3fa28e717e. This is one
 observed relocated Windows execution, not a translated ELF or all-base proof.
 The ordinary non-debug baseline base remains unmeasured. Server2025 NT10.0.26100.0,
 MSVC19.51.36260.0; no XP7 claim. Final-head evidence is recorded in PR/Linear.
+
+
+## Medium review
+
+Candidate fields remain private and reject_emission returns Err on every path;
+no Pe/emitter conversion is exposed. Entry diagnostic is deliberately after full
+metadata validation, and does not decode a complete program or establish operand
+binding. Record destinations are candidate RVAs only; no pointer flow proof exists.
+Profile selection does not retry malformed linker metadata as an authored image.
+
+Review adds production checks for DLL profile changes, canonical ABSOLUTE padding,
+permuted raw-section placement, duplicate relocation pages and metadata patch sites.
+Accounting:4 structural barriers,46 single mutations,2 compound rejections and2560
+truncations =2612 rejected CLI calls. The original2606 checks remain. One observer
+error-path fix propagates failure of the final ContinueDebugEvent as125 instead of
+returning an apparent successful child status. Instrumentation remains separate
+from ordinary baseline and supplies no generated-program or all-base equivalence.
+
+Next prerequisite: Astra High design of image-owned typed values plus callee-saved
+register stack words, specifically observed PUSH/POP ESI and preserving _write's EAX
+result across the helper call. Define unknown initial ESI, saved-word ownership and
+restoration, no numeric return-address exposure, pointer/integer separation through
+copies and joins, and relocation-to-decoded-operand bijection. Design/test-only first;
+no lifting barrier removal until independent positive/negative traces establish it.
+Two-word arguments and ADD ESP flags require explicit follow-on gates: unknown ESP
+prevents assuming exact arithmetic flags after cleanup. The real unchanged compiler
+program remains the eventual PE->Rust->ELF acceptance target.

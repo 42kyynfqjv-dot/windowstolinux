@@ -28,7 +28,7 @@ with tempfile.TemporaryDirectory() as directory:
     check(changed, 'unsupported entry at RVA 0x1000 (opcode 0x56)', True)
     # Independent mutation expectations. Every one must fail before structural success.
     mutations = [
-        (0x86,'H',4),(0x96,'H',0x103),(0xd0,'I',0x200000),
+        (0xde,'H',0),(0xde,'H',0xc540),(0x86,'H',4),(0x96,'H',0x103),(0xd0,'I',0x200000),
         (0xd4,'I',0x180),(0x108,'I',0x2000),(0x148,'I',0x2000),
         (0x1a8,'I',0x201),(0x1b4,'I',0x400),(0x1ac,'I',0x1000),
         (0x19c,'I',0xe0000020),(0x1b4,'I',0xfffffe00),(0xa8,'I',0x1010),
@@ -46,6 +46,22 @@ with tempfile.TemporaryDirectory() as directory:
     for offset, fmt, value in mutations:
         bad = bytearray(original); struct.pack_into('<'+fmt,bad,offset,value)
         check(bad)
+    # Compound layouts exercise role mapping and complete-block rules.
+    padded = bytearray(original); struct.pack_into('<H',padded,0x80a,0)
+    check(padded, 'pending typed pointer provenance', True)
+    swapped = bytearray(original)
+    swapped[0x400:0x600], swapped[0x800:0xa00] = original[0x800:0xa00], original[0x400:0x600]
+    struct.pack_into('<I',swapped,0x18c,0x800)
+    struct.pack_into('<I',swapped,0x1dc,0x400)
+    check(swapped, 'pending typed pointer provenance', True)
+    duplicate = bytearray(original)
+    struct.pack_into('<I',duplicate,0x1d0,24)
+    struct.pack_into('<I',duplicate,0x124,24)
+    duplicate[0x80c:0x818] = original[0x800:0x80c]
+    check(duplicate, 'relocation page order')
+    metadata_target = bytearray(original)
+    struct.pack_into('<IIHH',metadata_target,0x800,0x2000,12,0x3000,0)
+    check(metadata_target, 'whole range outside linker section')
     for length in range(len(original)):
         check(original[:length])
-print(f'production linker checks: 2 structural barriers, {len(mutations)} mutations, {len(original)} truncations; {count} rejected without output writes')
+print(f'production linker checks: 4 structural barriers, {len(mutations)} single mutations, 2 compound rejections, {len(original)} truncations; {count} rejected without output writes')
