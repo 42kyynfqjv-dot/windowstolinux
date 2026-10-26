@@ -131,3 +131,52 @@ their prior provenance; any future runtime-source reuse/distribution needs separ
 license review. DLL internals/version-dependent behavior remain unresolved research.
 Windows evidence is not XP/7/general-app compatibility. Actual load base and three
 historical timeout causes remain unknown; no silent retries. Production unchanged.
+
+## Medium review: evidence boundaries and safe next probes
+
+The snapshot inventory reproduces byte-for-byte from artifact12645986081. Entry
+edges/cookie location are byte checks; import names are dumpbin references; callback
+and exception paths are static observations. Original process output is dynamic
+success evidence only. No callback reachability, actual cookie entropy, runtime DLL
+version or startup failure behavior has been observed by this inventory. The script
+is deliberately limited to trusted authored reports, not a production hostile-input
+parser. Its import counts do not independently validate PE import-table integrity.
+
+SUB-539 should freeze these separate probes and expected outcomes before execution:
+
+1. A small independently authored C probe registers two atexit callbacks that append
+   distinct bytes to a private file; normal exit must record reverse registration
+   order. A separate invocation uses _exit and must leave the marker file empty.
+   Do not use buffered stdout to infer callback order. Check all file/registration
+   return values and fail the probe on setup failure.
+2. A separate stdio probe sets full buffering explicitly, writes one byte without
+   newline to redirected regular-file stdout, then calls exit or _exit in distinct
+   invocations. Success expects the byte only for exit. Require successful setvbuf/
+   fwrite and empty stderr; distinguish test setup errors from semantic mismatches.
+3. Test-only initializer-table traces independently specify null entries, ordered
+   callbacks, failing C initializer and unresolved/overlapping callback ranges.
+   A model trace is not Windows startup evidence. A future original Windows probe
+   must document its supported compiler hook; do not depend on undocumented section
+   ordering and then call that ordering portable or production-supported.
+
+Use fixed source, compiler flags and source/PE hashes; empty private working folders,
+no inherited secrets, no shell commands from program input, no destructive file
+paths. Bound each launch to15seconds and preserve diagnostics on failure, no silent
+retry. These are new authored probes, not edits to held_crt. Argument quoting/encoding
+and file short/error probes belong to later runtime-input/file contracts, not an
+unbounded prerequisite for the first held_crt success domain.
+
+For runtime provenance, use a separately built/hashed authored observer with existing
+Windows debug APIs on only the exact hashed child PE. Record CREATE_PROCESS_DEBUG_EVENT
+image base and LOAD_DLL_DEBUG_EVENT paths plus on-disk version/hash where resolvable;
+close event file handles, continue events correctly and terminate only the owned
+child on timeout. No injection, code patching, privilege adjustment, system debugger
+configuration or attaching to unrelated processes. Do not copy or execute DLLs at
+new paths. API-set import names may resolve to different host modules. Missing paths,
+access or races remain explicit gaps. A module-file hash does not verify all in-memory
+bytes. Debug observation changes scheduling and is a separate observed run; keep the
+ordinary baseline/hash/output comparison independently. Compare both observations,
+never silently substitute one for the other or infer all loaded modules are used.
+
+Astra High is appropriate for SUB-539's bounded control-flow/initializer effect
+analysis. Medium review found no production defect; production remains unchanged.
