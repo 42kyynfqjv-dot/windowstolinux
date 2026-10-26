@@ -23,6 +23,7 @@ jobs:
       - run: python3 -m unittest discover -s tools -p test_nested_stack_model.py -v
       - run: python3 -m unittest discover -s tools -p test_local_frame_model.py -v
       - run: python3 -m unittest discover -s tools -p test_byte_local_model.py -v
+      - run: python3 -m unittest discover -s tools -p test_image_read_model.py -v
       - name: Imported output translation and support checks
         run: |
           python3 scripts/check_output_probe.py
@@ -224,6 +225,8 @@ jobs:
         run: python tools/check_local_frame_contract.py "${{ runner.temp }}/w2l-compiler-measurement"
       - name: Check byte-local contract against unchanged compiler artifact
         run: python tools/check_byte_local_contract.py "${{ runner.temp }}/w2l-compiler-measurement"
+      - name: Check initialized image-read design against unchanged array and loop
+        run: python tools/check_image_read_contract.py "${{ runner.temp }}/w2l-compiler-measurement"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -257,3 +260,4 @@ jobs:
           python3 tools/check_permissioned_corpus.py evidence --compare
           python3 tools/check_local_frame_contract.py evidence
           python3 tools/check_byte_local_contract.py evidence
+          python3 tools/check_image_read_contract.py evidence

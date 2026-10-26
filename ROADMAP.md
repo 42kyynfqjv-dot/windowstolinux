@@ -182,3 +182,11 @@ program now requires same-PE Windows/Linux empty output/exit132. Ten compiler
 comparisons,102 authored pairs and18 launches are required; six held-out conversions
 remain rejected. Next is medium production/provenance review of partial values,
 per-flag knowledge, ownership and exact artifact evidence.
+
+SUB-534 proposes a complete straight-line read/add/return proof for the unchanged
+initialized array program, under [SUB534-IMAGE-READ-DESIGN.md](SUB534-IMAGE-READ-DESIGN.md).
+Nine independent model tests and exact array/loop artifact checks add design evidence;
+production still rejects both. A writable section becomes usable only after checked
+full-word provenance, loader-write exclusion and a complete no-write/no-escape proof.
+Next: medium contract review, then separately gated production implementation for
+same-PE exit9. Loops, ordinary CRT, PE32+ and general memory remain separate work.
