@@ -416,3 +416,79 @@ fn postcall_composition_native_and_rejections() {
         std::fs::remove_dir_all(dir).unwrap();
     }
 }
+
+#[test]
+fn normalized_operand_width_prefix_and_register_boundaries() {
+    let decode_one = |bytes: &[u8]| {
+        let mut d = Decoder::with_ip(32, bytes, 0x1000, DecoderOptions::NONE);
+        let i = d.decode();
+        if i.is_invalid() || i.len() != bytes.len() {
+            return Err("invalid".to_string());
+        }
+        normalize(&i, bytes)
+    };
+    // Independent ModRM register numbering, including preserved ESI/EDI/EBP.
+    for (encoding, internal) in [(0, 0), (1, 1), (2, 2), (6, 3), (7, 4), (5, 5)] {
+        assert!(
+            matches!(decode_one(&[0x8b,0xc0+encoding*8]).unwrap(),Op::Move(d,0) if d==internal)
+        );
+        assert!(
+            matches!(decode_one(&[0x0f,0x46,0xc0+encoding*8]).unwrap(),Op::Select(Condition::Be,d,0) if d==internal)
+        );
+    }
+    for (bytes, expected) in [
+        (vec![0x8d, 0x45, 0xf8], "Address(0, true, -8)"),
+        (vec![0x0f, 0xb7, 0x55, 0xfa], "StackRead(2, true, -6, 2)"),
+        (vec![0x6b, 0xca, 0xff], "Multiply(1, 2, 4294967295)"),
+        (vec![0x83, 0xec, 12], "AllocateN(12)"),
+        (vec![0x74, 0xfc], "Branch(Eq, 4094)"),
+    ] {
+        assert_eq!(format!("{:?}", decode_one(&bytes).unwrap()), expected);
+    }
+    for bytes in [
+        vec![0x66, 0x8b, 0xc1],
+        vec![0x67, 0x8b, 0xc1],
+        vec![0x64, 0x0f, 0xb7, 1],
+        vec![0xf3, 0x8b, 0xc1],
+        vec![0x8b, 0xe0],
+        vec![0x8b, 0xd8],
+        vec![0x0f, 0x46, 1],
+        vec![0x83, 0xec, 16],
+        vec![0xff, 0xe0],
+        vec![0x8d, 4],
+    ] {
+        assert!(decode_one(&bytes).is_err(), "{bytes:02x?}");
+    }
+}
+
+#[test]
+fn control_context_cycles_and_backward_acyclic_targets() {
+    let g: Graph = [
+        (100, (Op::Call(10), 110)),
+        (110, (Op::Ret, 111)),
+        (10, (Op::Branch(Condition::Eq, 30), 20)),
+        (20, (Op::Jump(5), 21)),
+        (30, (Op::Jump(5), 31)),
+        (5, (Op::Ret, 6)),
+    ]
+    .into();
+    validate_calls(&g, 100).unwrap();
+    let mut cycle = g.clone();
+    cycle.insert(5, (Op::Jump(10), 6));
+    assert!(validate_calls(&cycle, 100).is_err());
+    let mut recursion = g.clone();
+    recursion.insert(5, (Op::Call(100), 6));
+    assert!(validate_calls(&recursion, 100).is_err());
+    let mut missing = g;
+    missing.remove(&5);
+    assert!(validate_calls(&missing, 100).is_err());
+    // A large acyclic expansion still has a finite admission budget.
+    let mut large = Graph::new();
+    for i in 0..14 {
+        large.insert(i * 3, (Op::Branch(Condition::Eq, i * 3 + 2), i * 3 + 1));
+        large.insert(i * 3 + 1, (Op::Jump(i * 3 + 3), i * 3 + 2));
+        large.insert(i * 3 + 2, (Op::Jump(i * 3 + 3), i * 3 + 3));
+    }
+    large.insert(42, (Op::Ret, 43));
+    assert!(validate_calls(&large, 0).is_err());
+}

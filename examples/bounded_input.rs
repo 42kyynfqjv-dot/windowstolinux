@@ -37,6 +37,45 @@ mod tests {
         parse(format!("W2L_INPUT={s}\0").as_bytes()).unwrap()
     }
     #[test]
+    fn capacity_five_utf16_boundaries_and_unknown_bytes() {
+        let r = value("A€😀").project_capacity(5).unwrap();
+        assert_eq!(r.returned, 4);
+        assert_eq!(
+            r.bytes,
+            [
+                Some(65),
+                Some(0),
+                Some(0xac),
+                Some(0x20),
+                Some(0x3d),
+                Some(0xd8),
+                Some(0),
+                Some(0xde),
+                Some(0),
+                Some(0)
+            ]
+        );
+        for text in ["", "12345", "😀😀😀"] {
+            let r = value(text).project_capacity(5).unwrap();
+            assert_eq!(
+                r.returned,
+                if text.is_empty() {
+                    0
+                } else {
+                    text.encode_utf16().count() as u32 + 1
+                }
+            );
+            assert_eq!(r.bytes, [None; 10]);
+        }
+        assert_eq!(
+            value("123").project_capacity(5).unwrap().bytes[8..],
+            [None, None]
+        );
+        for capacity in [0, 1, 2, 4, 6, u32::MAX] {
+            assert_eq!(value("7").project_capacity(capacity), Err(Error::Capacity));
+        }
+    }
+    #[test]
     fn missing_empty_and_initialized_ranges() {
         assert_eq!(
             parse(b"").unwrap().project(),

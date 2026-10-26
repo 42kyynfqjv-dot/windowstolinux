@@ -21,16 +21,17 @@ Exact unprefixed `A1 moffs32` loads EAX from four validated immutable data bytes
 
 ## Status
 
-The reviewed foundation and bounded implementation are merged through SUB-551.
-SUB-552 [runtime-input integration](research/input/INTEGRATION.md) is pending review.
-It adds one unchanged freestanding compiler program with 17 runtime scenarios;
-the generated ELF reads input at execution within the explicit bounded environment
-contract. This is separate from ordinary CRT startup.
-Current CI requires 12 unchanged compiler-program Windows/Linux comparisons,
-102 authored comparisons and 18 original-only launch checks. Four held-out
-capabilities (runtime arguments, ordinary CRT, file I/O and PE32+) remain rejected.
-The [strict iced production adapter](docs/DECODER-INTEGRATION.md) preserves its
-specified instruction policies. The 99% compatibility objective remains aspirational.
+Reviewed work is merged through SUB-561. SUB-562's cohesive
+[runtime-input composition](research/input/heldout/COMPOSITION.md) is in draft review:
+shared operand/frame/owner-offset/capacity semantics target all eight frozen O1/O2
+artifacts and 112 same-PE Windows/Linux input scenarios. Final-commit CI evidence
+is recorded in the PR; local acceptance alone is not a merge gate. Earlier status
+paragraphs below are historical checkpoints.
+The existing 16 compiler-program baseline, 51 input-variant comparisons,
+102 authored comparisons and 18 original-only launch checks remain required.
+Runtime arguments through ordinary CRT, ordinary CRT startup, file I/O and PE32+
+remain unsupported. This selected freestanding corpus is not general application
+compatibility. The 99% compatibility objective remains aspirational.
 
 SUB-546 records a [no-go accessor closure decision](research/crt/ACCESSOR-CLOSURE.md).
 The isolated option, sentinel and external-cell research components do not close

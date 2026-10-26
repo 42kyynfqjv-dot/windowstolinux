@@ -1,4 +1,7 @@
-# SUB-560 held-out measurement
+# SUB-560 held-out measurement (historical)
+
+Later integrated admission and current acceptance gates are in [COMPOSITION.md](COMPOSITION.md).
+The rejection table below records the frozen initial experiment, not current support.
 
 Preregistration commit06dc3f0 fixed four C sources, O1/O2 configurations and14
 literal expectations each before any evaluation. Measurement run40410456789 at

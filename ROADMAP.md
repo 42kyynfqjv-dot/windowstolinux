@@ -333,8 +333,9 @@ as one integrated milestone. A freestanding binary-exact ASCII-uppercase filter
 is the later useful CLI target; broad I/O does not start in this design phase.
 Keep tests/review, and measure actual compiler dependencies before fixing scope.
 
-SUB-562 [composition progress](research/input/heldout/COMPOSITION.md): complete
-eight-artifact inventory and first shared predicate/operand implementation unit.
-Composed O2 is the first acceptance target; seven artifacts still reject while
-coupled frame/offset/capacity/call-effect work remains in the same draft PR.
-The full112-pair milestone is incomplete.
+SUB-562 [integrated composition](research/input/heldout/COMPOSITION.md) now implements
+shared operand, frame/saved-value, owner-offset, capacity and post-call predicate
+semantics. The acceptance gate is all eight frozen O1/O2 artifacts and112 actual
+Windows/ELF input pairs, plus independent unsafe/boundary/resource tests. Review
+and exact final-head CI remain required before merge. The next useful stdin/stdout
+CLI target remains separate; no arbitrary opcode accumulation or broad CRT claim.

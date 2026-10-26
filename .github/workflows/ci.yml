@@ -346,12 +346,14 @@ jobs:
           python3 research/input/scalar/check_nonlinear.py evidence
           python3 research/input/helper/check.py evidence
           python3 research/input/heldout/measure.py evidence --compare
+          python3 research/input/heldout/check_composition.py evidence
           python3 research/input/postcall/check.py evidence --compare
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: native-input-acquisition
           path: |
+            evidence/composition-additional.json
             evidence/input-acquisition.json
             evidence/input-translation.json
             evidence/input-native.rs
