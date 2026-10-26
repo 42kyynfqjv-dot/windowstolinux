@@ -19,6 +19,7 @@ pub(crate) enum Error {
     Duplicate,
     Encoding,
     ValueLimit,
+    Capacity,
 }
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct Value {
@@ -31,27 +32,43 @@ pub(crate) struct ApiResult {
     pub(crate) returned: u32,
     pub(crate) bytes: [Option<u8>; 6],
 }
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct WideApiResult {
+    pub(crate) returned: u32,
+    pub(crate) bytes: [Option<u8>; 10],
+}
 impl Value {
-    pub(crate) fn project(&self) -> ApiResult {
-        let mut result = ApiResult {
+    pub(crate) fn project_capacity(&self, capacity: u32) -> Result<WideApiResult, Error> {
+        if !matches!(capacity, 3 | 5) {
+            return Err(Error::Capacity);
+        }
+        let mut out = WideApiResult {
             returned: 0,
-            bytes: [None; 6],
+            bytes: [None; 10],
         };
         if !self.present || self.len == 0 {
-            return result;
+            return Ok(out);
         }
-        if self.len > 2 {
-            result.returned = (self.len + 1) as u32;
-            return result;
+        if self.len >= capacity as usize {
+            out.returned = (self.len + 1) as u32;
+            return Ok(out);
         }
-        result.returned = self.len as u32;
+        out.returned = self.len as u32;
         for i in 0..=self.len {
-            let word = if i == self.len { 0 } else { self.units[i] };
-            let pair = word.to_le_bytes();
-            result.bytes[2 * i] = Some(pair[0]);
-            result.bytes[2 * i + 1] = Some(pair[1]);
+            let v = if i == self.len { 0 } else { self.units[i] };
+            let b = v.to_le_bytes();
+            out.bytes[2 * i] = Some(b[0]);
+            out.bytes[2 * i + 1] = Some(b[1]);
         }
-        result
+        Ok(out)
+    }
+
+    pub(crate) fn project(&self) -> ApiResult {
+        let wide = self.project_capacity(3).expect("fixed reviewed capacity");
+        ApiResult {
+            returned: wide.returned,
+            bytes: std::array::from_fn(|i| wide.bytes[i]),
+        }
     }
 }
 fn parse(snapshot: &[u8]) -> Result<Value, Error> {

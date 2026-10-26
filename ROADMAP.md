@@ -332,3 +332,10 @@ inventory and batch the frozen corpus's operand/frame/owner-offset/capacity work
 as one integrated milestone. A freestanding binary-exact ASCII-uppercase filter
 is the later useful CLI target; broad I/O does not start in this design phase.
 Keep tests/review, and measure actual compiler dependencies before fixing scope.
+
+SUB-562 [integrated composition](research/input/heldout/COMPOSITION.md) now implements
+shared operand, frame/saved-value, owner-offset, capacity and post-call predicate
+semantics. The acceptance gate is all eight frozen O1/O2 artifacts and112 actual
+Windows/ELF input pairs, plus independent unsafe/boundary/resource tests. Review
+and exact final-head CI remain required before merge. The next useful stdin/stdout
+CLI target remains separate; no arbitrary opcode accumulation or broad CRT claim.

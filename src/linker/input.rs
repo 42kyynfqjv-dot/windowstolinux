@@ -1,6 +1,6 @@
 //! Private bounded environment-input admission. No observed host input participates.
 use super::*;
-use iced_x86::{Decoder, DecoderOptions};
+use iced_x86::{Decoder, DecoderOptions, Instruction, Mnemonic, OpKind, Register};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
 mod proof;
@@ -8,6 +8,19 @@ use proof::{prove, Proven};
 #[derive(Clone, Copy, Debug)]
 enum Op {
     Allocate,
+    AllocateN(u8),
+    PushReg(usize),
+    PopReg(usize),
+    Anchor,
+    Leave,
+    Address(usize, bool, i32),
+    StackRead(usize, bool, i32, u8),
+    StackCompare(bool, i32, u32),
+    CleanupN(u8),
+    CompareRegs(usize, usize),
+    Multiply(usize, usize, u32),
+    Select(Condition, usize, usize),
+    Jump(u32),
     Buffer,
     Push(u32),
     PushEax,
@@ -23,6 +36,7 @@ enum Op {
     Cleanup,
     Ret,
     Lea(usize, usize, usize, u32, u32),
+    Scaled(usize, usize, u32, u32),
     ZeroExtend(usize, usize),
     Arithmetic(usize, u32, bool),
     Binary(usize, usize, bool),
@@ -36,6 +50,8 @@ enum Op {
 #[derive(Clone, Copy, Debug)]
 enum Condition {
     Ne,
+    Eq,
+    B,
     Be,
     A,
 }
@@ -105,6 +121,13 @@ fn decode(image: &Candidate<'_>) -> Result<Graph, String> {
                 bound.insert(pc + 2);
                 Op::Acquire
             }
+            [0x3d, _, _, _, _] => Op::Compare(0, 32, u32_at(b, 1)?),
+            [0x83, 0xfa, n] => Op::Compare(2, 32, *n as i8 as i32 as u32),
+            [0x8b, 0x4c, 0x24, 4] => Op::Argument(1, 4),
+            [0x0f, 0xb7, 0x01] => Op::ReadWord(0, 1, 0),
+            [0x0f, 0xb7, 0x51, 2] => Op::ReadWord(2, 1, 2),
+            [0x8d, 0x04, 0x4a] => Op::Lea(0, 2, 1, 2, 0),
+            [0x8d, 0x04, 0x45, _, _, _, _] => Op::Scaled(0, 0, 2, u32_at(b, 3)?),
             [0x8b, 0xc8] => Op::Move(1, 0),
             [0x8b, 0xc2] => Op::Move(0, 2),
             [0xb8, _, _, _, _] => Op::Mov(0, u32_at(b, 1)?),
@@ -163,7 +186,7 @@ fn decode(image: &Candidate<'_>) -> Result<Graph, String> {
                 let target = u32::try_from(ins.near_branch_target())
                     .map_err(|_| "input: branch overflow")?;
                 need(
-                    target > pc && target < finish,
+                    target >= code.rva && target < finish,
                     "input: unproved cycle/target",
                 )?;
                 Op::Branch(
@@ -175,15 +198,16 @@ fn decode(image: &Candidate<'_>) -> Result<Graph, String> {
                     target,
                 )
             }
-            _ => return Err(format!("input: unsupported instruction at {pc:x}")),
+            _ => normalize(&ins, b)
+                .map_err(|e| format!("input: unsupported instruction at {pc:x}: {e}"))?,
         };
         for byte in pc..next {
             need(occupied.insert(byte), "input: overlapping instructions")?;
         }
-        if let Op::Branch(_, target) | Op::Call(target) = op {
+        if let Op::Branch(_, target) | Op::Call(target) | Op::Jump(target) = op {
             pending.push(target);
         }
-        if !matches!(op, Op::Ret) {
+        if !matches!(op, Op::Ret | Op::Jump(_)) {
             pending.push(next);
         }
         graph.insert(pc, (op, next));
@@ -206,10 +230,192 @@ fn decode(image: &Candidate<'_>) -> Result<Graph, String> {
     validate_calls(&graph, image.entry)?;
     Ok(graph)
 }
+// Operand normalization is bounded by encodings and width, not artifact identity.
+// Register numbering is internal; ESP is only an owned stack coordinate.
+fn reg(r: Register) -> Result<usize, String> {
+    match r {
+        Register::EAX => Ok(0),
+        Register::ECX => Ok(1),
+        Register::EDX => Ok(2),
+        Register::ESI => Ok(3),
+        Register::EDI => Ok(4),
+        Register::EBP => Ok(5),
+        _ => Err("unsupported register/width".into()),
+    }
+}
+fn normalize(i: &Instruction, b: &[u8]) -> Result<Op, String> {
+    // No prefixes: the old exact 66 comparison remains separately admitted.
+    need(
+        !b.is_empty()
+            && !matches!(
+                b[0],
+                0x26 | 0x2e | 0x36 | 0x3e | 0x64 | 0x65 | 0x66 | 0x67 | 0xf0 | 0xf2 | 0xf3
+            ),
+        "prefix",
+    )?;
+    let rr = || -> Result<(usize, usize), String> {
+        need(
+            i.op0_kind() == OpKind::Register && i.op1_kind() == OpKind::Register,
+            "register operands",
+        )?;
+        Ok((reg(i.op0_register())?, reg(i.op1_register())?))
+    };
+    let mem = || -> Result<(Register, i32), String> {
+        need(
+            i.memory_index() == Register::None
+                && i.memory_segment()
+                    == if i.memory_base() == Register::EBP || i.memory_base() == Register::ESP {
+                        Register::SS
+                    } else {
+                        Register::DS
+                    },
+            "address form",
+        )?;
+        Ok((i.memory_base(), i.memory_displacement64() as u32 as i32))
+    };
+    let imm = || -> Result<u32, String> {
+        match i.op1_kind() {
+            OpKind::Immediate8to32 => Ok(i.immediate8to32() as u32),
+            OpKind::Immediate32 => Ok(i.immediate32()),
+            _ => Err("immediate width".into()),
+        }
+    };
+    match i.mnemonic() {
+        Mnemonic::Push if b.len() == 1 => Ok(Op::PushReg(reg(i.op0_register())?)),
+        Mnemonic::Pop if b.len() == 1 => Ok(Op::PopReg(reg(i.op0_register())?)),
+        Mnemonic::Leave if b == [0xc9] => Ok(Op::Leave),
+        Mnemonic::Mov if b == [0x8b, 0xec] => Ok(Op::Anchor),
+        Mnemonic::Mov if i.op1_kind() == OpKind::Memory => {
+            let (base, off) = mem()?;
+            need(
+                matches!(base, Register::ESP | Register::EBP),
+                "stack source",
+            )?;
+            Ok(Op::StackRead(
+                reg(i.op0_register())?,
+                base == Register::EBP,
+                off,
+                4,
+            ))
+        }
+        Mnemonic::Mov if i.op1_kind() == OpKind::Immediate32 => {
+            Ok(Op::Mov(reg(i.op0_register())?, imm()?))
+        }
+        Mnemonic::Mov => {
+            let (d, r) = rr()?;
+            Ok(Op::Move(d, r))
+        }
+        Mnemonic::Movzx if i.op1_kind() == OpKind::Memory => {
+            need(b.starts_with(&[0x0f, 0xb7]), "WORD width")?;
+            let (base, off) = mem()?;
+            let d = reg(i.op0_register())?;
+            if matches!(base, Register::ESP | Register::EBP) {
+                Ok(Op::StackRead(d, base == Register::EBP, off, 2))
+            } else {
+                need((0..=8).contains(&off), "borrow displacement")?;
+                Ok(Op::ReadWord(d, reg(base)?, off as u8))
+            }
+        }
+        Mnemonic::Lea => {
+            let d = reg(i.op0_register())?;
+            let base = i.memory_base();
+            let index = i.memory_index();
+            let off = i.memory_displacement64() as u32;
+            if matches!(base, Register::ESP | Register::EBP) {
+                need(index == Register::None, "stack address index")?;
+                Ok(Op::Address(d, base == Register::EBP, off as i32))
+            } else if base == Register::None {
+                Ok(Op::Scaled(d, reg(index)?, i.memory_index_scale(), off))
+            } else {
+                let a = reg(base)?;
+                let (v, k) = if index == Register::None {
+                    (a, 0)
+                } else {
+                    (reg(index)?, i.memory_index_scale())
+                };
+                Ok(Op::Lea(d, a, v, k, off))
+            }
+        }
+        Mnemonic::Add | Mnemonic::Sub if i.op0_register() == Register::ESP => {
+            let n = imm()?;
+            need(n > 0 && n <= 12 && n % 4 == 0, "stack amount")?;
+            Ok(if i.mnemonic() == Mnemonic::Add {
+                Op::CleanupN(n as u8)
+            } else {
+                Op::AllocateN(n as u8)
+            })
+        }
+        Mnemonic::Add if i.op1_kind() == OpKind::Register => {
+            let (d, r) = rr()?;
+            Ok(Op::Binary(d, r, false))
+        }
+        Mnemonic::Add | Mnemonic::Sub => Ok(Op::Arithmetic(
+            reg(i.op0_register())?,
+            imm()?,
+            i.mnemonic() == Mnemonic::Sub,
+        )),
+        Mnemonic::Cmp if i.op0_kind() == OpKind::Memory => {
+            let (base, off) = mem()?;
+            need(
+                matches!(base, Register::ESP | Register::EBP),
+                "stack compare",
+            )?;
+            Ok(Op::StackCompare(base == Register::EBP, off, imm()?))
+        }
+        Mnemonic::Cmp if i.op1_kind() == OpKind::Register => {
+            let (d, r) = rr()?;
+            Ok(Op::CompareRegs(d, r))
+        }
+        Mnemonic::Cmp => Ok(Op::Compare(reg(i.op0_register())?, 32, imm()?)),
+        Mnemonic::Test => {
+            let (d, r) = rr()?;
+            need(d == r, "TEST form")?;
+            Ok(Op::Test(d))
+        }
+        Mnemonic::Imul if i.op_count() == 3 => {
+            need(
+                i.op0_kind() == OpKind::Register && i.op1_kind() == OpKind::Register,
+                "multiply operands",
+            )?;
+            let n = match i.op2_kind() {
+                OpKind::Immediate8to32 => i.immediate8to32() as u32,
+                OpKind::Immediate32 => i.immediate32(),
+                _ => return Err("multiply width".into()),
+            };
+            Ok(Op::Multiply(
+                reg(i.op0_register())?,
+                reg(i.op1_register())?,
+                n,
+            ))
+        }
+        Mnemonic::Cmove | Mnemonic::Cmovbe => {
+            let (d, r) = rr()?;
+            Ok(Op::Select(
+                if i.mnemonic() == Mnemonic::Cmove {
+                    Condition::Eq
+                } else {
+                    Condition::Be
+                },
+                d,
+                r,
+            ))
+        }
+        Mnemonic::Je | Mnemonic::Jb | Mnemonic::Jmp if i.op0_kind() == OpKind::NearBranch32 => {
+            let t = u32::try_from(i.near_branch_target()).map_err(|_| "target overflow")?;
+            Ok(match i.mnemonic() {
+                Mnemonic::Je => Op::Branch(Condition::Eq, t),
+                Mnemonic::Jb => Op::Branch(Condition::B, t),
+                _ => Op::Jump(t),
+            })
+        }
+        _ => Err("operand policy".into()),
+    }
+}
 fn validate_calls(graph: &Graph, entry: u32) -> Result<(), String> {
-    let mut pending = vec![(entry, vec![entry], Vec::<u32>::new())];
+    let mut pending = vec![(entry, vec![entry], Vec::<u32>::new(), BTreeSet::new())];
     let mut steps = 0;
-    while let Some((pc, mut targets, mut returns)) = pending.pop() {
+    while let Some((pc, mut targets, mut returns, mut seen)) = pending.pop() {
+        need(seen.insert((pc, returns.clone())), "input: control cycle")?;
         steps += 1;
         need(steps <= 4096, "input: call graph budget")?;
         let &(op, next) = graph.get(&pc).ok_or("input: missing control target")?;
@@ -221,19 +427,20 @@ fn validate_calls(graph: &Graph, entry: u32) -> Result<(), String> {
                 )?;
                 targets.push(t);
                 returns.push(next);
-                pending.push((t, targets, returns));
+                pending.push((t, targets, returns, seen));
             }
             Op::Ret => {
                 if let Some(t) = returns.pop() {
                     targets.pop();
-                    pending.push((t, targets, returns));
+                    pending.push((t, targets, returns, seen));
                 }
             }
             Op::Branch(_, t) => {
-                pending.push((t, targets.clone(), returns.clone()));
-                pending.push((next, targets, returns));
+                pending.push((t, targets.clone(), returns.clone(), seen.clone()));
+                pending.push((next, targets, returns, seen));
             }
-            _ => pending.push((next, targets, returns)),
+            Op::Jump(t) => pending.push((t, targets, returns, seen)),
+            _ => pending.push((next, targets, returns, seen)),
         }
     }
     Ok(())
@@ -242,17 +449,46 @@ pub(super) fn translate(image: &Candidate<'_>) -> Result<String, String> {
     let graph = decode(image)?;
     Ok(prove(graph, image.entry)?.emit())
 }
+fn condition(c: Condition) -> &'static str {
+    match c {
+        Condition::Ne => "!s.zf",
+        Condition::Eq => "s.zf",
+        Condition::B => "s.cf",
+        Condition::Be => "s.cf||s.zf",
+        Condition::A => "!s.cf&&!s.zf",
+    }
+}
 impl Proven {
     fn emit(self) -> String {
-        let mut s = String::from("// SUB552 native input subset. Genuine procfs; stable initial ASCII-key environment;\n// valid stack/no fault; strict UTF8 target <=64 UTF16 units. Host failures exit203.\n#![allow(dead_code,unused_variables,unused_assignments)]\nmod acquisition {\n");
+        let mut s = String::from("// Bounded native input composition subset. Genuine procfs; stable initial ASCII-key environment;\n// valid stack/no fault; strict UTF8 target <=64 UTF16 units. Host failures exit203.\n#![allow(dead_code,unused_variables,unused_assignments)]\nmod acquisition {\n");
         s.push_str(include_str!("input/acquisition.rs"));
-        s.push_str("}\nstruct Machine { r:[u32;4], saved:u32, stack:Vec<u32>, bytes:[u8;8], cf:bool,zf:bool }\n");
+        s.push_str(
+            "}\nstruct Machine { r:[u32;6], stack:Vec<u32>, bytes:[u8;12], cf:bool,zf:bool }\n",
+        );
         // Direct Rust functions for the acyclic graph. No runtime opcode/PC decoder.
         for (&pc, &(op, next)) in &self.graph {
             writeln!(s, "fn b{pc}(s:&mut Machine)->u32 {{").unwrap();
             match op {
+                Op::AllocateN(n)=>writeln!(s,"s.stack.extend([0;{}]);",n/4).unwrap(),
+                Op::PushReg(r)=>writeln!(s,"s.stack.push(s.r[{r}]);").unwrap(),
+                Op::PopReg(r)=>writeln!(s,"s.r[{r}]=s.stack.pop().unwrap();").unwrap(),
+                Op::Anchor=>s.push_str("s.r[5]=s.stack.len() as u32;\n"),
+                Op::Leave=>s.push_str("s.stack.truncate(s.r[5] as usize);s.r[5]=s.stack.pop().unwrap();\n"),
+                Op::Address(d,_,_)=>writeln!(s,"s.r[{d}]={};",self.addresses[&pc]).unwrap(),
+                Op::StackRead(d,frame,off,width)=>{
+                    match self.stack_reads[&pc] {
+                        Some(o)=>{let ty=if width==2{"u16"}else{"u32"};writeln!(s,"s.r[{d}]={ty}::from_le_bytes(s.bytes[{o}..{}].try_into().unwrap()) as u32;",o+width).unwrap();},
+                        None=>{let base=if frame{"s.r[5] as i64"}else{"s.stack.len() as i64"};writeln!(s,"s.r[{d}]=s.stack[({base}-1-({off}i64/4)) as usize];").unwrap();}
+                    }
+                },
+                Op::StackCompare(frame,off,k)=>{let base=if frame{"s.r[5] as i64"}else{"s.stack.len() as i64"};writeln!(s,"let v=s.stack[({base}-1-({off}i64/4)) as usize];s.cf=v<{k};s.zf=v=={k};").unwrap();},
+                Op::CleanupN(n)=>writeln!(s,"s.stack.truncate(s.stack.len()-{});",n/4).unwrap(),
+                Op::CompareRegs(a,b)=>writeln!(s,"s.cf=s.r[{a}]<s.r[{b}];s.zf=s.r[{a}]==s.r[{b}];").unwrap(),
+                Op::Multiply(d,r,k)=>writeln!(s,"s.r[{d}]=s.r[{r}].wrapping_mul({k});").unwrap(),
+                Op::Select(c,d,r)=>writeln!(s,"if {} {{s.r[{d}]=s.r[{r}];}}",condition(c)).unwrap(),
+                Op::Jump(t)=>{writeln!(s,"b{t}(s)}}").unwrap();continue;},
                 Op::Allocate=>s.push_str("s.stack.extend([0,0]);\n"),
-                Op::Buffer|Op::BufferAt(_)=>s.push_str("s.r[0]=0;\n"),
+                Op::Buffer|Op::BufferAt(_)=>writeln!(s,"s.r[0]={};",self.addresses[&pc]).unwrap(),
                 Op::Push(n)=>writeln!(s,"s.stack.push({n});").unwrap(),
                 Op::PushEax=>s.push_str("s.stack.push(s.r[0]);\n"),
                 Op::Name=>s.push_str("s.stack.push(0);\n"),
@@ -260,8 +496,8 @@ impl Proven {
                 Op::Call(t)=>writeln!(s,"s.stack.push(0);s.r[0]=b{t}(s);s.stack.pop();").unwrap(),
                 Op::Argument(d,o)=>writeln!(s,"s.r[{d}]=s.stack[s.stack.len()-1-{}];",o/4).unwrap(),
                 Op::CompareArgument(o,v)=>writeln!(s,"let v=s.stack[s.stack.len()-1-{}];s.cf=v<{v};s.zf=v=={v};",o/4).unwrap(),
-                Op::ReadWord(d,_,_)=>{let o=self.loads[&pc];writeln!(s,"s.r[{d}]=u16::from_le_bytes(s.bytes[{o}..{}].try_into().unwrap()) as u32;",o+2).unwrap();},
-                Op::Acquire => s.push_str("s.stack.truncate(s.stack.len()-3);let a=match acquisition::acquire(){Ok(v)=>v.project(),Err(_)=>return 203};s.r[0]=a.returned;s.r[1]=0;s.r[2]=0;for (i,v) in a.bytes.into_iter().enumerate(){if let Some(v)=v{s.bytes[i]=v;}}\n"),
+                Op::ReadWord(d,r,o)=>writeln!(s,"let o=s.r[{r}] as usize+{o};s.r[{d}]=u16::from_le_bytes(s.bytes[o..o+2].try_into().unwrap()) as u32;").unwrap(),
+                Op::Acquire => s.push_str(&"s.stack.truncate(s.stack.len()-3);let a=match acquisition::acquire(){Ok(v)=>v.project_capacity(CAPACITY).unwrap(),Err(_)=>return 203};s.r[0]=a.returned;s.r[1]=0;s.r[2]=0;for (i,v) in a.bytes.into_iter().enumerate(){if let Some(v)=v{s.bytes[i]=v;}}\n".replace("CAPACITY",&self.capacity.to_string())),
                 Op::Move(d,v) => writeln!(s,"s.r[{d}]=s.r[{v}];").unwrap(),
                 Op::Mov(r,v) => writeln!(s,"s.r[{r}]={v};").unwrap(),
                 Op::Test(r) => writeln!(s,"s.cf=false;s.zf=s.r[{r}]==0;").unwrap(),
@@ -270,13 +506,19 @@ impl Proven {
                     writeln!(s,"let v=s.r[{r}] & {mask};s.cf=v<{v};s.zf=v=={v};").unwrap();
                 },
                 Op::Load(d,_) => {
+                    if self.stack_reads.get(&pc)==Some(&None) {
+                        let Op::Load(_,o)=op else{unreachable!()};
+                        writeln!(s,"s.r[{d}]=s.stack[s.stack.len()-1-{}];",o/4).unwrap();
+                    } else {
                     let offset=self.loads[&pc];
                     writeln!(s,"s.r[{d}]=u32::from_le_bytes(s.bytes[{offset}..{}].try_into().unwrap());",offset+4).unwrap();
+                    }
                 }
-                Op::Save => s.push_str("s.saved=s.r[3];s.stack.push(s.r[3]);\n"),
-                Op::Restore => s.push_str("s.r[3]=s.saved;s.stack.pop();\n"),
+                Op::Save => s.push_str("s.stack.push(s.r[3]);\n"),
+                Op::Restore => s.push_str("s.r[3]=s.stack.pop().unwrap();\n"),
                 Op::Ret => {s.push_str("s.r[0]}\n");continue;}
                 Op::Lea(d,a,b,k,c) => writeln!(s,"s.r[{d}]=s.r[{a}].wrapping_add(s.r[{b}].wrapping_mul({k})).wrapping_add({c});").unwrap(),
+                Op::Scaled(d,v,k,c) => writeln!(s,"s.r[{d}]=s.r[{v}].wrapping_mul({k}).wrapping_add({c});").unwrap(),
                 Op::ZeroExtend(d,v) => writeln!(s,"s.r[{d}]=s.r[{v}] & 65535;").unwrap(),
                 Op::Arithmetic(r,v,subtract) => {
                     let method=if subtract{"overflowing_sub"}else{"overflowing_add"};
@@ -287,13 +529,13 @@ impl Proven {
                     writeln!(s,"s.r[{d}]=s.r[{d}].{method}(s.r[{v}]);").unwrap();
                 },
                 Op::Branch(c,t) => {
-                    let condition=match c {Condition::Ne=>"!s.zf",Condition::Be=>"s.cf||s.zf",Condition::A=>"!s.cf&&!s.zf"};
+                    let condition=condition(c);
                     writeln!(s,"if {condition} {{ b{t}(s) }} else {{ b{next}(s) }} }}").unwrap();continue;
                 }
             }
             writeln!(s, "b{next}(s)}}").unwrap();
         }
-        writeln!(s,"fn main(){{let mut s=Machine{{r:[0;4],saved:0,stack:vec![0],bytes:[0;8],cf:false,zf:false}};std::process::exit(b{}(&mut s) as i32);}}",self.entry).unwrap();
+        writeln!(s,"fn main(){{let mut s=Machine{{r:[0;6],stack:vec![0],bytes:[0;12],cf:false,zf:false}};std::process::exit(b{}(&mut s) as i32);}}",self.entry).unwrap();
         s
     }
 }
