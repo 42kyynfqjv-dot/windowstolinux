@@ -14,6 +14,7 @@ jobs:
       - run: rustfmt --check src/linker/state.rs src/inspection/read_state.rs src/inspection/loop_state.rs
       - run: cargo clippy --all-targets --locked -- -D warnings
       - run: cargo test --locked
+      - run: python3 -m unittest discover -s research/crt -p test_runtime_identity.py -v
       - run: cargo test --locked --example runtime_boundary
       - run: cargo test --locked --example crt_external_cell
       - run: cargo test --locked --example crt_sentinel

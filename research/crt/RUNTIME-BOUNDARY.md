@@ -55,3 +55,6 @@ be described as replacing the original CRT program or bypassing its startup.
 All previous12 compiler/102 authored comparisons and18 launch checks remain gates.
 Four historical Windows timeouts remain unexplained. Server2025 does not establish
 XP/7 compatibility. Medium substantive review precedes merging this research.
+
+Two independent Python tests use a literal synthetic PE layout to verify rebasing,
+unchanged preferred-base bytes and partial/duplicate/unsupported/unbacked rejection.
