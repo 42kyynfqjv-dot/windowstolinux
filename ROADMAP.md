@@ -154,3 +154,9 @@ checks. Seven PE32 envelopes parse; PE32+ rejects; every case remains ineligible
 for emission. Production and the eight compiler/102 authored comparisons stay
 unchanged. Next: medium contract review, then bounded non-emitting production
 intake/diagnostics; writable memory, loops and CRT retain explicit barriers.
+
+SUB-529 implements the reviewed non-emitting inspection gate in
+[SUB529-INSPECTION.md](SUB529-INSPECTION.md). Six independent Rust tests and same-PE
+Windows/Linux production-report checks supplement the design model. Next is medium
+production/provenance review; connecting closed metadata to existing execution proof
+requires a separate bounded gate. Parsing adds no translated-program coverage.

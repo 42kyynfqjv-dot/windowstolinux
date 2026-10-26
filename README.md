@@ -74,3 +74,8 @@ checks. Seven PE32 envelopes parse; PE32+ rejects; every case remains ineligible
 for emission. Production and the eight compiler/102 authored comparisons stay
 unchanged. Next: medium contract review, then bounded non-emitting production
 intake/diagnostics; writable memory, loops and CRT retain explicit barriers.
+
+SUB-529 adds `w2l --inspect-image INPUT.exe` for bounded PE32 diagnostic JSON.
+Inspection success always reports `emission_allowed: false`. Seven held-out PE32
+layouts can be inspected; PE32+ rejects; all eight conversions still reject.
+See [SUB529-INSPECTION.md](SUB529-INSPECTION.md) for stage boundaries and evidence.

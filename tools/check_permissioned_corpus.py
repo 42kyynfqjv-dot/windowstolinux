@@ -7,6 +7,7 @@ No converter is invoked here; existing check_native.py retains its rejection gat
 import argparse
 import hashlib
 import json
+import subprocess
 from pathlib import Path
 from permissioned_intake import Image, Rejected
 
@@ -23,6 +24,8 @@ by_name = {r['kind']: r for r in reports}
 expected_sites = {'held_loop': [(0x1006, 0x3000), (0x1015, 0x3000)],
                   'held_array': [(0x1002, 0x3004), (0x1007, 0x3008), (0x100e, 0x3000)]}
 rows = []
+production_rows = []
+converter = Path("target/debug/w2l").resolve()
 for case in cases:
     name = case['kind']
     r = by_name[name]
@@ -69,6 +72,22 @@ for case in cases:
                                              'writable-memory-unimplemented',
                                              'relocation-and-instruction-proof-not-run']
     assert hashlib.sha256((root / (name + '.exe')).read_bytes()).hexdigest() == digest
+    inspected = subprocess.run([str(converter), '--inspect-image', str(root / (name + '.exe'))], capture_output=True, timeout=15)
+    repeated = subprocess.run([str(converter), '--inspect-image', str(root / (name + '.exe'))], capture_output=True, timeout=15)
+    assert (inspected.returncode, inspected.stdout, inspected.stderr) == (repeated.returncode, repeated.stdout, repeated.stderr)
+    if name == 'held_pe32plus':
+        assert inspected.returncode == 1 and not inspected.stdout
+        assert inspected.stderr.decode().strip() == 'w2l: architecture: x86 PE32 required'
+        actual = {'stage': 'architecture-rejected', 'emission_allowed': False}
+    else:
+        assert inspected.returncode == 0 and not inspected.stderr
+        actual = json.loads(inspected.stdout)
+        normalized = dict(result)
+        normalized.pop('sha256')
+        normalized['relocation_candidates'] = [{k:v for k,v in p.items() if k != 'image'} for p in result['relocation_candidates']]
+        assert actual == normalized, (name, actual, normalized)
+    production_rows.append({'kind': name, 'sha256': digest, 'inspection': actual})
+    print('PRODUCTION_INSPECTION_ONLY', name, digest, actual['stage'], 'emission=false')
     rows.append({'kind': name, 'baseline': baseline, 'production_diagnostic': r['converter_stderr'],
                  'prototype': result})
     print('INTAKE_DESIGN_ONLY', name, digest, result['stage'], 'emission=false')
@@ -77,3 +96,9 @@ if args.compare:
     assert json.loads(path.read_text()) == rows, 'Windows/Linux prototype report mismatch'
 else:
     path.write_text(json.dumps(rows, indent=2) + '\n')
+
+production_path = root / 'production-inspection-report.json'
+if args.compare:
+    assert json.loads(production_path.read_text()) == production_rows
+else:
+    production_path.write_text(json.dumps(production_rows, indent=2)+'\n')

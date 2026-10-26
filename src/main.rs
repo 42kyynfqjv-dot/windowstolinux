@@ -1,6 +1,7 @@
 use std::env;
 mod control;
 mod imports;
+mod inspection;
 mod linker;
 use std::fs;
 use std::path::Path;
@@ -316,6 +317,20 @@ fn translate_image(bytes: &[u8]) -> Result<String, String> {
 fn run() -> Result<(), String> {
     let mut args = env::args_os().skip(1);
     let input = args.next().ok_or("usage: w2l INPUT.exe OUTPUT.rs")?;
+    if input == "--inspect-image" {
+        use std::io::Read;
+        let path = args.next().ok_or("usage: w2l --inspect-image INPUT.exe")?;
+        if args.next().is_some() {
+            return Err("usage: w2l --inspect-image INPUT.exe".into());
+        }
+        let file = fs::File::open(path).map_err(|e| e.to_string())?;
+        let mut bytes = Vec::new();
+        file.take(4 * 1024 * 1024 + 1)
+            .read_to_end(&mut bytes)
+            .map_err(|e| e.to_string())?;
+        println!("{}", inspection::inspect(bytes)?);
+        return Ok(());
+    }
     let output = args.next().ok_or("usage: w2l INPUT.exe OUTPUT.rs")?;
     if args.next().is_some() {
         return Err("usage: w2l INPUT.exe OUTPUT.rs".into());
