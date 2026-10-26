@@ -274,6 +274,22 @@ jobs:
           name: cli-measurement
           path: ${{ runner.temp }}/w2l-cli/*
           if-no-files-found: warn
+      - name: Measure separately frozen pipeline-correct CLI v2
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $installation = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $vcvars = Join-Path $installation 'VC\Auxiliary\Build\vcvarsall.bat'
+          cmd /c "`"$vcvars`" x86 && python research/cli/v2/measure.py %RUNNER_TEMP%/w2l-cli-v2"
+          if ($LASTEXITCODE -ne 0) { throw 'CLI v2 measurement failed' }
+          python research/cli/v2/inventory.py "$env:RUNNER_TEMP/w2l-cli-v2"
+          if ($LASTEXITCODE -ne 0) { throw 'CLI v2 inventory failed' }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cli-v2-measurement
+          path: ${{ runner.temp }}/w2l-cli-v2/*
+          if-no-files-found: warn
       - name: Validate design-only permissioned intake against all held-out originals
         run: python tools/check_permissioned_corpus.py "${{ runner.temp }}/w2l-compiler-measurement"
       - name: Check scalar local-frame contract against unchanged compiler artifact
