@@ -51,6 +51,10 @@ with tempfile.TemporaryDirectory() as tmp:
     # Store after an unbalanced push and copy without a callee frame.
     b=bytearray(CODE);b[0x65:0x6a]=bytes.fromhex('6a00 6a00 56');reject(b)
     b=bytearray(CODE);b[0x10:0x14]=bytes.fromhex('ff742408');reject(b)
+    # MOV preserves the unknown flags from cleanup: JE must not assume ZF.
+    b=bytearray(CODE);b[0x60:0x63]=bytes.fromhex('b800000000')
+    struct.pack_into('<i',b,0x7e,0x1040-(0x1000+0x7d+5))
+    reject(b,'unknown branch flags')
     for end in [0x51,0x52,0x53,0x59,0x5a,0x5b,0x5c,0x64,0x6c,0x6d,0x6e,0x6f,0x70,0x71,0x72,0x74,0x75,0x76,0x77,0x78,0x79,0x7a,0x7c,0x7d,0x7e,0x7f]:
         reject(CODE[:end])
 print(f'nested production: 2 deterministic native cases, {rejected} CLI rejections; separate from MSVC Windows/Linux evidence')

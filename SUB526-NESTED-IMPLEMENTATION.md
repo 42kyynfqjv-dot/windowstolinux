@@ -27,7 +27,7 @@ Two new Rust functions bring the root total to60, covering literal frame traces,
 copy/store pointer/unknown/protected/foreign rejection at both positions, atomic
 word preservation and routine graph boundaries/cycles. The new production CLI
 suite executes two independent literal programs (tail success0 and non-tail99)
-and49 rejection cases: exact-form neighbors/prefixes, executable truncations,
+and50 rejection cases: exact-form neighbors/prefixes, executable truncations,
 recursion/tail cycles, interior/out-of-range targets, unbalanced/untaken paths.
 It requires deterministic Rust and Hello/empty stderr observations. Existing
 compiler-shaped suite now executes11 cases: prior JE rejection is replaced by
@@ -50,3 +50,28 @@ boundary discovery, both-word borrowed-write validation, tail ESI/return identit
 independent byte layouts and final compiler artifact hashes. Primary instruction
 and ABI provenance is in SUB525-NESTED-DESIGN.md; original implementation is
 MIT OR Apache-2.0 with no Wine source/runtime or AI runtime.
+
+## Medium production review
+
+No production semantic defect reproduced. Exact artifact/hash and identical host
+Rust evidence match Nested/empty/0. Production copy timing, complete two-word
+store validation, protected ownership and tail return context follow the reviewed
+contract. Static region proof and leaf-removal cycle checks are separate from
+runtime instruction/depth caps. Region ambiguity rejection tightens structural
+acceptance; it is not general support for shared instruction regions.
+
+A real regression gap was unknown ZF on the newly admitted JE. The CLI suite now
+inserts flags-preserving MOV after cleanup and requires unknown-branch rejection;
+it checks actual loader/validator output preservation. There are now50 rejection
+invocations, not50 distinct instruction families. Two native cases remain separate
+from the eighth actual compiler-built Windows/Linux comparison.
+
+Next gate: preregister a held-out source corpus covering ordinary CRT, runtime
+inputs, loops, local/array/structure memory, file I/O and PE32+ to measure real
+structural barriers. Freeze sources/flags/expectations before measuring; accept
+honest rejections. Medium effort suffices for measurement. Choose any subsequent
+Astra architecture work from the resulting dominant prerequisites rather than
+adding isolated opcodes. Current x86 supports only three scalar registers plus
+ESI and exact forms, no loops/general writable memory/heap/ordinary CRT; PE32+
+needs a separate64-bit register/address/ABI design. Expanding imports/CRT before
+those execution-state prerequisites is unlikely to yield application coverage.
