@@ -20,6 +20,9 @@ class Contract(unittest.TestCase):
         s=State(flag=9);before=copy.deepcopy(s)
         r=initialize(s,7);self.assertEqual((r.eax,r.known_mask),(1,255));self.assertEqual(s,before)
         r=initialize(s,7,incoming_eax=0xdeadbeef);self.assertEqual(r.eax,0xdeadbe01)
+        for value in [-1,0x100000000]:
+            with self.assertRaises(ValueError):initialize(s,1,incoming_eax=value)
+        self.assertEqual(s,before)
 
     def test_invalid_policy_does_not_return_or_write(self):
         s=State();r=initialize(s,2)
@@ -49,6 +52,8 @@ class Contract(unittest.TestCase):
     def test_explicit_success_opaque_lifecycle_requires_reinitialization(self):
         s=State();self.assertEqual(initialize(s,0,effects=[Foreign(0,True,(1,2,3)),Foreign(0,True,(4,5,6))]).eax,1)
         self.assertEqual(register(s,0x4018d0,allowed_callbacks={0x4018d0},effect=Foreign(0,True,(7,8,9))).eax,0)
+        for index in [-1,2]:
+            with self.assertRaises(ValueError):consume_model_table(s,index)
         self.assertEqual(consume_model_table(s,0),[0x4018d0])
         self.assertEqual(register(s,0x4018d0,allowed_callbacks={0x4018d0},effect=Foreign(0,True,(7,8,9))).kind,'blocked')
 
@@ -68,6 +73,10 @@ class Contract(unittest.TestCase):
         s=State();initialize(s,1)
         with self.assertRaises(ValueError):register(s,0,allowed_callbacks={0x4018d0})
         with self.assertRaises(ValueError):register(s,0x5018d0,allowed_callbacks={0x4018d0})
+        for address in [-1,0x100000000]:
+            before=copy.deepcopy(s)
+            with self.assertRaises(ValueError):register(s,address,allowed_callbacks={address},effect=Foreign(0,True))
+            self.assertEqual(s,before)
         self.assertEqual(register(s,0x4018d0,allowed_callbacks={0x4018d0}).kind,'blocked')
         self.assertIn('_crt_atexit',s.events)
         s=State();initialize(s,1)

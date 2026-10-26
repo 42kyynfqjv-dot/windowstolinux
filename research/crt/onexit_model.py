@@ -91,6 +91,8 @@ def initialize(s, policy, *, incoming_eax=None, effects=()):
         return Result('blocked')
     if s.terminal:
         return Result('nonreturn')
+    if incoming_eax is not None and (not isinstance(incoming_eax, int) or not 0 <= incoming_eax <= 0xffffffff):
+        raise ValueError('incoming EAX bits')
     if s.flag is None:
         return block(s, 'unknown initialization byte')
     if s.flag:
@@ -142,7 +144,7 @@ def register(s, callback, *, allowed_callbacks, effect=Foreign()):
         return Result('blocked')
     if s.terminal:
         return Result('nonreturn')
-    if callback == 0 or callback not in allowed_callbacks:
+    if not isinstance(callback, int) or not 0 < callback <= 0xffffffff or callback not in allowed_callbacks:
         raise ValueError('callback lifetime/provenance')
     t = s.tables[0]
     if t.words[0] is None:
@@ -176,6 +178,8 @@ def register(s, callback, *, allowed_callbacks, effect=Foreign()):
 def consume_model_table(s, index):
     """Only model lifecycle, not native callback execution or imported effects."""
     validate(s)
+    if index not in (0, 1):
+        raise ValueError('table index')
     if s.blocked or s.terminal or s.tables[index].life != 'opaque-ready':
         raise ValueError('table lifetime')
     t = s.tables[index]
