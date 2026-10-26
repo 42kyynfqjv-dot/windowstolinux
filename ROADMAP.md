@@ -339,3 +339,9 @@ semantics. The acceptance gate is all eight frozen O1/O2 artifacts and112 actual
 Windows/ELF input pairs, plus independent unsafe/boundary/resource tests. Review
 and exact final-head CI remain required before merge. The next useful stdin/stdout
 CLI target remains separate; no arbitrary opcode accumulation or broad CRT claim.
+
+SUB-563 begins the cohesive useful CLI track: frozen freestanding binary-uppercase
+source, O1/O2 configurations and exact expectations; unchanged Windows measurement
+and separately labeled short-I/O probes precede production changes. See
+[CLI contract](research/cli/CONTRACT.md). Pipe EOF, mutable buffer ownership,
+runtime loops and synchronous handle effects must be resolved together.
