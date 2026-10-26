@@ -87,5 +87,5 @@ production until full proof/runtime correspondence and this evidence pass.
 
 Architecture/core needs Astra High; substantive medium review before merge. Keep
 this as a cohesive stream milestone, not a separate issue per opcode. Broader CRT,
-x64, GUI and XP/7 compatibility remain unproved. Four historical timeouts remain
+x64, GUI and XP/7 compatibility remain unproved. Five recorded timeouts remain
 unexplained; no retry or relaxed threshold is introduced.
