@@ -230,3 +230,31 @@ The new 16 functions/24 model traces are not additional Windows/Linux pairs.
 
 These are a finite route to one real compiler-produced native program. They are
 not a general cdecl/stdcall implementation or application compatibility claim.
+
+
+## Medium contract review
+
+Review found no reproduced model transition defect or production barrier escape.
+Two direct negative assertions now check internal RET rejects clobbered ESI without
+consuming its return/frame, and [ESP+8] rejects a physically present SavedESI word
+when only one actual argument was pushed. These extend existing functions: the
+count remains 16 functions. The 24 concrete traces are parameterizations of one
+observed layout scenario, not 24 distinct programs. Only the independent concrete
+stack varies numeric load base and incoming ESI; the symbolic model intentionally
+retains image-owned RVAs and an opaque ESI identity. Neither is new Windows evidence.
+Expected output/7+5/continuations/layout are literal independent expectations;
+CMP/JNE execution, real field discovery and arithmetic flag verification remain
+production integration gates, as documented above.
+
+Ready for a bounded Astra High production pass. Implement the typed core first
+with the barrier retained, then the exact nine observed form groups listed above,
+two-word helper accesses and ADD ESP,20 unknown-flag handling. Do not enable the
+Candidate emitter until graph-wide field binding, all-context byte/ownership
+checks, both balanced epilogues, pointer nonobservation and deterministic native
+emission are verified through production tests. Completion requires the same
+unmodified MSVC-built PE bytes to run on Windows and translate to a Linux ELF
+with Hello/empty stderr/exit0 in one reproducible experiment. If that cannot be
+completed within the bounded pass, keep rejection and report the specific gate;
+model or decoder acceptance alone is insufficient. Keep ordinary CRT rejection,
+all 102 existing comparisons and historical timeout diagnostics. No new register
+families, general memory, API coverage or compiler flag search are included.

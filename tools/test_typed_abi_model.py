@@ -105,6 +105,17 @@ class TypedAbiTests(unittest.TestCase):
         m.ret()
         self.assertTrue(m.halted)
 
+        # Internal RET has its own snapshot: balanced words alone are insufficient.
+        m, _, _ = setup()
+        m.call(0x1400)
+        before = list(m.words)
+        m.eax = Integer(99)
+        m.move_eax_to_esi()
+        with self.assertRaisesRegex(Rejected, 'ESI not restored'):
+            m.ret()
+        self.assertEqual(m.words, before)
+        self.assertEqual(len(m.frames), 2)
+
     def test_nested_and_shared_callee_context(self):
         m, _, _ = setup()
         initial = m.esi
@@ -233,6 +244,15 @@ class TypedAbiTests(unittest.TestCase):
         m.eax = Integer(7)
         with self.assertRaises(Rejected):
             m.add_eax(m.argument(1))
+
+        # Physical [ESP+8] exists, but is a saved register, not an argument.
+        m, _, _ = setup()
+        m.save_esi()
+        m.push(Integer(7))
+        m.call(0x1200)
+        self.assertEqual(m.argument(1), Integer(7))
+        with self.assertRaisesRegex(Rejected, 'caller-owned argument'):
+            m.argument(2)
 
     def test_exact_join_includes_context_and_unknown_identity(self):
         m, pointer, _ = setup()
