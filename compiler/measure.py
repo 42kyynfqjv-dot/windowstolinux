@@ -5,6 +5,10 @@ import os
 from pathlib import Path
 import struct
 import subprocess
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tools'))
+from linker_intake import Candidate
 
 repo=Path.cwd()
 root=Path(os.environ['RUNNER_TEMP'])/'w2l-compiler-measurement'
@@ -32,7 +36,9 @@ for kind in ['freestanding','crt']:
     command(link,kind+'-link')
     command(['dumpbin','/headers','/imports',exe],kind+'-headers-imports')
     # Disassemble only our freestanding authored program, not linked CRT startup code.
-    if kind=='freestanding':command(['dumpbin','/disasm',exe],kind+'-disassembly')
+    if kind=='freestanding':
+        command(['dumpbin','/disasm',exe],kind+'-disassembly')
+        command(['dumpbin','/relocations',exe],kind+'-relocations')
     b=(root/exe).read_bytes();pe=struct.unpack_from('<I',b,60)[0];o=pe+24
     assert b[pe:pe+4]==b'PE\0\0' and struct.unpack_from('<H',b,o)[0]==0x10b
     sections=struct.unpack_from('<H',b,pe+6)[0]
@@ -49,5 +55,13 @@ for kind in ['freestanding','crt']:
         conversion_accepted=converter.returncode==0,compile_flags=flags,link_flags=link[1:])
     print('MEASUREMENT '+json.dumps(result))
     results.append(result)
+    if kind=='freestanding':
+        # Separate test-only structural model; the production rejection above remains.
+        # No file patching, decoder bypass or compiled-program equivalence claim.
+        candidate = Candidate(b)
+        intake = candidate.report()
+        assert candidate.blob == b
+        (root/'linker-intake-prototype.json').write_text(json.dumps(intake,indent=2)+'\n')
+        print('TEST_ONLY_LINKER_INTAKE '+json.dumps(intake))
 (root/'report.json').write_text(json.dumps(results,indent=2)+'\n')
 print('Compiler experiment: two originals verified; acceptance is reported, never assumed.')

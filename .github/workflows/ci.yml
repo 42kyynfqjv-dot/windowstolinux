@@ -14,6 +14,7 @@ jobs:
       - run: cargo clippy --all-targets --locked -- -D warnings
       - run: cargo test --locked
       - run: python3 scripts/check_fixture_manifest.py
+      - run: python3 -m unittest discover -s tools -p test_linker_intake.py -v
       - name: Imported output translation and support checks
         run: |
           python3 scripts/check_output_probe.py

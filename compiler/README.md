@@ -48,3 +48,8 @@ Reproduction: cargo build --locked on Windows; enter an MSVC x86 tools environme
 python compiler/measure.py. RUNNER_TEMP must name a writable temporary directory.
 Do not interpret failure as a request to relax checks. Use observed PE metadata and
 instruction/ABI gaps to choose a separately designed bounded next implementation.
+
+SUB-515 also runs a separate test-only structural intake model on the unchanged
+minimal PE and records dumpbin /relocations and linker-intake-prototype.json.
+See ../SUB515-LINKER-DESIGN.md. Structural acceptance does not bypass production
+rejection or add a Linux comparison. Actual process load bases are not measured.

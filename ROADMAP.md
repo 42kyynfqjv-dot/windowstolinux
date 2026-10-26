@@ -67,3 +67,10 @@ SUB-514 measured unmodified MSVC output: both custom-entry and ordinary CRT buil
 run on Windows but conversion rejects. compiler/RESULTS.md identifies loader and
 register/stack gaps. Next bounded linker-image intake contract precedes the observed
 ABI/instruction slice; ordinary CRT remains a separate larger milestone.
+
+SUB-515 is narrowed to design/test-only validation before production changes; see
+[SUB515-LINKER-DESIGN.md](SUB515-LINKER-DESIGN.md). The proposed profile separates
+intake from emission, excludes loader/debug metadata from immutable reads, and
+requires typed relocation provenance. Medium contract review precedes production
+intake; actual compiler translation additionally requires the measured ABI slice
+and pointer-preserving stack state. Windows actual-base evidence remains absent.
