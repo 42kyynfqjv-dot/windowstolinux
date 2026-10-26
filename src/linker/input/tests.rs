@@ -41,7 +41,7 @@ fn graph_at(program: &[u8], entry: u32) -> Graph {
         metadata: vec![],
         iat: 0x2000,
         api: Api::Environment,
-        pointers: [(0x100a, 0x2008), (0x1010, 0x2000)].into(),
+        pointers: [(entry + 10, 0x2008), (entry + 16, 0x2000)].into(),
     };
     decode(&c).unwrap()
 }
