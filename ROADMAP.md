@@ -7,8 +7,10 @@
 - M4–M7 Windows APIs, advanced execution, instrumentation and desktop behavior remain open.
 - M8–M10 x64, representative corpus, optimization and reproducible releases remain open.
 
-Current production gates:12 unchanged compiler-program comparisons,102 authored
-Windows Server2025/Linux comparisons and18 original-only launch checks. Four
+Current production gates:16 unchanged compiler programs, including four runtime-input
+programs. The three frozen input compositions contribute51 Windows/ELF scenarios;
+102 authored Windows Server2025/Linux comparisons and18 original-only launch checks
+remain required. Four
 held-out capabilities remain rejected. This is not XP/7 validation or general
 application compatibility; the99% objective is aspirational.
 No milestone is complete merely because generated Rust compiles.
@@ -18,10 +20,11 @@ No milestone is complete merely because generated Rust compiles.
 SUB-546's [accessor closure decision](research/crt/ACCESSOR-CLOSURE.md) is no-go:
 the existing internal API description and separate probes do not establish the
 external effect frame needed to compose the real call with owned-cell/sentinel
-research components. Next: bounded runtime-specific resolved-target effect analysis
-with complete control-flow/effect coverage or a precise unresolved dependency.
-Astra High for that proof decision, then medium review. Ordinary CRT stays blocked;
-no further isolated cell implementation is a substitute for closure.
+research components. Later analysis bound one runtime accessor leaf, but object lifetime, original
+startup context and earlier external effects remain unproved (SUB-548). Ordinary
+CRT stays blocked. The separate freestanding input track now has real native
+runtime dependence; it does not close that startup gap. Next use a frozen held-out
+compiler/input composition measurement to test reuse before widening semantics.
 
 ## Historical implementation checkpoints
 
