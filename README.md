@@ -21,7 +21,19 @@ Exact unprefixed `A1 moffs32` loads EAX from four validated immutable data bytes
 
 ## Status
 
-M0, M1 and the bounded M2 slice are in draft review. CI exercises 63 original arithmetic/data cases plus seven imported-output Windows/Linux cases, including taken and untaken outcomes for each supported branch. The [strict iced production adapter](docs/DECODER-INTEGRATION.md) preserves the exact subset and is compared against a handwritten test oracle. The 99% compatibility objective is aspirational and has no measured corpus result.
+The reviewed foundation and bounded implementation are merged through SUB-545.
+Current CI requires 12 unchanged compiler-program Windows/Linux comparisons,
+102 authored comparisons and 18 original-only launch checks. Four held-out
+capabilities (runtime arguments, ordinary CRT, file I/O and PE32+) remain rejected.
+The [strict iced production adapter](docs/DECODER-INTEGRATION.md) preserves its
+specified instruction policies. The 99% compatibility objective remains aspirational.
+
+SUB-546 records a [no-go accessor closure decision](research/crt/ACCESSOR-CLOSURE.md).
+The isolated option, sentinel and external-cell research components do not close
+ordinary CRT startup. The next gate is a bounded runtime-specific accessor effect
+analysis. Historical checkpoints below describe earlier scopes; the latest linked
+implementation contracts govern each added profile. Four historical Windows
+fixture timeouts remain unexplained; diagnostics and failure propagation remain enabled.
 
 ## License
 

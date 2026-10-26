@@ -1,17 +1,29 @@
 # Roadmap
 
-- M0 foundation and M1 narrow modern-Windows PE32-to-native-ELF slice are in draft review.
+- M0 foundation and M1 narrow modern-Windows PE32-to-native-ELF slice are merged.
 - M2 has bounded EAX arithmetic, four flags, forward conditions, direct calls/returns and one-word stack arguments;
   the strict iced adapter is integrated. General stack/data memory is still open.
 - M3 now has bounded code plus read-only-data mapping; general executable structure, imports, relocations and indirect calls remain open.
 - M4–M7 Windows APIs, advanced execution, instrumentation and desktop behavior remain open.
 - M8–M10 x64, representative corpus, optimization and reproducible releases remain open.
 
-Current production evidence:63 authored Windows Server2025/Linux cases. This is
-not XP/7 validation or application compatibility; the99% objective is aspirational.
+Current production gates:12 unchanged compiler-program comparisons,102 authored
+Windows Server2025/Linux comparisons and18 original-only launch checks. Four
+held-out capabilities remain rejected. This is not XP/7 validation or general
+application compatibility; the99% objective is aspirational.
 No milestone is complete merely because generated Rust compiles.
 
-## Next native program gate
+## Current startup prerequisite
+
+SUB-546's [accessor closure decision](research/crt/ACCESSOR-CLOSURE.md) is no-go:
+the existing internal API description and separate probes do not establish the
+external effect frame needed to compose the real call with owned-cell/sentinel
+research components. Next: bounded runtime-specific resolved-target effect analysis
+with complete control-flow/effect coverage or a precise unresolved dependency.
+Astra High for that proof decision, then medium review. Ordinary CRT stays blocked;
+no further isolated cell implementation is a substitute for closure.
+
+## Historical implementation checkpoints
 
 SUB-508 implements the reviewed [SUB507-DESIGN.md](SUB507-DESIGN.md) contract:
 exact PUSH imm32, MOV EAX,[ESP+4] and flags-preserving LEA cleanup over one tagged

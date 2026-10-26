@@ -22,6 +22,7 @@ jobs:
       - run: python3 -m unittest discover -s research/crt -p test_initializer_model.py -v
       - run: python3 -m unittest discover -s research/crt -p test_onexit_model.py -v
       - run: python3 -m unittest discover -s research/crt -p test_commode_model.py -v
+      - run: python3 -m unittest discover -s research/crt -p test_accessor_evidence.py -v
       - run: python3 scripts/check_fixture_manifest.py
       - run: python3 -m unittest discover -s tools -p test_linker_intake.py -v
       - run: python3 -m unittest discover -s tools -p test_permissioned_intake.py -v
@@ -226,7 +227,7 @@ jobs:
           $installation = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
           if (!$installation) { throw 'Required existing MSVC toolchain unavailable' }
           $vcvars = Join-Path $installation 'VC\Auxiliary\Build\vcvarsall.bat'
-          cmd /c "`"$vcvars`" x86 && python compiler/measure.py && python compiler/diversity.py && python compiler/diversity.py --structures && python compiler/heldout/measure.py x86 && python research/crt/probe.py && python research/crt/check_option_state.py --windows-probe && python research/crt/check_onexit.py && python research/crt/check_sentinel.py --windows-probe && python research/crt/check_commode.py && python research/crt/check_external_cell.py"
+          cmd /c "`"$vcvars`" x86 && python compiler/measure.py && python compiler/diversity.py && python compiler/diversity.py --structures && python compiler/heldout/measure.py x86 && python research/crt/probe.py && python research/crt/check_option_state.py --windows-probe && python research/crt/check_onexit.py && python research/crt/check_sentinel.py --windows-probe && python research/crt/check_commode.py && python research/crt/check_external_cell.py && python research/crt/check_accessor.py"
           if ($LASTEXITCODE -ne 0) { throw 'Compiler measurement failed' }
           cmd /c "`"$vcvars`" x64 && python compiler/heldout/measure.py x64"
           if ($LASTEXITCODE -ne 0) { throw 'Held-out x64 measurement failed' }
@@ -254,6 +255,7 @@ jobs:
         with:
           name: compiler-measurement-reports
           path: |
+            ${{ runner.temp }}/w2l-compiler-measurement/crt_accessor_probe.exe
             ${{ runner.temp }}/w2l-compiler-measurement/crt_commode_*.exe
             ${{ runner.temp }}/w2l-compiler-measurement/crt_sentinel_probe.exe
             ${{ runner.temp }}/w2l-compiler-measurement/crt_onexit_probe.exe
@@ -298,3 +300,4 @@ jobs:
           python3 research/crt/check_sentinel.py evidence --compare
           python3 research/crt/check_commode.py evidence --compare
           python3 research/crt/check_external_cell.py evidence --compare
+          python3 research/crt/check_accessor.py evidence --compare
