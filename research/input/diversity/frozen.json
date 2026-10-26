@@ -1,0 +1,28 @@
+{
+  "scope": "Frozen before compiler/converter evaluation; no semantic support expansion",
+  "compile_flags": [
+    "/nologo",
+    "/Bv",
+    "/O2",
+    "/W4",
+    "/GS-",
+    "/Zl",
+    "/c"
+  ],
+  "link_flags": [
+    "/nologo",
+    "/machine:x86",
+    "/subsystem:console",
+    "/nodefaultlib",
+    "/entry:entry@0"
+  ],
+  "libraries": [
+    "kernel32.lib"
+  ],
+  "sha256": {
+    "guard_join.c": "37cfc30c41a5ede2a9ef9d6e5b4c35d4ec55572804ebc9e6795858e51986e2aa",
+    "squares.c": "af8b38ea2001659f4d8b9dcf8a22405fe4db79f1365f0af78f0fb17849e61985",
+    "helper.c": "2c7db6e7f55a73c48703a2421e4a49f684bbcd66d8cd72d03e0d976bf545bf87",
+    "cases.json": "852628e6ea02df1a2d803c23d5de81fc26100d56a7eff882248c82f4435b9a50"
+  }
+}
