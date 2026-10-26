@@ -272,3 +272,10 @@ three conversions reject. No support is widened. See
 Next recommended Astra design: bounded register-parametric scalar IR and proof
 for the unchanged reordered-guard program, preserving unknown-state/ownership
 checks. Nonlinear IMUL and helper-pointer calls remain separate prerequisites.
+
+SUB-554 defines [reusable bounded scalar semantics](research/input/scalar/DESIGN.md)
+and an independent test-only model for register/width operands, modular predicate
+refinement, snapshots, disjunctive joins and owned initialized reads. Eight model
+tests exercise register permutations and guard order without production expansion.
+Next: medium contract review, then bounded normalization/proof/emission integration
+for unchanged guard_join. Nonlinear IMUL and pointer-helper calls remain separate.

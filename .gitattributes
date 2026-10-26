@@ -19,3 +19,5 @@ research/input/*.json text eol=lf
 
 research/input/diversity/*.py text eol=lf
 research/input/diversity/*.json text eol=lf
+
+research/input/scalar/*.py text eol=lf
