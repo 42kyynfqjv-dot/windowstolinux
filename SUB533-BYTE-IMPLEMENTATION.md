@@ -50,7 +50,7 @@ Test-only compatibility adapters compare legacy Option<Flags> expectations again
 Knowledge without adding runtime conversions or weakening expected flag values.
 
 Independent CLI/native byte cases use literal instruction bytes and expected results:
-10 deterministic native programs and121 rejection cases, including prefixes inserted
+11 deterministic native programs and121 rejection cases, including prefixes inserted
 into valid controls, unsupported registers/widths/offsets, unknown reads and untaken
 uninitialized paths. The synthetic PE shell is reused from the reviewed local tests;
 no model/production-derived behavioral oracle. Earlier local10 native/95 rejections,
@@ -70,3 +70,12 @@ Next medium review: partial scalar normalization and every full-value consumer,
 per-flag migration/condition inputs, byte/word cleanup isolation, POP/PUSH modified
 contents, independent regressions and exact compiler-artifact provenance. Draft only;
 no merge/release or broader capability expansion in this slice.
+
+Medium review adds a native full-known POP normalization/compare case from a real
+caller scalar argument. The unknown-ECX full-read rejection now initializes EAX,
+so it cannot pass merely because the other ADD operand was also unknown. These
+close evidence gaps; no production defect was reproduced. Partial AL preservation,
+per-flag consumer knowledge and distinct allocation-kind cleanup remain as specified.
+Next proposed design is frozen held_array read-only use of initially writable image
+data: whole-program no-write proof, relocation-bound scalar reads and initial-data
+provenance before any eligibility change. Ordinary CRT/loop support remains separate.

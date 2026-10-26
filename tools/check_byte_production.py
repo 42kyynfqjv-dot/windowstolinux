@@ -34,7 +34,11 @@ suffix=h('0fb60424 59 c3')
 outer+=b'\xe8'+struct.pack('<i',len(suffix))+suffix
 positive.append(('nested-byte',outer+base,65))
 positive.append(('shared-byte',h('e806000000 e801000000 c3')+base,132))
-negative=[h(x) for x in ['51 0fb60424 59 c3','51 88442401 59 c3','51 59 03c1 c3','51 83c408 c3',
+# Full known ECX argument -> byte overwrite -> POP normalization -> full compare.
+main=h('6a00 6811223344 e804000000 83c408 c3')
+helper=h('8b4c2404 51 c644240143 59 b811433344 3bc8 7506 b807000000 c3 b863000000 c3')
+positive.append(('pop-full-normalization',main+helper,7))
+negative=[h(x) for x in ['51 0fb60424 59 c3','51 88442401 59 c3','51 59 b800000000 03c1 c3','51 83c408 c3',
  '83ec08 59 c3','51 8b442404 59 c3','51 c7042401000000 59 c3','51 56 59 c3',
  '51 51 59 c3','51 6a01 59 c3','51 b801000000 c3','fec0 c3',
  '51 33c0 7504 c6042407 0fb60424 59 c3','51 c644240107 59 51 0fb60424 59 c3']]
