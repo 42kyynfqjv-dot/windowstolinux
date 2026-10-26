@@ -296,3 +296,9 @@ SUB-557 integrates the reviewed bounded nonlinear scalar DAG into the private
 input proof/emitter. See `research/input/scalar/NONLINEAR-INTEGRATION.md` for exact
 forms, proof limits and same-artifact execution gates. Frozen squares is the new
 acceptance target; helper calls require a separate ownership design.
+
+SUB-558 helper design/model: `research/input/helper/CONTRACT.md` defines borrowed
+initialized-buffer authority, protected call/return contexts, explicit argument
+versus local cleanup and narrow unreachable-padding gates. Eight model tests and
+same-artifact inventory are design evidence; production helper remains rejected.
+Medium review precedes separate graph/capability/emitter implementation.
