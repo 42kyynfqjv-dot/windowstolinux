@@ -8,7 +8,9 @@ fn parity(bytes: &[u8]) -> bool {
             assert_eq!(trial, original, "IR differs for {bytes:02x?}");
             let source = control::emit(&original);
             assert_eq!(control::emit(&trial), source);
-            assert_eq!(control::emit(&trial), source); // Determinism, including rejection.
+            let repeated = control::decode_with(bytes, adapter::decode_instruction).unwrap();
+            assert_eq!(repeated, trial);
+            assert_eq!(control::emit(&repeated), source); // Fresh decode and emission.
             source.is_ok()
         }
         (Err(_), Err(_)) => false, // Diagnostics may differ; rejection must not.
@@ -77,6 +79,47 @@ fn all_first_two_bytes_have_instruction_acceptance_and_ir_parity() {
 
 #[test]
 fn independently_specified_policy_rejections_and_boundaries() {
+    // Literal expected IR is independent of the handwritten decoder oracle.
+    use control::{Condition, Instruction, Op};
+    for (code, expected) in [
+        (vec![0xb8, 0x78, 0x56, 0x34, 0x12], Op::Mov(0x12345678)),
+        (vec![0x05, 255, 255, 255, 255], Op::Add(u32::MAX)),
+        (vec![0x3d, 0, 0, 0, 128], Op::Compare(0x80000000)),
+        (vec![0x31, 0xc0], Op::Xor),
+        (vec![0xc3], Op::Ret),
+    ] {
+        let mut bytes = vec![0x90; 17];
+        bytes.extend(&code);
+        assert_eq!(
+            adapter::decode_instruction(&bytes, 17).unwrap(),
+            Instruction {
+                op: expected,
+                next: 17 + code.len()
+            }
+        );
+    }
+    for (opcode, condition, when) in [
+        (0x72, Condition::Carry, true),
+        (0x73, Condition::Carry, false),
+        (0x74, Condition::Zero, true),
+        (0x75, Condition::Zero, false),
+        (0x7c, Condition::SignedLess, true),
+        (0x7d, Condition::SignedLess, false),
+    ] {
+        let mut bytes = vec![0x90; 17];
+        bytes.extend([opcode, 127]);
+        assert_eq!(
+            adapter::decode_instruction(&bytes, 17).unwrap(),
+            Instruction {
+                op: Op::Branch {
+                    condition,
+                    when,
+                    target: 146
+                },
+                next: 19
+            }
+        );
+    }
     let forms: &[&[u8]] = &[
         &[0xb8, 0, 0, 0, 0],
         &[0x05, 0, 0, 0, 0],

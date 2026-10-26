@@ -95,3 +95,28 @@ whitelist, test independence, shared-code extraction and notices. After that,
 make a separately scoped production-integration decision with the same rejection
 matrix and final-commit Windows/Linux checks; do not widen execution semantics
 while integrating. Broader M2 and M3–M10 work remains open.
+
+## Medium review follow-through
+
+The comparison counts were checked against the actual loop bounds: corpus byte
+lengths total 708, hence 708 * 256 = 181,248 mutation calls; the instruction grid
+is 256 * 256 * 2 = 131,072 calls. These are comparisons, including duplicates.
+The review strengthens determinism by decoding afresh before comparing IR and
+source, and adds literal expected IR for all eleven supported forms at offset 17.
+Immediate bit patterns and each branch condition/polarity/absolute target are
+asserted without calling the handwritten decoder for expected values.
+
+Rejection equivalence means both decoders fail, or equal IR reaches the same
+shared semantic rejection. Error strings are intentionally not compared; this
+is not diagnostic-category parity. Shared graph/emitter behavior remains outside
+independent decoder-oracle coverage. All six packaged dependency notice texts
+were compared verbatim to pinned archives; iced retains its tagged upstream
+notice. The production decoder and execution policy are untouched by this review.
+
+Next integration decision: pin iced in the converter only after deciding whether
+the maintenance benefit warrants its dependency/build cost. Preserve the exact
+byte whitelist, fail closed on decoder/policy disagreement, retain the independent
+handwritten oracle under tests, and require malformed/prefix/target/resource
+regressions plus identical fixture IR/source and final Windows/Linux CI. No silent
+fallback, resynchronization or new instruction acceptance. Use Astra High for the
+production boundary/design change, then medium for verification and documentation.
