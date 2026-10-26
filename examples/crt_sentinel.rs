@@ -811,3 +811,115 @@ mod tests {
         }
     }
 }
+
+// Research-only binding reused by the external-cell example. No production caller.
+#[allow(dead_code)]
+pub(crate) fn validate_external_caller(file: &[u8]) -> Result<()> {
+    let snapshot = Snapshot::new(file.to_vec());
+    bind(&snapshot)?;
+    let opt = u32_at(file, 60)? as usize + 24;
+    let raw = |r: u32, n: u32| -> Result<usize> {
+        let end = r.checked_add(n).ok_or("range overflow")?;
+        for i in 0..4 {
+            let p = opt + 224 + i * 40;
+            let start = u32_at(file, p + 12)?;
+            let size = u32_at(file, p + 8)?.min(u32_at(file, p + 16)?);
+            if r >= start && end <= start + size {
+                return Ok((u32_at(file, p + 20)? + r - start) as usize);
+            }
+        }
+        Err("unbacked caller/import")
+    };
+    let read = |r, n| -> Result<&[u8]> { bytes(file, raw(r, n)?, n as usize) };
+    require(
+        read(0x1043, 19)?
+            == [
+                0xe8, 0x78, 6, 0, 0, 0x8b, 0xf0, 0xe8, 0xb7, 0x0c, 0, 0, 0x6a, 1, 0x89, 0x30, 0xe8,
+                0x88, 3,
+            ],
+        "zero caller prefix",
+    )?;
+    require(
+        read(0x1056, 2)? == [0, 0]
+            && read(0x16c0, 3)? == [0x33, 0xc0, 0xc3]
+            && read(0x1d06, 6)? == [0xff, 0x25, 0xa8, 0x20, 0x40, 0],
+        "caller/helper/thunk",
+    )?;
+    let mut c = u32_at(file, opt + 136)?;
+    let end = c + u32_at(file, opt + 140)?;
+    let mut thunk = false;
+    while c < end {
+        let block = read(c, 8)?;
+        let page = u32_at(block, 0)?;
+        let n = u32_at(block, 4)?;
+        for i in (8..n).step_by(2) {
+            let v = u16_at(read(c + i, 2)?, 0)?;
+            if v >> 12 != 3 {
+                continue;
+            }
+            let site = page + u32::from(v & 4095);
+            if site == 0x1d08 {
+                thunk = true;
+            }
+            require(
+                ![(0x1043, 21), (0x16c0, 3), (0x1d06, 6)]
+                    .iter()
+                    .any(|(p, n)| overlap(site, 4, *p, *n))
+                    || site == 0x1d08,
+                "caller relocation",
+            )?;
+        }
+        c += n;
+    }
+    require(thunk, "thunk HIGHLOW")?;
+    let string = |r: u32| -> Result<String> {
+        let mut b = Vec::new();
+        for i in 0..256 {
+            let v = read(r.checked_add(i).ok_or("string overflow")?, 1)?[0];
+            if v == 0 {
+                return String::from_utf8(b).map_err(|_| "import UTF8");
+            }
+            b.push(v);
+        }
+        Err("import name cap")
+    };
+    let dir = u32_at(file, opt + 104)?;
+    let len = u32_at(file, opt + 108)?;
+    require((20..=640).contains(&len), "import directory cap")?;
+    let mut found = false;
+    let mut terminated = false;
+    for j in 0..len / 20 {
+        let d = read(dir + j * 20, 20)?;
+        if d.iter().all(|b| *b == 0) {
+            terminated = true;
+            break;
+        }
+        let orig = u32_at(d, 0)?;
+        let iat = u32_at(d, 16)?;
+        let dll = string(u32_at(d, 12)?)?;
+        let mut end = false;
+        for i in 0..256u32 {
+            let v = u32_at(
+                read(orig.checked_add(i * 4).ok_or("thunk overflow")?, 4)?,
+                0,
+            )?;
+            if v == 0 {
+                end = true;
+                break;
+            }
+            let slot = iat.checked_add(i * 4).ok_or("IAT overflow")?;
+            require(v < 0x80000000, "ordinal import")?;
+            if slot == 0x20a8 {
+                require(
+                    !found
+                        && dll == "api-ms-win-crt-stdio-l1-1-0.dll"
+                        && string(v.checked_add(2).ok_or("name overflow")?)? == "__p__commode",
+                    "exact accessor import",
+                )?;
+                found = true;
+            }
+        }
+        require(end, "unterminated thunk")?;
+    }
+    require(found && terminated, "accessor descriptor")
+}

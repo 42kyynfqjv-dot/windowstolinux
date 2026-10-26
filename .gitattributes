@@ -10,3 +10,4 @@ research/crt/*onexit*.py text eol=lf
 research/crt/*sentinel*.py text eol=lf
 research/crt/sentinel-vectors.json text eol=lf
 research/crt/*commode*.py text eol=lf
+research/crt/check_external_cell.py text eol=lf
