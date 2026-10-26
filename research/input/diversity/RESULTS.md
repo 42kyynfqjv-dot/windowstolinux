@@ -1,5 +1,9 @@
 # SUB-553 frozen runtime-input composition measurement
 
+Historical SUB-553 measurement. SUB-555 [scalar integration](../scalar/IMPLEMENTATION.md)
+now requires guard_join acceptance; squares/helper retain their rejection gates.
+The original frozen sources, flags and51expected Windows outcomes are unchanged.
+
 Sources, 51 literal expected outcomes and compiler configuration were committed in
 076661c before any compiler/converter evaluation. `frozen.json` hashes the source
 bytes and expectations. No production code was changed. All three source programs

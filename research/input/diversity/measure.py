@@ -1,5 +1,5 @@
 """Frozen held-out input compositions: no production support changes permitted."""
-import argparse,hashlib,json,os,platform,subprocess
+import argparse,hashlib,json,os,platform,subprocess,struct
 from pathlib import Path
 ap=argparse.ArgumentParser();ap.add_argument('evidence',type=Path);ap.add_argument('--compare',action='store_true');a=ap.parse_args()
 root=a.evidence.resolve();repo=Path(__file__).resolve().parents[3];src=Path(__file__).resolve().parent
@@ -36,6 +36,7 @@ for case in cases:
     p=run([str(converter),str(pe),str(output)])
     assert p.returncode in (0,1),(name,p.returncode,p.stderr)
     item.update(accepted=p.returncode==0,converter_error=p.stderr.decode('utf-8'))
+    assert item['accepted']==(name=='guard_join'),('SUB555 acceptance gate',name,item)
     if item['accepted']:
         item['generated_sha256']=sha(output)
         if a.compare:
@@ -64,7 +65,25 @@ for case in cases:
             write(native_report if a.compare else report,out)
             assert actual==dict(name=v['name'],exit=v['exit'],stdout_hex='',stderr_hex=''),actual
         if a.compare:assert item['observations']==old['observations']
+    if a.compare and name=='guard_join':
+        item['elf_sha256']=sha(executable)
+        extra=[f'{i:02d}' for i in range(100)]+['/',':','９','😀','\x01']
+        for value in extra:
+            expected=int(value) if all('0'<=c<='9' for c in value) else 202
+            p=run([str(executable)],env={'W2L_INPUT':value})
+            assert (p.returncode,p.stdout,p.stderr)==(expected,b'',b'')
+        item['additional_native_cases']=len(extra)
+        blob=pe.read_bytes();ph=struct.unpack_from('<I',blob,60)[0];table=ph+24+struct.unpack_from('<H',blob,ph+20)[0]
+        raw=struct.unpack_from('<I',blob,table+20)[0]
+        bad=root/'guard-negative.exe';sink=root/'guard-negative.rs';rejected=0
+        # Separate mutated files only. Frozen original PE never changed.
+        for offset,value in [(7,2),(0x32,0x76),(0x40,0x76),(0x45,4),(0x4d,0x76),(0x59,0x76),(0x49,0x67),(0x71,0x14),(0x89,1)]:
+            b=bytearray(blob);b[raw+offset]=value;bad.write_bytes(b);sink.write_text('preserve')
+            p=run([str(converter),str(bad),str(sink)])
+            assert p.returncode==1 and sink.read_text()=='preserve',(offset,p.stderr)
+            rejected+=1
+        item['unsafe_cli_rejections']=rejected
     assert sha(pe)==item['pe_sha256']
     write(native_report if a.compare else report,out)
     print(name,'ACCEPTED' if item['accepted'] else 'REJECTED: '+item['converter_error'].strip())
-print('DIVERSITY:3 frozen compiler programs;51 original scenarios; accepted programs compared, rejections retained')
+print('DIVERSITY:3 frozen programs;51 Windows scenarios; guard_join17 translated pairs; squares/helper rejected')

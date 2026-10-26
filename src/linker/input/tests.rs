@@ -8,7 +8,10 @@ fn code() -> Vec<u8> {
         .collect()
 }
 fn graph() -> Graph {
-    let mut bytes = code();
+    graph_for(&code())
+}
+fn graph_for(program: &[u8]) -> Graph {
+    let mut bytes = program.to_vec();
     bytes.resize(512, 0);
     bytes.extend(b"W\0\x32\0L\0_\0I\0N\0P\0U\0T\0\0\0");
     let c = Candidate {
@@ -20,8 +23,8 @@ fn graph() -> Graph {
             Section {
                 rva: 0x1000,
                 raw: 0,
-                size: 129,
-                virtual_size: 129,
+                size: program.len() as u32,
+                virtual_size: program.len() as u32,
                 flags: CODE,
             },
             Section {
@@ -45,7 +48,7 @@ fn decoded_forms_and_independent_complete_path_proof() {
     assert_eq!(g.len(), 47);
     assert!(matches!(g[&0x1000].0, Op::Allocate));
     assert!(matches!(g[&0x1018].0, Op::Branch(Condition::Ne, 0x1023)));
-    assert!(matches!(g[&0x1046].0, Op::CompareAx(9)));
+    assert!(matches!(g[&0x1046].0, Op::Compare(0, 16, 9)));
     assert!(matches!(g[&0x1057].0, Op::Load(3, 6)));
     assert!(matches!(g[&0x106a].0, Op::Lea(2, 2, 2, 0, 0xffffffe8)));
     let p = prove(g, 0x1000).unwrap();
@@ -77,15 +80,15 @@ fn unsafe_api_guards_and_full_word_loads_reject() {
 #[test]
 fn lifetimes_saved_slots_unknown_states_and_exit_gates_reject() {
     for (at, op) in [
-        (0x1003, Op::Mov(0)),
+        (0x1003, Op::Mov(0, 0)),
         (0x1014, Op::Move(1, 2)),
         (0x1016, Op::Cleanup),
         (0x1042, Op::Push(0)),
         (0x1072, Op::Cleanup),
         (0x1073, Op::Restore),
         (0x107c, Op::Cleanup),
-        (0x101a, Op::Mov(256)),
-        (0x1052, Op::SubEdx(0)),
+        (0x101a, Op::Mov(0, 256)),
+        (0x1052, Op::Arithmetic(2, 0, true)),
         (0x104c, Op::Move(2, 3)),
         (0x1070, Op::Move(0, 3)),
         (0x1064, Op::Acquire),
@@ -102,8 +105,119 @@ fn safe_program_changes_change_emission_and_determinism() {
     let a = prove(g.clone(), 0x1000).unwrap().emit();
     assert_eq!(a, prove(g.clone(), 0x1000).unwrap().emit());
     let mut changed = g;
-    changed.get_mut(&0x101a).unwrap().0 = Op::Mov(199);
+    changed.get_mut(&0x101a).unwrap().0 = Op::Mov(0, 199);
     let b = prove(changed, 0x1000).unwrap().emit();
     assert_ne!(a, b);
     assert!(b.contains("s.r[0]=199;"));
+}
+
+fn guard_graph() -> Graph {
+    let text="83ec088d04246a03506808204000ff150020400083f8417609b8cb00000083c408c383f8027609b8c900000083c408c385c07509b8c800000083c408c383f802752e8b5424028d42d06683f80977378b0c248d41d06683f809772b0fb7c18d0c800fb7c28d044805f0fdffff83c408c38b0c248d41d06683f809770a0fb7c183e83083c408c3b8ca00000083c408c3";
+    let b: Vec<u8> = (0..text.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&text[i..i + 2], 16).unwrap())
+        .collect();
+    graph_for(&b)
+}
+#[test]
+fn reordered_guard_ir_and_unsafe_paths() {
+    let g = guard_graph();
+    for (at, expected) in [
+        (0x1014, "Compare(0, 32, 65)"),
+        (0x1030, "Test(0)"),
+        (0x1042, "Load(2, 2)"),
+        (0x104f, "Load(1, 0)"),
+        (0x105b, "ZeroExtend(0, 1)"),
+        (0x105e, "Lea(1, 0, 0, 4, 0)"),
+        (0x1067, "Arithmetic(0, 4294966768, false)"),
+        (0x107f, "Arithmetic(0, 48, true)"),
+    ] {
+        assert_eq!(format!("{:?}", g[&at].0), expected);
+    }
+    assert_eq!(
+        prove(g.clone(), 0x1000).unwrap().loads,
+        [(0x1042, 2), (0x104f, 0), (0x1070, 0)].into()
+    );
+    for (at, op) in [
+        (0x1032, Op::Branch(Condition::Be, 0x103d)),
+        (0x1040, Op::Branch(Condition::Be, 0x1070)),
+        (0x1042, Op::Load(2, 4)),
+        (0x1049, Op::Compare(1, 16, 9)),
+        (0x104d, Op::Branch(Condition::Be, 0x1086)),
+        (0x1055, Op::Arithmetic(0, 1, false)),
+        (0x1070, Op::Load(1, 2)),
+    ] {
+        let mut bad = g.clone();
+        bad.get_mut(&at).unwrap().0 = op;
+        assert!(prove(bad, 0x1000).is_err(), "{at:x}");
+    }
+}
+#[test]
+fn production_ir_register_permutations_and_return_adapter() {
+    for (index, map) in [
+        [0, 1, 2],
+        [0, 2, 1],
+        [1, 0, 2],
+        [1, 2, 0],
+        [2, 0, 1],
+        [2, 1, 0],
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let reg = |r: usize| if r < 3 { map[r] } else { r };
+        let mut out = Graph::new();
+        for (pc, (op, next)) in graph() {
+            let op = match op {
+                Op::Move(d, s) => Op::Move(reg(d), if pc == 0x1014 { 0 } else { reg(s) }),
+                Op::Mov(d, v) => Op::Mov(reg(d), v),
+                Op::Test(r) => Op::Test(reg(r)),
+                Op::Compare(r, w, v) => Op::Compare(reg(r), w, v),
+                Op::Load(r, o) => Op::Load(reg(r), o),
+                Op::Lea(d, a, b, k, c) => Op::Lea(reg(d), reg(a), reg(b), k, c),
+                Op::ZeroExtend(d, s) => Op::ZeroExtend(reg(d), reg(s)),
+                Op::Arithmetic(r, v, sub) => Op::Arithmetic(reg(r), v, sub),
+                Op::Branch(c, t) => Op::Branch(c, t * 4),
+                Op::Ret => {
+                    out.insert(pc * 4, (Op::Move(0, reg(0)), pc * 4 + 1));
+                    out.insert(pc * 4 + 1, (Op::Ret, pc * 4 + 2));
+                    continue;
+                }
+                op => op,
+            };
+            out.insert(pc * 4, (op, next * 4));
+        }
+        let source = prove(out, 0x4000).unwrap().emit();
+        assert!(source.contains("wrapping_mul"));
+        if cfg!(target_os = "linux") {
+            let dir =
+                std::env::temp_dir().join(format!("w2l-scalar-{}-{index}", std::process::id()));
+            std::fs::create_dir_all(&dir).unwrap();
+            let path = dir.join("permutation.rs");
+            let binary = dir.join("native");
+            std::fs::write(&path, source).unwrap();
+            let built = std::process::Command::new("rustc")
+                .arg("--edition=2021")
+                .arg(&path)
+                .arg("-o")
+                .arg(&binary)
+                .output()
+                .unwrap();
+            assert!(
+                built.status.success(),
+                "{}",
+                String::from_utf8_lossy(&built.stderr)
+            );
+            for (value, expected) in [("7", 7), ("42", 42), ("07", 7), ("a", 202), ("", 200)] {
+                let r = std::process::Command::new(&binary)
+                    .env_clear()
+                    .env("W2L_INPUT", value)
+                    .output()
+                    .unwrap();
+                assert_eq!(r.status.code(), Some(expected));
+                assert!(r.stdout.is_empty() && r.stderr.is_empty());
+            }
+            std::fs::remove_dir_all(dir).unwrap();
+        }
+    }
 }
