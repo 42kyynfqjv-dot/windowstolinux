@@ -34,3 +34,8 @@ See [SUB512-OUTPUT.md](SUB512-OUTPUT.md) for validation, runtime failures and li
 Linker-produced minimal MSVC images now have bounded structural intake, with
 emission deliberately gated pending typed pointer/ABI support. See
 [SUB516-INTAKE.md](SUB516-INTAKE.md) for exact limits and instrumented load-base evidence.
+
+SUB-518 replaces the linker-image emission block with typed all-path validation
+for the exact observed minimal MSVC program. See [SUB518-IMPLEMENTATION.md](SUB518-IMPLEMENTATION.md)
+for supported forms, conditional ABI assumptions and unchanged-compiler CI gate.
+Ordinary CRT applications remain unsupported.

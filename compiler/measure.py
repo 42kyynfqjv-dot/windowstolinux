@@ -50,9 +50,13 @@ for kind in ['freestanding','crt']:
     assert observation==('48656c6c6f','',0),(kind,observation)
     converter=subprocess.run([str(repo/'target/debug/w2l.exe'),str(root/exe),str(root/(kind+'.rs'))],capture_output=True,timeout=15)
     if kind == 'freestanding':
+        assert converter.returncode == 0, converter.stderr
+        again = root/'again.rs'
+        command([str(repo/'target/debug/w2l.exe'),str(root/exe),str(again)],'deterministic-conversion')
+        assert again.read_bytes() == (root/(kind+'.rs')).read_bytes()
+        again.unlink()
+    else:
         assert converter.returncode == 1
-        assert 'linker intake validated; unsupported entry at RVA 0x1000 (opcode 0x56)' in converter.stderr.decode()
-        assert not (root/(kind+'.rs')).exists()
     result=dict(kind=kind,sha256=hashlib.sha256(b).hexdigest(),sections=sections,
         coff_characteristics=hex(struct.unpack_from('<H',b,pe+22)[0]),dll_characteristics=hex(struct.unpack_from('<H',b,o+70)[0]),
         directories=[dict(index=i,rva=hex(struct.unpack_from('<I',b,o+96+8*i)[0]),size=struct.unpack_from('<I',b,o+100+8*i)[0]) for i in range(16) if any(struct.unpack_from('<II',b,o+96+8*i))],
@@ -62,8 +66,8 @@ for kind in ['freestanding','crt']:
     print('MEASUREMENT '+json.dumps(result))
     results.append(result)
     if kind=='freestanding':
-        # Separate test-only structural model; the production rejection above remains.
-        # No file patching, decoder bypass or compiled-program equivalence claim.
+        # Independent structural cross-check alongside production conversion.
+        # Original PE bytes stay unchanged; downstream Linux CI executes generated Rust.
         candidate = Candidate(b)
         intake = candidate.report()
         tool_words = highlow_words(relocation_listing)

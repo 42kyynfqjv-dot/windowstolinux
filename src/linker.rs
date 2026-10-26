@@ -1,4 +1,4 @@
-//! SUB-515 contract: structural candidate only. No conversion to the emitting Pe type.
+//! Strict linker-image intake; translation requires the separate typed proof.
 use crate::{range, u16_at, u32_at};
 
 const CODE: u32 = 0x6000_0020;
@@ -31,7 +31,7 @@ struct Section {
     virtual_size: u32,
     flags: u32,
 }
-/// All fields are private; no API exposes this as an emitter-authorized image.
+/// Private image context; translation validates every decoded path before emission.
 pub(crate) struct Candidate<'a> {
     bytes: &'a [u8],
     base: u32,
@@ -40,6 +40,7 @@ pub(crate) struct Candidate<'a> {
     sections: Vec<Section>,
     metadata: Vec<(u32, u32)>,
     iat: u32,
+    pointers: std::collections::BTreeMap<u32, u32>,
 }
 impl<'a> Candidate<'a> {
     fn location(&self, rva: u32, size: u32, flags: u32) -> Result<usize, String> {
@@ -146,6 +147,7 @@ impl<'a> Candidate<'a> {
             sections: Vec::new(),
             metadata: Vec::new(),
             iat: 0,
+            pointers: Default::default(),
         };
         let mut next = rounded(headers)?;
         let mut raw_spans = Vec::new();
@@ -346,6 +348,7 @@ impl<'a> Candidate<'a> {
                 } else {
                     self.immutable(dest, 1)?;
                 }
+                self.pointers.insert(site, dest);
                 live += 1;
             }
             need(live > 0, "linker empty relocation page")?;
@@ -354,14 +357,6 @@ impl<'a> Candidate<'a> {
         }
         need(!sites.is_empty(), "linker missing relocations")
     }
-    pub(crate) fn reject_emission(&self) -> Result<String, String> {
-        let offset = self.location(self.entry, 1, CODE)?;
-        let section = self.sections.iter().find(|s| s.flags == CODE).unwrap();
-        let size = section.virtual_size.min(section.size) - (self.entry - section.rva);
-        let code = range(self.bytes, offset, size as usize)?;
-        if let Err(error) = crate::control::decode_instruction(code, 0) {
-            return Err(format!("linker intake validated; unsupported entry at RVA {:#x} (opcode {:#04x}): {error}; emission blocked",self.entry,code[0]));
-        }
-        Err("linker intake validated; emission blocked pending typed pointer provenance".into())
-    }
 }
+
+mod translate;

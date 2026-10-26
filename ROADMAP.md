@@ -85,3 +85,9 @@ Its independent model is test-only. Next: medium contract review, then bounded
 typed-core integration with the emission barrier retained until all listed
 ABI/form and unchanged-compiler Windows/Linux gates pass. No compiler-produced
 PE has yet been translated successfully; ordinary CRT support remains separate.
+
+SUB-518 implements the bounded typed/compiler ABI path described in
+[SUB518-IMPLEMENTATION.md](SUB518-IMPLEMENTATION.md). Its substantive acceptance gate
+is unchanged MSVC PE -> Rust -> ELF execution matching the original Windows output.
+Next medium review audits that evidence and production proof boundaries before any
+additional compiler/CRT coverage.

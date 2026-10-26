@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
 
 #[path = "control/flags.rs"]
-mod flags;
+pub(crate) mod flags;
 use flags::Flags;
 #[path = "control/stack.rs"]
 pub(super) mod stack;

@@ -308,7 +308,7 @@ fn translate_image(bytes: &[u8]) -> Result<String, String> {
     let pe = u32_at(bytes, 0x3c)? as usize;
     let characteristics = pe.checked_add(24 + 70).ok_or("header offset overflow")?;
     if u16_at(bytes, characteristics)? == 0x8540 {
-        return linker::Candidate::parse(bytes)?.reject_emission();
+        return linker::Candidate::parse(bytes)?.translate();
     }
     Pe::parse(bytes)?.translate()
 }

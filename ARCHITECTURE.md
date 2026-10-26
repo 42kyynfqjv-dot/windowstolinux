@@ -38,3 +38,8 @@ and compiler ABI semantics remain required before translation; see SUB516-INTAKE
 [SUB517-TYPED-ABI-DESIGN.md](SUB517-TYPED-ABI-DESIGN.md) specifies the proposed
 image-owned typed values and saved-ESI/return ownership. Its Python model is
 test-only; production has no new ABI forms or relocation-aware emission.
+
+SUB-518 supersedes the design-only/unconditional-barrier checkpoint above with
+private per-Candidate typed validation and static Rust emission. See
+[SUB518-IMPLEMENTATION.md](SUB518-IMPLEMENTATION.md). Every graph path and relocation
+operand must validate before output; no conversion to the old scalar Pe emitter.

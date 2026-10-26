@@ -23,9 +23,9 @@ with tempfile.TemporaryDirectory() as directory:
             assert diagnostic in message, (count, message)
         count += 1
     original = image()
-    check(original, 'emission blocked pending typed pointer provenance', True)
+    check(original, 'output arguments', True)
     changed = bytearray(original); changed[0x400] = 0x56
-    check(changed, 'unsupported entry at RVA 0x1000 (opcode 0x56)', True)
+    check(changed, 'unsupported instruction', True)
     # Independent mutation expectations. Every one must fail before structural success.
     mutations = [
         (0xde,'H',0),(0xde,'H',0xc540),(0x86,'H',4),(0x96,'H',0x103),(0xd0,'I',0x200000),
@@ -48,12 +48,12 @@ with tempfile.TemporaryDirectory() as directory:
         check(bad)
     # Compound layouts exercise role mapping and complete-block rules.
     padded = bytearray(original); struct.pack_into('<H',padded,0x80a,0)
-    check(padded, 'pending typed pointer provenance', True)
+    check(padded, 'missing import relocation', True)
     swapped = bytearray(original)
     swapped[0x400:0x600], swapped[0x800:0xa00] = original[0x800:0xa00], original[0x400:0x600]
     struct.pack_into('<I',swapped,0x18c,0x800)
     struct.pack_into('<I',swapped,0x1dc,0x400)
-    check(swapped, 'pending typed pointer provenance', True)
+    check(swapped, 'output arguments', True)
     duplicate = bytearray(original)
     struct.pack_into('<I',duplicate,0x1d0,24)
     struct.pack_into('<I',duplicate,0x124,24)

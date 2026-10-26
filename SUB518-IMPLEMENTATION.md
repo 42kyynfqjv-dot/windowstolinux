@@ -1,0 +1,68 @@
+# SUB-518 bounded compiler-program translation
+
+The exact linker profile now passes through a private typed validator before Rust
+emission. Structural validity alone remains insufficient. All HIGHLOW sites must
+match complete reachable 68 immediate or FF15 displacement fields, including both
+branch successors and call continuations; unmatched and overlapping fields reject.
+The existing authored-image profile and its decoder policy are unchanged.
+
+`src/linker/translate.rs` uses an exact byte whitelist plus iced length/validity
+checking for the observed SUB517 forms. The linker profile supports JNZ only;
+existing authored profiles retain their previous branch families. Instructions
+are emitted as fixed Rust match arms; no PE bytes or decoder dependency are shipped.
+`state.rs` shares checked typed stack/register transitions between validation and
+native execution. Scalar/Pointer/opaque Unknown remain distinct. ImportSlot is
+represented only by a validated Write operation, never as guest register data.
+
+Image ownership is lexical: private Op/Value/State constructors and graphs exist
+only inside one Candidate translation, with no API for importing state from another
+image. Pointer values are immutable RVAs resolved solely against that Candidate.
+Generated code owns only its validated literal output buffers. A numeric VA cannot
+be used as a pointer. Copies preserve tags; pointer arithmetic/comparison/EAX returns
+reject. Unknown incoming ESI has a distinct identity from unknown EAX. Call frames
+snapshot ESI and RET verifies restoration; it does not restore automatically.
+
+Every conditional successor is validated in its own complete state context; states
+are never merged or stripped of provenance to accept a join. In addition to existing
+1024 decoded/executed instruction, 128 extra word and 32 call limits, validation
+caps total explored transitions at4096. This may reject otherwise valid programs.
+Both return epilogues require balanced ownership and original ESI. ADD ESP,20 drops
+exactly five caller Data words, rejecting saved/return words, and makes tracked
+flags unknown until overwritten. Only caller Data under the immediate callee Return
+can supply the first two arguments. Arithmetic uses the existing independently
+verified CF/ZF/SF/OF implementation. Runtime output retains full-write regular-file
+requirements and exit125 on unsupported output environment/failure.
+
+The prior unconditional emission barrier is replaced by complete structural,
+decoder-field, all-context ownership/type/output and terminal validation. A failure
+at any stage preserves existing output files. The old scalar emitter is never used
+for a linker Candidate. No general register/memory/CRT or extra API support.
+
+## Evidence gates
+
+- 48 root Rust test functions (two new ownership/typed-return tests), plus existing
+  evaluation suite (43 functions,27 inherited) and model suites.
+- `tools/check_compiler_subset.py`: six deterministic native executions of authored
+  literal compiler-shaped code, including both error epilogues and signed immediate
+  boundaries;20 independent malformed/unsupported mutations preserve output.
+- All2612 former linker CLI rejection cases remain rejected; only their semantic
+  diagnostics change where the old unconditional barrier was reached.
+- Existing102 Windows/Linux comparisons remain required, separately counted.
+- `compiler/measure.py` uses the unchanged source and single documented MSVC build
+  configuration, executes original Windows PE, converts twice and checks deterministic
+  Rust. It records exact PE SHA and compiler flags and verifies PE bytes unchanged.
+  The `compiler-native-linux` CI job downloads generated source/report, compiles with
+  rustc -D warnings and requires Hello/empty stderr/exit0 against the Windows report.
+  It never patches the PE or searches compilation flags. Ordinary CRT must reject.
+
+Successful CI is required before claiming the compiler comparison passed. Reports
+and source are artifacts; official compiler/CRT binaries are not distributed. The
+separate debug-event load-base observation remains limited to that instrumented
+launch; ordinary baseline base and actual relocated operand bytes are unmeasured.
+No all-base/XP7/general-application claim. Valid flat stack/no-fault/no-asynchronous-
+mutation and legacy CRT output assumptions from SUB517/SUB512 remain conditional.
+Historical unexplained corpus timeout is not declared solved.
+
+Next medium review should focus on decoded relocation coverage, per-Candidate
+ownership isolation, hypothetical branch states, saved ESI and cleanup boundaries,
+generated transition equivalence, and provenance of the actual CI compiler artifact.

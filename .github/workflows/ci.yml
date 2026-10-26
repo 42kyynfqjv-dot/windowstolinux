@@ -11,6 +11,7 @@ jobs:
         with:
           components: clippy, rustfmt
       - run: cargo fmt --check
+      - run: rustfmt --check src/linker/state.rs
       - run: cargo clippy --all-targets --locked -- -D warnings
       - run: cargo test --locked
       - run: python3 scripts/check_fixture_manifest.py
@@ -22,6 +23,7 @@ jobs:
           python3 scripts/make_output_probe.py /tmp/output-probe.exe
           cargo build --locked
           python3 tools/check_linker_production.py
+          python3 tools/check_compiler_subset.py
           python3 scripts/check_imported_output.py
           python3 corpus/check.py
           rustfmt --check tools/output-probe.rs
@@ -193,6 +195,30 @@ jobs:
         with:
           name: compiler-measurement-reports
           path: |
+            ${{ runner.temp }}/w2l-compiler-measurement/*.rs
             ${{ runner.temp }}/w2l-compiler-measurement/*.json
             ${{ runner.temp }}/w2l-compiler-measurement/*.txt
           if-no-files-found: error
+
+  compiler-native-linux:
+    needs: compiler-produced-windows
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: compiler-measurement-reports
+          path: evidence
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Execute unchanged compiler program translated to native ELF
+        run: |
+          rustc -D warnings evidence/freestanding.rs -o /tmp/compiler-native
+          /tmp/compiler-native > /tmp/native.stdout 2> /tmp/native.stderr
+          python3 - <<'PYCODE'
+          import json
+          from pathlib import Path
+          original = json.loads(Path('evidence/report.json').read_text())[0]
+          assert original['conversion_accepted'] and original['exit'] == 0
+          assert Path('/tmp/native.stdout').read_bytes().hex() == original['stdout_hex'] == '48656c6c6f'
+          assert Path('/tmp/native.stderr').read_bytes().hex() == original['stderr_hex'] == ''
+          print('UNCHANGED_COMPILER_NATIVE_MATCH', original['sha256'], 'Hello', 'exit=0')
+          PYCODE
