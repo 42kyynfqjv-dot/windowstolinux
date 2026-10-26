@@ -8,6 +8,7 @@ class State:
     blocked:bool=False
 
 def dispatch(entries, effects, state, *, start, end, code, protected=(), integer=True):
+    if state.blocked:return None
     if start%4 or end<start or end-start!=4*len(entries):raise ValueError('table range')
     if any(start<b and a<end for a,b in protected):raise ValueError('table alias')
     if any(p and p not in code for p in entries):raise ValueError('unowned callback')

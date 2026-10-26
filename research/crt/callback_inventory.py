@@ -49,6 +49,7 @@ for line in (root/'held_crt-disassembly.txt').read_text().splitlines():
  t=raw(target-base,6);imported=None
  if b[t:t+2]==b'\xff\x25':imported=imports.get(u(t+2))
  calls.append(dict(site_rva=rv,target_rva=target-base,imported=imported))
+assert len(calls)==27,'incomplete exact-profile disassembly'
 out=dict(pe_sha256=r['sha256'],tables=tables,relocated_table_sites=[0x20bc,0x20c8,0x20cc],direct_calls=calls,
  initial_tls_slots=[word(0x30f0),word(0x30f4)],complete_effect_proof=False,emission_allowed=False)
 path=root/'crt-callbacks.json'

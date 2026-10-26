@@ -11,6 +11,8 @@ class Contract(unittest.TestCase):
   r,s=self.call([0x1000,0x1100],{0x1000:(7,{}),0x1100:(9,{})},integer=False);self.assertIsNone(r);self.assertEqual(s.trace,[0x1000,0x1100])
  def test_unknown_external_havocs_known_zero(self):
   s=State({'tls':0},{'tls'});r,s=self.call([0x1000,0x1100],{},s);self.assertIsNone(s.values['tls']);self.assertTrue(s.blocked);self.assertEqual(s.trace,[0x1000])
+  r,s=self.call([0x1100],{0x1100:(0,{'tls':0})},s)
+  self.assertIsNone(r);self.assertIsNone(s.values['tls']);self.assertEqual(s.trace,[0x1000])
  def test_unknown_result_stops_later_callbacks(self):
   r,s=self.call([0x1000,0x1100],{0x1000:(None,{})});self.assertTrue(s.blocked);self.assertEqual(s.trace,[0x1000])
  def test_changed_target_and_alias_reject_before_effect(self):
