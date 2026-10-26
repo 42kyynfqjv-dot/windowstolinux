@@ -31,7 +31,7 @@ fn ownership_types_and_unknown_state() {
     for _ in 0..5 {
         s.step(Op::Push(1), 1, &mut no_output).unwrap();
     }
-    s.flags = Some(Flags::xor_self());
+    s.flags = (Some(Flags::xor_self())).into();
     s.step(Op::Cleanup, 2, &mut no_output).unwrap();
     assert!(s.flags.is_none());
 }
@@ -358,7 +358,7 @@ fn conditional_invalid_scalars_and_unknown_flags() {
                     s.eax = Value::Integer(5);
                     s.ecx = Value::Integer(3);
                     s.edx = Value::Integer(1);
-                    s.flags = flags;
+                    s.flags = (flags).into();
                     if operand == 0 {
                         s.eax = bad
                     } else if matches!(op, Op::SelectGe) {
@@ -415,7 +415,7 @@ fn scalar_argument_ownership_and_mov_flags() {
     }
     for flags in [None, Some(Flags::compare(0x8000_0000, 1))] {
         let mut s = State::new(0);
-        s.flags = flags;
+        s.flags = (flags).into();
         for op in [
             Op::Push(5),
             Op::Push(7),
@@ -441,7 +441,7 @@ fn volatile_register_call_effects_and_fresh_external_origins() {
     let mut preserved = State::new(0);
     preserved.ecx = Value::Integer(7);
     preserved.edx = Value::Integer(1);
-    preserved.flags = Some(Flags::compare(3, 4));
+    preserved.flags = (Some(Flags::compare(3, 4))).into();
     let before = (preserved.ecx, preserved.edx, preserved.flags);
     for op in [Op::Call(20), Op::Mov(8), Op::Ret] {
         preserved.step(op, 5, &mut no_output).unwrap();

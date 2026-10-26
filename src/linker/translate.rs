@@ -29,6 +29,17 @@ impl Candidate<'_> {
             };
             let imm = |n: usize| u32_at(b, n);
             let (size, op) = match b[0] {
+                0x51 => (1, Op::PushEcx),
+                0x59 => (1, Op::PopEcx),
+                0xc6 if b.get(..3) == Some(&[0xc6, 4, 0x24]) => (4, Op::StoreByte(0, byte(3)?)),
+                0xc6 if b.get(..4) == Some(&[0xc6, 0x44, 0x24, 1]) => {
+                    (5, Op::StoreByte(1, byte(4)?))
+                }
+                0x88 if b.get(..4) == Some(&[0x88, 0x44, 0x24, 1]) => (4, Op::StoreAl),
+                0xfe if byte(1)? == 0xc0 => (2, Op::IncAl),
+                0x0f if b.get(..4) == Some(&[0x0f, 0xb6, 4, 0x24]) => (4, Op::LoadByteEax(0)),
+                0x0f if b.get(..5) == Some(&[0x0f, 0xb6, 0x44, 0x24, 1]) => (5, Op::LoadByteEax(1)),
+                0x0f if b.get(..5) == Some(&[0x0f, 0xb6, 0x4c, 0x24, 1]) => (5, Op::LoadByteEcx),
                 0x56 => (1, Op::Save),
                 0x5e => (1, Op::Restore),
                 0xc3 => (1, Op::Ret),
@@ -293,6 +304,9 @@ fn validate_routines(entry: u32, graph: &BTreeMap<u32, (Op, u32)>) -> Result<(),
     Ok(())
 }
 
+#[cfg(test)]
+#[path = "byte_tests.rs"]
+mod byte_tests;
 #[cfg(test)]
 #[path = "local_tests.rs"]
 mod local_tests;

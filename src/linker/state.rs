@@ -2,10 +2,26 @@
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Value {
     Integer(u32),
+    Partial([Option<u8>; 4]),
     Pointer(u32),
     Unknown(u32),
 }
 impl Value {
+    fn bytes(self) -> Result<[Option<u8>; 4], String> {
+        match self {
+            Self::Integer(v) => Ok(v.to_le_bytes().map(Some)),
+            Self::Partial(b) => Ok(b),
+            Self::Unknown(_) => Ok([None; 4]),
+            Self::Pointer(_) => Err("pointer byte access".into()),
+        }
+    }
+    fn from_bytes(b: [Option<u8>; 4]) -> Self {
+        match b {
+            [Some(a), Some(c), Some(d), Some(e)] => Self::Integer(u32::from_le_bytes([a, c, d, e])),
+            _ => Self::Partial(b),
+        }
+    }
+
     fn integer(self) -> Result<u32, String> {
         if let Self::Integer(v) = self {
             Ok(v)
@@ -14,10 +30,51 @@ impl Value {
         }
     }
 }
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct Knowledge {
+    carry: Option<bool>,
+    zero: Option<bool>,
+    sign: Option<bool>,
+    overflow: Option<bool>,
+}
+impl From<Flags> for Knowledge {
+    fn from(f: Flags) -> Self {
+        Self {
+            carry: Some(f.carry),
+            zero: Some(f.zero),
+            sign: Some(f.sign),
+            overflow: Some(f.overflow),
+        }
+    }
+}
+#[cfg(test)]
+impl From<Option<Flags>> for Knowledge {
+    fn from(f: Option<Flags>) -> Self {
+        f.map(Self::from).unwrap_or_default()
+    }
+}
+#[cfg(test)]
+impl PartialEq<Option<Flags>> for Knowledge {
+    fn eq(&self, f: &Option<Flags>) -> bool {
+        *self == Self::from(*f)
+    }
+}
+#[cfg(test)]
+impl Knowledge {
+    fn is_none(&self) -> bool {
+        *self == Self::default()
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Allocation {
+    Words(usize),
+    Bytes(usize),
+}
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Word {
     Entry,
     Local(usize, usize, Option<u32>),
+    Bytes(usize, usize, [Option<u8>; 4]),
     Data(usize, Value),
     Saved(usize, Value),
     Return(usize, u32),
@@ -27,10 +84,17 @@ struct Frame {
     owner: usize,
     esi: Value,
     boundary: usize,
-    allocation: Option<usize>,
+    allocation: Option<Allocation>,
 }
 #[derive(Clone, Copy, Debug)]
 enum Op {
+    PushEcx,
+    PopEcx,
+    StoreByte(u8, u8),
+    StoreAl,
+    LoadByteEax(u8),
+    LoadByteEcx,
+    IncAl,
     AllocateLocal,
     StoreLocalZero(u32),
     StoreFour(u32),
@@ -72,7 +136,7 @@ struct State {
     esi: Value,
     ecx: Value,
     edx: Value,
-    flags: Option<Flags>,
+    flags: Knowledge,
     words: Vec<Word>,
     frames: Vec<Frame>,
     serial: usize,
@@ -87,7 +151,7 @@ impl State {
             esi: Value::Unknown(1),
             ecx: Value::Unknown(2),
             edx: Value::Unknown(3),
-            flags: None,
+            flags: Knowledge::default(),
             words: vec![Word::Entry],
             frames: vec![Frame {
                 owner: 0,
@@ -123,6 +187,9 @@ impl State {
             .unwrap()
             .allocation
             .ok_or("no local allocation")?;
+        let Allocation::Words(token) = token else {
+            return Err("word allocation required".into());
+        };
         if self.words.len() != boundary + 3
             || !self.words[boundary + 1..]
                 .iter()
@@ -131,6 +198,25 @@ impl State {
             return Err("local ownership/shape".into());
         }
         Ok(boundary + 1)
+    }
+    fn byte_window(&self) -> Result<[Option<u8>; 4], String> {
+        let at = self.boundary()?;
+        let Some(Allocation::Bytes(token)) = self.frames.last().unwrap().allocation else {
+            return Err("byte allocation required".into());
+        };
+        if self.words.len() != at + 2 {
+            return Err("byte allocation shape".into());
+        }
+        match self.words.last() {
+            Some(Word::Bytes(o, t, b)) if *o == self.owner() && *t == token => Ok(*b),
+            _ => Err("byte ownership".into()),
+        }
+    }
+    fn read_byte(&self, offset: u8) -> Result<u8, String> {
+        if offset > 1 {
+            return Err("byte offset".into());
+        }
+        self.byte_window()?[offset as usize].ok_or("unknown byte".into())
     }
     fn local_value(&self, at: usize) -> Result<u32, String> {
         match self.words.get(at) {
@@ -237,6 +323,55 @@ impl State {
         self.steps += 1;
         self.pc = next;
         match op {
+            Op::PushEcx => {
+                let at = self.boundary()?;
+                if self.has_locals() || self.words.len() != at + 1 {
+                    return Err("byte allocation shape".into());
+                }
+                let b = self.ecx.bytes()?;
+                let token = self.steps;
+                self.push(Word::Bytes(self.owner(), token, b))?;
+                self.frames.last_mut().unwrap().allocation = Some(Allocation::Bytes(token));
+            }
+            Op::PopEcx => {
+                self.ecx = Value::from_bytes(self.byte_window()?);
+                self.words.pop();
+                self.frames.last_mut().unwrap().allocation = None;
+            }
+            Op::StoreByte(offset, value) => {
+                if offset > 1 {
+                    return Err("byte offset".into());
+                }
+                let mut b = self.byte_window()?;
+                b[offset as usize] = Some(value);
+                let Some(Word::Bytes(_, _, bytes)) = self.words.last_mut() else {
+                    unreachable!()
+                };
+                *bytes = b;
+            }
+            Op::StoreAl => {
+                let value = self.eax.bytes()?[0].ok_or("unknown AL")?;
+                let mut b = self.byte_window()?;
+                b[1] = Some(value);
+                let Some(Word::Bytes(_, _, bytes)) = self.words.last_mut() else {
+                    unreachable!()
+                };
+                *bytes = b;
+            }
+            Op::LoadByteEax(offset) => {
+                self.eax = Value::Integer(u32::from(self.read_byte(offset)?))
+            }
+            Op::LoadByteEcx => self.ecx = Value::Integer(u32::from(self.read_byte(1)?)),
+            Op::IncAl => {
+                let mut b = self.eax.bytes()?;
+                let old = b[0].ok_or("unknown AL")?;
+                let value = old.wrapping_add(1);
+                b[0] = Some(value);
+                self.eax = Value::from_bytes(b);
+                self.flags.zero = Some(value == 0);
+                self.flags.sign = Some(value & 128 != 0);
+                self.flags.overflow = Some(old == 127);
+            }
             Op::AllocateLocal => {
                 let boundary = self.boundary()?;
                 if self.has_locals() || self.words.len() != boundary + 1 {
@@ -250,8 +385,8 @@ impl State {
                     Word::Local(self.owner(), token, None),
                     Word::Local(self.owner(), token, None),
                 ]);
-                self.frames.last_mut().unwrap().allocation = Some(token);
-                self.flags = None;
+                self.frames.last_mut().unwrap().allocation = Some(Allocation::Words(token));
+                self.flags = Knowledge::default();
             }
             Op::StoreLocalZero(v) | Op::StoreFour(v)
                 if self.has_locals() || matches!(op, Op::StoreLocalZero(_)) =>
@@ -275,7 +410,7 @@ impl State {
                 let at = self.local_window()? + 1;
                 let (value, flags) = Flags::add(self.eax.integer()?, self.local_value(at)?);
                 self.eax = Value::Integer(value);
-                self.flags = Some(flags);
+                self.flags = Knowledge::from(flags);
             }
             Op::Save => self.push(Word::Saved(self.owner(), self.esi))?,
             Op::Restore => match self.words.last().cloned() {
@@ -288,7 +423,12 @@ impl State {
             Op::Push(v) => self.push(Word::Data(self.owner(), Value::Integer(v)))?,
             Op::Pointer(rva) => self.push(Word::Data(self.owner(), Value::Pointer(rva)))?,
             Op::Mov(v) => self.eax = Value::Integer(v),
-            Op::MoveEsi => self.esi = self.eax,
+            Op::MoveEsi => {
+                if matches!(self.eax, Value::Partial(_)) {
+                    return Err("partial ESI move".into());
+                }
+                self.esi = self.eax;
+            }
             Op::Argument => {
                 self.eax = if self.has_locals() {
                     Value::Integer(self.local_value(self.local_window()?)?)
@@ -300,22 +440,24 @@ impl State {
             Op::EcxArgumentOne => self.ecx = Value::Integer(self.argument(1)?.integer()?),
             Op::EdxOne => self.edx = Value::Integer(1),
             Op::CompareEcxEax => {
-                self.flags = Some(Flags::compare(self.ecx.integer()?, self.eax.integer()?))
+                self.flags =
+                    Knowledge::from(Flags::compare(self.ecx.integer()?, self.eax.integer()?))
             }
             Op::SelectGe => {
-                let flags = self.flags.ok_or("unknown conditional flags")?;
+                let sign = self.flags.sign.ok_or("unknown conditional flags")?;
+                let overflow = self.flags.overflow.ok_or("unknown conditional flags")?;
                 // Require both scalar operands even when the condition is false.
                 // Requiring old EAX on true is a conservative subset restriction.
                 self.eax.integer()?;
                 let source = self.edx.integer()?;
-                if flags.sign == flags.overflow {
+                if sign == overflow {
                     self.eax = Value::Integer(source)
                 }
             }
             Op::AddEcx => {
                 let (value, flags) = Flags::add(self.eax.integer()?, self.ecx.integer()?);
                 self.eax = Value::Integer(value);
-                self.flags = Some(flags)
+                self.flags = Knowledge::from(flags)
             }
             Op::AddArgument | Op::AddThirdArgument => {
                 let index = if matches!(op, Op::AddThirdArgument) {
@@ -325,28 +467,32 @@ impl State {
                 };
                 let (v, f) = Flags::add(self.eax.integer()?, self.argument(index)?.integer()?);
                 self.eax = Value::Integer(v);
-                self.flags = Some(f)
+                self.flags = Knowledge::from(f)
             }
-            Op::CompareEax(v) => self.flags = Some(Flags::compare(self.eax.integer()?, v)),
-            Op::CompareEsi(v) => self.flags = Some(Flags::compare(self.esi.integer()?, v)),
+            Op::CompareEax(v) => {
+                self.flags = Knowledge::from(Flags::compare(self.eax.integer()?, v))
+            }
+            Op::CompareEsi(v) => {
+                self.flags = Knowledge::from(Flags::compare(self.esi.integer()?, v))
+            }
             Op::Xor => {
                 if matches!(self.eax, Value::Pointer(_)) {
                     return Err("pointer arithmetic".into());
                 }
                 self.eax = Value::Integer(0);
-                self.flags = Some(Flags::xor_self())
+                self.flags = Knowledge::from(Flags::xor_self())
             }
             Op::CleanupTwo if self.has_locals() => {
                 let at = self.local_window()?;
                 self.words.truncate(at);
                 self.frames.last_mut().unwrap().allocation = None;
-                self.flags = None;
+                self.flags = Knowledge::default();
             }
             Op::Cleanup | Op::CleanupSix | Op::CleanupTwo => {
                 let boundary = self.boundary()?;
                 if self.words[boundary + 1..]
                     .iter()
-                    .any(|w| matches!(w, Word::Local(..)))
+                    .any(|w| matches!(w, Word::Local(..) | Word::Bytes(..)))
                 {
                     return Err("untracked local allocation".into());
                 }
@@ -368,7 +514,7 @@ impl State {
                     return Err("cleanup ownership".into());
                 }
                 self.words.truncate(at);
-                self.flags = None
+                self.flags = Knowledge::default()
             }
             Op::CopyArgument => {
                 let boundary = self.return_boundary()?;
@@ -401,8 +547,14 @@ impl State {
                 if self.frames.len() > 32 {
                     return Err("call depth".into());
                 }
-                if self.has_locals() {
-                    self.local_window()?;
+                match self.frames.last().unwrap().allocation {
+                    Some(Allocation::Words(_)) => {
+                        self.local_window()?;
+                    }
+                    Some(Allocation::Bytes(_)) => {
+                        self.byte_window()?;
+                    }
+                    None => {}
                 }
                 let boundary = self.words.len();
                 self.serial += 1;
@@ -416,7 +568,7 @@ impl State {
                 self.pc = target
             }
             Op::Branch(target) | Op::Equal(target) => {
-                let zero = self.flags.ok_or("unknown branch flags")?.zero;
+                let zero = self.flags.zero.ok_or("unknown branch flags")?;
                 if zero == matches!(op, Op::Equal(_)) {
                     self.pc = target;
                     return Ok(Some(next));
@@ -435,7 +587,7 @@ impl State {
                         if *a == owner && *b == owner && *c == owner =>
                     {
                         self.eax = Value::Integer(output(*rva, *n)?);
-                        self.flags = None;
+                        self.flags = Knowledge::default();
                         // steps is unique along this path and bounded by 1024 above.
                         // Origins 0..3 name entry values; clones retain their identity.
                         self.ecx = Value::Unknown(4 + 2 * self.steps as u32);
