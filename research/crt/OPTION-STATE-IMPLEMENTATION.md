@@ -35,7 +35,8 @@ unchanged high words; this does not authorize omitting their original reads/writ
 ECX ends with the second high dword. The callback's final XOR sets EAX=0,
 CF=OF=SF=0, ZF=PF=1; AF is undefined (`None`/JSON null). The model also computes each
 intermediate OR's CF/OF/ZF/SF/PF and leaves AF unknown. MOV/CALL/RET preserve those
-flags. Other registers are preserved, subject to the valid stack precondition.
+flags. EBX, EDX, ESI, EDI and EBP are preserved, subject to the valid stack precondition.
+ESP is accounted for separately below, and EIP returns to the caller.
 
 Relative to callback entry, nested calls use at most eight bytes below incoming
 ESP. Their RETs balance those pushes. The callback RET consumes the incoming return
@@ -106,3 +107,17 @@ attributes already pin Rust and C to LF. The JSON vector file now also has an
 explicit LF attribute. Raw-byte hashes remain strict; no normalization or ignored
 comparison field was added. This is a diagnosed harness provenance failure, not a
 retry or an explanation for the three historical process timeouts.
+
+## Medium review
+
+PR #1 merged at a57aa4d; PR #2 now targets main. Review found an ambiguous report
+field, other_registers_preserved, alongside a nonzero ESP delta. The report now
+names only EBX/EDX/ESI/EDI/EBP and independently checks the stack fields. Review also
+found that the CPU probe observed only final XOR flags; intermediate OR flags were
+checked in Rust for only one input. The same five literal byte vectors now carry
+independently specified defined-flag masks for both ORs. The CPU probe captures
+those flags after each high-word write, before the next OR/XOR destroys them.
+Negative low words and both parity outcomes are covered; AF remains excluded as
+undefined. Byte inputs/outputs are unchanged, and no additional test-function or
+translated-program count is claimed. Ownership preconditions remain assumptions;
+this review does not close external alias/startup effects or authorize emission.

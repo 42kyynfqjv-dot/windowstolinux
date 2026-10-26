@@ -38,9 +38,11 @@ def main():
     vectors = []
     for v in specification['positive']:
         result = json.loads(run([binary, pe, '--vector', v['before']]))
-        expected = dict(specification['post_callback'],after=v['after'],ecx=int.from_bytes(bytes.fromhex(v['before'])[12:16],'little'),pf=True,af=None)
+        expected = dict(specification['post_callback'],after=v['after'],ecx=int.from_bytes(bytes.fromhex(v['before'])[12:16],'little'),pf=True,af=None,helper_defined_flags=v['helper_defined_flags'])
         assert all(result[k]==value for k,value in expected.items()), (v,result)
         assert result['synthetic_vector'] and not result['emission_allowed']
+        assert result['preserved_registers']==['ebx','edx','esi','edi','ebp']
+        assert result['stack_delta_from_callback_entry']==4 and result['peak_stack_bytes_below_entry']==8
         assert run([binary,pe,'--vector',v['before']])==run([binary,pe,'--vector',v['before']])
         vectors.append(dict(name=v['name'],expected=expected,result=result))
     out = dict(pe_sha256=sha(pe), spec_sha256=sha(source/'option-state-vectors.json'),
@@ -64,6 +66,7 @@ def main():
             assert result['ecx']==int.from_bytes(bytes.fromhex(v['before'])[12:16],'little')
             # CF, PF, ZF, SF, OF defined by final XOR. AF deliberately excluded.
             assert result['eflags'] & 0x8c5 == 0x44
+            assert result['helper_defined_flags']==v['helper_defined_flags']
             observations.append(dict(name=v['name'],result=result))
         (root/'crt-option-cpu.json').write_text(json.dumps(dict(source_sha256=sha(source/'option_probe.c'),
             probe_sha256=sha(probe),spec_sha256=out['spec_sha256'],observations=observations,
@@ -75,7 +78,7 @@ def main():
         assert len(cpu['observations'])==len(vectors)==5
         for observed,model in zip(cpu['observations'],vectors):
             assert observed['name']==model['name']
-            assert all(observed['result'][k]==model['expected'][k] for k in ('after','eax','ecx'))
+            assert all(observed['result'][k]==model['expected'][k] for k in ('after','eax','ecx','helper_defined_flags'))
             assert observed['result']['eflags'] & 0x8c5 == 0x44
     assert sha(pe)==record['sha256']
     print('OPTION_STATE: bound unchanged PE; five independent vectors; startup incomplete; emission false')

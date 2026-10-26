@@ -255,6 +255,16 @@ struct Flags {
     pf: bool,
     af: Option<bool>,
 }
+impl Flags {
+    // Defined arithmetic flags only; AF is deliberately excluded.
+    fn defined_mask(&self) -> u32 {
+        u32::from(self.cf)
+            | (u32::from(self.pf) << 2)
+            | (u32::from(self.zf) << 6)
+            | (u32::from(self.sf) << 7)
+            | (u32::from(self.of) << 11)
+    }
+}
 fn logical_flags(value: u32) -> Flags {
     Flags {
         cf: false,
@@ -310,8 +320,8 @@ fn run() -> Result<()> {
     }
     let effect = bind(&snapshot)?.effect();
     let flags = logical_flags(0);
-    println!("{{\"after\":\"{}\",\"eax\":0,\"ecx\":{},\"cf\":{},\"of\":{},\"zf\":{},\"sf\":{},\"pf\":{},\"af\":null,\"stack_delta_from_callback_entry\":4,\"peak_stack_bytes_below_entry\":8,\"other_registers_preserved\":true,\"exclusive_owned_no_fault_assumption\":true,\"source_after\":\"{}\",\"synthetic_vector\":{},\"emission_allowed\":false,\"complete_startup_proof\":false}}",
-        hex(&effect.data),effect.ecx,flags.cf,flags.of,flags.zf,flags.sf,flags.pf,hex(&source.data),args.len()==4);
+    println!("{{\"after\":\"{}\",\"eax\":0,\"ecx\":{},\"cf\":{},\"of\":{},\"zf\":{},\"sf\":{},\"pf\":{},\"af\":null,\"stack_delta_from_callback_entry\":4,\"peak_stack_bytes_below_entry\":8,\"preserved_registers\":[\"ebx\",\"edx\",\"esi\",\"edi\",\"ebp\"],\"helper_defined_flags\":[{},{}],\"exclusive_owned_no_fault_assumption\":true,\"source_after\":\"{}\",\"synthetic_vector\":{},\"emission_allowed\":false,\"complete_startup_proof\":false}}",
+        hex(&effect.data),effect.ecx,flags.cf,flags.of,flags.zf,flags.sf,flags.pf,effect.helper_flags[0].defined_mask(),effect.helper_flags[1].defined_mask(),hex(&source.data),args.len()==4);
     Ok(())
 }
 fn main() {

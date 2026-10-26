@@ -11,7 +11,7 @@ static int nibble(char c) {
 int main(int argc, char **argv) {
     uint32_t words[4]; unsigned char *bytes = (unsigned char *)words;
     uint32_t *first = words, *second = words + 2;
-    uint32_t result_eax, result_ecx, result_flags;
+    uint32_t result_eax, result_ecx, result_flags, first_flags, second_flags;
     int i;
     if (argc != 2 || strlen(argv[1]) != 32) return 125;
     for (i = 0; i < 16; ++i) {
@@ -24,10 +24,14 @@ int main(int argc, char **argv) {
         mov ecx, [eax+4]
         or dword ptr [eax], 24h
         mov [eax+4], ecx
+        pushfd
+        pop first_flags
         mov eax, second
         mov ecx, [eax+4]
         or dword ptr [eax], 2
         mov [eax+4], ecx
+        pushfd
+        pop second_flags
         xor eax, eax
         mov result_eax, eax
         mov result_ecx, ecx
@@ -36,6 +40,6 @@ int main(int argc, char **argv) {
     }
     printf("{\"after\":\"");
     for (i = 0; i < 16; ++i) printf("%02x", (unsigned int)bytes[i]);
-    printf("\",\"eax\":%u,\"ecx\":%u,\"eflags\":%u}\n", result_eax, result_ecx, result_flags);
+    printf("\",\"eax\":%u,\"ecx\":%u,\"eflags\":%u,\"helper_defined_flags\":[%u,%u]}\n", result_eax, result_ecx, result_flags, first_flags & 0x8c5u, second_flags & 0x8c5u);
     return 0;
 }
