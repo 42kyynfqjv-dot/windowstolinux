@@ -1,0 +1,306 @@
+{
+  "provenance": "Independent inventory of authored composed_O2 MSVC dumpbin listing from run 40410456789, artifact 12692352644; bytes checked against same untouched PE. Not a decoder or eligibility certificate.",
+  "entry_rva": "0x1000",
+  "code_rva": "0x1000",
+  "code_size": 159,
+  "padding": {
+    "rva": "0x1061",
+    "bytes": "cccccccccccccccccccccccccccccc"
+  },
+  "instructions": [
+    {
+      "rva": "0x1000",
+      "bytes": "83ec08",
+      "assembly": "sub         esp,8",
+      "new_form": false
+    },
+    {
+      "rva": "0x1003",
+      "bytes": "8d0424",
+      "assembly": "lea         eax,[esp]",
+      "new_form": false
+    },
+    {
+      "rva": "0x1006",
+      "bytes": "6a03",
+      "assembly": "push        3",
+      "new_form": false
+    },
+    {
+      "rva": "0x1008",
+      "bytes": "50",
+      "assembly": "push        eax",
+      "new_form": false
+    },
+    {
+      "rva": "0x1009",
+      "bytes": "6808204000",
+      "assembly": "push        402008h",
+      "new_form": false
+    },
+    {
+      "rva": "0x100e",
+      "bytes": "ff1500204000",
+      "assembly": "call        dword ptr ds:[00402000h]",
+      "new_form": false
+    },
+    {
+      "rva": "0x1014",
+      "bytes": "85c0",
+      "assembly": "test        eax,eax",
+      "new_form": false
+    },
+    {
+      "rva": "0x1016",
+      "bytes": "7509",
+      "assembly": "jne         00401021",
+      "new_form": false
+    },
+    {
+      "rva": "0x1018",
+      "bytes": "b8c8000000",
+      "assembly": "mov         eax,0C8h",
+      "new_form": false
+    },
+    {
+      "rva": "0x101d",
+      "bytes": "83c408",
+      "assembly": "add         esp,8",
+      "new_form": false
+    },
+    {
+      "rva": "0x1020",
+      "bytes": "c3",
+      "assembly": "ret",
+      "new_form": false
+    },
+    {
+      "rva": "0x1021",
+      "bytes": "83f841",
+      "assembly": "cmp         eax,41h",
+      "new_form": false
+    },
+    {
+      "rva": "0x1024",
+      "bytes": "7609",
+      "assembly": "jbe         0040102F",
+      "new_form": false
+    },
+    {
+      "rva": "0x1026",
+      "bytes": "b8cb000000",
+      "assembly": "mov         eax,0CBh",
+      "new_form": false
+    },
+    {
+      "rva": "0x102b",
+      "bytes": "83c408",
+      "assembly": "add         esp,8",
+      "new_form": false
+    },
+    {
+      "rva": "0x102e",
+      "bytes": "c3",
+      "assembly": "ret",
+      "new_form": false
+    },
+    {
+      "rva": "0x102f",
+      "bytes": "83f802",
+      "assembly": "cmp         eax,2",
+      "new_form": false
+    },
+    {
+      "rva": "0x1032",
+      "bytes": "7609",
+      "assembly": "jbe         0040103D",
+      "new_form": false
+    },
+    {
+      "rva": "0x1034",
+      "bytes": "b8c9000000",
+      "assembly": "mov         eax,0C9h",
+      "new_form": false
+    },
+    {
+      "rva": "0x1039",
+      "bytes": "83c408",
+      "assembly": "add         esp,8",
+      "new_form": false
+    },
+    {
+      "rva": "0x103c",
+      "bytes": "c3",
+      "assembly": "ret",
+      "new_form": false
+    },
+    {
+      "rva": "0x103d",
+      "bytes": "50",
+      "assembly": "push        eax",
+      "new_form": false
+    },
+    {
+      "rva": "0x103e",
+      "bytes": "8d442404",
+      "assembly": "lea         eax,[esp+4]",
+      "new_form": false
+    },
+    {
+      "rva": "0x1042",
+      "bytes": "50",
+      "assembly": "push        eax",
+      "new_form": false
+    },
+    {
+      "rva": "0x1043",
+      "bytes": "e828000000",
+      "assembly": "call        00401070",
+      "new_form": false
+    },
+    {
+      "rva": "0x1048",
+      "bytes": "83c408",
+      "assembly": "add         esp,8",
+      "new_form": false
+    },
+    {
+      "rva": "0x104b",
+      "bytes": "3dca000000",
+      "assembly": "cmp         eax,0CAh",
+      "new_form": true
+    },
+    {
+      "rva": "0x1050",
+      "bytes": "7504",
+      "assembly": "jne         00401056",
+      "new_form": false
+    },
+    {
+      "rva": "0x1052",
+      "bytes": "83c408",
+      "assembly": "add         esp,8",
+      "new_form": false
+    },
+    {
+      "rva": "0x1055",
+      "bytes": "c3",
+      "assembly": "ret",
+      "new_form": false
+    },
+    {
+      "rva": "0x1056",
+      "bytes": "8d044506000000",
+      "assembly": "lea         eax,[eax*2+00000006h]",
+      "new_form": true
+    },
+    {
+      "rva": "0x105d",
+      "bytes": "83c408",
+      "assembly": "add         esp,8",
+      "new_form": false
+    },
+    {
+      "rva": "0x1060",
+      "bytes": "c3",
+      "assembly": "ret",
+      "new_form": false
+    },
+    {
+      "rva": "0x1070",
+      "bytes": "8b4c2404",
+      "assembly": "mov         ecx,dword ptr [esp+4]",
+      "new_form": true
+    },
+    {
+      "rva": "0x1074",
+      "bytes": "0fb701",
+      "assembly": "movzx       eax,word ptr [ecx]",
+      "new_form": true
+    },
+    {
+      "rva": "0x1077",
+      "bytes": "83e830",
+      "assembly": "sub         eax,30h",
+      "new_form": false
+    },
+    {
+      "rva": "0x107a",
+      "bytes": "83f809",
+      "assembly": "cmp         eax,9",
+      "new_form": false
+    },
+    {
+      "rva": "0x107d",
+      "bytes": "771a",
+      "assembly": "ja          00401099",
+      "new_form": false
+    },
+    {
+      "rva": "0x107f",
+      "bytes": "837c240802",
+      "assembly": "cmp         dword ptr [esp+8],2",
+      "new_form": false
+    },
+    {
+      "rva": "0x1084",
+      "bytes": "7518",
+      "assembly": "jne         0040109E",
+      "new_form": false
+    },
+    {
+      "rva": "0x1086",
+      "bytes": "0fb75102",
+      "assembly": "movzx       edx,word ptr [ecx+2]",
+      "new_form": true
+    },
+    {
+      "rva": "0x108a",
+      "bytes": "83ea30",
+      "assembly": "sub         edx,30h",
+      "new_form": false
+    },
+    {
+      "rva": "0x108d",
+      "bytes": "83fa09",
+      "assembly": "cmp         edx,9",
+      "new_form": true
+    },
+    {
+      "rva": "0x1090",
+      "bytes": "7707",
+      "assembly": "ja          00401099",
+      "new_form": false
+    },
+    {
+      "rva": "0x1092",
+      "bytes": "8d0c80",
+      "assembly": "lea         ecx,[eax+eax*4]",
+      "new_form": false
+    },
+    {
+      "rva": "0x1095",
+      "bytes": "8d044a",
+      "assembly": "lea         eax,[edx+ecx*2]",
+      "new_form": true
+    },
+    {
+      "rva": "0x1098",
+      "bytes": "c3",
+      "assembly": "ret",
+      "new_form": false
+    },
+    {
+      "rva": "0x1099",
+      "bytes": "b8ca000000",
+      "assembly": "mov         eax,0CAh",
+      "new_form": false
+    },
+    {
+      "rva": "0x109e",
+      "bytes": "c3",
+      "assembly": "ret",
+      "new_form": false
+    }
+  ]
+}

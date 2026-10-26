@@ -1,5 +1,9 @@
 # Architecture
 
+For the current implementation audit, profile boundaries and next integrated
+milestone, see [CLI critical path](docs/CLI-CRITICAL-PATH.md). The milestone entries
+below include historical checkpoints; later entries supersede earlier barriers.
+
 The target design separates PE parsing, instruction lifting, typed intermediate representation, Rust emission, and a Rust-native Windows compatibility runtime. This repository currently contains a narrow entry-path experiment in one Rust binary. That shape is temporary; unsupported semantics are rejected instead of guessed.
 
 The authored-image loader checks DOS and PE signatures, PE32/x86 console shape, section table and image bounds, and executable file-backed entry bytes. It accepts one executable code section, optionally followed by one adjacent read-only initialized-data section under [SUB509-MAPPING.md](SUB509-MAPPING.md), and requires all 16 PE data directories to be empty. Outside the SUB-512 extension it rejects imports; it always rejects TLS, relocations, exports, resources, and every other declared directory rather than ignoring their startup effects. It also rejects DLL characteristics and mappings outside that exact profile. This is a deliberately restricted image profile, not a general PE loader.
