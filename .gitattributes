@@ -16,3 +16,6 @@ research/crt/*runtime*.py text eol=lf
 research/crt/*composition*.py text eol=lf
 research/input/*.py text eol=lf
 research/input/*.json text eol=lf
+
+research/input/diversity/*.py text eol=lf
+research/input/diversity/*.json text eol=lf
