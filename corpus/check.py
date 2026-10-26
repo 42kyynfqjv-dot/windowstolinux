@@ -35,8 +35,17 @@ with tempfile.TemporaryDirectory() as directory:
         if not windows:
             convert(b,True);first=rs.read_bytes();convert(b,True);assert first==rs.read_bytes()
             subprocess.run(['rustc','-D','warnings',str(rs),'-o',str(elf)],check=True,timeout=30)
+        # Flush before launching: identify a hung original without guessing from
+        # the last buffered successful line. Keep the same timeout and fail closed.
+        identity = dict(case=i, platform='windows' if windows else 'linux',
+                        pe_sha256=hashlib.sha256(b).hexdigest())
+        print('corpus launching '+json.dumps(identity), flush=True)
         with open(root/'out','wb') as out,open(root/'err','wb') as err:
-            p=subprocess.run([str(exe if windows else elf)],stdout=out,stderr=err,timeout=15)
+            try:
+                p=subprocess.run([str(exe if windows else elf)],stdout=out,stderr=err,timeout=15)
+            except subprocess.TimeoutExpired:
+                print('corpus TIMEOUT '+json.dumps(identity), flush=True)
+                raise
         observation=((root/'out').read_bytes().hex(),(root/'err').read_bytes().hex(),p.returncode)
         assert observation==(spec['stdout_hex'],spec['stderr_hex'],spec['exit']),(i,observation)
         print(f'corpus {i:02}: stdout={observation[0]} stderr={observation[1]} exit={observation[2]}')

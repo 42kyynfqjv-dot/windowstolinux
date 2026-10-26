@@ -9,6 +9,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tools'))
 from linker_intake import Candidate
+from dumpbin_relocations import highlow_words
 
 repo=Path.cwd()
 root=Path(os.environ['RUNNER_TEMP'])/'w2l-compiler-measurement'
@@ -38,7 +39,7 @@ for kind in ['freestanding','crt']:
     # Disassemble only our freestanding authored program, not linked CRT startup code.
     if kind=='freestanding':
         command(['dumpbin','/disasm',exe],kind+'-disassembly')
-        command(['dumpbin','/relocations',exe],kind+'-relocations')
+        relocation_listing = command(['dumpbin','/relocations',exe],kind+'-relocations')
     b=(root/exe).read_bytes();pe=struct.unpack_from('<I',b,60)[0];o=pe+24
     assert b[pe:pe+4]==b'PE\0\0' and struct.unpack_from('<H',b,o)[0]==0x10b
     sections=struct.unpack_from('<H',b,pe+6)[0]
@@ -60,6 +61,10 @@ for kind in ['freestanding','crt']:
         # No file patching, decoder bypass or compiled-program equivalence claim.
         candidate = Candidate(b)
         intake = candidate.report()
+        tool_words = highlow_words(relocation_listing)
+        model_words = [(p.site, candidate.base + p.rva) for p in candidate.pointers]
+        assert tool_words == model_words, (tool_words, model_words)
+        intake['dumpbin_highlow_agrees'] = True
         assert candidate.blob == b
         (root/'linker-intake-prototype.json').write_text(json.dumps(intake,indent=2)+'\n')
         print('TEST_ONLY_LINKER_INTAKE '+json.dumps(intake))

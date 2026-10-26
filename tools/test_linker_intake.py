@@ -204,6 +204,14 @@ class LinkerDesign(unittest.TestCase):
         self.reject_mutation(0x401, '<I', 0x3fffff, 'below image')
         self.reject_mutation(0x401, '<I', 0x401000, 'whole range')
 
+    def test_independent_dumpbin_listing_expectations(self):
+        from dumpbin_relocations import highlow_words
+        listing = "1000 RVA, C SizeOfBlock\n 4 HIGHLOW 00402008\n C HIGHLOW 00402000"
+        self.assertEqual(highlow_words(listing), [(0x1004, 0x402008), (0x100c, 0x402000)])
+        for listing in ('', '4 HIGHLOW 00402008', '1000 RVA, C SizeOfBlock\nunsupported'):
+            with self.assertRaises(ValueError):
+                highlow_words(listing)
+
     def test_all_file_truncations_fail_explicitly(self):
         b = image()
         for length in range(len(b)):

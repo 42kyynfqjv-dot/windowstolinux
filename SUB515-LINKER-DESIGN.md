@@ -207,3 +207,37 @@ After medium review, bounded production integration requires:
 No new resource/user decision is needed. Medium review should challenge opaque
 POGO handling, metadata ownership, actual-base evidence and typed stack prerequisites
 before another Astra High production integration turn.
+
+
+## Medium contract review
+
+Range/role checks, duplicate/overlap rejection and metadata exclusions were reviewed
+against the observed MSVC fields. No production change was justified. The model
+still cannot prove instruction boundaries or pointer flow; its test-supplied bind
+fields are not that proof. Pointer identity belongs to the Candidate resolver;
+production must use image-owned types and cannot trust caller-supplied RVA tags.
+Actual load bases remain unmeasured. Opaque POGO handling is conditional on excluding
+all metadata consumption and all unsupported startup directories, not a general
+claim about debug records. These conditions remain mandatory production gates.
+
+The relocation listing comparison is now enforced against the same unmodified PE
+in Windows CI (rather than only manually inspecting two reports). One added test
+checks independently specified dumpbin records and missing/unrecognized listings:
+15 prototype functions now, with the original 14 retained.
+
+Timeout investigation: run40269378607 first Windows job121398673975 completed case13
+then timed out waiting15 seconds for case14; retry job121398912221 passed case14
+(stdout433134, empty stderr, exit0) and all other cases. Logs supply no process
+trace, actual load address, Windows event or verified cause. A successful retry
+cannot establish that this reliability issue is fixed. Corpus launch/timeout logs
+now flush case ID, platform and exact PE SHA256; the15-second limit and failure
+remain unchanged. Final CI provides another ordinary execution attempt, with no
+stress test, security change or acceptance relaxation. If it recurs, retain the
+exact failing image identity and collect documented process/module diagnostics
+before guessing whether scheduling, loading or program behavior caused the wait.
+
+Ready for a bounded Astra High production-intake implementation after this review:
+strict parsed-candidate types and independent Rust loader tests, with linker-profile
+emission unconditionally blocked pending separately reviewed typed pointer flow.
+Require unchanged compiler intake to reach unsupported PUSH ESI, preserve all prior
+comparisons, and keep actual-base observation separate from arithmetic reasoning.
