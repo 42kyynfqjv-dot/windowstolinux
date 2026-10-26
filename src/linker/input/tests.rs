@@ -177,6 +177,7 @@ fn production_ir_register_permutations_and_return_adapter() {
                 Op::Lea(d, a, b, k, c) => Op::Lea(reg(d), reg(a), reg(b), k, c),
                 Op::ZeroExtend(d, s) => Op::ZeroExtend(reg(d), reg(s)),
                 Op::Arithmetic(r, v, sub) => Op::Arithmetic(reg(r), v, sub),
+                Op::Binary(d, s, m) => Op::Binary(reg(d), reg(s), m),
                 Op::Branch(c, t) => Op::Branch(c, t * 4),
                 Op::Ret => {
                     out.insert(pc * 4, (Op::Move(0, reg(0)), pc * 4 + 1));
@@ -219,5 +220,60 @@ fn production_ir_register_permutations_and_return_adapter() {
             }
             std::fs::remove_dir_all(dir).unwrap();
         }
+    }
+}
+
+#[test]
+fn nonlinear_decoded_paths_and_native_boundaries() {
+    let hex="83ec088d04246a03506808204000ff15002040008bc885c97509b8c800000083c408c383f9417609b8cb00000083c408c383f9027609b8c900000083c408c38b14248d42d06683f809772c0fb7d283c2d00fafd283f90275188b4c24028d41d06683f80977110fb7c983c1d00fafc903d18bc283c408c3b8ca00000083c408c3";
+    let bytes: Vec<u8> = (0..hex.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap())
+        .collect();
+    let g = graph_for(&bytes);
+    assert!(matches!(g[&0x1051].0, Op::Binary(2, 2, true)));
+    assert!(matches!(g[&0x106c].0, Op::Binary(1, 1, true)));
+    assert!(matches!(g[&0x106f].0, Op::Binary(2, 1, false)));
+    for (at, op) in [
+        (0x1049, Op::Branch(Condition::Be, 0x1077)),
+        (0x1054, Op::Compare(2, 32, 2)),
+        (0x1054, Op::Arithmetic(1, 0, false)),
+        (0x1059, Op::Load(1, 4)),
+        (0x1064, Op::Branch(Condition::Be, 0x1077)),
+        (0x1066, Op::Move(1, 3)),
+        (0x106f, Op::ZeroExtend(2, 2)),
+    ] {
+        let mut bad = g.clone();
+        bad.get_mut(&at).unwrap().0 = op;
+        assert!(prove(bad, 0x1000).is_err(), "{at:x}");
+    }
+    let source = prove(g, 0x1000).unwrap().emit();
+    assert!(source.contains("wrapping_mul"));
+    if cfg!(target_os = "linux") {
+        let dir = std::env::temp_dir().join(format!("w2l-nonlinear-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("n.rs");
+        let bin = dir.join("native");
+        std::fs::write(&file, source).unwrap();
+        assert!(std::process::Command::new("rustc")
+            .args(["--edition=2021"])
+            .arg(&file)
+            .arg("-o")
+            .arg(&bin)
+            .status()
+            .unwrap()
+            .success());
+        for a in 0..10 {
+            for b in 0..10 {
+                let r = std::process::Command::new(&bin)
+                    .env_clear()
+                    .env("W2L_INPUT", format!("{a}{b}"))
+                    .output()
+                    .unwrap();
+                assert_eq!(r.status.code(), Some(a * a + b * b));
+                assert!(r.stdout.is_empty() && r.stderr.is_empty());
+            }
+        }
+        std::fs::remove_dir_all(dir).unwrap();
     }
 }

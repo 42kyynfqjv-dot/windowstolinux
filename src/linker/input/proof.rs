@@ -49,24 +49,95 @@ impl Expr {
         Ok(e)
     }
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+// Immutable bounded analysis DAG. Counts expanded occurrences, including aliases.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum Scalar {
+    Affine(Expr),
+    Node(std::rc::Rc<ScalarNode>),
+}
+#[derive(Debug, PartialEq, Eq)]
+struct ScalarNode {
+    left: Scalar,
+    right: Scalar,
+    multiply: bool,
+    size: u16,
+    depth: u8,
+}
+impl Scalar {
+    fn cost(&self) -> (u16, u8) {
+        match self {
+            Self::Affine(_) => (1, 1),
+            Self::Node(n) => (n.size, n.depth),
+        }
+    }
+    fn binary(self, right: Self, multiply: bool) -> Result<Self, String> {
+        let (a, ad) = self.cost();
+        let (b, bd) = right.cost();
+        let size = 1 + a + b;
+        let depth = 1 + ad.max(bd);
+        need(size <= 63 && depth <= 12, "input: expression resource cap")?;
+        Ok(Self::Node(std::rc::Rc::new(ScalarNode {
+            left: self,
+            right,
+            multiply,
+            size,
+            depth,
+        })))
+    }
+    fn bounds(&self, ranges: &[(u32, u32); 3]) -> (u32, u32) {
+        match self {
+            Self::Affine(e) => e.bounds(ranges),
+            Self::Node(n) => {
+                let (a, b) = n.left.bounds(ranges);
+                let (c, d) = n.right.bounds(ranges);
+                let (a, b, c, d) = (u64::from(a), u64::from(b), u64::from(c), u64::from(d));
+                let (lo, hi) = if n.multiply {
+                    (a * c, b * d)
+                } else {
+                    (a + c, b + d)
+                };
+                if lo >> 32 == hi >> 32 {
+                    (lo as u32, hi as u32)
+                } else {
+                    (0, u32::MAX)
+                }
+            }
+        }
+    }
+    fn value(self) -> Value {
+        match self {
+            Self::Affine(e) => Value::Scalar(e),
+            n => Value::Nonlinear(n),
+        }
+    }
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
 enum Value {
     Unknown,
     Scalar(Expr),
+    Nonlinear(Scalar),
     Buffer,
     Name,
     OriginalEsi,
 }
 impl Value {
-    fn scalar(self) -> Result<Expr, String> {
+    fn expression(&self) -> Result<Scalar, String> {
+        match self {
+            Self::Scalar(e) => Ok(Scalar::Affine(*e)),
+            Self::Nonlinear(e) => Ok(e.clone()),
+            _ => Err("input: unknown or pointer used as scalar".into()),
+        }
+    }
+
+    fn scalar(&self) -> Result<Expr, String> {
         if let Self::Scalar(e) = self {
-            Ok(e)
+            Ok(*e)
         } else {
             Err("input: unknown or pointer used as scalar".into())
         }
     }
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 enum Word {
     Return,
     Local(u8),
@@ -218,7 +289,7 @@ pub(super) fn prove(graph: Graph, entry: u32) -> Result<Proven, String> {
                 s.regs[0] = Value::Buffer;
             }
             Op::Push(n) => s.stack.push(Word::Arg(Value::Scalar(Expr::constant(n)))),
-            Op::PushEax => s.stack.push(Word::Arg(s.regs[0])),
+            Op::PushEax => s.stack.push(Word::Arg(s.regs[0].clone())),
             Op::Name => s.stack.push(Word::Arg(Value::Name)),
             Op::Acquire => {
                 need(
@@ -259,7 +330,7 @@ pub(super) fn prove(graph: Graph, entry: u32) -> Result<Proven, String> {
                 }
                 continue;
             }
-            Op::Move(d, v) => s.regs[d] = Value::Scalar(s.regs[v].scalar()?),
+            Op::Move(d, v) => s.regs[d] = s.regs[v].expression()?.value(),
             Op::Mov(r, v) => s.regs[r] = Value::Scalar(Expr::constant(v)),
             Op::Test(r) => s.flags = Some((s.regs[r].scalar()?, 32, 0)),
             Op::Compare(r, width, v) => s.flags = Some((s.regs[r].scalar()?, width, v)),
@@ -312,7 +383,7 @@ pub(super) fn prove(graph: Graph, entry: u32) -> Result<Proven, String> {
                     "input: terminal ownership/ABI",
                 )?;
                 need(
-                    s.regs[0].scalar()?.bounds(&s.ranges).1 <= 255,
+                    s.regs[0].expression()?.bounds(&s.ranges).1 <= 255,
                     "input: unproved portable exit",
                 )?;
                 returns += 1;
@@ -323,11 +394,19 @@ pub(super) fn prove(graph: Graph, entry: u32) -> Result<Proven, String> {
             }
             Op::ZeroExtend(d, v) => s.regs[d] = Value::Scalar(s.regs[v].scalar()?.low16()?),
             Op::Arithmetic(r, v, subtract) => {
-                s.regs[r] = Value::Scalar(s.regs[r].scalar()?.add(
-                    Expr::constant(0),
-                    0,
-                    if subtract { v.wrapping_neg() } else { v },
-                ));
+                let delta = if subtract { v.wrapping_neg() } else { v };
+                s.regs[r] = match s.regs[r].expression()? {
+                    Scalar::Affine(e) => Value::Scalar(e.add(Expr::constant(0), 0, delta)),
+                    e => e
+                        .binary(Scalar::Affine(Expr::constant(delta)), false)?
+                        .value(),
+                };
+                s.flags = None;
+            }
+            Op::Binary(d, v, multiply) => {
+                let left = s.regs[d].expression()?;
+                let right = s.regs[v].expression()?;
+                s.regs[d] = left.binary(right, multiply)?.value();
                 s.flags = None;
             }
             Op::Branch(c, target) => {
@@ -436,5 +515,41 @@ mod tests {
                 .bounds(&[(0, 1), (0, 0), (0, 0)]),
             (0, u32::MAX)
         );
+    }
+}
+
+#[cfg(test)]
+mod nonlinear_tests {
+    use super::*;
+    #[test]
+    fn independent_modular_products_and_resource_caps() {
+        let ranges = [(0, 0); 3];
+        for (a, b, result) in [
+            (u32::MAX, 2, u32::MAX - 1),
+            (0x80000000, u32::MAX, 0x80000000),
+            (65536, 65536, 0),
+            (9, 9, 81),
+        ] {
+            let e = Scalar::Affine(Expr::constant(a))
+                .binary(Scalar::Affine(Expr::constant(b)), true)
+                .unwrap();
+            assert_eq!(e.bounds(&ranges), (result, result));
+        }
+        let x = Scalar::Affine(Expr::variable(0));
+        let e = x.clone().binary(x.clone(), true).unwrap();
+        assert_eq!(e.bounds(&[(0, 9), (0, 0), (0, 0)]), (0, 81));
+        assert_eq!(e.bounds(&[(0, u32::MAX), (0, 0), (0, 0)]), (0, u32::MAX));
+        let mut e = x.clone();
+        for _ in 0..5 {
+            e = e.clone().binary(e, true).unwrap();
+        }
+        assert_eq!(e.cost(), (63, 6));
+        assert!(e.clone().binary(e, true).is_err());
+        let mut e = x.clone();
+        for _ in 0..11 {
+            e = e.binary(x.clone(), false).unwrap();
+        }
+        assert_eq!(e.cost(), (23, 12));
+        assert!(e.binary(x, false).is_err());
     }
 }

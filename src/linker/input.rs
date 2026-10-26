@@ -25,6 +25,7 @@ enum Op {
     Lea(usize, usize, usize, u32, u32),
     ZeroExtend(usize, usize),
     Arithmetic(usize, u32, bool),
+    Binary(usize, usize, bool),
     Branch(Condition, u32),
 }
 #[derive(Clone, Copy, Debug)]
@@ -128,6 +129,13 @@ fn decode(image: &Candidate<'_>) -> Result<Graph, String> {
             [0x8d, 0x04, 0x48] => Op::Lea(0, 0, 1, 2, 0),
             [0x05, _, _, _, _] => Op::Arithmetic(0, u32_at(b, 1)?, false),
             [0x83, 0xe8, n] => Op::Arithmetic(0, *n as i8 as i32 as u32, true),
+            [0x83, 0xc2, n] => Op::Arithmetic(2, *n as i8 as i32 as u32, false),
+            [0x83, 0xc1, n] => Op::Arithmetic(1, *n as i8 as i32 as u32, false),
+            [0x0f, 0xaf, 0xd2] => Op::Binary(2, 2, true),
+            [0x0f, 0xaf, 0xc9] => Op::Binary(1, 1, true),
+            [0x8b, 0x4c, 0x24, 2] => Op::Load(1, 2),
+            [0x0f, 0xb7, 0xc9] => Op::ZeroExtend(1, 1),
+            [0x03, 0xd1] => Op::Binary(2, 1, false),
             [opcode @ (0x75..=0x77), _] => {
                 let target = u32::try_from(ins.near_branch_target())
                     .map_err(|_| "input: branch overflow")?;
@@ -201,6 +209,10 @@ impl Proven {
                 Op::Arithmetic(r,v,subtract) => {
                     let method=if subtract{"overflowing_sub"}else{"overflowing_add"};
                     writeln!(s,"let (v,c)=s.r[{r}].{method}({v});s.r[{r}]=v;s.cf=c;s.zf=v==0;").unwrap();
+                },
+                Op::Binary(d,v,multiply)=>{
+                    let method=if multiply {"wrapping_mul"} else {"wrapping_add"};
+                    writeln!(s,"s.r[{d}]=s.r[{d}].{method}(s.r[{v}]);").unwrap();
                 },
                 Op::Branch(c,t) => {
                     let condition=match c {Condition::Ne=>"!s.zf",Condition::Be=>"s.cf||s.zf",Condition::A=>"!s.cf&&!s.zf"};
