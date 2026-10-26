@@ -41,13 +41,26 @@ class NestedContract(unittest.TestCase):
     def test_protected_foreign_pointer_unknown_slots_reject(self):
         for word in [Word('return',0,5),Word('saved',0,5),Word('entry',0,None),
                      Word('data',99,5),Word('data',0,('pointer','image',0x2008)),Word('data',0,('unknown',9))]:
-            for operation in ['copy','store','tail']:
-                m=self.outer();m.words[1]=word;before=list(m.words)
-                with self.assertRaises(ValueError):
-                    if operation=='copy':m.copy8()
-                    elif operation=='store':m.store(8,3)
-                    else:m.tail(0x1040)
-                self.assertEqual(m.words,before)
+            for position in (1,2):
+                for operation in ['copy','store','tail']:
+                    m=self.outer()
+                    if operation=='copy' and position==2:m.copy8()
+                    m.words[position]=word;before=list(m.words)
+                    with self.assertRaises(ValueError):
+                        if operation=='copy':m.copy8()
+                        elif operation=='store':m.store(8 if position==1 else 4,3 if position==1 else 12)
+                        else:m.tail(0x1040)
+                    self.assertEqual(m.words,before)
+
+    def test_store_requires_complete_scalar_window(self):
+        for position in (1,2):
+            m=self.outer();m.words[position]=Word('saved',0,7)
+            before=list(m.words)
+            # Even a valid selected slot cannot authorize mutation when the
+            # other member of the two-argument window is protected.
+            with self.assertRaisesRegex(ValueError,'argument owner'):
+                m.store(4 if position==1 else 8,12 if position==1 else 3)
+            self.assertEqual(m.words,before)
 
     def test_store_borrow_and_flag_preservation(self):
         m=self.outer();m.flags=False;m.store(8,3);m.store(4,12)

@@ -95,7 +95,7 @@ any path. Existing loader/relocation/output/terminal barriers remain mandatory.
 
 ## Prototype evidence and limits
 
-`python3 -m unittest discover -s tools -p test_nested_stack_model.py -v` runs eight
+`python3 -m unittest discover -s tools -p test_nested_stack_model.py -v` runs nine
 independent test functions. Literal stack snapshots and continuations cover copy
 ordering, value independence, borrowed stores, final return, protected/foreign/
 pointer/unknown words, bad untaken state, ESI, flags, cycles and caps. The model
@@ -124,3 +124,19 @@ no-fault and regular-file full-output assumptions apply. Two historical Windows
 timeout causes remain unresolved; XP/7/general applications remain unvalidated.
 Astra High is appropriate for graph/frame integration after medium contract review.
 No external resource blocker identified. No merge/release.
+
+## Medium contract review
+
+Read-before-push indices and the preserved101B tail continuation match the exact
+artifact. The original eight tests used literal independent stack expectations,
+but protected/pointer/unknown mutations targeted only argument2. They now cover
+both positions, including the second copy after ESP changes. A ninth function
+checks that a valid destination beside a protected word grants no write authority.
+The prototype now validates BOTH complete scalar caller arguments before either
+exact store mutates a slot. This clarifies the narrow borrowed-write window and
+rejects mismatched shapes atomically. Production remains unchanged/rejecting.
+
+Ready for bounded Astra integration subject to production routine-region/acyclic
+graph proof and shared checked transitions. The prototype tests supplied graphs
+and explicit alternative states; it does not prove decoder graph recovery or
+automatic all-path exploration. Those remain mandatory implementation gates.

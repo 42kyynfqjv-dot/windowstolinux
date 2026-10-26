@@ -107,6 +107,10 @@ class Model:
         f = self.frame(True)
         at = len(self.words)-1-offset//4
         old = self.scalar_slot(at, f)
+        # Grant this narrow borrowed-write authority only for a complete
+        # two-scalar argument window, not one valid slot beside protected data.
+        for argument in (f.boundary-1, f.boundary-2):
+            self.scalar_slot(argument, f)
         self.tick()
         # Borrowed mutation: retain caller ownership; do not clone/steal the slot.
         self.words[at] = replace(old, value=value)
