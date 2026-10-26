@@ -6,7 +6,7 @@ def sha(p):return hashlib.sha256(p.read_bytes()).hexdigest()
 def save(p,d):p.write_text(json.dumps(d,indent=2)+'\n',encoding='utf-8')
 def run(cmd,**kw):
  save(out/'stage.json',dict(command=list(map(str,cmd)),platform=platform.platform(),start=time.time()))
- try:return subprocess.run(cmd,capture_output=True,timeout=30,**kw)
+ try:return subprocess.run(cmd,timeout=30,**(dict(stderr=subprocess.PIPE) if "stdout" in kw else dict(capture_output=True)),**kw)
  except subprocess.TimeoutExpired as e:
   save(out/'timeout.json',dict(command=list(map(str,cmd)),stdout=(e.stdout or b'').hex(),stderr=(e.stderr or b'').hex()));raise
 m=json.loads((src/'frozen.json').read_text());cases=json.loads((src/'cases.json').read_text())
@@ -30,11 +30,13 @@ for config,flags in m['configurations'].items():
  row['pipe_eof']=dict(exit=p.returncode,stdout_hex=p.stdout.hex(),stderr_hex=p.stderr.hex())
  path=out/'input.bin';path.write_bytes(b'a')
  with path.open('wb') as f:p=run([str(pe)],stdin=f)
- assert p.returncode==11 and p.stdout==b'';row['read_failure_exit']=p.returncode
+ assert (p.returncode,p.stdout,p.stderr)==(11,b'',b'');row['read_failure_exit']=p.returncode
+ row['read_failure']=dict(exit=p.returncode,stdout_hex=p.stdout.hex(),stderr_hex=p.stderr.hex())
  path.write_bytes(b'a')
  with path.open('rb') as f, (out/'input.bin').open('rb') as dest:
-  p=subprocess.run([str(pe)],stdin=f,stdout=dest,stderr=subprocess.PIPE,timeout=30)
+  p=run([str(pe)],stdin=f,stdout=dest)
  assert p.returncode==12 and not p.stderr;row['write_failure_exit']=p.returncode
+ row['write_failure']=dict(exit=p.returncode,destination_after_hex=path.read_bytes().hex(),stderr_hex=p.stderr.hex());assert path.read_bytes()==b'a'
  target=out/(stem+'.rs');target.write_text('preserve')
  p=run([str(repo/'target/debug/w2l.exe'),str(pe),str(target)])
  assert p.returncode==1 and target.read_text()=='preserve'
