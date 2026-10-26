@@ -6,7 +6,7 @@ class Contract(unittest.TestCase):
     def test_literal_four_byte_zero(self):
         s=State(frame_proven=True);self.assertEqual(write_zero(s,self.ptr()),'stored');self.assertEqual(s.value.to_bytes(4,'little'),b'\0\0\0\0')
     def test_same_address_not_same_owner(self):
-        for p in [Pointer(2,'app-ucrt',1,0x70001000),Pointer(1,'static-crt',1,0x70001000),Pointer(1,'app-ucrt',2,0x70001000)]:
+        for p in [Pointer(2,'app-ucrt',1,0x70001000),Pointer(1,'static-crt',1,0x70001000),Pointer(1,'app-ucrt',2,0x70001000),Pointer(1.0,'app-ucrt',1,0x70001000),Pointer(True,'app-ucrt',1,0x70001000)]:
             s=State(frame_proven=True);before=copy.deepcopy(s)
             with self.assertRaises(ValueError):write_zero(s,p)
             self.assertEqual(s,before)
