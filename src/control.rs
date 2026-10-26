@@ -5,6 +5,9 @@ use std::fmt::Write;
 #[path = "control/flags.rs"]
 mod flags;
 use flags::Flags;
+#[path = "control/stack.rs"]
+pub(super) mod stack;
+use stack::{Return, Stack};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Condition {
@@ -34,6 +37,9 @@ pub(super) enum Op {
     Mov(u32),
     Add(u32),
     Compare(u32),
+    PushData(u32),
+    LoadArgument,
+    DropData,
     Call {
         target: usize,
     },
@@ -85,6 +91,9 @@ pub(super) fn oracle_instruction(bytes: &[u8], at: usize) -> Result<Instruction,
                 5,
             )
         }
+        0x68 => (Op::PushData(super::u32_at(bytes, at + 1)?), 5),
+        0x8b if bytes.get(at..at + 4) == Some(&[0x8b, 0x44, 0x24, 4]) => (Op::LoadArgument, 4),
+        0x8d if bytes.get(at..at + 4) == Some(&[0x8d, 0x64, 0x24, 4]) => (Op::DropData, 4),
         0xe8 => {
             let displacement = super::u32_at(bytes, at + 1)? as i32;
             if displacement < 0 {
@@ -178,12 +187,15 @@ fn validate(program: &Program) -> Result<u8, String> {
     let mut eax = None;
     let mut flags = None;
     let mut pc = 0;
-    let mut returns = vec![None];
+    let mut stack = Stack::new();
     for _ in 0..LIMIT {
         let instruction = program.get(&pc).ok_or("missing instruction")?;
         pc = instruction.next;
         match instruction.op {
             Op::Mov(value) => eax = Some(value),
+            Op::PushData(value) => stack.push(value)?,
+            Op::LoadArgument => eax = Some(stack.argument()?),
+            Op::DropData => stack.cleanup()?,
             Op::Add(value) => {
                 let (result, updated) = Flags::add(eax.ok_or("unknown entry EAX")?, value);
                 eax = Some(result);
@@ -207,20 +219,13 @@ fn validate(program: &Program) -> Result<u8, String> {
                 }
             }
             Op::Call { target } => {
-                if returns.len() > 32 {
-                    return Err("call nesting limit exceeded".into());
-                }
-                returns.push(Some(instruction.next));
+                stack.call(instruction.next)?;
                 pc = target;
             }
-            Op::Ret => {
-                if let Some(next) = returns.pop().ok_or("return stack underflow")? {
-                    pc = next;
-                    continue;
-                }
-                return u8::try_from(eax.ok_or("unknown return EAX")?)
-                    .map_err(|_| "Windows exit status exceeds Linux's 8-bit exit range".into());
-            }
+            Op::Ret => match stack.ret(eax)? {
+                Return::Resume(next) => pc = next,
+                Return::Exit(value) => return Ok(value),
+            },
         }
     }
     Err("execution instruction limit exceeded".into())
@@ -239,17 +244,27 @@ pub(super) fn emit(program: &Program) -> Result<String, String> {
     out.push_str(include_str!("control/flags.rs").trim_start_matches(
         "//! Independently implemented 32-bit arithmetic contracts; see SUB502-CONTRACT.md.\n",
     ));
-    out.push_str("\n}\nuse arithmetic::Flags;\n");
-    out.push_str("// Statically decoded x86; bounded forward control flow.\nuse std::convert::TryFrom;\n#[allow(unused_assignments, unused_mut, unused_variables)]\nfn main() {\nlet mut eax: Option<u32> = None;\nlet mut flags: Option<Flags> = None;\nlet mut pc: usize = 0;\nlet mut returns: Vec<Option<usize>> = vec![None];\nfor _ in 0..1024 {\nmatch pc {\n");
+    out.push_str("\n}\nuse arithmetic::Flags;\n#[allow(dead_code)]\nmod stack {\n");
+    out.push_str(
+        include_str!("control/stack.rs")
+            .split("\n#[cfg(test)]")
+            .next()
+            .unwrap(),
+    );
+    out.push_str("\n}\nuse stack::{Stack, Return};\n");
+    out.push_str("// Statically decoded x86; bounded forward control flow.\n#[allow(unused_assignments, unused_mut, unused_variables)]\nfn main() {\nlet mut eax: Option<u32> = None;\nlet mut flags: Option<Flags> = None;\nlet mut pc: usize = 0;\nlet mut stack = Stack::new();\nfor _ in 0..1024 {\nmatch pc {\n");
     for (at, instruction) in program {
         writeln!(out, "{at} => {{").unwrap();
         match instruction.op {
             Op::Mov(value) => writeln!(out, "eax = Some({value});").unwrap(),
+            Op::PushData(value) => writeln!(out, "stack.push({value}).unwrap();").unwrap(),
+            Op::LoadArgument => writeln!(out, "eax = Some(stack.argument().unwrap());").unwrap(),
+            Op::DropData => writeln!(out, "stack.cleanup().unwrap();").unwrap(),
             Op::Add(value) => writeln!(out, "let (value, updated) = Flags::add(eax.unwrap(), {value}); eax = Some(value); flags = Some(updated);").unwrap(),
             Op::Compare(value) => writeln!(out, "flags = Some(Flags::compare(eax.unwrap(), {value}));").unwrap(),
             Op::Xor => writeln!(out, "eax = Some(0); flags = Some(Flags::xor_self());").unwrap(),
-            Op::Call { target } => writeln!(out, "assert!(returns.len() <= 32); returns.push(Some({})); pc = {target};", instruction.next).unwrap(),
-            Op::Ret => writeln!(out, "if let Some(next) = returns.pop().unwrap() {{ pc = next; }} else {{ std::process::exit(u8::try_from(eax.unwrap()).unwrap() as i32); }}").unwrap(),
+            Op::Call { target } => writeln!(out, "stack.call({}).unwrap(); pc = {target};", instruction.next).unwrap(),
+            Op::Ret => writeln!(out, "match stack.ret(eax).unwrap() {{ Return::Resume(next) => pc = next, Return::Exit(value) => std::process::exit(i32::from(value)), }}").unwrap(),
             Op::Branch { condition, when, target } => writeln!(out, "if {} == {when} {{ pc = {target}; }} else {{ pc = {}; }}", condition.rust(), instruction.next).unwrap(),
         }
         if !matches!(
@@ -277,6 +292,9 @@ pub(super) fn records_for_comparison(bytes: &[u8]) -> Result<Vec<DecodeRecord>, 
         .map(|(&at, ins)| {
             let (name, immediate, target) = match ins.op {
                 Op::Mov(v) => ("mov", Some(v), None),
+                Op::PushData(v) => ("push", Some(v), None),
+                Op::LoadArgument => ("load_argument", None, None),
+                Op::DropData => ("drop_data", None, None),
                 Op::Add(v) => ("add", Some(v), None),
                 Op::Compare(v) => ("cmp", Some(v), None),
                 Op::Xor => ("xor", None, None),
@@ -610,3 +628,7 @@ mod tests {
         assert!(translate(&[0xc3]).is_err());
     }
 }
+
+#[cfg(test)]
+#[path = "control/stack_program_tests.rs"]
+mod stack_program_tests;

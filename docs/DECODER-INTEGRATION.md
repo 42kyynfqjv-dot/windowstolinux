@@ -1,5 +1,9 @@
 # SUB-505 production decoder decision
 
+Historical integration checkpoint. Later bounded extensions add direct calls
+(SUB-506) and the three exact stack forms (SUB-508); see README and the respective
+contracts for the current whitelist and evidence. No other memory forms are accepted.
+
 Decision: integrate the reviewed strict iced adapter into the converter. The
 SUB-504 trial and medium review established bounded acceptance/IR/source parity,
 independent expected IR for all supported forms, prefix/truncation rejection and

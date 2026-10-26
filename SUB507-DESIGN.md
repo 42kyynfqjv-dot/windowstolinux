@@ -1,9 +1,10 @@
 # SUB-507 bounded stack arguments: design decision
 
-Status: design and test-only prototype. Production still rejects PUSH, stack loads
-and LEA. No new executable compatibility has been demonstrated in this milestone.
-Proceed to a separately reviewed implementation of the contract below; do not add
-general stack/memory support by accepting all instructions iced can decode.
+Status: reviewed contract, implemented by SUB-508 for the exact three forms below.
+The six-function design prototype remains test-only and independent of production.
+See [SUB508-IMPLEMENTATION.md](SUB508-IMPLEMENTATION.md) for current evidence.
+The historical design gates below describe the requirements for that implementation;
+they do not authorize general stack/memory support.
 
 ## Decision and primary sources
 
@@ -124,9 +125,10 @@ literal ownership snapshots, nested/repeated calls, rejection without mutation,
 capacity/depth limits and iced metadata/flag effects. The review adds an enforced terminal state, wrong-owner failure checks and an
 independent concrete byte-layout oracle at three aligned starting ESP values.
 It is a state-machine sketch,
-not a lifter or emitter. Tests explicitly confirm production rejects all three
-candidate new forms. There is no new Windows baseline or generated ELF for this
-contract yet. Existing42 Windows/Linux cases validate only existing production.
+not a lifter or emitter. At the SUB-507 checkpoint, tests confirmed production rejected all three forms
+and 42 Windows/Linux cases covered prior production. SUB-508 updates the metadata
+test to confirm exact-form decoding, adds production state/IR tests and ten native
+fixture cases. The prototype remains separate from the production stack.
 
 Before production support, a medium review should audit the symbolic-address
 relation, ownership and flags argument. A bounded implementation must then:

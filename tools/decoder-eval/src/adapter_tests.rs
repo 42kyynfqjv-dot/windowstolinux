@@ -87,6 +87,9 @@ fn independently_specified_policy_rejections_and_boundaries() {
         (vec![0x3d, 0, 0, 0, 128], Op::Compare(0x80000000)),
         (vec![0x31, 0xc0], Op::Xor),
         (vec![0xc3], Op::Ret),
+        (vec![0x68, 0x78, 0x56, 0x34, 0x12], Op::PushData(0x12345678)),
+        (vec![0x8b, 0x44, 0x24, 4], Op::LoadArgument),
+        (vec![0x8d, 0x64, 0x24, 4], Op::DropData),
     ] {
         let mut bytes = vec![0x90; 17];
         bytes.extend(&code);
@@ -135,6 +138,9 @@ fn independently_specified_policy_rejections_and_boundaries() {
         &[0x3d, 0, 0, 0, 0],
         &[0x31, 0xc0],
         &[0xc3],
+        &[0x68, 0, 0, 0, 0],
+        &[0x8b, 0x44, 0x24, 4],
+        &[0x8d, 0x64, 0x24, 4],
         &[0xe8, 0, 0, 0, 0],
         &[0x72, 0],
         &[0x73, 0],

@@ -234,13 +234,13 @@ fn instruction_metadata_and_esp_flag_counterexample() {
     // ADD ESP,4 depends on unknown absolute ESP: two aligned, non-wrapping inputs.
     assert!(i64::from(0x7ffffffcu32 as i32) + 4 > i64::from(i32::MAX));
     assert!(i64::from(0x80000000u32 as i32) + 4 <= i64::from(i32::MAX));
-    // Design acceptance is NOT production acceptance.
+    // SUB-508 now accepts these exact instructions; whole-program state is checked separately.
     for bytes in [
         &[0x68, 7, 0, 0, 0][..],
         &[0x8b, 0x44, 0x24, 4],
         &[0x8d, 0x64, 0x24, 4],
     ] {
-        assert!(crate::control::decode_instruction(bytes, 0).is_err());
+        assert!(crate::control::decode_instruction(bytes, 0).is_ok());
     }
 }
 

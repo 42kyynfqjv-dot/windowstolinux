@@ -92,6 +92,32 @@ CASES["call_wide_internal"] = b"\xe8\x06\x00\x00\x00" + add_eax(0xffffff00) + b"
 CASES["call_shared_branch"] = mov_eax(0) + b"\xe8\x11\x00\x00\x00" + add_eax(0) + b"\xe8\x07\x00\x00\x00" + add_eax(3) + b"\xc3\x90" + cmp_eax(0) + b"\x74\x06" + mov_eax(2) + b"\xc3" + mov_eax(1) + b"\xc3"
 
 
+# SUB-508 single-word caller-cleanup fixtures. Literal displacements are reviewed
+# independently of the production lifter. PUSH/LOAD/LEA preserve flags.
+def push_data(value: int) -> bytes:
+    return b"\x68" + value.to_bytes(4, "little")
+
+
+LOAD_ARGUMENT = b"\x8b\x44\x24\x04"
+DROP_DATA = b"\x8d\x64\x24\x04"
+ARGUMENT_PLUS_FIVE = LOAD_ARGUMENT + add_eax(5) + b"\xc3"
+CASES["stack_argument"] = push_data(7) + b"\xe8\x05\x00\x00\x00" + DROP_DATA + b"\xc3" + ARGUMENT_PLUS_FIVE
+CASES["stack_shared"] = push_data(7) + b"\xe8\x20\x00\x00\x00" + DROP_DATA + cmp_eax(12) + b"\x74\x06" + mov_eax(99) + b"\xc3" + push_data(9) + b"\xe8\x05\x00\x00\x00" + DROP_DATA + b"\xc3" + ARGUMENT_PLUS_FIVE
+CASES["stack_nested"] = push_data(7) + b"\xe8\x05\x00\x00\x00" + DROP_DATA + b"\xc3" + push_data(11) + b"\xe8\x1b\x00\x00\x00" + DROP_DATA + cmp_eax(16) + b"\x74\x06" + mov_eax(99) + b"\xc3" + ARGUMENT_PLUS_FIVE + ARGUMENT_PLUS_FIVE
+# Same helper takes both branch paths across two invocations; local data is
+# balanced before the join so [ESP+4] again denotes that invocation's argument.
+CASES["stack_shared_join"] = CASES["stack_shared"][:-len(ARGUMENT_PLUS_FIVE)] + LOAD_ARGUMENT + cmp_eax(7) + b"\x74\x09" + push_data(99) + DROP_DATA + ARGUMENT_PLUS_FIVE
+for name, prefix, opcode in [
+    ("stack_flags_zero", b"\x31\xc0", 0x74),
+    ("stack_flags_carry", mov_eax(0xffffffff) + add_eax(1), 0x72),
+    ("stack_flags_overflow", mov_eax(0x7fffffff) + add_eax(1), 0x7c),
+    ("stack_flags_negative_overflow", mov_eax(0x80000000) + add_eax(0xffffffff), 0x7c),
+    ("stack_flags_negative", mov_eax(0x80000000) + add_eax(0), 0x7c),
+    ("stack_flags_clear", mov_eax(1) + add_eax(1), 0x7c),
+]:
+    CASES[name] = branch_case(prefix + push_data(7) + b"\xe8\x12\x00\x00\x00" + DROP_DATA, opcode) + LOAD_ARGUMENT + b"\xc3"
+
+
 def build(case: str) -> bytes:
     if case not in CASES:
         raise ValueError(f"unknown fixture case: {case}")

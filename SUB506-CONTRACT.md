@@ -1,5 +1,10 @@
 # SUB-506 bounded calls and returns
 
+Historical call-only contract. SUB-508 replaces the return-only vector with the
+unified tagged stack in [SUB507-DESIGN.md](SUB507-DESIGN.md). The exact three
+argument/cleanup forms are now supported; call targets, depth and execution limits
+below still apply. Prior counts and exclusions below describe the SUB-506 checkpoint.
+
 Support exact unprefixed E8 rel32 in 32-bit mode and existing C3 RET. The signed
 relative displacement must be nonnegative; target = checked instruction-end +
 displacement, must agree with iced and be an executable instruction boundary.

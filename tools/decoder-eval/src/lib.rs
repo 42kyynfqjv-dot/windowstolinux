@@ -36,9 +36,14 @@ mod evaluation {
                 assert!(!i.is_invalid(), "{name}:{at}");
                 assert_eq!(i.len(), len, "{name}:{at}");
                 assert_eq!(y.len().to_const() as usize, len, "{name}:{at}");
+                let mnemonic = match op.as_str() {
+                    "load_argument" => "mov",
+                    "drop_data" => "lea",
+                    other => other,
+                };
                 assert_eq!(
                     format!("{:?}", i.mnemonic()).to_lowercase(),
-                    op,
+                    mnemonic,
                     "{name}:{at}"
                 );
                 let y_name = format!("{:?}", y.opcode()).to_lowercase();
@@ -49,8 +54,16 @@ mod evaluation {
                     "return" => "ret",
                     other => other,
                 };
-                assert_eq!(y_name, op, "{name}:{at}");
-                if let Some(value) = imm {
+                assert_eq!(y_name, mnemonic, "{name}:{at}");
+                if op == "push" {
+                    assert_eq!(i.immediate32(), imm.unwrap());
+                    assert_eq!(
+                        y.operand(0),
+                        Operand::ImmediateI32 {
+                            imm: imm.unwrap() as i32
+                        }
+                    );
+                } else if let Some(value) = imm {
                     assert_eq!(i.op0_register(), Register::EAX);
                     assert_eq!(i.immediate32(), value);
                     assert_eq!(
@@ -60,6 +73,30 @@ mod evaluation {
                         }
                     );
                     assert_eq!(y.operand(1), Operand::ImmediateI32 { imm: value as i32 });
+                }
+                if op == "load_argument" || op == "drop_data" {
+                    let reg = if op == "load_argument" {
+                        Register::EAX
+                    } else {
+                        Register::ESP
+                    };
+                    let y_reg = if op == "load_argument" {
+                        RegSpec::eax()
+                    } else {
+                        RegSpec::esp()
+                    };
+                    assert_eq!(i.op0_register(), reg);
+                    assert_eq!(i.memory_base(), Register::ESP);
+                    assert_eq!(i.memory_displacement64(), 4);
+                    assert_eq!(i.memory_index(), Register::None);
+                    assert_eq!(y.operand(0), Operand::Register { reg: y_reg });
+                    assert_eq!(
+                        y.operand(1),
+                        Operand::Disp {
+                            base: RegSpec::esp(),
+                            disp: 4
+                        }
+                    );
                 }
                 if op == "xor" {
                     assert_eq!(

@@ -12,6 +12,9 @@ pub(super) fn decode_instruction(bytes: &[u8], at: usize) -> Result<Instruction,
         0x05 => (Code::Add_EAX_imm32, 5),
         0x3d => (Code::Cmp_EAX_imm32, 5),
         0x31 if tail.get(1) == Some(&0xc0) => (Code::Xor_rm32_r32, 2),
+        0x68 => (Code::Pushd_imm32, 5),
+        0x8b if tail.get(..4) == Some(&[0x8b, 0x44, 0x24, 4]) => (Code::Mov_r32_rm32, 4),
+        0x8d if tail.get(..4) == Some(&[0x8d, 0x64, 0x24, 4]) => (Code::Lea_r32_m, 4),
         0xe8 => (Code::Call_rel32_32, 5),
         0xc3 => (Code::Retnd, 1),
         0x72 => (Code::Jb_rel8_32, 2),
@@ -55,6 +58,37 @@ pub(super) fn decode_instruction(bytes: &[u8], at: usize) -> Result<Instruction,
                 return Err("unsupported XOR operands".into());
             }
             Op::Xor
+        }
+        Code::Pushd_imm32 => {
+            if decoded.op_count() != 1 || decoded.op0_kind() != OpKind::Immediate32 {
+                return Err("unsupported PUSH operand".into());
+            }
+            Op::PushData(decoded.immediate32())
+        }
+        Code::Mov_r32_rm32 | Code::Lea_r32_m => {
+            let destination = if code == Code::Mov_r32_rm32 {
+                Register::EAX
+            } else {
+                Register::ESP
+            };
+            if decoded.op_count() != 2
+                || decoded.op0_kind() != OpKind::Register
+                || decoded.op0_register() != destination
+                || decoded.op1_kind() != OpKind::Memory
+                || decoded.memory_base() != Register::ESP
+                || decoded.memory_index() != Register::None
+                || decoded.memory_index_scale() != 1
+                || decoded.memory_displ_size() != 1
+                || decoded.memory_displacement64() != 4
+                || decoded.memory_segment() != Register::SS
+            {
+                return Err("unsupported stack address operands".into());
+            }
+            if code == Code::Mov_r32_rm32 {
+                Op::LoadArgument
+            } else {
+                Op::DropData
+            }
         }
         Code::Call_rel32_32 => {
             let displacement = i32::from_le_bytes(tail[1..5].try_into().unwrap());
