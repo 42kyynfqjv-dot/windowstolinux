@@ -225,3 +225,11 @@ SUB-538 maps ordinary x86 CRT startup in [the dependency decision](research/crt/
 The remaining runtime/CRT/file/PE32+ cases stay rejected. Next gate is complete
 startup/initializer effect closure for held_crt, followed by a reviewed native entry
 contract; no guessed-main bypass or new graph templates.
+
+SUB-548 completes the bounded [original-startup precondition audit](research/crt/COMPOSITION-DECISION.md).
+The matched accessor leaf does not close original object lifetime or earlier external
+effects. Ordinary CRT remains rejected; stop repeated isolated success probes.
+Next: design an independently authored freestanding public-API runtime-input target
+with explicit Windows/Linux input mapping, frozen source/flags and independent
+oracles. This advances runtime-input validation without skipping the held-out CRT
+program's startup. No production capability changes in this decision.
