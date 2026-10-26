@@ -1,0 +1,490 @@
+[
+  {
+    "kind": "held_crt",
+    "pe_sha256": "5331defc936aa3a22ac442ef65c44625112934106b7408c0aac3fa9e6e4a6766",
+    "source_sha256": "ce74a99f0bfb05b512ffe86d71d74ef6afc542cffc30112cbcf7e5bcceed6008",
+    "freeze_commit": "cf042295303dccedb8506564f1e466ef9d353acd",
+    "compile_flags": [
+      "/nologo",
+      "/Bv",
+      "/O2",
+      "/W4",
+      "/c",
+      "D:\\a\\windowstolinux\\windowstolinux\\compiler\\heldout\\crt.c",
+      "/Foheld_crt.obj",
+      "/MD"
+    ],
+    "link_flags": [
+      "/nologo",
+      "/machine:x86",
+      "/subsystem:console",
+      "held_crt.obj",
+      "/out:held_crt.exe"
+    ],
+    "compiler_versions": [
+      "14.51.36260.0",
+      "19.51.36260.0"
+    ],
+    "baseline": {
+      "stdout_hex": "435254",
+      "stderr_hex": "",
+      "exit": 0,
+      "files": {}
+    },
+    "entry_rva": 4864,
+    "entry_call_rva": 5648,
+    "entry_jump_rva": 4368,
+    "directories": {
+      "1": [
+        9460,
+        160
+      ],
+      "5": [
+        16384,
+        336
+      ],
+      "6": [
+        8624,
+        28
+      ],
+      "10": [
+        8432,
+        64
+      ],
+      "12": [
+        8192,
+        176
+      ]
+    },
+    "security_cookie_va": 4206656,
+    "imports": {
+      "KERNEL32.dll": [
+        "QueryPerformanceCounter",
+        "GetCurrentProcessId",
+        "GetCurrentThreadId",
+        "GetSystemTimeAsFileTime",
+        "InitializeSListHead",
+        "SetUnhandledExceptionFilter",
+        "GetModuleHandleW",
+        "IsProcessorFeaturePresent"
+      ],
+      "VCRUNTIME140.dll": [
+        "__current_exception",
+        "__current_exception_context",
+        "_except_handler4_common"
+      ],
+      "api-ms-win-crt-stdio-l1-1-0.dll": [
+        "__acrt_iob_func",
+        "_set_fmode",
+        "fwrite",
+        "__p__commode"
+      ],
+      "api-ms-win-crt-runtime-l1-1-0.dll": [
+        "_configure_narrow_argv",
+        "_initterm",
+        "_set_app_type",
+        "exit",
+        "_exit",
+        "_get_initial_narrow_environment",
+        "_initialize_narrow_environment",
+        "__p___argc",
+        "__p___argv",
+        "_cexit",
+        "_c_exit",
+        "_register_thread_local_exe_atexit_callback",
+        "_seh_filter_exe",
+        "terminate",
+        "_controlfp_s",
+        "_initialize_onexit_table",
+        "_register_onexit_function",
+        "_crt_atexit",
+        "_initterm_e"
+      ],
+      "api-ms-win-crt-math-l1-1-0.dll": [
+        "__setusermatherr"
+      ],
+      "api-ms-win-crt-locale-l1-1-0.dll": [
+        "_configthreadlocale"
+      ],
+      "api-ms-win-crt-heap-l1-1-0.dll": [
+        "_set_new_mode"
+      ]
+    },
+    "whole_disassembly_indirect_transfers": [
+      "00401002",
+      "00401012",
+      "0040120A",
+      "00401210",
+      "00401640",
+      "0040164F",
+      "00401658",
+      "00401665",
+      "004016F5",
+      "004017E2",
+      "00401835",
+      "004018B8",
+      "004018BE",
+      "004018E8",
+      "004018EE",
+      "00401949",
+      "00401C88",
+      "00401C8E",
+      "00401C94",
+      "00401C9A",
+      "00401CA0",
+      "00401CA6",
+      "00401CAC",
+      "00401CB2",
+      "00401CB8",
+      "00401CBE",
+      "00401CC4",
+      "00401CCA",
+      "00401CD0",
+      "00401CD6",
+      "00401CDC",
+      "00401CE2",
+      "00401CE8",
+      "00401CEE",
+      "00401CF4",
+      "00401CFA",
+      "00401D00",
+      "00401D06",
+      "00401D0C",
+      "00401D12",
+      "00401D18",
+      "00401D1E",
+      "00401D24"
+    ],
+    "complete_reachable_graph": false,
+    "emission_allowed": false
+  },
+  {
+    "kind": "held_args",
+    "pe_sha256": "000e5af90e921d9fcfa6fcff673a6285e021cf080f15de32c614c06fde181558",
+    "source_sha256": "1eabbc9f298d7c44402a3cde48bb3a13894f46bf758deffc9f59c4c7229c8a16",
+    "freeze_commit": "cf042295303dccedb8506564f1e466ef9d353acd",
+    "compile_flags": [
+      "/nologo",
+      "/Bv",
+      "/O2",
+      "/W4",
+      "/c",
+      "D:\\a\\windowstolinux\\windowstolinux\\compiler\\heldout\\args.c",
+      "/Foheld_args.obj",
+      "/MD"
+    ],
+    "link_flags": [
+      "/nologo",
+      "/machine:x86",
+      "/subsystem:console",
+      "held_args.obj",
+      "/out:held_args.exe"
+    ],
+    "compiler_versions": [
+      "14.51.36260.0",
+      "19.51.36260.0"
+    ],
+    "baseline": {
+      "stdout_hex": "41726773",
+      "stderr_hex": "",
+      "exit": 68,
+      "files": {}
+    },
+    "entry_rva": 4880,
+    "entry_call_rva": 5664,
+    "entry_jump_rva": 4384,
+    "directories": {
+      "1": [
+        9460,
+        160
+      ],
+      "5": [
+        16384,
+        336
+      ],
+      "6": [
+        8624,
+        28
+      ],
+      "10": [
+        8432,
+        64
+      ],
+      "12": [
+        8192,
+        176
+      ]
+    },
+    "security_cookie_va": 4206656,
+    "imports": {
+      "KERNEL32.dll": [
+        "QueryPerformanceCounter",
+        "GetCurrentProcessId",
+        "GetCurrentThreadId",
+        "GetSystemTimeAsFileTime",
+        "InitializeSListHead",
+        "SetUnhandledExceptionFilter",
+        "GetModuleHandleW",
+        "IsProcessorFeaturePresent"
+      ],
+      "VCRUNTIME140.dll": [
+        "__current_exception",
+        "__current_exception_context",
+        "_except_handler4_common"
+      ],
+      "api-ms-win-crt-stdio-l1-1-0.dll": [
+        "__acrt_iob_func",
+        "_set_fmode",
+        "fwrite",
+        "__p__commode"
+      ],
+      "api-ms-win-crt-runtime-l1-1-0.dll": [
+        "_configure_narrow_argv",
+        "_initterm",
+        "_set_app_type",
+        "exit",
+        "_exit",
+        "_get_initial_narrow_environment",
+        "_initialize_narrow_environment",
+        "__p___argc",
+        "__p___argv",
+        "_cexit",
+        "_c_exit",
+        "_register_thread_local_exe_atexit_callback",
+        "_seh_filter_exe",
+        "terminate",
+        "_controlfp_s",
+        "_initialize_onexit_table",
+        "_register_onexit_function",
+        "_crt_atexit",
+        "_initterm_e"
+      ],
+      "api-ms-win-crt-math-l1-1-0.dll": [
+        "__setusermatherr"
+      ],
+      "api-ms-win-crt-locale-l1-1-0.dll": [
+        "_configthreadlocale"
+      ],
+      "api-ms-win-crt-heap-l1-1-0.dll": [
+        "_set_new_mode"
+      ]
+    },
+    "whole_disassembly_indirect_transfers": [
+      "00401009",
+      "00401019",
+      "0040121A",
+      "00401220",
+      "00401650",
+      "0040165F",
+      "00401668",
+      "00401675",
+      "00401705",
+      "004017F2",
+      "00401845",
+      "004018C8",
+      "004018CE",
+      "004018F8",
+      "004018FE",
+      "00401959",
+      "00401C98",
+      "00401C9E",
+      "00401CA4",
+      "00401CAA",
+      "00401CB0",
+      "00401CB6",
+      "00401CBC",
+      "00401CC2",
+      "00401CC8",
+      "00401CCE",
+      "00401CD4",
+      "00401CDA",
+      "00401CE0",
+      "00401CE6",
+      "00401CEC",
+      "00401CF2",
+      "00401CF8",
+      "00401CFE",
+      "00401D04",
+      "00401D0A",
+      "00401D10",
+      "00401D16",
+      "00401D1C",
+      "00401D22",
+      "00401D28",
+      "00401D2E",
+      "00401D34"
+    ],
+    "complete_reachable_graph": false,
+    "emission_allowed": false
+  },
+  {
+    "kind": "held_file",
+    "pe_sha256": "c6c67175a9183c1fbe7954e3922903e5f294092751d4b5549169e0a43ada6bcf",
+    "source_sha256": "39eaaf51c6b2d8dc620adcf7a2ec5c78f1a70dce5fb0805ed280857dea24a6bf",
+    "freeze_commit": "cf042295303dccedb8506564f1e466ef9d353acd",
+    "compile_flags": [
+      "/nologo",
+      "/Bv",
+      "/O2",
+      "/W4",
+      "/c",
+      "D:\\a\\windowstolinux\\windowstolinux\\compiler\\heldout\\file.c",
+      "/Foheld_file.obj",
+      "/MD"
+    ],
+    "link_flags": [
+      "/nologo",
+      "/machine:x86",
+      "/subsystem:console",
+      "held_file.obj",
+      "/out:held_file.exe"
+    ],
+    "compiler_versions": [
+      "14.51.36260.0",
+      "19.51.36260.0"
+    ],
+    "baseline": {
+      "stdout_hex": "44617461",
+      "stderr_hex": "",
+      "exit": 0,
+      "files": {
+        "held.txt": "44617461"
+      }
+    },
+    "entry_rva": 5040,
+    "entry_call_rva": 5824,
+    "entry_jump_rva": 4544,
+    "directories": {
+      "1": [
+        9460,
+        160
+      ],
+      "5": [
+        16384,
+        356
+      ],
+      "6": [
+        8656,
+        28
+      ],
+      "10": [
+        8464,
+        64
+      ],
+      "12": [
+        8192,
+        188
+      ]
+    },
+    "security_cookie_va": 4206656,
+    "imports": {
+      "KERNEL32.dll": [
+        "QueryPerformanceCounter",
+        "GetCurrentProcessId",
+        "GetCurrentThreadId",
+        "GetSystemTimeAsFileTime",
+        "InitializeSListHead",
+        "SetUnhandledExceptionFilter",
+        "GetModuleHandleW",
+        "IsProcessorFeaturePresent"
+      ],
+      "VCRUNTIME140.dll": [
+        "__current_exception",
+        "__current_exception_context",
+        "_except_handler4_common"
+      ],
+      "api-ms-win-crt-stdio-l1-1-0.dll": [
+        "_set_fmode",
+        "fclose",
+        "fopen",
+        "__acrt_iob_func",
+        "__p__commode",
+        "fwrite",
+        "fread"
+      ],
+      "api-ms-win-crt-runtime-l1-1-0.dll": [
+        "_set_app_type",
+        "_seh_filter_exe",
+        "_configure_narrow_argv",
+        "_initialize_narrow_environment",
+        "terminate",
+        "_initterm",
+        "_initterm_e",
+        "exit",
+        "_exit",
+        "_controlfp_s",
+        "__p___argc",
+        "__p___argv",
+        "_cexit",
+        "_get_initial_narrow_environment",
+        "_register_thread_local_exe_atexit_callback",
+        "_c_exit",
+        "_crt_atexit",
+        "_initialize_onexit_table",
+        "_register_onexit_function"
+      ],
+      "api-ms-win-crt-math-l1-1-0.dll": [
+        "__setusermatherr"
+      ],
+      "api-ms-win-crt-locale-l1-1-0.dll": [
+        "_configthreadlocale"
+      ],
+      "api-ms-win-crt-heap-l1-1-0.dll": [
+        "_set_new_mode"
+      ]
+    },
+    "whole_disassembly_indirect_transfers": [
+      "0040100C",
+      "0040102B",
+      "00401042",
+      "00401061",
+      "00401080",
+      "00401097",
+      "004010AE",
+      "004010BE",
+      "004012BA",
+      "004012C0",
+      "004016F0",
+      "004016FF",
+      "00401708",
+      "00401715",
+      "004017A5",
+      "00401892",
+      "004018E5",
+      "00401968",
+      "0040196E",
+      "00401998",
+      "0040199E",
+      "004019F9",
+      "00401D38",
+      "00401D3E",
+      "00401D44",
+      "00401D4A",
+      "00401D50",
+      "00401D56",
+      "00401D5C",
+      "00401D62",
+      "00401D68",
+      "00401D6E",
+      "00401D74",
+      "00401D7A",
+      "00401D80",
+      "00401D86",
+      "00401D8C",
+      "00401D92",
+      "00401D98",
+      "00401D9E",
+      "00401DA4",
+      "00401DAA",
+      "00401DB0",
+      "00401DB6",
+      "00401DBC",
+      "00401DC2",
+      "00401DC8",
+      "00401DCE",
+      "00401DD4"
+    ],
+    "complete_reachable_graph": false,
+    "emission_allowed": false
+  }
+]

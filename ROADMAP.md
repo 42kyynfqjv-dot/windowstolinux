@@ -208,3 +208,8 @@ native structured-loop output; see [implementation contract](SUB537-FINITE-LOOP-
 CI requires unchanged loop same-PE exit10 agreement alongside eleven prior compiler
 comparisons. Four held-out cases remain rejected. Next medium production/provenance
 review; general cyclic control flow, CRT/runtime inputs and PE32+ remain separate gates.
+
+SUB-538 maps ordinary x86 CRT startup in [the dependency decision](research/crt/README.md).
+The remaining runtime/CRT/file/PE32+ cases stay rejected. Next gate is complete
+startup/initializer effect closure for held_crt, followed by a reviewed native entry
+contract; no guessed-main bypass or new graph templates.
