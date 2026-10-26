@@ -51,6 +51,9 @@ class ImageReads(unittest.TestCase):
     def test_metadata_full_width_and_loader_modified_data(self):
         for metadata in (((0x3007,1),), ((0x1005,1),), ((0x3000,12),)):
             with self.assertRaisesRegex(Rejected,'metadata'):example(metadata=metadata).prove()
+        # Even an unused initialized data word cannot be loader-modified.
+        with self.assertRaisesRegex(Rejected,'loader write outside code'):
+            example(data=DATA+b'\0'*4,relocs=(0x1002,0x1007,0x100e,0x300c)).prove()
         for site in (0x3000,0x3009):
             with self.assertRaises(Rejected):example(relocs=(0x1002,0x1007,0x100e,site)).prove()
         m=example();m.relocations=(Relocation(0x1002,1),)
@@ -61,6 +64,11 @@ class ImageReads(unittest.TestCase):
                       (0x1002,0x1003,0x1007,0x100e), (0x1000,0x1007,0x100e),
                       (0x1002,0x1007,0x100d), (0x1002,0x1007,0x1012)]:
             with self.assertRaises(Rejected):example(relocs=sites).prove()
+        # A complete non-overlapping loader write into ADD bytes is still unbound.
+        # This isolates the final accounting gate, rather than failing a range check.
+        code=CODE[:-1]+bytes.fromhex('03c1 03c1')+b'\xc3'
+        with self.assertRaisesRegex(Rejected,'unbound loader write'):
+            example(code=code,relocs=(0x1002,0x1007,0x100e,0x1014)).prove()
         # Address-shaped bytes are not authority without the exact relocation.
         with self.assertRaises(Rejected):example(relocs=()).prove()
 

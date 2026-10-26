@@ -185,3 +185,32 @@ No known tool/resource blocker. Linear context-notes tool advertised but returne
 historical original-Windows timeout causes remain unresolved; failures retain diagnostics
 and are not retried silently. Server2025 evidence is not XP/7 or general-app compatibility.
 No merge/release. This design is ready for bounded medium review, not production use.
+
+## Medium contract review
+
+Reviewed the complete decoder/evaluator and independently literal expectations. The
+proof covers this candidate's entire code body, not all previously supported opcode
+families: branches/calls are forbidden even if an apparent branch would be untaken.
+The existing graph/call machinery does not authorize composing those operations with
+this new data authority. Model inputs assume checked PE metadata closure; the model's
+directory-number allowlist alone cannot prove debug/relocation transitive closure.
+Production must obtain that property from the owned checked envelope and must never
+accept caller-supplied descriptors or report JSON as evidence.
+
+Closed two isolated regression gaps within the existing nine test functions: a complete
+non-overlapping HIGHLOW over valid ADD bytes now explicitly reaches `unbound loader
+write`; a loader write to a fourth initialized data word, unused by every read, reaches
+`loader write outside code`. Earlier malformed-site cases could reject at bounds or
+missing-field checks and did not establish these particular gates. No model behavior
+change or production defect was reproduced. Full-width metadata overlap and partial
+read bounds, exact artifact bytes, independent arithmetic/flags and own-snapshot reads
+were verified. Python mutable test objects do not establish Rust capability isolation.
+
+Ready for bounded SUB-535 Astra implementation: private checked candidate, exact five
+forms, unified checked semantics/emission, full relocation accounting including unused
+data and code sites, independent negative CLI tests proving each gate is reached, and
+actual unchanged-array Windows/Linux exit9 agreement. Retain all ten existing compiler
+comparisons and six rejections until the array implementation passes; then only array
+changes acceptance. No loop execution, general memory or external-call composition.
+Valid stack/no-fault/no-external-mutation conditions and unobserved actual array load
+base remain explicit. Three historical Windows timeout causes remain unresolved.
