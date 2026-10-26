@@ -89,7 +89,7 @@ stale generations, full bounds, scalar-versus-pointer confusion and sticky unkno
 effects. They are synthetic premises, separate from four process observations and
 from the existing twelve compiler translations. The CPU/option/sentinel/lifecycle
 checks remain unchanged. Windows Server2025 observations establish no XP/7 support;
-three historical original-fixture timeout causes remain unresolved.
+four historical original-fixture timeout causes remain unresolved.
 
 ## Smallest implementation gate
 
@@ -110,3 +110,29 @@ Initial CI 40368889099 failed before probe execution because a redundant accesso
 declaration conflicted with the SDK stdio.h DLL linkage (C4273 under /WX). The
 probe now uses the existing SDK declaration; warnings remain errors. This diagnosed
 build failure is separate from the historical process timeouts.
+
+
+## Medium review evidence
+
+At 6470f9d, eight model functions and four isolated Windows observations passed,
+with matching original/source/probe hashes on Linux. /MD returned a word in the
+loaded ucrtbase.dll (version10.0.26100.33648); /MT returned a word in the probe
+executable. Two repeated process observations per configuration each agreed with
+one joined worker thread. All initial words were0: these are idempotent zero-store
+and restoration observations, not a measured nonzero-to-zero transition. Numeric
+VAs happened to repeat across processes; that establishes no shared object identity.
+Module ownership is observed in these separate probes, not in the original callback.
+
+Run40369240802 initially failed the original-Windows corpus21 launch, then passed
+one explicitly disclosed rerun. Failure artifact12671956668 retains exact PE hash
+2df3c4bed3a066a71191c619b5d937f6cf2209c808e82fc85423957ceca4c556,
+expected C21 stdout and empty stderr, spawn0.0117s, wait15.0054s and a live process
+at timeout. The harness killed only that owned process. This differs from prior
+cases corpus14 (40269378607), imported-max (40279659683) and corpus4
+(40291023803). Output-before-timeout narrows the symptom to post-output termination
+or process-observation behavior; it does not identify a loader, program, harness
+or runner cause. A passing repeat does not fix or explain it. No threshold changed.
+
+Review confirmed the borrowed production sentinel component cannot consume this
+hypothetical model as execution authority. Accessor frame, earlier startup effects,
+external mutation and later exit-registration closure remain unimplemented.
