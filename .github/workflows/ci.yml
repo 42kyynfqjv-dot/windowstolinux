@@ -247,8 +247,9 @@ jobs:
           if (!$installation) { throw 'MSVC unavailable' }
           $vcvars = Join-Path $installation 'VC\Auxiliary\Build\vcvarsall.bat'
           cmd /c "`"$vcvars`" x86 && python research/input/diversity/measure.py %RUNNER_TEMP%/w2l-compiler-measurement"
-          python research/input/scalar/check_nonlinear.py "$env:RUNNER_TEMP/w2l-compiler-measurement"
           if ($LASTEXITCODE -ne 0) { throw 'Input diversity measurement failed' }
+          python research/input/scalar/check_nonlinear.py "$env:RUNNER_TEMP/w2l-compiler-measurement"
+          if ($LASTEXITCODE -ne 0) { throw 'Nonlinear artifact binding failed' }
       - name: Validate design-only permissioned intake against all held-out originals
         run: python tools/check_permissioned_corpus.py "${{ runner.temp }}/w2l-compiler-measurement"
       - name: Check scalar local-frame contract against unchanged compiler artifact
