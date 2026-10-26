@@ -74,6 +74,9 @@ for name, prefix, opcode in [
     CASES[name] = branch_case(prefix, opcode)
 CASES["cmp_preserve_eax"] = mov_eax(42) + cmp_eax(100) + b"\xc3"
 
+for name, a, b in [("signed_join_taken", 0x80000000, 0x7fffffff), ("signed_join_fallthrough", 0x7fffffff, 0x80000000)]:
+    CASES[name] = mov_eax(a) + cmp_eax(b) + b"\x7c\x05" + mov_eax(11) + cmp_eax(0) + b"\x7c\x06" + mov_eax(11) + b"\xc3" + mov_eax(22) + b"\xc3"
+
 
 def build(case: str) -> bytes:
     if case not in CASES:

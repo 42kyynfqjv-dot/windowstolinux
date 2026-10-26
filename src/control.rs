@@ -288,6 +288,30 @@ mod tests {
     }
 
     #[test]
+    fn signed_join_recomputes_flags_from_path_state() {
+        for (a, b, expected) in [
+            (0x8000_0000u32, 0x7fff_ffffu32, 22),
+            (0x7fff_ffff, 0x8000_0000, 11),
+        ] {
+            let mut code = vec![0xb8];
+            code.extend(a.to_le_bytes());
+            code.push(0x3d);
+            code.extend(b.to_le_bytes());
+            code.extend([
+                0x7c, 5, 0xb8, 11, 0, 0, 0, 0x3d, 0, 0, 0, 0, 0x7c, 6, 0xb8, 11, 0, 0, 0, 0xc3,
+                0xb8, 22, 0, 0, 0, 0xc3,
+            ]);
+            assert_eq!(exit_for_test(&code).unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn signed_targets_must_be_instruction_boundaries() {
+        assert!(translate(&[0x31, 0xc0, 0x7d, 1, 0x3d, 0, 0, 0, 0, 0xc3]).is_err());
+        assert!(translate(&[0x31, 0xc0, 0x7c, 127, 0xc3]).is_err());
+    }
+
+    #[test]
     fn carry_and_zero_truth_table() {
         for (a, b, value, carry, zero) in [
             (0, 0, 0, false, true),

@@ -17,7 +17,7 @@ The authored `scripts/make_pe32_fixture.py` builds import-free PE32 cases within
 
 ## Status
 
-M0, M1 and the bounded M2 slice are in draft review. CI exercises 32 authored Windows/Linux cases, including taken and untaken outcomes for each supported branch. The 99% compatibility objective is aspirational and has no measured corpus result.
+M0, M1 and the bounded M2 slice are in draft review. CI exercises 34 authored Windows/Linux cases, including taken and untaken outcomes for each supported branch. The 99% compatibility objective is aspirational and has no measured corpus result.
 
 ## License
 
