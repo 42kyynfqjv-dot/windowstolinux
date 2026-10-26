@@ -218,7 +218,7 @@ jobs:
           $installation = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
           if (!$installation) { throw 'Required existing MSVC toolchain unavailable' }
           $vcvars = Join-Path $installation 'VC\Auxiliary\Build\vcvarsall.bat'
-          cmd /c "`"$vcvars`" x86 && python compiler/measure.py && python compiler/diversity.py && python compiler/diversity.py --structures && python compiler/heldout/measure.py x86"
+          cmd /c "`"$vcvars`" x86 && python compiler/measure.py && python compiler/diversity.py && python compiler/diversity.py --structures && python compiler/heldout/measure.py x86 && python research/crt/probe.py"
           if ($LASTEXITCODE -ne 0) { throw 'Compiler measurement failed' }
           cmd /c "`"$vcvars`" x64 && python compiler/heldout/measure.py x64"
           if ($LASTEXITCODE -ne 0) { throw 'Held-out x64 measurement failed' }
@@ -232,6 +232,11 @@ jobs:
         run: python tools/check_image_read_contract.py "${{ runner.temp }}/w2l-compiler-measurement"
       - name: Check finite-loop design against unchanged compiler artifact
         run: python tools/check_finite_loop_contract.py "${{ runner.temp }}/w2l-compiler-measurement"
+      - name: Explore ordinary CRT normal flow without emission
+        shell: pwsh
+        run: |
+          cargo run --locked --example crt_graph -- "${{ runner.temp }}/w2l-compiler-measurement/held_crt.exe" | Out-File -Encoding ascii "${{ runner.temp }}/w2l-compiler-measurement/crt-graph.json"
+          if ($LASTEXITCODE -ne 0) { throw 'CRT graph exploration failed' }
       - name: Inventory ordinary CRT dependencies without emission
         run: python research/crt/inventory.py "${{ runner.temp }}/w2l-compiler-measurement"
       - uses: actions/upload-artifact@v4
@@ -270,3 +275,5 @@ jobs:
           python3 tools/check_image_read_contract.py evidence
           python3 tools/check_finite_loop_contract.py evidence
           python3 research/crt/inventory.py evidence --compare
+          cargo run --locked --example crt_graph -- evidence/held_crt.exe > /tmp/crt-graph.json
+          python3 -c 'import json; assert json.load(open("/tmp/crt-graph.json")) == json.load(open("evidence/crt-graph.json"))'
