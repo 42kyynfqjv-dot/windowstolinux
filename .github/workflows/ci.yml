@@ -165,3 +165,31 @@ jobs:
       - run: cargo fmt --manifest-path tools/decoder-eval/Cargo.toml --check
       - run: cargo clippy --manifest-path tools/decoder-eval/Cargo.toml --all-targets --locked -- -D warnings
       - run: cargo test --manifest-path tools/decoder-eval/Cargo.toml --locked -- --nocapture
+
+  compiler-produced-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: cargo build --locked
+      - name: Measure available MSVC x86 output
+        shell: pwsh
+        run: |
+          Write-Host "Compiler baseline OS: $([System.Environment]::OSVersion.VersionString)"
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $installation = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (!$installation) { throw 'Required existing MSVC toolchain unavailable' }
+          $vcvars = Join-Path $installation 'VC\Auxiliary\Build\vcvarsall.bat'
+          cmd /c "`"$vcvars`" x86 && python compiler/measure.py"
+          if ($LASTEXITCODE -ne 0) { throw 'Compiler measurement failed' }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: compiler-measurement-reports
+          path: |
+            ${{ runner.temp }}/w2l-compiler-measurement/*.json
+            ${{ runner.temp }}/w2l-compiler-measurement/*.txt
+          if-no-files-found: error
