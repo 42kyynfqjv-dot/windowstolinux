@@ -94,3 +94,10 @@ and first unsupported feature. Require accepted variants to pass this same hashe
 PE Windows/Linux conversion/execution chain. Rejection is a measured result, not
 permission to broaden semantics. Medium effort is sufficient for that measurement;
 any new semantic implementation requires a concrete Astra High handoff.
+
+The first strengthened run40274654723 failed at the source-hash comparison because
+Windows checked out CRLF C source. Rust include_str source also needs identical
+checkout bytes for deterministic cross-host emission. .gitattributes now requires
+LF for C and Rust source; hashes still compare exact bytes without normalization.
+This changes checkout policy, not compiler options or compiled PE bytes after build.
+The failed run is retained as provenance evidence, not retried as unexplained flakiness.
