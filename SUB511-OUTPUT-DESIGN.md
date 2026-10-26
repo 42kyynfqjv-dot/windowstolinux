@@ -183,3 +183,43 @@ No unconditional pre-execution of effects during conversion.
 Astra High is appropriate for parser/effect/stack integration. Medium should first
 review this contract and test independence, then review the bounded implementation.
 No merge/release, general handles, APIs, memory writes, relocation or console modes.
+
+## Medium contract review
+
+Review confirmed the printable byte domain excludes documented LF expansion and
+CTRL-Z termination; it does not make Unicode mode equivalent. That mode remains
+an external exclusion. The native prototype now rechecks length/bytes at its effect
+boundary as well as argument preparation, preventing bypass through direct invoke.
+This check does not establish PE provenance: production must still bind that proof
+to the parsed image. Existing exhaustive byte tests exercise preparation; direct
+invoke regressions check empty/newline/CTRL-Z/oversize rejection before any write.
+
+The Microsoft contract does not promise preservation or clearing of errno on
+success. Neither errno nor _doserrno is part of the supported observation: access
+to their storage/functions, invalid-parameter handlers, CRT stream state and later
+CRT operations must remain rejected. File-position effects match only under the
+stated isolated initial-offset/full-write assumptions. _write is descriptor I/O;
+there is no supported FILE stream to fflush. Native File writes add no user-space
+output buffer. Neither dropping the duplicate nor successful write proves durable
+storage; do not add an fsync or fflush compatibility claim.
+
+One call-site IR snapshot must not accidentally reuse the first context's bytes:
+if a shared call site has differing validated count/payload across contexts, reject
+that program in SUB-512. Context specialization is outside this initial slice.
+Require an independent negative fixture for this case. Untaken-call validation
+must propagate a hypothetical stack state through both decoded successors with
+bounds; do not describe today's constant-path evaluator as already proving it.
+If that conservative analysis cannot represent a state, reject it. Include tests
+for no output on the selected untaken path, and invalid arguments on its decoded
+alternative. These are implementation requirements, not prototype evidence.
+
+EAX is replaced, ECX/EDX and four flags cannot be assumed preserved. The current
+ISA subset cannot observe other volatile registers or CRT global state. API return
+must invalidate modeled flags before every successor/join; no probe observation
+of coincidental preservation can substitute for that rule. Caller cleanup and
+protected return-tag limits require production-path tests, not this buffer model.
+
+Ready for bounded Astra High SUB-512 implementation after this review: the legacy
+CRT startup/byte-mode/valid-stack/preferred-base/full-success domain remains
+conditional. Production must prove strict metadata/buffer rejection and actual
+mechanically translated observations before announcing imported-output support.

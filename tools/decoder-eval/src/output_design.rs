@@ -46,6 +46,10 @@ pub fn invoke(
     writer: &mut impl Write,
     bytes: &[u8],
 ) -> Result<(u32, [Option<bool>; 4]), &'static str> {
+    // Defend the effect boundary too: callers must not bypass prepare.
+    if !(1..=64).contains(&bytes.len()) || !bytes.iter().all(|byte| (0x20..=0x7e).contains(byte)) {
+        return Err("unsupported output bytes");
+    }
     match writer.write(bytes) {
         Ok(n) if n == bytes.len() => Ok((n as u32, [None; 4])),
         _ => Err("unsupported output failure"),
@@ -155,6 +159,11 @@ mod tests {
         assert_eq!(invoke(&mut writer, b"Hello"), Ok((5, [None; 4])));
         assert_eq!(writer.observed, b"Hello");
         assert_eq!(writer.calls, 1);
+        for bytes in [&b""[..], &b"\n"[..], &b"\x1a"[..], &[b'A'; 65][..]] {
+            let mut untouched = Vec::new();
+            assert!(invoke(&mut untouched, bytes).is_err());
+            assert!(untouched.is_empty());
+        }
     }
     #[test]
     fn partial_zero_and_error_are_not_fabricated_success_or_retried() {
