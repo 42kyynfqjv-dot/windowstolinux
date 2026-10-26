@@ -27,3 +27,7 @@ research/input/heldout/*.json text eol=lf
 research/input/heldout/*.py text eol=lf
 research/input/postcall/*.json text eol=lf
 research/input/postcall/*.py text eol=lf
+
+# Frozen CLI provenance must survive Windows checkout.
+research/cli/*.json text eol=lf
+research/cli/*.py text eol=lf
