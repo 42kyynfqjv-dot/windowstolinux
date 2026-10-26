@@ -1,8 +1,10 @@
 # Evaluation and adapter trial dependency notices
 
 These notices cover the exact dependency versions in this workspace's Cargo.lock.
-They do not relicense original WindowsToLinux code. The adapter exists only under
-`cfg(test)` here; the root converter and generated Rust have no decoder dependency.
+They do not relicense original WindowsToLinux code. This harness imports the
+production adapter under `cfg(test)`. The root converter now depends on iced and
+lazy_static; its notices are in ../../THIRD-PARTY-NOTICES.md. Generated Rust has
+no decoder dependency.
 For each dual MIT OR Apache-2.0 dependency, this notice bundle selects MIT.
 No dependency implementation source is vendored or modified.
 
