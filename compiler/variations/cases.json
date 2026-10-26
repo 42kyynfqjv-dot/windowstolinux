@@ -1,0 +1,30 @@
+[
+  {
+    "kind": "variation_changed",
+    "source": "compiler/variations/changed.c",
+    "stdout_hex": "56616c7565",
+    "stderr_hex": "",
+    "exit": 0
+  },
+  {
+    "kind": "variation_helper_failure",
+    "source": "compiler/variations/helper_failure.c",
+    "stdout_hex": "48656c6c6f",
+    "stderr_hex": "",
+    "exit": 99
+  },
+  {
+    "kind": "variation_write_failure",
+    "source": "compiler/variations/write_failure.c",
+    "stdout_hex": "48656c6c6f",
+    "stderr_hex": "",
+    "exit": 99
+  },
+  {
+    "kind": "variation_three_arguments",
+    "source": "compiler/variations/three_arguments.c",
+    "stdout_hex": "48656c6c6f",
+    "stderr_hex": "",
+    "exit": 0
+  }
+]
