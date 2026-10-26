@@ -34,3 +34,15 @@ relocation target provenance and output-write barrier; confirm actual-base evide
 labeling. Typed pointer/ABI integration requires a separate bounded Astra High gate.
 No general debug/relocation/data feature support; POGO remains opaque inaccessible
 metadata. Historical unexplained Windows corpus timeout is not declared solved.
+
+## Measured implementation evidence
+
+Commit7e13c224c06284eb37ea7354d8ff88d235f692de, CI40270967594 passed all four jobs.
+The unchanged minimal compiler PE now reaches validated intake and unsupported
+entry RVA0x1000 opcode0x56; no Rust output is written. Both ordinary originals
+still emit Hello/empty stderr/exit0. The separate instrumented minimal run reports
+actual base0x4c0000 versus preferred0x400000, same output/exit and unchanged SHA256
+e6e9ee50d418e7913a2578d2302c1730099b72006f74b957ee7b5c3fa28e717e. This is one
+observed relocated Windows execution, not a translated ELF or all-base proof.
+The ordinary non-debug baseline base remains unmeasured. Server2025 NT10.0.26100.0,
+MSVC19.51.36260.0; no XP7 claim. Final-head evidence is recorded in PR/Linear.

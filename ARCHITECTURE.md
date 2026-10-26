@@ -2,7 +2,7 @@
 
 The target design separates PE parsing, instruction lifting, typed intermediate representation, Rust emission, and a Rust-native Windows compatibility runtime. This repository currently contains a narrow entry-path experiment in one Rust binary. That shape is temporary; unsupported semantics are rejected instead of guessed.
 
-The loader checks DOS and PE signatures, PE32/x86 console shape, section table and image bounds, and executable file-backed entry bytes. It accepts one executable code section, optionally followed by one adjacent read-only initialized-data section under [SUB509-MAPPING.md](SUB509-MAPPING.md), and requires all 16 PE data directories to be empty. Outside the SUB-512 extension it rejects imports; it always rejects TLS, relocations, exports, resources, and every other declared directory rather than ignoring their startup effects. It also rejects DLL characteristics and mappings outside that exact profile. This is a deliberately restricted image profile, not a general PE loader.
+The authored-image loader checks DOS and PE signatures, PE32/x86 console shape, section table and image bounds, and executable file-backed entry bytes. It accepts one executable code section, optionally followed by one adjacent read-only initialized-data section under [SUB509-MAPPING.md](SUB509-MAPPING.md), and requires all 16 PE data directories to be empty. Outside the SUB-512 extension it rejects imports; it always rejects TLS, relocations, exports, resources, and every other declared directory rather than ignoring their startup effects. It also rejects DLL characteristics and mappings outside that exact profile. This is a deliberately restricted image profile, not a general PE loader.
 
 The production adapter in `src/control/decoder.rs` applies an exact byte/form whitelist over iced-x86 1.21.0. Graph validation and emission are in `src/control.rs`. They support MOV/ADD/XOR/CMP/RET, forward direct CALL and forward short JC/JNC/JZ/JNZ/JL/JGE, with carry, zero, sign and overflow flag semantics. Both successors are decoded; overlapping instructions, unknown entry state on the deterministic execution path, unsupported code, and backward branches are rejected. Non-return edges form an acyclic graph. Internal RET restores its saved continuation; entry RET marks the entry sentinel terminal and exits. Exact PUSH imm32, MOV EAX,[ESP+4] and LEA ESP,[ESP+4] use one tagged stack for caller-owned data and opaque return words. `src/control/stack.rs` implements checked transitions shared by validation and generated Rust; independent literal and concrete-byte tests check that implementation. Capacity is 128 additional words. Absolute ESP and return-address values remain unobservable. Conservative all-path call nesting is capped at 32; decoding and dynamic execution are capped at 1,024 instructions. Generated Rust contains statically decoded operations and fixed successors. No original bytes are decoded at runtime.
 
@@ -28,3 +28,9 @@ SUB-512 extends the loader with one strict import/IAT in a third loader-owned
 section. Image-aware FF15 decoding, hypothetical branch-state validation and
 native output emission are described in [SUB512-OUTPUT.md](SUB512-OUTPUT.md).
 General indirect calls and guest access to import memory remain rejected.
+
+SUB-516 adds a separate strict linker-image Candidate (src/linker.rs), selected
+before parsing by DLL characteristics8540. Its only terminal API rejects emission;
+metadata acceptance never grants access to the authored-image emitter. It validates
+imports/debug/HIGHLOW ranges under SUB515-LINKER-DESIGN.md. Typed pointer provenance
+and compiler ABI semantics remain required before translation; see SUB516-INTAKE.md.

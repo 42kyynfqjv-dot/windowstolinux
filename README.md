@@ -30,3 +30,7 @@ Original code is licensed under either MIT or Apache-2.0, at your option. Conver
 SUB-512 adds one strict three-section `msvcrt.dll!_write` profile with exact FF15
 call, immutable printable ASCII1..64 and regular-file/full-success assumptions.
 See [SUB512-OUTPUT.md](SUB512-OUTPUT.md) for validation, runtime failures and limits.
+
+Linker-produced minimal MSVC images now have bounded structural intake, with
+emission deliberately gated pending typed pointer/ABI support. See
+[SUB516-INTAKE.md](SUB516-INTAKE.md) for exact limits and instrumented load-base evidence.
