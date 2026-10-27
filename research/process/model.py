@@ -1,5 +1,8 @@
 """Test-only process-contract model; no PE admission or Windows API implementation."""
 from dataclasses import dataclass
+from itertools import count
+
+SPACES = count(1)
 
 
 class Reject(ValueError):
@@ -27,6 +30,7 @@ class Region:
 
 class Space:
     def __init__(self):
+        self.identity = next(SPACES)
         self.regions = {}
         self.serial = 0
 
@@ -39,7 +43,7 @@ class Space:
         self.serial += 1
         self.regions[base] = Region(base, size, owner, self.serial, writable,
                                     bytearray(size), [zero] * size)
-        return (base, self.serial, owner)  # proof capability, NOT guest pointer bits
+        return (base, self.serial, owner, self.identity)  # proof capability, NOT guest pointer bits
 
     def access(self, address, size, write=False):
         end = span(address, size)
@@ -63,7 +67,9 @@ class Space:
         r.defined[i:i+len(data)] = [True]*len(data)
 
     def capability(self, token):
-        base, generation, owner = token
+        base, generation, owner, space = token
+        if space != self.identity:
+            raise Reject('wrong address space proof')
         r = self.regions.get(base)
         if r is None or (r.generation, r.owner) != (generation, owner):
             raise Reject('stale/wrong owner proof')

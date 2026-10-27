@@ -22,8 +22,10 @@ class Contracts(unittest.TestCase):
         s=Space();old=s.map(0x1000,4,'heap');s.write(0x1000,b'old!');s.release(old)
         new=s.map(0x1000,4,'heap');s.write(0x1000,b'new!')
         with self.assertRaises(Reject):s.capability(old)
-        with self.assertRaises(Reject):s.capability((new[0],new[1],'other'))
+        with self.assertRaises(Reject):s.capability((new[0],new[1],'other',new[3]))
         self.assertEqual(s.read(0x1000,4),b'new!')
+        other=Space();foreign=other.map(0x1000,4,'heap')
+        with self.assertRaises(Reject):s.capability(foreign)
 
     def test_reallocation_outcomes(self):
         s=Space();old=s.map(0x1000,4,'heap');s.write(0x1000,b'AB')
