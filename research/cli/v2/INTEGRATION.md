@@ -321,3 +321,9 @@ source freeze, compiler flags or expected baseline results are edited to pass.
 Five historical Windows fixture timeouts remain unexplained. New proof-performance
 experiments that returned UNKNOWN were rejected, not silently retried in production.
 PR25 remains draft until exact-head CI and substantive medium review complete.
+
+CI40434680140 stopped in Windows solver provisioning before compiler measurement:
+the verified official Windows wheel installs `data/bin/z3.exe` under Python's
+prefix, not its Scripts directory. The CI locator now checks that exact package
+layout. This is a diagnosed setup failure; it is unrelated to the five historical
+Windows program timeouts. Checks and solver budgets were not relaxed.

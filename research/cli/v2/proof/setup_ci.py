@@ -2,7 +2,7 @@
 import os,shutil,subprocess,sys
 from pathlib import Path
 name='z3.exe' if os.name=='nt' else 'z3'
-paths=[Path(sys.executable).parent/name,Path(sys.executable).parent/'Scripts'/name]
+paths=[Path(sys.executable).parent/name,Path(sys.executable).parent/'Scripts'/name,Path(sys.prefix)/'bin'/name]
 found=next((p for p in paths if p.is_file()),None)
 if found is None:
  found=shutil.which(name)
