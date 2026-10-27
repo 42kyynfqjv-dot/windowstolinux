@@ -37,16 +37,25 @@ fn main() {{
  assert_eq!(retry.retry_candidate().unwrap(),&context());
  assert_eq!(retry.push(0,0,context()),Err(Error::Phase));
  assert_eq!(retry.retry_candidate().err(),Some(Error::Phase));
- let mut unknown=context();unknown.registers[4]=None;
- let mut failed=Stack::new(1).unwrap();
- assert_eq!(failed.begin_search(unknown,true),Err(Error::UnknownContext));
- assert_eq!(failed.push(0,0,context()),Err(Error::Phase));
+ for missing in 0..10 {{
+  let mut unknown=context();
+  match missing {{0..=7=>unknown.registers[missing]=None,8=>unknown.ip=None,_=>unknown.flags=None}}
+  let mut failed=Stack::new(1).unwrap();
+  assert_eq!(failed.begin_search(unknown,true),Err(Error::UnknownContext));
+  assert_eq!(failed.push(0,0,context()),Err(Error::Phase));
+  assert_eq!(failed.retry_candidate().err(),Some(Error::Phase));
+ }}
  let mut failed=Stack::new(1).unwrap();
  failed.begin_search(context(),false).unwrap();
  assert_eq!(failed.retry_candidate().err(),Some(Error::Noncontinuable));
  let mut stale=Stack::new(1).unwrap();let old=stale.push(1,1,context()).unwrap();
  stale.pop_normal(old).unwrap();let fresh=stale.push(1,1,context()).unwrap();
  assert_ne!(old,fresh);assert_eq!(stale.pop_normal(old).err(),Some(Error::Identity));
+ stale.begin_search(context(),true).unwrap();
+ assert_eq!(stale.select_unwind(old),Err(Error::Identity));
+ stale.select_unwind(fresh).unwrap();
+ assert!(stale.cleanup_frame().unwrap().is_none());
+ assert_eq!(retry.select_unwind(foreign),Err(Error::Phase));
 }}
 "#,
         include_str!("../activation.rs")
