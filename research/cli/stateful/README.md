@@ -37,3 +37,6 @@ hash, generated Rust and actual output/stderr/exit across Windows/Linux. Rejecti
 must preserve the output sentinel and match across hosts. Inventory all instructions
 and sections before choosing one cohesive next architecture gate. Windows Server
 2025 does not validate XP/7; six historical launch timeouts remain unexplained.
+
+See [measured outcomes and integrated next gate](RESULTS.md). Accepted emitted
+programs also run the24 frozen backend scenarios; these are separately counted.

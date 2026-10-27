@@ -12,7 +12,12 @@ with tempfile.TemporaryDirectory() as td:
   p=run([str(repo/'target/debug/w2l'),str(pe),str(target)]);c=row['conversion'];assert p.returncode==c['exit']
   got=dict(name=row['name'],config=row['config'],pe_sha256=sha(pe),conversion_exit=p.returncode,stderr=p.stderr.decode(errors='replace'))
   if p.returncode:
-   assert p.returncode==1 and target.read_text()=='preserve';assert got['stderr']==c['stderr'];rows.append(got);continue
+   assert p.returncode==1 and target.read_text()=='preserve'
+   got['windows_stderr']=c['stderr'];got['diagnostic_text_equal']=got['stderr']==c['stderr']
+   def budget(text):return 'wall-time budget exhausted' in text or ('max. resource limit exceeded' in text and '"sat"' not in text)
+   if budget(got['stderr']) and budget(c['stderr']):got['rejection_class']='proof-budget';got['exact_diagnostic_parity']=False
+   else:assert got['stderr']==c['stderr'],(stem,got['stderr'],c['stderr']);got['rejection_class']='exact-diagnostic'
+   rows.append(got);(root/'native-partial.json').write_text(json.dumps(rows,indent=2)+'\n');continue
   assert sha(target)==c['rust_sha256'] and target.read_bytes()==(root/(stem+'.rs')).read_bytes();got['rust_sha256']=sha(target)
   exe=d/stem;p=run(['rustc','--edition=2021',str(target),'-o',str(exe)]);assert p.returncode==0,p.stderr;actual=[]
   for expected in row['observations']:
@@ -30,5 +35,20 @@ with tempfile.TemporaryDirectory() as td:
   rd,wr=os.pipe();os.close(rd)
   with path.open('rb') as f,os.fdopen(wr,'wb',buffering=0) as dest:p=run([str(exe)],stdin=f,stdout=dest)
   assert dict(exit=p.returncode,stderr_hex=p.stderr.hex(),stdout='unobservable')==row['closedpipe_failure']
+  # Separate substituted-backend executions of actual emitted code.
+  (d/'generated.rs').write_bytes(target.read_bytes())
+  harness=(Path(__file__).parent/'scripted_native.rs').read_text()
+  payload=json.loads((Path(__file__).parent/'payload.json').read_text())['input_hex']
+  harness=harness.replace('PAYLOAD',','.join(str(b) for b in bytes.fromhex(payload)))
+  (d/'scripted.rs').write_text(harness)
+  p=run(['rustc','--edition=2021',str(d/'scripted.rs'),'-o',str(d/'scripted')]);assert p.returncode==0,p.stderr
+  p=run([str(d/'scripted')]);assert p.returncode==0 and not p.stderr,p.stderr
+  records=[]
+  for line in p.stdout.decode().splitlines():
+   a,b,c,e,h=line.split(' ',4);records.append(dict(mode=int(a),exit=int(b),reads=int(c),writes=int(e),stdout_hex=h))
+  expected=json.loads((Path(__file__).parent/'probe-expectations.json').read_text())[row['name']]
+  assert len(records)==24
+  for a,b in zip(records,expected):assert {k:a[k] for k in b}==b,(stem,a,b)
+  got['scripted_backend']=records
   got.update(observations=actual,real_failures=3);rows.append(got)
-(root/'native.json').write_text(json.dumps(rows,indent=2)+'\n');print(json.dumps([{k:v for k,v in r.items() if k!='observations'} for r in rows],indent=2))
+(root/'native.json').write_text(json.dumps(rows,indent=2)+'\n');print(json.dumps([{k:v for k,v in r.items() if k not in ('observations','scripted_backend')} for r in rows],indent=2))
