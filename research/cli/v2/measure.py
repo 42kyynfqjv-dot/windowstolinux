@@ -52,12 +52,12 @@ for config,flags in m['configurations'].items():
  assert p.returncode==closed['exit'] and p.stderr.hex()==closed['stderr_hex']
  target=out/(stem+'.rs');target.write_text('preserve')
  p=run([str(repo/'target/debug/w2l.exe'),str(pe),str(target)])
- assert p.returncode==1 and target.read_text()=='preserve'
- row['conversion']=dict(accepted=False,error=p.stderr.decode());assert sha(pe)==row['pe_sha256'];save(out/'report.json',report)
+ assert p.returncode==0 and target.read_text()!='preserve',p.stderr
+ row['conversion']=dict(accepted=True,rust_sha256=sha(target));assert sha(pe)==row['pe_sha256'];save(out/'report.json',report)
 p=run(['cl','/nologo','/W4','/O2',str(src/'probe.c'),'/Fe:probe.exe'],cwd=out);(out/'probe-build.txt').write_bytes(p.stdout+p.stderr);assert p.returncode==0
 p=run([str(out/'probe.exe')]);assert p.returncode==0;pout=p.stdout.decode();(out/'probe-results.txt').write_text(pout)
 records=[dict(mode=int(a),exit=int(b),reads=int(c),writes=int(d),output_bytes=int(e)) for a,b,c,d,e in re.findall(r'mode=(\d+) exit=(\d+) read_calls=(\d+) write_calls=(\d+) output_bytes=(\d+)',pout)]
 assert [r['mode'] for r in records]==list(range(10)) and [r['exit'] for r in records]==expected['scripted_exits']
 report['extra_failure_sha256']=sha(src/'extra-failures.json')
 report['scripted_probe']=dict(cases=len(records),records=records,source_sha256=sha(src/'probe.c'),kind='substituted API backend, not original program baseline');save(out/'report.json',report)
-print('CLI V2:2 unchanged PEs;28 regular-file cases;28 pipe cases;6 real I/O failures;10 scripted API cases;production rejected')
+print('CLI V2:2 unchanged PEs;28 regular-file cases;28 pipe cases;6 real I/O failures;10 scripted API cases;Rust emitted; ELF comparison is a separate Linux gate')

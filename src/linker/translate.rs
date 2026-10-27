@@ -7,7 +7,7 @@ impl Candidate<'_> {
     pub(crate) fn translate(&self) -> Result<String, String> {
         if self.api == Api::Stream {
             let bound = super::stream::bind(self)?;
-            return Err(format!("stream intake and {} calls bound; emission blocked: cyclic frame/epoch proof required",bound.calls.len()));
+            return super::stream::translate(&bound);
         }
         if self.api == Api::Environment {
             return super::input::translate(self);

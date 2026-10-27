@@ -5,6 +5,10 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 #[path = "../stream/graph.rs"]
 mod graph;
 use graph::{Binary, Operand, Operation};
+mod emit;
+mod frame;
+mod logic;
+mod solver;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(super) enum Function {
     Read,
@@ -74,6 +78,8 @@ impl Candidate<'_> {
 #[derive(Debug)]
 pub(super) struct Bound {
     pub(super) calls: BTreeMap<u32, Function>,
+    graph: graph::Graph,
+    loads: BTreeMap<u32, Function>,
 }
 fn merge(old: &mut [Option<Function>; 8], new: [Option<Function>; 8]) -> bool {
     let before = *old;
@@ -214,7 +220,28 @@ pub(super) fn bind(image: &Candidate<'_>) -> Result<Bound, String> {
             calls.insert(pc, f);
         }
     }
-    Ok(Bound { calls })
+    Ok(Bound {
+        calls,
+        graph: g,
+        loads,
+    })
+}
+
+pub(super) fn translate(bound: &Bound) -> Result<String, String> {
+    let frames = frame::prove(bound)?;
+    let logic = logic::encode(bound, &frames)?;
+    if let Some(path) = std::env::var_os("W2L_STREAM_OBLIGATIONS") {
+        use std::io::Write;
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(path)
+            .map_err(|e| e.to_string())?;
+        file.write_all(logic.text.as_bytes())
+            .map_err(|e| e.to_string())?;
+    }
+    solver::prove(&logic)?;
+    Ok(emit::emit(bound))
 }
 
 #[cfg(test)]

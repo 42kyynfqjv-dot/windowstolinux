@@ -28,9 +28,8 @@ with tempfile.TemporaryDirectory() as temp:
   for name,data in [('original',b)]+cases:
    pe=d/'test.exe';target=d/'out.rs';pe.write_bytes(data);target.write_text('preserve')
    r=subprocess.run([str(exe),str(pe),str(target)],capture_output=True,timeout=30)
-   assert r.returncode==1 and target.read_text()=='preserve',(name,r.stderr)
-   if name=='original':assert f"stream intake and {5 if row['config']=='O1' else 6} calls bound; emission blocked" in r.stderr.decode()
-   else:assert 'calls bound;' not in r.stderr.decode(),(name,r.stderr)
+   if name=='original':assert r.returncode==0 and target.read_text()!='preserve',r.stderr
+   else:assert r.returncode==1 and target.read_text()=='preserve',(name,r.stderr)
    results.append(dict(config=row['config'],case=name,error=r.stderr.decode()))
 (root/'binding-rejections.json').write_text(json.dumps(results,indent=2)+'\n')
-print('Production binding:2 originals reach proof barrier;12 malformed imports rejected;no emission')
+print('Production binding:2 originals prove and emit;12 malformed imports rejected')
