@@ -18,7 +18,9 @@ int main(int argc,char **argv) {
     si.cb=sizeof(si);
     if(!CreateProcessA(argv[1],NULL,NULL,NULL,FALSE,DEBUG_ONLY_THIS_PROCESS,
                        NULL,NULL,&si,&pi)) return 125;
-    while(GetTickCount64()<deadline && WaitForDebugEvent(&ev,1000)) {
+    unsigned events=0;
+    while(events++<128 && GetTickCount64()<deadline && WaitForDebugEvent(&ev,1000)) {
+        fprintf(stderr,"event=%lu thread=%lu code=%lu armed=%d\n",ev.dwDebugEventCode,ev.dwThreadId,ev.dwDebugEventCode==EXCEPTION_DEBUG_EVENT?ev.u.Exception.ExceptionRecord.ExceptionCode:0,armed);
         DWORD action=DBG_CONTINUE;
         if(ev.dwDebugEventCode==CREATE_PROCESS_DEBUG_EVENT) {
             base=(DWORD)(uintptr_t)ev.u.CreateProcessInfo.lpBaseOfImage;
@@ -64,6 +66,7 @@ int main(int argc,char **argv) {
     }
     /* Never let the measured utility continue into its workload. Drain the owned
      * child's termination event, including failures while an event was pending. */
+    fprintf(stderr,"observation stopped=%d result=%lu error=%lu entry=%lu events=%u\n",stopped,result,GetLastError(),entry,events);
     TerminateProcess(pi.hProcess,125);
     ContinueDebugEvent(ev.dwProcessId,ev.dwThreadId,DBG_CONTINUE);
     for(int i=0;i<32 && WaitForDebugEvent(&ev,100);++i) {
