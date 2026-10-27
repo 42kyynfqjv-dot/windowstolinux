@@ -1,19 +1,24 @@
 // Generated from verified PE instructions. Local compiler-time Z3 is not linked.
 // Original runtime support: MIT OR Apache-2.0. Linux regular-file/byte-pipe subset.
-#![allow(unused_assignments,unused_parens)]
+#![allow(unused_assignments,unused_parens,unused_variables)]
+// CHECKED_MEMORY_MODULE
 use std::{fs::File,io::{Read,Write},os::{fd::AsFd,unix::fs::FileTypeExt}};
 fn assert_contract(ok:bool){if !ok{eprintln!("stream runtime contract violation");std::process::exit(125);}}
-struct Frame{bytes:[u8;4096],initialized:[bool;4096]}
+// Registers retain the existing proved frame-relative coordinates. The checked
+// map uses a private nonzero backing base, not a claimed original Windows ESP.
+struct Frame{memory:guest_memory::Space,fresh:[bool;4096],empty:[u8;0]}
+fn checked<T>(r:Result<T,guest_memory::Fault>)->T{r.unwrap_or_else(|_|{assert_contract(false);unreachable!()})}
 impl Frame{
- fn new()->Self{Self{bytes:[0;4096],initialized:[false;4096]}}
+ fn new()->Self{let mut memory=checked(guest_memory::Space::new(4096,1));checked(memory.map(0x10000,4096,guest_memory::Owner::Stack(1),guest_memory::Permissions::READ_WRITE,false));Self{memory,fresh:[false;4096],empty:[]}}
  fn range(p:u32,n:u32)->std::ops::Range<usize>{let end=p.checked_add(n);assert_contract(end.is_some_and(|e|e<=4096));p as usize..end.unwrap() as usize}
- fn get(&self,p:u32,n:u8)->u32{let s=Self::range(p,n as u32);assert_contract(self.initialized[s.clone()].iter().all(|&b|b));let mut word=[0;4];word[..n as usize].copy_from_slice(&self.bytes[s]);u32::from_le_bytes(word)}
- fn put(&mut self,p:u32,n:u8,v:u32){let s=Self::range(p,n as u32);self.bytes[s.clone()].copy_from_slice(&v.to_le_bytes()[..n as usize]);self.initialized[s].fill(true);}
- fn invalidate(&mut self,p:u32,n:u32){self.initialized[Self::range(p,n)].fill(false);}
- fn initialize(&mut self,p:u32,n:u32){self.initialized[Self::range(p,n)].fill(true);}
+ fn address(p:u32,n:u32)->u32{Self::range(p,n);0x10000+p}
+ fn get(&self,p:u32,n:u8)->u32{assert_contract(matches!(n,1|2|4));let mut word=[0;4];word[..n as usize].copy_from_slice(self.source(p,n as u32));u32::from_le_bytes(word)}
+ fn put(&mut self,p:u32,n:u8,v:u32){assert_contract(matches!(n,1|2|4));checked(self.memory.write(Self::address(p,n as u32),&v.to_le_bytes()[..n as usize]));self.fresh[Self::range(p,n as u32)].fill(true);}
+ fn invalidate(&mut self,p:u32,n:u32){self.fresh[Self::range(p,n)].fill(false);}
+ fn initialize(&mut self,p:u32,n:u32){let s=Self::range(p,n);if n!=0{checked(self.memory.define(Self::address(p,n),n));}self.fresh[s].fill(true);}
  fn pair(&self,p:u32,n:u32,c:u32){let a=Self::range(p,n);let b=Self::range(c,4);assert_contract(c%4==0&&(a.end<=b.start||b.end<=a.start));}
- fn destination(&mut self,p:u32,n:u32)->&mut[u8]{&mut self.bytes[Self::range(p,n)]}
- fn source(&self,p:u32,n:u32)->&[u8]{let s=Self::range(p,n);assert_contract(self.initialized[s.clone()].iter().all(|&b|b));&self.bytes[s]}
+ fn destination(&mut self,p:u32,n:u32)->&mut[u8]{Self::range(p,n);if n==0{return &mut self.empty;}checked(self.memory.destination(Self::address(p,n),n))}
+ fn source(&self,p:u32,n:u32)->&[u8]{let s=Self::range(p,n);assert_contract(self.fresh[s].iter().all(|&b|b));if n==0{return &[];}checked(self.memory.read(Self::address(p,n),n))}
 }
 pub trait StreamIo{
  fn standard(&mut self,selector:u32)->u32;

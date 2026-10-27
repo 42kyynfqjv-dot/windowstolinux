@@ -44,7 +44,16 @@ fn store(o: &Operand, v: &str) -> String {
     }
 }
 pub(super) fn emit(bound: &Bound) -> String {
-    let mut out = include_str!("runtime.txt").to_string();
+    // The same checked core is tested directly and compiled into native output.
+    // Proof identity is runtime-local; no process IDs enter generated source.
+    let core = include_str!("../../guest_memory.rs")
+        .split("\n#[cfg(test)]")
+        .next()
+        .unwrap();
+    let mut out = include_str!("runtime.txt").replace(
+        "// CHECKED_MEMORY_MODULE",
+        &format!("#[allow(dead_code)]\nmod guest_memory {{\n{core}\n}}"),
+    );
     writeln!(out,"pub fn run<B: StreamIo>(io:&mut B)->u32 {{\nlet mut r=[0u32;8];r[4]=4096;let mut m=Frame::new();let mut cf=false;let mut zf=false;let mut error=0u32;let mut pc={}u32;loop{{match pc{{",bound.graph.entry).unwrap();
     for (&pc, node) in &bound.graph.nodes {
         writeln!(out, "{pc}=>{{").unwrap();

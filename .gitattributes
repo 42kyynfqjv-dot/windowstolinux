@@ -49,3 +49,6 @@ research/utilities/rcedit/fixtures/*.rc text eol=lf
 research/utilities/rcedit/fixtures/*.bin -text
 research/utilities/rcedit/*.json text eol=lf
 research/utilities/rcedit/*.py text eol=lf
+research/process/*.py text eol=lf
+research/process/conformance/*.json text eol=lf
+research/process/conformance/*.py text eol=lf

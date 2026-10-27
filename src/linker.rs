@@ -262,8 +262,8 @@ impl<'a> Candidate<'a> {
                 && range(self.bytes, at + 20, 20)? == [0; 20],
             "linker import binding/terminator",
         )?;
-        if iat_dir == (self.iat, 20) {
-            return self.stream_imports(ilt, name);
+        if iat_dir.0 == self.iat && matches!(iat_dir.1, 12 | 16 | 20) {
+            return self.stream_imports(ilt, name, iat_dir.1 / 4 - 1);
         }
         need(
             iat_dir == (self.iat, 8) && ilt.is_multiple_of(4) && self.iat.is_multiple_of(4),

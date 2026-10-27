@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "programs": [
+    "slice",
+    "swap"
+  ],
+  "configurations": {
+    "O2": [
+      "/O2"
+    ]
+  },
+  "compile_flags": [
+    "/nologo",
+    "/Bv",
+    "/W4",
+    "/GS-",
+    "/Zl",
+    "/c"
+  ],
+  "link_flags": [
+    "/nologo",
+    "/machine:x86",
+    "/subsystem:console",
+    "/nodefaultlib",
+    "/entry:entry@0"
+  ],
+  "libraries": [
+    "kernel32.lib"
+  ],
+  "sha256": {
+    "slice.c": "b48c0c0d369859b80ffd883fa73f5480db243cbac18100ebc5e6f9cd7087686b",
+    "swap.c": "eea962c682e912f4cf2b9e65412981cf120dbed7776680fdefb0e5d918c733ee",
+    "cases.json": "aa797f3e68d86e4c238e8fc2946e6c4659137493a02df73101d1e99d4acb8bcb"
+  }
+}
