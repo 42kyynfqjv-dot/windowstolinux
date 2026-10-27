@@ -24,10 +24,10 @@ Exact unprefixed `A1 moffs32` loads EAX from four validated immutable data bytes
 Want to contribute? See the [public roadmap and initial issues](docs/COMMUNITY-ROADMAP.md)
 and [contribution guide](CONTRIBUTING.md). Fork, submit a PR, and maintainers review.
 
-Current active work: SUB-577 adds [bounded shared heap effects](research/process/heap/CONTRACT.md)
-with independently frozen Windows conformance and separately labelled native component
-comparisons. Heap PE translation remains blocked on typed ownership/outcome and numeric
-emission integration; component matches are not translated-program evidence.
+Current active work: SUB-577 integrates [bounded shared heap ownership and native emission](research/process/heap/INTEGRATION.md)
+for two unchanged, independently frozen compiler programs. Local ELF execution matches
+32 recorded Windows successes and four I/O failures; fresh cross-host CI and substantive
+production review gate the draft PR. The 32 separate component matches are not translated evidence.
 SUB-576 [checked-memory/frame integration](research/process/IMPLEMENTATION.md) and
 its timeout-diagnostic follow-up are reviewed and merged. LLVM streaming validation
 and original ISCC/rcedit measurements are retained; neither third-party utility

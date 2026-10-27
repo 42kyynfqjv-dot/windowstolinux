@@ -39,7 +39,7 @@ cases=json.loads((repo/'research/process/heap/cases.json').read_text())
 report=dict(manifest=manifest,programs=[])
 for name in manifest['programs']:
     digest='0'*64  # metadata-only unit vector; executable bytes are checked separately
-    row=dict(name=name,pe_sha256=digest,conversion=dict(exit=1),observations=[])
+    row=dict(name=name,pe_sha256=digest,conversion=dict(exit=0,rust_sha256=digest),observations=[])
     for c in cases:
         row['observations'].append(dict(name=c['name'],exit=0,stdout_hex=c['expected'][name],stderr_hex='',timeout=False,executed_sha256=digest))
     for key,code in [('read_failure',11),('write_failure',14)]:
@@ -53,8 +53,10 @@ r=copy.deepcopy(report);r['programs'][0]['observations'].pop();bad.append(r)
 r=copy.deepcopy(report);r['programs'][0]['observations'][0]['timeout']=True;bad.append(r)
 r=copy.deepcopy(report);r['programs'][0]['observations'][0]['executed_sha256']='1'*64;bad.append(r)
 r=copy.deepcopy(report);r['programs'][0]['write_failure']['exit']=0;bad.append(r)
+r=copy.deepcopy(report);r['programs'][0]['conversion']['exit']=1;bad.append(r)
+r=copy.deepcopy(report);r['programs'][0]['conversion']['rust_sha256']='';bad.append(r)
 for r in bad:
     try: validate_report(r,manifest,cases)
     except AssertionError: pass
     else: raise AssertionError('Malformed evidence accepted')
-print('Six malformed metadata reports rejected; no execution or translation counted')
+print('Eight malformed metadata reports rejected; no execution or translation counted')

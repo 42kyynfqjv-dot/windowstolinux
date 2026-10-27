@@ -35,7 +35,9 @@ additions around a meaningful gap; large raw case counts are not compatibility.
 Shared checked storage is merged under existing proof/admission gates
 (SUB-576 / [PR #37](https://github.com/42kyynfqjv-dot/windowstolinux/pull/37)).
 Current SUB-577 [draft PR #43](https://github.com/42kyynfqjv-dot/windowstolinux/pull/43)
-adds bounded heap effects and conformance; heap PE translation is still blocked.
+integrates bounded heap ownership and native emission; fresh cross-host evidence and
+substantive production review remain the merge gates. See the
+[precise subset and evidence categories](../research/process/heap/INTEGRATION.md).
 Process-address composition, module startup and API effects need reviewed contracts
 before widening support. Discuss those interfaces instead of building parallel
 application-specific loaders. Public issues are the contribution queue; Linear

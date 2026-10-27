@@ -120,8 +120,8 @@ def main():
         else:
             assert r['exit'] == 1 and rust.read_text() == 'preserve'
         save(out/'report.json', report)
-    assert all(p['conversion']['exit'] == 1 for p in report['programs']), 'Heap execution still requires ownership/admission review'
-    print('32 Windows success observations + 4 real I/O failures; both untouched conversion outcomes retained')
+    assert all(p['conversion']['exit'] == 0 for p in report['programs']), 'Heap production proof/emission failed'
+    print('32 Windows success observations + 4 real I/O failures; both untouched PEs converted; native execution is a separate job')
 
 if __name__ == '__main__':
     main()

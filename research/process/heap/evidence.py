@@ -16,4 +16,5 @@ def validate_report(report, manifest, cases):
             assert failure['executed_sha256'] == row['pe_sha256'], 'heap evidence: error image'
             assert failure['timeout'] is False, 'heap evidence: timed out error case'
             assert (failure['exit'], failure['stdout_hex'], failure['stderr_hex']) == (code, '', ''), 'heap evidence: error outcome'
-        assert row['conversion']['exit'] == 1, 'heap evidence: required conversion barrier'
+        assert row['conversion']['exit'] == 0, 'heap evidence: conversion failed'
+        assert len(row['conversion']['rust_sha256']) == 64, 'heap evidence: generated source hash'

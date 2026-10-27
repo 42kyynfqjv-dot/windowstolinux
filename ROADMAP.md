@@ -6,10 +6,10 @@ engineering checkpoints; issue/PR counts do not establish application compatibil
 
 Current direction: reusable process-memory/startup/API contracts grounded in
 independent ISCC/rcedit inventories. Those utilities still reject conversion.
-SUB-576 checked-memory integration is merged. SUB-577 implements bounded heap
-effects and measures frozen conformance programs; genuine heap PE translation
-still needs shared typed ownership/outcome and numeric emission integration. See
-[heap contract and remaining gates](research/process/heap/CONTRACT.md). Broader
+SUB-576 checked-memory integration is merged. SUB-577 integrates bounded heap
+ownership, allocation-result refinement and native emission in the existing draft PR.
+See [production contract and evidence gates](research/process/heap/INTEGRATION.md).
+Broader
 startup closure and a pinned current Wine failure remain separate evidence gates.
 
 - M0 foundation and M1 narrow modern-Windows PE32-to-native-ELF slice are merged.

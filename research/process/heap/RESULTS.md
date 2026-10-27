@@ -1,4 +1,15 @@
-# Heap effects measurement — partial SUB-577
+# Heap effects measurement
+
+## Production integration
+
+See [INTEGRATION.md](INTEGRATION.md) for the current admission contract and evidence
+categories. Local development translated both untouched ff447ed Windows artifacts:
+32 ELF success outcomes and four real I/O-failure outcomes matched recorded Windows
+results. This local run regenerated both Rust files locally and **does not establish
+fresh cross-host generation**. CI now requires fresh Windows conversion followed by
+same-PE Linux conversion, byte-identical Rust and those 36 execution comparisons.
+The 32 component matches remain separately reported. Final-head CI/artifacts are
+linked in PR #43 and SUB-577; the historical runs below remain preserved.
 
 ## First completed Windows measurement
 

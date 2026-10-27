@@ -1,9 +1,9 @@
-# SUB-577 shared default-heap effects — bounded component
+# SUB-577 shared default-heap effects
 
-This slice implements allocation/free/resize effects in the **same numeric-address
-Space** used by generated streaming frames. It does not yet bind Heap imports or
-admit heap programs. The two frozen compiler programs must still reject. A native
-Rust component comparison is not a PE-to-Rust-to-ELF comparison.
+Current production admission, proof and native emission are specified in
+[INTEGRATION.md](INTEGRATION.md). The component contract below remains the storage
+foundation. Historical inventory/continuation notes record the earlier component
+checkpoint; they are not current conversion outcomes.
 
 ## Primary contracts and independent implementation
 
@@ -62,10 +62,10 @@ validation it returns None without mutation. It does not predict Windows exhaust
 allow guest code to choose allocation success, or establish resource equivalence.
 No huge allocations are used to force Windows failure.
 
-There is no thread LastError state in this component. An eventual API binding must
+There is no thread LastError state inside this storage component. The production API binding must
 preserve it on injected Alloc/ReAlloc failure, invalidate knowledge on unspecified
 success effects, and separately justify GetProcessHeap/HeapFree failure handling.
-Call-clobbered registers/flags and stdcall cleanup also remain binding obligations.
+Call-clobbered registers/flags and stdcall cleanup are enforced by the production binding.
 No hidden external mutation, callbacks, asynchronous access or other heap user is
 assumed within this bounded component; those effects prevent admission until modeled.
 
@@ -141,7 +141,7 @@ unresolved. ISCC's preserved import inventory has GetProcessHeap/HeapAlloc/HeapF
 and HeapDestroy; related compression modules additionally import HeapReAlloc.
 Private heap lifetime, global objects, callbacks and startup remain separate gates.
 
-Recommended continuation: one shared typed-memory/effect proof and native-emission
+Historical continuation recommendation (implemented in INTEGRATION.md): one shared typed-memory/effect proof and native-emission
 integration in this PR, including the observed scalar OR/shift forms with independent
 flag/partial-width tests. Keep nullable outcomes and failure-preserved old pointers
 on separate edges; carry allocation identity and initialized extents through spills
