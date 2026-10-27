@@ -1,3 +1,28 @@
+# Current integrated status
+
+Production admission and native emission are implemented for the documented stream
+subset. At commit `dea882f349e859ab241ba73ad0cff801ed25d6a6`, CI40434887458 passed
+all five jobs. Downloaded Windows/native artifacts confirm two unchanged O1/O2
+PEs, byte-identical generated Rust across hosts and 62 real Windows/ELF
+file/pipe/failure comparisons. Sixteen scripted emitted-program executions and
+14 rejection cases are counted separately. Root tests:115; the five graph example
+functions are also inherited in root and must not be double-counted.
+
+The substantive medium review reran115 root functions and28 additional seeded
+binary pipe cases across both native outputs (sizes0,1,254..258,511..513,
+4095..4097,131073). Those28 are Linux-only oracle checks, not new Windows pairs.
+Review covered checked import binding, protected frame joins, incoming-domain
+checks, first-violation obligations, unique read-count ownership, fresh prefix
+replacement, coincident successors, solver failure policy and emitted arithmetic
+and I/O. No additional production defect was reproduced during this review.
+
+The implementation contract below under "Integrated" remains authoritative.
+Earlier checkpoint sections are retained as history; their zero-translation and
+unfinished-work statements describe their earlier commits. Original v1/error11
+history, ordinaryCRT/XP7 exclusions and five unexplained Windows timeouts remain.
+
+## Historical component and design checkpoints
+
 # SUB-564 streaming integration checkpoint
 
 Status: **partial implementation; production admission remains blocked**. This is
