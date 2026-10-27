@@ -636,3 +636,47 @@ jobs:
           name: independent-utility-native
           path: utility-evidence/native-rejection.json
           if-no-files-found: warn
+  rcedit-windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --locked
+      - name: Build pinned upstream rcedit and measure frozen scratch-only workloads
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $install = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $vcvars = Join-Path $install 'VC\Auxiliary\Build\vcvarsall.bat'
+          cmd /c "`"$vcvars`" x86 -vcvars_ver=14.44 && python research/utilities/rcedit/measure.py %RUNNER_TEMP%/rcedit-corpus"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rcedit-windows
+          path: |
+            ${{ runner.temp }}/rcedit-corpus/report.json
+            ${{ runner.temp }}/rcedit-corpus/*.txt
+            ${{ runner.temp }}/rcedit-corpus/rcedit.exe
+            ${{ runner.temp }}/rcedit-corpus/fixture/fixture.exe
+            ${{ runner.temp }}/rcedit-corpus/cases/*/target.exe
+          if-no-files-found: warn
+  rcedit-native:
+    runs-on: ubuntu-latest
+    needs: rcedit-windows
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --locked
+      - uses: actions/download-artifact@v4
+        with:
+          name: rcedit-windows
+          path: rcedit-evidence
+      - name: Verify unchanged source-built utility intake rejection
+        run: python3 research/utilities/rcedit/check_native.py rcedit-evidence
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rcedit-native
+          path: rcedit-evidence/native-rejection.json
+          if-no-files-found: warn

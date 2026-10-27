@@ -379,3 +379,9 @@ are held out; WinSCP is a Wine-working control, and CrystalDiskMark's storage
 semantic-gap lead remains unverified. See [utility measurement](research/utilities/README.md).
 Compiler front-end/DLL/Delphi runtime dependencies are recorded honestly; original
 compilation or intake rejection does not count as native third-party translation.
+
+SUB-574 adds an unchanged source-built MSVC/CMake resource utility family after
+the official-prebuilt ISCC measurement. Frozen scratch-only resource queries/edits
+use independent Win32 observations and code/manifest preservation checks. This is
+measurement before capability work, with no app-specific support changes. See
+[rcedit evidence gates](research/utilities/rcedit/README.md).
