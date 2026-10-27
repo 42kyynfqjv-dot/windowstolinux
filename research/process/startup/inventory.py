@@ -39,7 +39,8 @@ def focus(data, disassembly):
     dependencies = []
     # Actual call sites observed in the pinned handler. Resolve direct thunks
     # from bytes; no symbol name is used to manufacture a destination.
-    for site in [0x47b2a9, 0x47b2cf, 0x47b312, 0x47b34f]:
+    for site in [0x47b2a9, 0x47b2cf, 0x47b312, 0x47b34f,
+                 0x47b3b2, 0x47b3e8, 0x47d02b, 0x47cfe8]:
         call = mapped_bytes(data, site, 5)
         if call[0] != 0xe8:
             raise ValueError('pinned call-site bytes changed')

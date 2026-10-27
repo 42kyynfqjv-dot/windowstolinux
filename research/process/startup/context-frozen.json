@@ -1,0 +1,18 @@
+{
+  "source_sha256": "a1144bed962feee113607b3183e2b54757b81779384ed1820dbc300255491c0e",
+  "configuration": "MSVC x86 14.44 /O2 /GS; ordinary CRT entry; independent expected outcomes fixed before Windows execution",
+  "cases": [
+    {
+      "mode": "r",
+      "exit": 0,
+      "stdout_hex": "5652",
+      "stderr_hex": ""
+    },
+    {
+      "mode": "u",
+      "exit": 0,
+      "stdout_hex": "494f4648",
+      "stderr_hex": ""
+    }
+  ]
+}
