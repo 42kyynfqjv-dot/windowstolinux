@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "programs": [
+    "rot13",
+    "xor",
+    "compact"
+  ],
+  "configurations": {
+    "O1": [
+      "/O1"
+    ],
+    "O2": [
+      "/O2"
+    ]
+  },
+  "compile_flags": [
+    "/nologo",
+    "/Bv",
+    "/W4",
+    "/GS-",
+    "/Zl",
+    "/c"
+  ],
+  "link_flags": [
+    "/nologo",
+    "/machine:x86",
+    "/subsystem:console",
+    "/nodefaultlib",
+    "/entry:entry@0"
+  ],
+  "libraries": [
+    "kernel32.lib"
+  ],
+  "failure_exits": {
+    "read": 11,
+    "write": 12,
+    "closedpipe": 12
+  },
+  "sha256": {
+    "xor.c": "2c7df58df4bf042aae0589421964ab384ed8786d132c91760868337321c02fb5",
+    "compact.c": "11411a938272fc4a5de2124c9a6a2c8192411e55e16bd6ccfab88293720ea303",
+    "rot13.c": "d516f965ecc70f0c250084dbc3280a09861a90f119d6efc2d2e9e5137476691b",
+    "cases.json": "9fa237b0d670af8356d3e5f1cb1b165a410bf108b05d6d2b68f58cec26c4fa2b"
+  }
+}
