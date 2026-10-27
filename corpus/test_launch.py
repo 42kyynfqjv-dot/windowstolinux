@@ -84,7 +84,7 @@ class DiagnosticFailures(unittest.TestCase):
             child=Mock(pid=123)
             child.wait.side_effect=[subprocess.TimeoutExpired(['child'],15),0]
             child.poll.return_value=0
-            with patch('launch.subprocess.Popen',return_value=child), patch('launch.capture_process_state',return_value={'exit':1,'seconds':0}):
+            with patch('launch.platform.platform',return_value='authored-test'), patch('launch.subprocess.Popen',return_value=child), patch('launch.capture_process_state',return_value={'exit':1,'seconds':0}):
                 with self.assertRaises(subprocess.TimeoutExpired):
                     execute([sys.executable],d/'out',d/'err',d/'evidence',{}, {},timeout=15)
             child.kill.assert_not_called()
