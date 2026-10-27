@@ -1,0 +1,73 @@
+{
+  "version": 1,
+  "scope": "measurement only; no converter support changes",
+  "families": {
+    "development": [
+      "Inno Setup",
+      "innounp"
+    ],
+    "control_not_development": [
+      "WinSCP"
+    ],
+    "reserved_storage": [
+      "CrystalDiskMark",
+      "DiskSpd"
+    ],
+    "reserved_gui_media": [
+      "VirtualDub"
+    ]
+  },
+  "cases": [
+    {
+      "name": "minimal",
+      "fixture": "minimal.iss",
+      "exit": 0,
+      "output": "PE artifact; never execute",
+      "repeat": 2
+    },
+    {
+      "name": "payload",
+      "fixture": "payload.iss",
+      "exit": 0,
+      "output": "PE artifact; never execute",
+      "repeat": 2
+    },
+    {
+      "name": "invalid",
+      "fixture": "invalid.iss",
+      "exit": 2,
+      "output": "none",
+      "repeat": 1
+    },
+    {
+      "name": "bad-option",
+      "args": [
+        "/W2LUnknownOption"
+      ],
+      "exit": 1,
+      "output": "none",
+      "repeat": 1
+    }
+  ],
+  "fixture_sha256": {
+    "invalid.iss": "2e4b7bd3b2c27562b9e067759429b4d77a315bcaf5c1eaabad881b8ad2cbbd1f",
+    "minimal.iss": "289634c28ac2651bbbd4e5289bc51921af4057166eb213af8329e45ab6473591",
+    "payload.bin": "40aff2e9d2d8922e47afd4648e6967497158785fbd1da870e7110266bf944880",
+    "payload.iss": "4393e89f9932809d9a8322c74533fc003a1f07e5b88d3788b09e69b46f3a7717"
+  },
+  "iscc_arguments": [
+    "/Q",
+    "/F<case>",
+    "/O<unique-scratch-output>",
+    "<script>"
+  ],
+  "forbidden": [
+    "generated installer execution",
+    "signing",
+    "network transfers",
+    "driver/storage workloads",
+    "application-name/hash/result shortcuts"
+  ],
+  "windows_baseline_before_converter": true,
+  "binary_output_determinism": "measure repeat hashes; do not normalize or assume stability"
+}

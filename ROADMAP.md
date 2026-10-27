@@ -372,3 +372,10 @@ See [cross-compiler integration](research/cli/llvm/INTEGRATION.md). After review
 measure a bounded held-out streaming composition corpus across both pinned
 compilers without widening support to fit it. Compiler portability is not ordinary
 CRT, general application, PE32+ or XP/7 compatibility.
+
+SUB-573 freezes independent utility families and measures official unmodified
+ISCC compiler workloads before any support changes. Whole related project families
+are held out; WinSCP is a Wine-working control, and CrystalDiskMark's storage
+semantic-gap lead remains unverified. See [utility measurement](research/utilities/README.md).
+Compiler front-end/DLL/Delphi runtime dependencies are recorded honestly; original
+compilation or intake rejection does not count as native third-party translation.
