@@ -99,6 +99,21 @@ symbol, numeric ASLR address, chain length and host loader's frame allocation ar
 unobservable to the admitted program. They need not delay this bounded integration.
 The obligations have **not yet been established for rcedit**.
 
+Review clarification: this is a sufficient conditional contract, not evidence
+that the original utility satisfies it. It moves the missing work into explicit
+proof obligations; it does not discharge them. Environment restrictions alone
+cannot exclude synchronous guest faults, API failures, filter faults or cleanup
+faults. Each admitted operation must enumerate those effects, and every reachable
+outcome must have a proved transition. An unknown effect is a failed admission
+gate, even when ordinary baseline execution did not encounter it.
+
+All root-opacity and finite-target obligations must pass **before emission**.
+Do not emit a program that returns 125/203 when a supported input reaches an
+unproved root, or add a runtime guard that suppresses its original behavior.
+Runtime checks may defend established invariants; they cannot supply a missing
+equivalence proof. Any narrower input domain must be explicit, enforceable before
+guest-visible effects and validated against Windows on that same domain.
+
 ## Reaching the root is a different capability, not silent termination
 
 If an event can cross the boundary, conversion remains unsupported until a native
