@@ -1,0 +1,41 @@
+{
+  "module_path_hex": "5c5c3f5c433a5c57696e646f77735c537973574f5736345c6e74646c6c2e646c6c",
+  "module_machine": 332,
+  "module_timestamp": 3684659782,
+  "module_size": 1744896,
+  "kind": "INT3 entry observation; eip normalized from trap; not baseline",
+  "image_base": 8060928,
+  "entry": 8087694,
+  "eip": 8087694,
+  "esp": 19921580,
+  "ebp": 19921592,
+  "teb": 16863232,
+  "stack_base": 19922944,
+  "stack_limit": 19910656,
+  "chain_head": 19921664,
+  "previous": 19921688,
+  "handler": 1996277296,
+  "handler_allocation": 1995767808,
+  "handler_type": 16777216,
+  "pe_sha256": "ce252fb1eddd05c3ea6acd73871995b1badd32446d76c6df07abaf8fa44fd22f",
+  "source_sha256": "ba8f45b929e54000bf92cd871e3b830eb9d622fd254ce28344dbe374f07eedd7",
+  "translated_pairs": 0,
+  "handler_module": {
+    "sha256": "1e78588dcb44d47c1656f9f6eab8ab5beb5279959bcebf74c0f869d8d1c73322",
+    "machine": 332,
+    "timestamp": 3684659782,
+    "image_size": 1744896,
+    "handler_rva": 509488,
+    "exact_named_exports": [],
+    "symbol_status": "no exact named export; private symbol unresolved",
+    "file_name": "ntdll.dll",
+    "resolved_file": "\\\\?\\C:\\Windows\\SysWOW64\\ntdll.dll",
+    "file_version": "10.0.20348.5756"
+  },
+  "evidence": {
+    "commit": "853146d8da5ffa027eaafe203a07a2b9f9ff8080",
+    "workflow_run": 40598163347,
+    "job": 122519267246,
+    "kind": "separate original-entry instrumented observation; not ordinary baseline"
+  }
+}

@@ -1,5 +1,13 @@
 # Cohesive handler execution milestone — SUB-579 / same PR45
 
+Current entry-boundary decision: [ENTRY-CONTRACT.md](ENTRY-CONTRACT.md). An
+original-entry observation establishes a nonempty borrowed ntdll-owned chain.
+For application-contained exception handling, prove that identity is preserved
+and neither dereferenced nor invoked, rather than cloning irrelevant loader
+internals. Search/unwind crossing the root remains a separate unresolved shared
+effect. This refines the initial-state requirement below without granting an
+empty-chain premise or a no-exception assumption. No startup translation yet.
+
 Execution of this plan reached the explicit architectural stop criterion:
 [EXECUTION-BOUNDARY.md](EXECUTION-BOUNDARY.md) records the original helper dependency
 graph, production decoder experiments and two independently frozen Windows

@@ -1,5 +1,12 @@
 # Original incoming ownership is not an empty chain
 
+Follow-up: [ENTRY-CONTRACT.md](ENTRY-CONTRACT.md) identifies the actual mapped
+x86 ntdll.dll/version/hash and selects a borrowed semantic entry boundary. The
+private symbol is still unresolved. The original observation below is preserved
+as history; its then-unknown module identity is now resolved. Full loader-internal
+replication is not required for paths proved to remain inside application-owned
+exception activations. Such proof is not yet established for this utility.
+
 The required original-entry experiment now has a concrete result. At commit
 e3d98a74b9461fbd28e93ac447269aa8deff6c5e, dedicated workflow
 [40595682305](https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/40595682305)
