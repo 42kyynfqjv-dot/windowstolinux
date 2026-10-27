@@ -153,7 +153,11 @@ The supplied Rust executable uses Rust's ordinary SIGPIPE handling; embedding th
 component into a process that changes signal policy is outside current evidence.
 Closed-pipe failure is tested explicitly rather than assumed. No system security
 settings are changed. Failed writes retain any output already delivered; no
-rollback/flush equivalence for arbitrary buffered writers is claimed. Only raw
+rollback/flush equivalence for arbitrary buffered writers is claimed. The component runner now duplicates the existing standard descriptors through
+safe AsFd/try_clone_to_owned and File; no buffered stdin/stdout locks, invented
+raw descriptor ownership or /proc reopening. Duplicates share offsets and closing
+them does not close the original standard descriptors. Duplicate failure remains
+a component setup failure, not a proved guest GetStdHandle result. Only raw
 file/pipe endpoints belong in eventual native admission.
 
 The architecture-correct preferred/rebased-address and valid-stack assumptions
@@ -175,3 +179,11 @@ failure also invalidates requested initialization conservatively.
 
 Five earlier Windows fixture timeouts remain unexplained (see parent RESULTS.md).
 No silent retries or enlarged timeouts. Green runs do not diagnose those failures.
+
+A further deterministic defect was reproduced by the newly frozen closed-output-
+pipe case: the first component runner used buffered Rust stdout, which returned
+success before delivering bytes and hid the error at process exit (exit 0 instead
+of 12). Replaced both standard stream locks with owned, unbuffered File duplicates.
+The permanent end-to-end component regression checks exit 12 and empty stderr;
+no flush-at-exit workaround or rewritten expected result. This illustrates why
+component API semantics must be validated before using them in emitted programs.

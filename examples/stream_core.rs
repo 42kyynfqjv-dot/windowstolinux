@@ -3,9 +3,8 @@
 pub mod effects;
 #[path = "../src/stream/memory.rs"]
 pub mod memory;
-use effects::{Backend, Kind, Native};
+use effects::{Backend, Kind};
 use memory::{Error, Memory};
-use std::io::{Read, Write};
 
 // Independent authored consumer of the memory/API effect component. Kept separate
 // from production so these comparisons cannot silently grant PE admission.
@@ -53,7 +52,11 @@ pub fn component<B: Backend>(backend: &mut B, kind: Kind) -> Result<u8, Error> {
     m.release(buf)?;
     Ok(result)
 }
+#[cfg(unix)]
 fn main() {
+    use effects::Native;
+    use std::io::{Read, Write};
+    use std::os::fd::AsFd;
     let args: Vec<_> = std::env::args().collect();
     let (input, kind): (Box<dyn Read>, Kind) = match args.get(1).map(String::as_str) {
         Some("file") => (
@@ -73,13 +76,28 @@ fn main() {
             Box::new(std::fs::File::open(&args[2]).expect("component input")),
             Kind::File,
         ),
-        Some("pipe") => (Box::new(std::io::stdin().lock()), Kind::Pipe),
+        Some("pipe") => (
+            Box::new(std::fs::File::from(
+                std::io::stdin()
+                    .as_fd()
+                    .try_clone_to_owned()
+                    .expect("component duplicate stdin"),
+            )),
+            Kind::Pipe,
+        ),
         _ => panic!("component exerciser: file|pipe|read-failure|write-failure [path]"),
     };
     let output: Box<dyn Write> = if args[1] == "write-failure" {
         Box::new(std::fs::File::open(&args[2]).expect("component read-only output"))
     } else {
-        Box::new(std::io::stdout().lock())
+        // Duplicate the existing open file description; do not reopen /proc/self/fd,
+        // use buffered stdout, or take ownership of and close the original fd.
+        Box::new(std::fs::File::from(
+            std::io::stdout()
+                .as_fd()
+                .try_clone_to_owned()
+                .expect("component duplicate stdout"),
+        ))
     };
     let mut backend = Native { input, output };
     match component(&mut backend, kind) {
@@ -89,6 +107,11 @@ fn main() {
             std::process::exit(125);
         }
     }
+}
+#[cfg(not(unix))]
+fn main() {
+    eprintln!("native stream component exerciser requires Unix");
+    std::process::exit(125);
 }
 #[cfg(test)]
 mod tests {
