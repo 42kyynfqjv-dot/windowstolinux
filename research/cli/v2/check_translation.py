@@ -38,7 +38,7 @@ with tempfile.TemporaryDirectory() as td:
   adapter.write_text(generated.read_text().replace('fn main(){','fn original_main(){')+'\nfn main(){let mut io=Native::new();assert_eq!(io.write(2,b"x"),Err(109));}\n')
   p=subprocess.run(['rustc','--edition=2021',str(adapter),'-o',str(adapter_exe)],capture_output=True,timeout=30);assert p.returncode==0,p.stderr
   rd,wr=os.pipe();os.close(rd)
-  with os.fdopen(wr,'wb',buffering=0) as dest:p=subprocess.run([str(adapter_exe)],stdout=dest,stderr=subprocess.PIPE,timeout=30)
+  with os.fdopen(wr,'wb',buffering=0) as dest:p=subprocess.run([str(adapter_exe)],input=b'',stdout=dest,stderr=subprocess.PIPE,timeout=30)
   assert p.returncode==0 and not p.stderr,p.stderr
   # The same emitted instruction function with a substituted backend: eight
   # documented-result probes, not additional unchanged Windows executions.
