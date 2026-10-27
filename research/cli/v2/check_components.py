@@ -12,11 +12,18 @@ report=json.loads((root/'report.json').read_text());cases=json.loads((src/'cases
 manifest=json.loads((src/'frozen.json').read_text())
 for name,h in manifest['sha256'].items():assert sha(src/name)==h,(name,'freeze')
 assert report['manifest']==manifest and len(report['programs'])==2
+extra=json.loads((src/'extra-failures.json').read_text())
+assert report['extra_failure_sha256']==sha(src/'extra-failures.json')
+expected=json.loads((src/'expectations.json').read_text())
+assert [x['exit'] for x in report['scripted_probe']['records']]==expected['scripted_exits']
 suffix='.exe' if windows else ''
 graph=repo/'target/debug/examples'/('stream_graph'+suffix)
 results=[]
 for row in report['programs']:
  stem='uppercase_v2_'+row['config'];pe=root/(stem+'.exe');b=pe.read_bytes();assert sha(pe)==row['pe_sha256']
+ assert row['read_failure']==expected['read_failure']
+ assert row['write_failure']==expected['write_failure']
+ assert row['closed_output_pipe']=={k:v for k,v in extra['closed_output_pipe'].items() if k!='input_hex'}
  for kind in ['observations','pipe_observations']:
   assert row[kind]==[{k:v[k] for k in ['name','exit','stdout_hex','stderr_hex']} for v in cases]
  # Trusted compiler evidence extraction; not a substitute for production PE intake.
@@ -48,6 +55,12 @@ if not windows:
  for mode,expected in [('read-failure',11),('write-failure',12)]:
   p=run([str(core),mode,str(path)]);assert (p.returncode,p.stdout,p.stderr)==(expected,b'',b'');assert path.read_bytes()==b'a'
   observations.append(dict(kind=mode,exit=p.returncode,stdout_hex=p.stdout.hex(),stderr_hex=p.stderr.hex()))
+ closed=extra['closed_output_pipe'];path.write_bytes(bytes.fromhex(closed['input_hex']))
+ rd,wr=os.pipe();os.close(rd)
+ with os.fdopen(wr,'wb',buffering=0) as dest:
+  p=subprocess.run([str(core),'file',str(path)],stdout=dest,stderr=subprocess.PIPE,timeout=30)
+ assert p.returncode==closed['exit'] and p.stderr.hex()==closed['stderr_hex']
+ observations.append(dict(kind='closed-output-pipe',exit=p.returncode,stderr_hex=p.stderr.hex(),stdout=closed['stdout']))
  (root/'component-native.json').write_text(json.dumps(dict(kind='authored component consumer, NOT PE translation',graphs=results,observations=observations),indent=2)+'\n')
- print('28 file/pipe + 2 failure component cases match frozen expectations and both originals; zero CLI PE translations')
+ print('28 file/pipe + 3 failure component cases match frozen expectations and both originals; zero CLI PE translations')
 print(json.dumps(results,indent=2))

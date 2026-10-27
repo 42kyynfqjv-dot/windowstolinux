@@ -345,3 +345,11 @@ source, O1/O2 configurations and exact expectations; unchanged Windows measureme
 and separately labeled short-I/O probes precede production changes. See
 [CLI contract](research/cli/CONTRACT.md). Pipe EOF, mutable buffer ownership,
 runtime loops and synchronous handle effects must be resolved together.
+
+### SUB-564 cohesive streaming integration (in progress)
+
+[Versioned v2 integration checkpoint](research/cli/v2/INTEGRATION.md): frozen
+pipeline-correct originals and shared checked memory/I/O/graph components.
+Production CLI admission remains blocked by loop-carried frame/state proof and
+native emission. Keep the same cohesive PR through completion; component and
+structural comparisons are not PE-to-ELF acceptance.

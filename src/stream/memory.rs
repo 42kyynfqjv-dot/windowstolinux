@@ -1,5 +1,7 @@
 //! Checked, byte-initialized owned storage. No guest address or PE admission authority.
 use std::ops::Range;
+use std::sync::atomic::{AtomicU64, Ordering};
+static NEXT_ARENA: AtomicU64 = AtomicU64::new(1);
 
 pub const STORAGE: usize = 4096;
 const OBJECTS: usize = 32;
@@ -15,12 +17,14 @@ pub enum Error {
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Pointer {
+    arena: u64,
     id: u64,
     offset: usize,
 }
 impl Pointer {
     pub fn offset(self, n: usize) -> Result<Self, Error> {
         Ok(Self {
+            arena: self.arena,
             id: self.id,
             offset: self.offset.checked_add(n).ok_or(Error::Bounds)?,
         })
@@ -34,19 +38,34 @@ struct Object {
     protected: bool,
 }
 pub struct Memory {
+    arena: u64,
     bytes: [u8; STORAGE],
     initialized: [bool; STORAGE],
     objects: [Option<Object>; OBJECTS],
     next_id: u64,
 }
-impl Default for Memory {
-    fn default() -> Self {
-        Self {
+impl Memory {
+    pub fn new() -> Result<Self, Error> {
+        let mut arena = NEXT_ARENA.load(Ordering::Relaxed);
+        loop {
+            let next = arena.checked_add(1).ok_or(Error::Capacity)?;
+            match NEXT_ARENA.compare_exchange_weak(
+                arena,
+                next,
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+            ) {
+                Ok(_) => break,
+                Err(current) => arena = current,
+            }
+        }
+        Ok(Self {
+            arena,
             bytes: [0; STORAGE],
             initialized: [false; STORAGE],
             objects: [None; OBJECTS],
             next_id: 1,
-        }
+        })
     }
 }
 impl Memory {
@@ -80,9 +99,16 @@ impl Memory {
             protected,
         });
         self.next_id = next;
-        Ok(Pointer { id, offset: 0 })
+        Ok(Pointer {
+            arena: self.arena,
+            id,
+            offset: 0,
+        })
     }
     pub fn release(&mut self, p: Pointer) -> Result<(), Error> {
+        if p.arena != self.arena {
+            return Err(Error::Stale);
+        }
         if p.offset != 0 {
             return Err(Error::Bounds);
         }
@@ -97,6 +123,9 @@ impl Memory {
         Ok(())
     }
     fn span(&self, p: Pointer, size: usize) -> Result<Range<usize>, Error> {
+        if p.arena != self.arena {
+            return Err(Error::Stale);
+        }
         let o = self
             .objects
             .iter()
@@ -111,6 +140,11 @@ impl Memory {
             return Err(Error::Bounds);
         }
         Ok(o.start + p.offset..o.start + end)
+    }
+    pub fn invalidate(&mut self, p: Pointer, size: usize) -> Result<(), Error> {
+        let r = self.span(p, size)?;
+        self.initialized[r].fill(false);
+        Ok(())
     }
     pub fn read(&self, p: Pointer, size: usize) -> Result<&[u8], Error> {
         let r = self.span(p, size)?;
@@ -167,8 +201,21 @@ impl Memory {
 mod tests {
     use super::*;
     #[test]
+    fn foreign_arena_pointer_never_aliases_matching_allocation_number() {
+        let mut a = Memory::new().unwrap();
+        let mut b = Memory::new().unwrap();
+        let p = a.allocate(4, false).unwrap();
+        let q = b.allocate(4, false).unwrap();
+        a.put_word(p, 7).unwrap();
+        b.put_word(q, 9).unwrap();
+        assert_eq!(b.word(p), Err(Error::Stale));
+        assert_eq!(a.write(q, &[0]), Err(Error::Stale));
+        assert_eq!(b.release(p), Err(Error::Stale));
+        assert_eq!(b.word(q), Ok(9));
+    }
+    #[test]
     fn byte_word_alias_and_unknown_tail() {
-        let mut m = Memory::default();
+        let mut m = Memory::new().unwrap();
         let p = m.allocate(8, false).unwrap();
         m.write(p, &[0x12, 0x34, 0x56]).unwrap();
         assert_eq!(m.word(p), Err(Error::Uninitialized));
@@ -180,7 +227,7 @@ mod tests {
     }
     #[test]
     fn ownership_reuse_protection_complete_bounds_and_aliases() {
-        let mut m = Memory::default();
+        let mut m = Memory::new().unwrap();
         let p = m.allocate(8, false).unwrap();
         let q = m.allocate(4, true).unwrap();
         assert_eq!(m.write(q, &[1]), Err(Error::Protected));
@@ -196,7 +243,7 @@ mod tests {
     }
     #[test]
     fn external_failure_and_short_success_never_initialize_unknown_bytes() {
-        let mut m = Memory::default();
+        let mut m = Memory::new().unwrap();
         let p = m.allocate(8, false).unwrap();
         m.write(p, &[9; 8]).unwrap();
         assert_eq!(
@@ -221,7 +268,7 @@ mod tests {
     }
     #[test]
     fn allocation_caps_and_one_past_zero_length() {
-        let mut m = Memory::default();
+        let mut m = Memory::new().unwrap();
         let p = m.allocate(STORAGE, false).unwrap();
         assert_eq!(m.allocate(1, false), Err(Error::Capacity));
         assert_eq!(m.read(p.offset(STORAGE).unwrap(), 0), Ok(&[][..]));

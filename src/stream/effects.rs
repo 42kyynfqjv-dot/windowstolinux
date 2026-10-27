@@ -69,6 +69,7 @@ pub fn read_file<B: Backend>(
     m.pair(p, n, count)?;
     m.put_word(count, 0)?;
     if !valid {
+        m.invalidate(p, n)?;
         return Ok(Effect::fail(INVALID_HANDLE));
     }
     // A zero-byte request is successful, not evidence of EOF.
@@ -134,7 +135,7 @@ mod tests {
         }
     }
     fn setup() -> (Memory, Pointer, Pointer) {
-        let mut m = Memory::default();
+        let mut m = Memory::new().unwrap();
         let p = m.allocate(8, false).unwrap();
         let c = m.allocate(4, false).unwrap();
         (m, p, c)
@@ -210,6 +211,7 @@ mod tests {
             Ok(Effect::fail(6))
         );
         assert_eq!(b.calls, 3);
+        assert_eq!(m.read(p, 1), Err(Error::Uninitialized));
     }
     #[test]
     fn excessive_backend_progress_rejects_not_clamps() {

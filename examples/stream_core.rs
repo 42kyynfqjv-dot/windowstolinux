@@ -10,7 +10,7 @@ use std::io::{Read, Write};
 // Independent authored consumer of the memory/API effect component. Kept separate
 // from production so these comparisons cannot silently grant PE admission.
 pub fn component<B: Backend>(backend: &mut B, kind: Kind) -> Result<u8, Error> {
-    let mut m = Memory::default();
+    let mut m = Memory::new()?;
     let buf = m.allocate(256, false)?;
     let count = m.allocate(4, false)?;
     let written = m.allocate(4, false)?;
