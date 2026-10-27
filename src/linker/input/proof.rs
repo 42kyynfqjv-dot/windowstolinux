@@ -581,7 +581,7 @@ pub(super) fn prove(graph: Graph, entry: u32) -> Result<Proven, String> {
             Op::Call(t) => {
                 need(
                     s.calls == 1
-                        && s.frames.len() < 4
+                        && s.frames.len() < super::MAX_ACTIVATIONS
                         && t != entry
                         && !s.frames.iter().any(|f| f.target == t),
                     "input: internal call context",
