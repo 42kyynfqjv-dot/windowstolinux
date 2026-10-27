@@ -33,3 +33,10 @@ class Evidence(unittest.TestCase):
             inventory(b, '00401234: C3 ret\n00401234: C3 ret', h)
         with self.assertRaises(struct.error):
             inventory(b'', '', hashlib.sha256(b'').hexdigest())
+
+    def test_relative_target_ignores_symbol_and_adjacent_thunks(self):
+        b = self.sample()
+        text = '00401234: E9 07 00 00 00     jmp _symbol\n00401239: E9 FF FF FF FF     jmp unrelated\n00401240: C3                 ret'
+        r = inventory(b, text, hashlib.sha256(b).hexdigest())
+        self.assertEqual([x['va'] for x in r['excerpts']], ['0x401234', '0x401240'])
+        self.assertEqual(len(r['excerpts'][0]['lines']), 1)

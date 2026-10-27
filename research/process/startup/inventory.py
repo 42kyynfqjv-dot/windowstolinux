@@ -39,12 +39,19 @@ def inventory(data, disassembly, expected_hash):
         if target not in addresses:
             excerpts.append({'va': hex(target), 'missing': True})
             continue
-        window = lines[addresses[target]:addresses[target]+64]
+        window = []
+        for line in lines[addresses[target]:addresses[target]+64]:
+            window.append(line)
+            m = re.match(r'\s*([0-9A-Fa-f]{8}): ((?:[0-9A-Fa-f]{2} )+)', line)
+            if not m:
+                continue
+            raw = bytes.fromhex(m[2])
+            va = int(m[1], 16)
+            if len(raw) == 5 and raw[0] in (0xe8, 0xe9):
+                pending.append((va+5+int.from_bytes(raw[1:], 'little', signed=True)) % 2**32)
+            if raw[0] in (0xc3, 0xc2, 0xe9, 0xeb):
+                break
         excerpts.append({'va': hex(target), 'lines': window})
-        for line in window:
-            m = re.search(r'\b(?:call|jmp)\s+([0-9a-fA-F]{8})\b', line)
-            if m:
-                pending.append(int(m[1], 16))
     return dict(kind='static excerpts; no reachability or effect closure',
                 pe_sha256=digest, entry_rva=hex(entry), preferred_base=hex(base),
                 excerpts=excerpts, capped=bool(pending), emission_allowed=False)
