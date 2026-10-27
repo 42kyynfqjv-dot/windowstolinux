@@ -658,6 +658,8 @@ jobs:
             ${{ runner.temp }}/rcedit-corpus/report.json
             ${{ runner.temp }}/rcedit-corpus/*.txt
             ${{ runner.temp }}/rcedit-corpus/rcedit.exe
+            ${{ runner.temp }}/rcedit-corpus/fixture/fixture.exe
+            ${{ runner.temp }}/rcedit-corpus/cases/*/target.exe
           if-no-files-found: warn
   rcedit-native:
     runs-on: ubuntu-latest
