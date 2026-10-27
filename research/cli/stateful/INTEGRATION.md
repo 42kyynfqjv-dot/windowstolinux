@@ -104,7 +104,7 @@ are development evidence; cross-host conversion identity requires final-commit C
 Windows Server 2025 does not establish XP/7 support. Stable synchronous regular
 files/byte pipes, valid stack and no concurrent mutation remain assumptions.
 Ordinary CRT, general applications, PE32+, devices and asynchronous I/O remain
-unsupported. Six historical original-Windows timeout causes remain unresolved.
+unsupported. Seven original-Windows timeout occurrences remain unresolved (including the new case below).
 
 Development CI at909daa1 (run40452176178) failed on Windows tabs O1 at the inner
 backedge invariant query (resource exhaustion); the same graph had passed locally.
@@ -112,3 +112,18 @@ The failure remains recorded, not retried as acceptance. Subsequent proof encodi
 uses exact guarded finite AND results and removes a redundant overflow alternative
 for AND, whose result is always within u32. Solver budgets stay unchanged; both
 hosts must pass the new final commit.
+
+### Additional original-Windows launch failure
+
+Run40452702063 at6f7126c independently failed the older authored corpus at case12
+on Windows Server2025, image win25-vs2026/20261021.278.1. The retained executable
+SHA256 is05467e738deb03223e2878330d9071435ba6134940b18c5af5aa36653af71a3f;
+artifact12711026676 (`corpus-launch-evidence`) contains the exact program, outputs
+and case-12/launch.json. Expected and actual stdout were433132 (`C12`), stderr
+empty. Spawn took0.01233s; process.poll() was still None after15s; kill completed
+with exit1. This resembles the earlier full-output/process-still-running symptoms
+but identifies neither a common cause nor a resolved runner defect. The18 launch
+probes had passed immediately beforehand. No retry/timeout increase/suppression
+was added; this workflow failed. A later passing run does not explain the cause.
+The failure is independent of the converter's stateful graph changes, but remains
+part of the project's unresolved original-Windows validation reliability gap.

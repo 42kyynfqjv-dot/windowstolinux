@@ -36,7 +36,7 @@ Compiler-produced PEs remain untouched. Every accepted conversion must match PE
 hash, generated Rust and actual output/stderr/exit across Windows/Linux. Rejections
 must preserve the output sentinel and match across hosts. Inventory all instructions
 and sections before choosing one cohesive next architecture gate. Windows Server
-2025 does not validate XP/7; six historical launch timeouts remain unexplained.
+2025 does not validate XP/7; seven launch timeouts remain unexplained; the latest evidence is recorded in INTEGRATION.md.
 
 See [measured outcomes and integrated next gate](RESULTS.md). Accepted emitted
 programs also run the24 frozen backend scenarios; these are separately counted.

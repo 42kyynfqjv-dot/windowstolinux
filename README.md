@@ -27,7 +27,8 @@ builds through reusable scalar semantics and checked weighted loop invariants.
 actual Windows/ELF comparisons, scripted effects and native partition tests.
 Reviewed streaming work through SUB-569 is merged. This slice requires final CI
 and substantive review before merge. Z3 is compiler-only; generated binaries
-require neither Z3 nor Wine. Earlier paragraphs below are historical checkpoints.
+require neither Z3 nor Wine. Seven original-Windows launch timeout occurrences
+remain unexplained. Earlier paragraphs below are historical checkpoints.
 
 
 Reviewed work is merged through SUB-561. SUB-562's cohesive
