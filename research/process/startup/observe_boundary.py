@@ -17,6 +17,12 @@ CASES = [('filter_callback',0x47cfc0,23,None),
          ('thread_stack_validation',0x47cceb,7,'prefix'),
          ('floating_point_state',0x4f4168,4,'unsupported instruction Stmxcsr')]
 
+def verify_callback(stdout):
+    rows = [line for line in stdout.splitlines() if line.startswith('0047cfd0 ')]
+    if (len(rows) != 1 or 'operation: Call(' not in rows[0]
+            or not rows[0].endswith('successors: [4706258] }')):
+        raise ValueError('callback successor changed; re-review boundary')
+
 def main(root, decoder):
     data = (root/'rcedit.exe').read_bytes()
     if hashlib.sha256(data).hexdigest() != PIN:
@@ -41,8 +47,7 @@ def main(root, decoder):
                 raise ValueError('expected structural-only callback graph')
             # CALL ECX at +16 has only ordinary fallthrough +18. This is the
             # concrete shape being measured, not a claim that it is sufficient.
-            if 'successors: [4706258]' not in stdout: # 0x47cfd2
-                raise ValueError('callback successor changed; re-review boundary')
+            verify_callback(stdout)
         elif result.returncode != 1 or rejection not in stderr:
             raise ValueError('expected explicit unsupported boundary')
     print(json.dumps(report,indent=2))

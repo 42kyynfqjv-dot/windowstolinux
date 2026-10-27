@@ -15,6 +15,13 @@ executes independent Windows programs and uses the real production decoder on
 unchanged original byte slices. It does not execute the original handler on Linux.
 No new translated pairs, complete handler CFG, or full rcedit support are claimed.
 
+Medium review clarification: a CALL node's ordinary successor is not by itself
+proof that an IR cannot support exceptions. Exceptional effects can be composed
+outside a local CFG. The gap established here is the absence of that composition
+in the inspected binding, emitter, checked-fault and startup interfaces together.
+The probes demonstrate required behavior; source inspection establishes the
+current implementation gap. They do not mandate one particular IR representation.
+
 ## Reproducible evidence
 
 Commit `e9c32e7f51f3cd5657c7ab2afac8ac63f346ba98`, dedicated workflow
@@ -144,6 +151,11 @@ boundary with explicit effects shared by lifting, proof and emitted code:
    collided events and notification writes. Never drop live records first and then
    reauthorize their stale pointers to run cleanup. Unknown destructor targets or
    nested effects keep conversion blocked.
+   Distinguish scope retirement from activation retirement: one activation can
+   contain several cleanup scopes and the selected handler. Finish each required
+   scope in order before retiring an abandoned activation; retain the selected
+   activation and its surviving locals. Restore original saved registers, numeric
+   ESP/EBP and FS chain according to lifted operations, not a blanket caller reset.
 5. **Native lowering:** emit only recovered original basic blocks and bounded,
    proven successor dispatch. This can be a Rust state machine over compiled
    blocks; it must not fetch/decode arbitrary PE bytes at runtime. No Wine or AI
@@ -170,3 +182,34 @@ branches, original loader state, debugger/async interactions or all nested fault
 Previous original-Windows timeouts remain unexplained and retained; no retry or
 threshold change is part of this work. Modern Windows evidence is not XP/7 or
 ordinary third-party application compatibility.
+
+## Reviewed next Astra implementation contract
+
+Implement the shared effect boundary in the real decoder/binding/proof/emitter
+path, then compose it with checked startup state in this same PR. Deliver the
+following as one integrated change, with reviewable commits:
+
+- Lower original calls, returns and proven indirect transfers with activation
+  identities and finite continuation targets. Preserve per-register known bits,
+  initialized stack ranges, protected return slots and borrowed capabilities.
+- Introduce owned event/context state and distinct return, search, selected unwind,
+  resume and terminal outcomes. Language filter -1/0/1 and raw dispatcher
+  dispositions must have separate typed contracts. Validate context fields under
+  ContextFlags, thread/frame generations, target boundaries and continuability.
+- Execute cleanup scopes while storage remains live; invalidate abandoned-frame
+  capabilities only after their last required cleanup. Preserve the selected
+  frame, module notification writes and actual register/stack restoration.
+- Bind original scope/helper targets and API effects through shared rules. Reject
+  unclosed RtlUnwind, nested/collided unwind, floating-point, loader-frame or
+  destructor effects. A rejecting intermediate commit may be useful, but final
+  acceptance needs the composed original-instruction path and observable native
+  execution, not another component-only model.
+- Reuse frozen probes as behavioral oracles and add independent multi-scope,
+  saved-register, wrong-thread, stale-context, noncontinuable, cleanup-fault and
+  unknown-target cases. Compare unchanged PE/Rust hashes, output/exit and relevant
+  state. A smaller execution slice must be labeled as such; whole-PE startup
+  admission requires complete original entry/dependency closure.
+
+No new external resource or user decision blocks that implementation. The
+architectural finding requires substantive Astra work; the current PR remains
+draft until its integrated acceptance gates actually pass.
