@@ -210,6 +210,22 @@ impl Space {
     pub fn validate(&self, cap: Capability, owner: Owner) -> Result<(), Fault> {
         self.token(cap, owner).map(|_| ())
     }
+    /// Check identity and complete range without claiming bytes initialized or
+    /// granting access permissions. Used before formation of owned destinations.
+    pub fn validate_range(
+        &self,
+        cap: Capability,
+        owner: Owner,
+        address: u32,
+        size: u32,
+    ) -> Result<(), Fault> {
+        let i = self.token(cap, owner)?;
+        let (j, _) = self.locate(address, size)?;
+        if i != j {
+            return Err(Fault::Identity);
+        }
+        Ok(())
+    }
     pub fn release(&mut self, cap: Capability, owner: Owner) -> Result<(), Fault> {
         let i = self.token(cap, owner)?;
         self.bytes -= self.regions.remove(i).bytes.len();

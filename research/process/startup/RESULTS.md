@@ -56,3 +56,25 @@ model tests are retained; this is one new regression, not fourteen new tests.
 Production converter code is unchanged. No Windows probe source or expectation was
 modified. The contract now explicitly lists missing stack/module/permission classes
 and initial-state/initialized-record premises before production admission.
+# Byte-backed component follow-through (SUB-579 still In Progress)
+
+See BYTES.md for the new Rust checked-memory component and its fourteen independent
+component tests. It validates actual record/guard bytes, module cookie versions,
+stack ownership and explicit API output footprints. It does not translate startup,
+execute handlers or admit rcedit; zero new PE/ELF pairs are claimed. Full local and
+remote verification for the new head is recorded in PR #45 and SUB-579.
+
+The previously pending eae1a44 full runs both failed in original Windows launches:
+
+- PR run 40583601918: `output-probe.exe` exceeded the unchanged 15-second deadline
+  before imported/corpus comparisons ran. Its old direct subprocess launcher did
+  not retain process-state diagnostics. The current change routes it through the
+  existing tested launch evidence helper and always uploads its evidence.
+- Push run 40583591190: corpus case 8 timed out at 15 seconds, PE SHA256
+  `960c94ad7ad94ae059c4ee177ea7dc7f3ad29c2cd1794a321b636d0e7d17fca5`;
+  retained `corpus-launch-evidence` artifact 12771145283. Case 6 passed in this run.
+
+All eight other jobs passed in each run; dedicated startup run 40583591034 passed.
+These failures differ from earlier case 6 and the prior compiler-build timeout.
+No root cause is established, no retries or threshold increases were introduced,
+and improved diagnostics are not represented as fixing the timeout.

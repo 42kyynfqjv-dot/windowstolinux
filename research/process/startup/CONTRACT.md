@@ -7,6 +7,11 @@ frozen Windows probes, not a production dispatcher, native startup replacement,
 or utility conversion. The original rcedit entry and all production rejections
 remain intact. No Windows kernel or driver instructions are implemented.
 
+Follow-through: [BYTES.md](BYTES.md) documents the isolated native byte-backed
+component, its checked-memory integration and fourteen Rust tests. The Python
+prototype described below remains independent and retains its rejection regression.
+The component still has no startup admission or exception-dispatch authority.
+
 ## Evidence and provenance
 
 DECISION.md binds the unchanged source-built artifact and concrete entry sequence.
