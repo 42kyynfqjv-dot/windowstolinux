@@ -468,12 +468,28 @@ jobs:
           name: memory-conformance-windows
           path: memory-conformance
       - name: Compare checked-memory conformance artifacts
-        run: python3 research/process/conformance/check_native.py memory-conformance
+        run: |
+          python3 research/process/conformance/check_native.py memory-conformance
+          python3 research/process/conformance/check_safety.py memory-conformance
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: memory-conformance-native
-          path: memory-conformance/native.json
+          path: |
+            memory-conformance/native.json
+            memory-conformance/safety.json
+          if-no-files-found: warn
+      - uses: actions/download-artifact@v4
+        with:
+          name: cli-measurement
+          path: cli-original-evidence
+      - name: Preserve frozen original CLI pipe-EOF error semantics
+        run: python3 research/cli/check_native.py cli-original-evidence
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cli-original-native
+          path: cli-original-evidence/native.json
           if-no-files-found: warn
       - uses: actions/download-artifact@v4
         with:

@@ -1,4 +1,4 @@
-"""Windows-only original measurement; no converter support changes."""
+"""Frozen v1 baseline: preserve original pipe-EOF error11 if conversion succeeds."""
 import hashlib,json,os,platform,subprocess,sys,time
 from pathlib import Path
 src=Path(__file__).resolve().parent;repo=src.parents[1];out=Path(sys.argv[1]).resolve();out.mkdir(exist_ok=True,parents=True)
@@ -39,9 +39,11 @@ for config,flags in m['configurations'].items():
  row['write_failure']=dict(exit=p.returncode,destination_after_hex=path.read_bytes().hex(),stderr_hex=p.stderr.hex());assert path.read_bytes()==b'a'
  target=out/(stem+'.rs');target.write_text('preserve')
  p=run([str(repo/'target/debug/w2l.exe'),str(pe),str(target)])
- assert p.returncode==1 and target.read_text()=='preserve'
- row['conversion']=dict(accepted=False,error=p.stderr.decode());assert sha(pe)==row['pe_sha256'];save(out/'report.json',report)
+ row['conversion']=dict(accepted=p.returncode==0,error=p.stderr.decode())
+ if p.returncode==0:row['conversion']['rust_sha256']=sha(target)
+ else:assert p.returncode==1 and target.read_text()=='preserve'
+ assert sha(pe)==row['pe_sha256'];save(out/'report.json',report)
 p=run(['cl','/nologo','/W4','/O2',str(src/'probe.c'),'/Fe:probe.exe'],cwd=out);(out/'probe-build.txt').write_bytes(p.stdout+p.stderr);assert p.returncode==0
 p=run([str(out/'probe.exe')]);assert p.returncode==0;pout=p.stdout.decode();(out/'probe-results.txt').write_text(pout)
 report['scripted_probe']=dict(cases=8,source_sha256=sha(src/'probe.c'),kind='substituted API backend, not original program baseline');save(out/'report.json',report)
-print('CLI MEASUREMENT:2 unchanged PEs;22 regular-file cases;2 pipe EOF cases;4 real I/O failures;8 scripted API cases;production rejected')
+print('CLI MEASUREMENT:2 unchanged PEs;22 regular-file cases;2 pipe EOF cases;4 real I/O failures;8 scripted API cases;conversion outcomes recorded (v1 pipe EOF remains error11)')

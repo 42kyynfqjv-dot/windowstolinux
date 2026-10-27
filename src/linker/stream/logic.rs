@@ -528,6 +528,27 @@ impl Builder<'_> {
             Ok(Value::Frame(Some(at))) => Some(at),
             _ => None,
         };
+        // A displacement is not an object identity. For an indexed address it
+        // is only a lower bound: scalar index values are unsigned and scales
+        // positive in this domain. Retain every region ending above that bound,
+        // then prove the FULL address/initialized range in coverage. This also
+        // handles a displacement in preceding padding, not just an unmapped gap.
+        // Count cells/protected slots are excluded when regions are constructed.
+        if a.index.is_some() {
+            // A zero-bias region start keeps the existing narrower proof search.
+            // This is a conservative candidate restriction, NOT an assumption:
+            // crossing into a different region still fails full coverage. Using
+            // every later region here needlessly enlarges unrelated loop states.
+            if let Some(r) = self.regions.iter().find(|r| Some(r.base) == at) {
+                return vec![*r];
+            }
+            return self
+                .regions
+                .iter()
+                .copied()
+                .filter(|r| at.is_none_or(|at| at < r.base + r.cap as i32))
+                .collect();
+        }
         let selected: Vec<_> = self
             .regions
             .iter()

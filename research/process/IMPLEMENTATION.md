@@ -75,7 +75,13 @@ These are memory conformance programs, not independently developed third-party
 utilities or general heap allocation tests. Windows observations precede conversion;
 Linux consumes exactly their hashed PE files, compares deterministic Rust and runs
 accepted results. Rejected programs retain exact diagnostics and untouched output.
-See `conformance/RESULTS.md` after CI for actual outcomes; no pending run is counted.
+See `conformance/RESULTS.md` for observed outcomes and the initial failures; no
+pending run is counted. Indexed constant anchors are now candidate lower bounds,
+not object identities: complete runtime-effective-address bounds/initialization
+remain mandatory. Zero-bias anchors preserve conservative single-region proof
+search. Five unsafe compiled-artifact mutations and two solver-budget checks guard
+this generalization. The historical uppercase-v1 harness now verifies its actual
+translated pipe-EOF error11 rather than assuming incidental import rejection.
 
 Reproduce with `cargo test --locked`, `cargo clippy --all-targets --locked -- -D warnings`,
 `python3 research/process/check_memory.py`, Windows `conformance/measure.py OUT`,
