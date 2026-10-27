@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "programs": [
+    "stream",
+    "record"
+  ],
+  "configurations": {
+    "O2": [
+      "/O2"
+    ]
+  },
+  "compile_flags": [
+    "/nologo",
+    "/Bv",
+    "/W4",
+    "/GS-",
+    "/Zl",
+    "/c"
+  ],
+  "link_flags": [
+    "/nologo",
+    "/machine:x86",
+    "/subsystem:console",
+    "/nodefaultlib",
+    "/entry:entry@0"
+  ],
+  "libraries": [
+    "kernel32.lib"
+  ],
+  "sha256": {
+    "stream.c": "bd2b506cad49f80b44d872223e69541e42eac2b61b200fe6d94eb2328d071e2f",
+    "record.c": "f912352f2d29d60e43eea1c7dc4285ae78a66d1847989dc7f761dff4fb52bd22",
+    "cases.json": "8062c2d42ad45ca475210d9b98f10caf7a36b4aa473cab78589a133d94b889e5"
+  },
+  "scope": "Frozen heap API buffer/scalar-field conformance, custom entry; utility startup remains unsupported."
+}
