@@ -26,6 +26,12 @@ jobs:
           python3 -m venv /tmp/w2l-proof-env
           /tmp/w2l-proof-env/bin/pip install --require-hashes --no-deps -r research/cli/v2/proof/requirements.txt
           /tmp/w2l-proof-env/bin/python research/cli/v2/proof/obligations.py > /tmp/w2l-proof-results.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: stream-proof-domain
+          path: /tmp/w2l-proof-results.json
+          if-no-files-found: warn
       - run: cargo test --locked --example stream_core
       - run: cargo test --locked --example stream_graph
       - run: cargo test --locked --example bounded_input
