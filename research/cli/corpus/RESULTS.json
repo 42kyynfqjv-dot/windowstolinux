@@ -1,0 +1,70 @@
+{
+  "evidence_run": 40437531308,
+  "evidence_commit": "be7354bcaf57888c88aaa4e845ff89392f020adb",
+  "freeze_commit": "d4abc13",
+  "platform": "Windows-2025Server-10.0.26100-SP0",
+  "windows_processes": 174,
+  "translated_programs": 0,
+  "programs": [
+    {
+      "name": "rot13",
+      "config": "O1",
+      "pe_sha256": "932c4b725fdf5fd358b14d65c5145b45f60a75ebc7af92456cf7731e6933c05d",
+      "source_sha256": "d516f965ecc70f0c250084dbc3280a09861a90f119d6efc2d2e9e5137476691b",
+      "conversion": {
+        "exit": 1,
+        "stderr": "w2l: 000010ec: stream: unsupported instruction Neg\n"
+      }
+    },
+    {
+      "name": "rot13",
+      "config": "O2",
+      "pe_sha256": "054d10c506f87ff2b1185e645a2f1e00d52fdb219dcb585fed7308ae8bbcefb5",
+      "source_sha256": "d516f965ecc70f0c250084dbc3280a09861a90f119d6efc2d2e9e5137476691b",
+      "conversion": {
+        "exit": 1,
+        "stderr": "w2l: 00001122: stream: unsupported instruction Neg\n"
+      }
+    },
+    {
+      "name": "xor",
+      "config": "O1",
+      "pe_sha256": "dd2703432c615ec8bcd524a856e6bf4fa592516e98969e35fbd1598b03f1c7aa",
+      "source_sha256": "2c7df58df4bf042aae0589421964ab384ed8786d132c91760868337321c02fb5",
+      "conversion": {
+        "exit": 1,
+        "stderr": "w2l: 000010be: stream: unsupported instruction Neg\n"
+      }
+    },
+    {
+      "name": "xor",
+      "config": "O2",
+      "pe_sha256": "9821826035268bea4d26f2b3b7563de8fe0f7aa531e9af1934e116d4f340a485",
+      "source_sha256": "2c7df58df4bf042aae0589421964ab384ed8786d132c91760868337321c02fb5",
+      "conversion": {
+        "exit": 1,
+        "stderr": "w2l: 000010f9: stream: unsupported instruction Neg\n"
+      }
+    },
+    {
+      "name": "compact",
+      "config": "O1",
+      "pe_sha256": "3a973e3857f5cf55957a5beaea31b1cf3f2cf1663cd3cd51fb5b3455e522d06d",
+      "source_sha256": "11411a938272fc4a5de2124c9a6a2c8192411e55e16bd6ccfab88293720ea303",
+      "conversion": {
+        "exit": 1,
+        "stderr": "w2l: 000010d0: stream: unsupported instruction Neg\n"
+      }
+    },
+    {
+      "name": "compact",
+      "config": "O2",
+      "pe_sha256": "7d823753b968a8137d147ffd6234e326bc5936e7f1d64c1f84a7436748581280",
+      "source_sha256": "11411a938272fc4a5de2124c9a6a2c8192411e55e16bd6ccfab88293720ea303",
+      "conversion": {
+        "exit": 1,
+        "stderr": "w2l: 00001105: stream: unsupported instruction Neg\n"
+      }
+    }
+  ]
+}
