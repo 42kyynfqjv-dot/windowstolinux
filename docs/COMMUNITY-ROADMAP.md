@@ -32,8 +32,10 @@ additions around a meaningful gap; large raw case counts are not compatibility.
 | [#40: Wine failure reproduction](https://github.com/42kyynfqjv-dot/windowstolinux/issues/40) | Same-version Windows/Wine GUI behavior, package/asset provenance and disposable isolation. WinMerge deletion is a reported feature failure, not a verified current failure or unrunnable app. |
 | [#41: future device backend](https://github.com/42kyynfqjv-dot/windowstolinux/issues/41) | Handle/device identity, operation/buffer contracts, errors, async/cancellation, privileges and lifetime. Mock-only design; no kernel/hardware operations. |
 
-Maintainer engineering currently integrates shared checked storage under existing
-proof/admission gates (SUB-576 / [PR #37](https://github.com/42kyynfqjv-dot/windowstolinux/pull/37)).
+Shared checked storage is merged under existing proof/admission gates
+(SUB-576 / [PR #37](https://github.com/42kyynfqjv-dot/windowstolinux/pull/37)).
+Current SUB-577 [draft PR #43](https://github.com/42kyynfqjv-dot/windowstolinux/pull/43)
+adds bounded heap effects and conformance; heap PE translation is still blocked.
 Process-address composition, module startup and API effects need reviewed contracts
 before widening support. Discuss those interfaces instead of building parallel
 application-specific loaders. Public issues are the contribution queue; Linear

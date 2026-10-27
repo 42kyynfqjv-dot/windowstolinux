@@ -24,15 +24,17 @@ Exact unprefixed `A1 moffs32` loads EAX from four validated immutable data bytes
 Want to contribute? See the [public roadmap and initial issues](docs/COMMUNITY-ROADMAP.md)
 and [contribution guide](CONTRIBUTING.md). Fork, submit a PR, and maintainers review.
 
-Current active work: SUB-576 integrates a reusable checked-memory core into
-proved streaming-frame accesses. [Contract and conformance gates](research/process/IMPLEMENTATION.md)
-separate byte definedness, read freshness and process-bound proof identity.
-Work through SUB-575 is reviewed and merged, including LLVM streaming validation
-and original ISCC/rcedit measurements. Neither third-party utility translates yet;
-ordinary CRT startup and general process/API composition remain blocked.
-Z3 is compiler-only; generated binaries require neither Z3 nor Wine. Eight
-historical original-Windows launch timeouts remain unexplained. Earlier status
-paragraphs below are historical checkpoints.
+Current active work: SUB-577 adds [bounded shared heap effects](research/process/heap/CONTRACT.md)
+with independently frozen Windows conformance and separately labelled native component
+comparisons. Heap PE translation remains blocked on typed ownership/outcome and numeric
+emission integration; component matches are not translated-program evidence.
+SUB-576 [checked-memory/frame integration](research/process/IMPLEMENTATION.md) and
+its timeout-diagnostic follow-up are reviewed and merged. LLVM streaming validation
+and original ISCC/rcedit measurements are retained; neither third-party utility
+translates yet. Ordinary CRT startup and general process/API composition remain blocked.
+Z3 is compiler-only; generated binaries require neither Z3 nor Wine. Eight earlier
+original-Windows launch timeouts plus a separate same-head diagnostic occurrence
+remain unexplained. Earlier status paragraphs below are historical checkpoints.
 
 
 Reviewed work is merged through SUB-561. SUB-562's cohesive
