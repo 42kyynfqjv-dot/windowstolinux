@@ -9,6 +9,32 @@ import subprocess
 import time
 
 
+def capture_process_state(pid, evidence):
+    """Read only the owned child's state after failure, before termination."""
+    if os.name == 'nt':
+        script = (
+            "$p=Get-Process -Id " + str(int(pid)) + " -ErrorAction Stop;"
+            "$threads=@($p.Threads | ForEach-Object {"
+            "$reason=$null;try{$reason=$_.WaitReason.ToString()}catch{};"
+            "[pscustomobject]@{id=$_.Id;state=$_.ThreadState.ToString();"
+            "wait_reason=$reason;start_address=$_.StartAddress.ToInt64()}});"
+            "[pscustomobject]@{id=$p.Id;name=$p.ProcessName;handles=$p.HandleCount;"
+            "cpu_seconds=$p.TotalProcessorTime.TotalSeconds;threads=$threads} | ConvertTo-Json -Depth 4"
+        )
+        command = ['powershell.exe', '-NoProfile', '-NonInteractive', '-Command', script]
+    else:
+        command = ['ps', '-p', str(int(pid)), '-o', 'pid,ppid,stat,etime,nlwp']
+    started = time.perf_counter()
+    try:
+        result = subprocess.run(command, capture_output=True, timeout=3)
+        (evidence / 'process-state.stdout').write_bytes(result.stdout)
+        (evidence / 'process-state.stderr').write_bytes(result.stderr)
+        return dict(exit=result.returncode, seconds=time.perf_counter()-started)
+    except Exception as error:
+        return dict(error=type(error).__name__ + ': ' + str(error),
+                    seconds=time.perf_counter()-started)
+
+
 def execute(command, stdout, stderr, evidence, identity, expected, timeout=15):
     evidence = Path(evidence)
     evidence.mkdir(parents=True, exist_ok=True)
@@ -34,7 +60,10 @@ def execute(command, stdout, stderr, evidence, identity, expected, timeout=15):
                 record['exit'] = process.wait(timeout=timeout)
             except subprocess.TimeoutExpired:
                 record.update(timeout=True, poll_at_timeout=process.poll(), wait_seconds=time.perf_counter()-wait)
-                save()  # Retain pre-kill state even if termination fails.
+                record['timeout_wait_seconds'] = record['wait_seconds']
+                save()  # Retain pre-kill state even if diagnostics/termination fail.
+                record['process_state_capture'] = capture_process_state(process.pid, evidence)
+                save()
                 process.kill()
                 record['exit_after_kill'] = process.wait(timeout=5)
                 raise

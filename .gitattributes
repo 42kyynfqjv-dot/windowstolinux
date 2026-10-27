@@ -42,3 +42,6 @@ research/cli/crlf/*.json text eol=lf
 research/cli/crlf/*.py text eol=lf
 research/cli/stateful/*.json text eol=lf
 research/cli/stateful/*.py text eol=lf
+# Frozen independent compiler workloads must retain their preregistered bytes.
+research/utilities/fixtures/*.iss text eol=lf
+research/utilities/fixtures/*.bin -text

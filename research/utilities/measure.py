@@ -3,7 +3,7 @@ from pathlib import Path
 import hashlib,json,os,platform,shutil,subprocess,sys,time
 here=Path(__file__).resolve().parent;repo=here.parents[1];out=Path(sys.argv[1]).resolve();payload=out/'payload';compiler=payload/'ISCC.exe';m=json.loads((here/'frozen.json').read_text());rows=[]
 sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()
-for name,digest in m['fixture_sha256'].items():assert sha(here/'fixtures'/name)==digest
+for name,digest in m['fixture_sha256'].items():assert sha(here/'fixtures'/name)==digest,(name,sha(here/'fixtures'/name),digest)
 report=dict(platform=platform.platform(),scope='official prebuilt release; not source-rebuilt; no translated execution',compiler_sha256=sha(compiler),cases=rows)
 def save(): (out/'report.json').write_text(json.dumps(report,indent=2)+'\n')
 def run(args,stage,cwd=None):

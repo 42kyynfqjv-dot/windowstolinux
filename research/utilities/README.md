@@ -99,3 +99,26 @@ reserved failure guides code, reclassify that case as development/regression and
 retain a fresh family for acceptance. First measure actual feasibility; select
 one cohesive reusable loader/runtime/memory/API prerequisite from the complete
 inventory. No kernel/driver, ordinary CRT, PE32+, general-app or XP/7 support claim.
+
+## Initial CI findings (preserved history)
+
+Run40518168120 at frozen commit622f07e prepared the official portable payload,
+then stopped before compiler observations because Git's Windows checkout changed
+`.iss` LF bytes to CRLF. Explicit eol=lf preserves the original preregistered bytes;
+fixture contents, hashes, command configurations and converter support are unchanged.
+No baseline is claimed from this failed preflight. Original ISCC.exe from that
+artifact has SHA256 f87212f64f08e0b57b53829c7441719cda73dffbfcfdcf851031b74ee0f9f2f8.
+Local intake of the untouched compiler rejects with `only code with optional
+read-only data is supported`; the output sentinel remains intact. This is a layout
+profile rejection, not evidence that subsequent Delphi/DLL/runtime semantics work.
+
+The same run preserved an eighth original-Windows timeout in authored corpus case2:
+PE31f21dbf8b0d49740b2f7379d84775eeb4cb457b298aae5f2e5fa8b6fe18b797,
+full expected stdout433032, empty stderr, poll=None after15.0085seconds;
+spawn0.00876seconds, killed exit1. Server2025 image20261021.278.1/Python3.12.10.
+Artifact12739229930 retains program/launch/stdout/stderr. The varying fixture and
+full-output/live-process pattern does not prove a common cause. Loader-thread or
+entry-return hypotheses remain unverified. Earlier seven causes remain unresolved.
+The launch harness now attempts a bounded, read-only owned-child process/thread
+snapshot BEFORE kill on future failures; diagnostic failure is recorded. This
+keeps the15second failure threshold and introduces no retries or timeout suppression.
