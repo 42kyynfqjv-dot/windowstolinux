@@ -460,20 +460,21 @@ mod tests {
                 );
             }
         }
-        for bytes in [
+        for mut bytes in [
             vec![0x66, 0x0f, 0xb6, 0xc1],
             vec![0x0f, 0xb6, 0xc4],
             vec![0x0f, 0xb7, 0xc1],
             vec![0x0f, 0xb6, 0x01],
             vec![0x0f, 0xb6, 0xe1],
-            vec![0x0f, 0xb6],
             vec![0x66, 0x0f, 0x47, 0xc1],
             vec![0x0f, 0x47, 0x01],
             vec![0x0f, 0x47, 0xe1],
             vec![0xf3, 0x0f, 0x47, 0xc1],
         ] {
+            bytes.push(0xc3); // A valid terminator prevents accidental rejection for a missing RET.
             assert!(decode(&bytes, 0, 0).is_err(), "{bytes:x?}");
         }
+        assert!(decode(&[0x0f, 0xb6], 0, 0).is_err());
     }
     #[test]
     fn conditional_move_exact_register_form_only() {

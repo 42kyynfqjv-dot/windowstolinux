@@ -39,9 +39,9 @@ with tempfile.TemporaryDirectory() as td:
   records.append(dict(config=opt,case='false-weighted-invariant',solver='sat'))
   p=run([str(repo/'target/debug/w2l'),str(root/f'tabs_{opt}.exe'),str(d/'out.rs')],env=dict(os.environ,W2L_Z3_RLIMIT='1'));assert p.returncode==1 and (d/'out.rs').read_text()=='preserve';records.append(dict(config=opt,case='solver-exhaustion',diagnostic=p.stderr.decode()))
   original=(root/f'fold_{opt}.exe').read_bytes();pe=struct.unpack_from('<I',original,60)[0];raw=struct.unpack_from('<I',original,pe+24+224+20)[0]
-  # Stack arithmetic makes ESP-dependent flags unknown; CMOVA must reject.
+  # Compare an unknown volatile scalar; following MOVZX must not invent flags.
   at=0xaa if opt=='O1' else 0xc2
   assert original[raw+at:raw+at+3]==(bytes.fromhex('80fb7a') if opt=='O1' else bytes.fromhex('80fa7a'))
-  changed=bytearray(original);changed[raw+at:raw+at+3]=bytes.fromhex('83c400');(d/'unsafe.exe').write_bytes(changed)
-  p=run([str(repo/'target/debug/w2l'),str(d/'unsafe.exe'),str(d/'out.rs')]);assert p.returncode==1 and (d/'out.rs').read_text()=='preserve';records.append(dict(config=opt,case='cmova-unknown-flags',diagnostic=p.stderr.decode()))
+  changed=bytearray(original);changed[raw+at:raw+at+3]=bytes.fromhex('39c190');(d/'unsafe.exe').write_bytes(changed)
+  p=run([str(repo/'target/debug/w2l'),str(d/'unsafe.exe'),str(d/'out.rs')]);assert p.returncode==1 and (d/'out.rs').read_text()=='preserve';records.append(dict(config=opt,case='cmova-unknown-flags',diagnostic=p.stderr.decode()));assert b'conditional move reads unknown' in p.stderr
 (root/'safety.json').write_text(json.dumps(records,indent=2)+'\n');print(f'{len(records)} negative checks; counts include mutated PEs, false invariant certificates and solver exhaustion')
