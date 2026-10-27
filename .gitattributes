@@ -57,3 +57,5 @@ research/process/heap/*.json text eol=lf
 research/process/heap/*.py text eol=lf
 research/process/buffers/*.json text eol=lf
 research/process/buffers/*.py text eol=lf
+research/process/startup/*.json text eol=lf
+research/process/startup/*.py text eol=lf
