@@ -1,0 +1,8 @@
+{
+  "closed_output_pipe": {
+    "input_hex": "617a00ff",
+    "exit": 12,
+    "stderr_hex": "",
+    "stdout": "unobservable: read endpoint closed before child launch"
+  }
+}

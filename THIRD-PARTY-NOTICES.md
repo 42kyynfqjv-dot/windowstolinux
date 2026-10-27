@@ -68,3 +68,14 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
+
+## Z3 4.15.4 (optional local compiler dependency for streaming admission)
+
+The stream verifier invokes the official Z3 4.15.4 executable. CI provisions
+z3-solver 4.15.4.0 with platform wheel checksums in
+`research/cli/v2/proof/requirements.txt`. No solver code or binary is embedded in
+generated Rust/ELF. The exact upstream MIT license is retained in
+[Z3-LICENSE.txt](research/cli/v2/proof/Z3-LICENSE.txt), from
+https://github.com/Z3Prover/z3/blob/z3-4.15.4/LICENSE.txt.
+Retain that notice if distributing Z3 with the compiler. Original implementation
+and runtime support remain MIT OR Apache-2.0.

@@ -31,3 +31,8 @@ research/input/postcall/*.py text eol=lf
 # Frozen CLI provenance must survive Windows checkout.
 research/cli/*.json text eol=lf
 research/cli/*.py text eol=lf
+research/cli/v2/*.json text eol=lf
+research/cli/v2/*.py text eol=lf
+# Runtime template is included verbatim in emitted Rust on both hosts.
+src/linker/stream/runtime.txt text eol=lf
+research/cli/v2/proof/* text eol=lf

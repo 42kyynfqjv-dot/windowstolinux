@@ -1,0 +1,56 @@
+{
+  "file_cases": [
+    "case0",
+    "case1",
+    "case2",
+    "case3",
+    "case4",
+    "case5",
+    "case6",
+    "case7",
+    "case8",
+    "case9",
+    "case10",
+    "multichunk_65535",
+    "multichunk_65536",
+    "multichunk_65537"
+  ],
+  "pipe_cases": [
+    "case0",
+    "case1",
+    "case2",
+    "case3",
+    "case4",
+    "case5",
+    "case6",
+    "case7",
+    "case8",
+    "case9",
+    "case10",
+    "multichunk_65535",
+    "multichunk_65536",
+    "multichunk_65537"
+  ],
+  "read_failure": {
+    "exit": 11,
+    "stdout_hex": "",
+    "stderr_hex": ""
+  },
+  "write_failure": {
+    "exit": 12,
+    "destination_after_hex": "61",
+    "stderr_hex": ""
+  },
+  "scripted_exits": [
+    0,
+    10,
+    11,
+    12,
+    13,
+    13,
+    14,
+    0,
+    11,
+    0
+  ]
+}
