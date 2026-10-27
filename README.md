@@ -21,6 +21,9 @@ Exact unprefixed `A1 moffs32` loads EAX from four validated immutable data bytes
 
 ## Status
 
+Want to contribute? See the [public roadmap and initial issues](docs/COMMUNITY-ROADMAP.md)
+and [contribution guide](CONTRIBUTING.md). Fork, submit a PR, and maintainers review.
+
 Current active work: SUB-576 integrates a reusable checked-memory core into
 proved streaming-frame accesses. [Contract and conformance gates](research/process/IMPLEMENTATION.md)
 separate byte definedness, read freshness and process-bound proof identity.

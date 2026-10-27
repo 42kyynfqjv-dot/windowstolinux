@@ -1,5 +1,14 @@
 # Roadmap
 
+For current public work and contribution gates, see the
+[community roadmap](docs/COMMUNITY-ROADMAP.md). The sections below preserve historical
+engineering checkpoints; issue/PR counts do not establish application compatibility.
+
+Current direction: reusable process-memory/startup/API contracts grounded in
+independent ISCC/rcedit inventories. Those utilities still reject conversion.
+SUB-576 checked-memory integration is in draft review; broader startup closure
+and a pinned current Wine failure remain separate evidence gates.
+
 - M0 foundation and M1 narrow modern-Windows PE32-to-native-ELF slice are merged.
 - M2 has bounded EAX arithmetic, four flags, forward conditions, direct calls/returns and one-word stack arguments;
   the strict iced adapter is integrated. General stack/data memory is still open.
