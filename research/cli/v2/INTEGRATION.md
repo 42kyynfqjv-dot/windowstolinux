@@ -187,3 +187,27 @@ of 12). Replaced both standard stream locks with owned, unbuffered File duplicat
 The permanent end-to-end component regression checks exit 12 and empty stderr;
 no flush-at-exit workaround or rewritten expected result. This illustrates why
 component API semantics must be validated before using them in emitted programs.
+
+### Continued production binding stage
+
+The production linker intake now accepts the exact four-name stream import set
+(independent of table order), validates the full ILT/IAT plus terminator, reserves
+all descriptors/names/tables against overlap, and binds relocated absolute IAT
+uses to function identities. Ordinals, duplicate names, unsupported names/DLLs,
+table aliases, mismatched thunks and unconsumed relocations reject.
+
+Function-token propagation uses a finite must-analysis over the normalized cyclic
+graph. Joins retain a function identity only when all incoming states agree;
+external calls invalidate volatile EAX/ECX/EDX tokens. The final converged states
+must resolve every register-held call. O1 binds five calls and O2 six. This proof
+covers function identity only, not arguments, stack shape, memory initialization,
+termination or behavioral equivalence. Both originals still reject emission with
+an explicit cyclic frame/epoch proof diagnostic.
+
+Four independent binding test functions cover preserved versus volatile tokens,
+conflicting and agreeing branch joins, relocation provenance, IAT writes and a
+cyclic call path. The five graph tests are also exercised through the production
+module; they are inherited tests, not five new independent cases. Root test count
+is now108 (99 previous +5 inherited graph +4 new binding). Twelve malformed import
+mutations across the two unchanged originals reject through production intake;
+the two originals reach the proof barrier with output files preserved.

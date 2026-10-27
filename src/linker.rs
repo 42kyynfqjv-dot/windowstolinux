@@ -35,6 +35,7 @@ struct Section {
 enum Api {
     Write,
     Environment,
+    Stream,
 }
 /// Private image context; translation validates every decoded path before emission.
 pub(crate) struct Candidate<'a> {
@@ -46,6 +47,7 @@ pub(crate) struct Candidate<'a> {
     metadata: Vec<(u32, u32)>,
     iat: u32,
     api: Api,
+    functions: std::collections::BTreeMap<u32, stream::Function>,
     pointers: std::collections::BTreeMap<u32, u32>,
 }
 impl<'a> Candidate<'a> {
@@ -154,6 +156,7 @@ impl<'a> Candidate<'a> {
             metadata: Vec::new(),
             iat: 0,
             api: Api::Write,
+            functions: Default::default(),
             pointers: Default::default(),
         };
         let mut next = rounded(headers)?;
@@ -259,6 +262,9 @@ impl<'a> Candidate<'a> {
                 && range(self.bytes, at + 20, 20)? == [0; 20],
             "linker import binding/terminator",
         )?;
+        if iat_dir == (self.iat, 20) {
+            return self.stream_imports(ilt, name);
+        }
         need(
             iat_dir == (self.iat, 8) && ilt.is_multiple_of(4) && self.iat.is_multiple_of(4),
             "linker IAT extent/alignment",
@@ -360,7 +366,7 @@ impl<'a> Candidate<'a> {
                 let dest = u32_at(self.bytes, offset)?
                     .checked_sub(self.base)
                     .ok_or("linker pointer below base")?;
-                if dest == self.iat {
+                if dest == self.iat || self.functions.contains_key(&dest) {
                     self.location(dest, 4, DATA)?;
                 } else {
                     self.immutable(dest, 1)?;
@@ -377,6 +383,7 @@ impl<'a> Candidate<'a> {
 }
 
 mod input;
+mod stream;
 mod translate;
 
 /// The capability can only be made by the checked, owned importless intake.
@@ -401,6 +408,7 @@ pub(crate) fn translate_importless(
         metadata: vec![],
         iat: 0,
         api: Api::Write,
+        functions: Default::default(),
         pointers: std::collections::BTreeMap::new(),
     }
     .translate()

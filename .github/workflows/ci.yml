@@ -288,6 +288,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'CLI v2 inventory failed' }
           cargo build --locked --example stream_graph
           if ($LASTEXITCODE -ne 0) { throw 'Stream graph build failed' }
+          python research/cli/v2/check_binding.py "$env:RUNNER_TEMP/w2l-cli-v2"
+          if ($LASTEXITCODE -ne 0) { throw 'Stream binding checks failed' }
           python research/cli/v2/check_components.py "$env:RUNNER_TEMP/w2l-cli-v2" --windows
           if ($LASTEXITCODE -ne 0) { throw 'Stream graph evidence failed' }
       - uses: actions/upload-artifact@v4
@@ -358,6 +360,7 @@ jobs:
       - name: Compare stream components and structural graphs (not PE translation)
         run: |
           cargo build --locked --example stream_graph --example stream_core
+          python3 research/cli/v2/check_binding.py cli-v2-evidence
           python3 research/cli/v2/check_components.py cli-v2-evidence
       - uses: actions/upload-artifact@v4
         if: always()

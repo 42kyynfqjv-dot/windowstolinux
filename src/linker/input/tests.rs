@@ -18,6 +18,7 @@ fn graph_at(program: &[u8], entry: u32) -> Graph {
     bytes.resize(512, 0);
     bytes.extend(b"W\0\x32\0L\0_\0I\0N\0P\0U\0T\0\0\0");
     let c = Candidate {
+        functions: Default::default(),
         bytes: &bytes,
         base: 0x400000,
         entry,
