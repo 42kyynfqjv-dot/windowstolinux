@@ -24,7 +24,9 @@ class Contracts(unittest.TestCase):
         with self.assertRaises(Reject):s.capability(old)
         with self.assertRaises(Reject):s.capability((new[0],new[1],'other',new[3]))
         self.assertEqual(s.read(0x1000,4),b'new!')
-        other=Space();foreign=other.map(0x1000,4,'heap')
+        other=Space();temporary=other.map(0x1000,4,'heap');other.release(temporary)
+        foreign=other.map(0x1000,4,'heap')
+        self.assertEqual(new[:3],foreign[:3])  # only process identity differs
         with self.assertRaises(Reject):s.capability(foreign)
 
     def test_reallocation_outcomes(self):
