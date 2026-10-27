@@ -752,8 +752,16 @@ impl Builder<'_> {
                     let ok = self.heap_coverage(site, &offset, &width, s, true)?;
                     self.check(pre, assume, ok);
                     let h = self.heaps[&site];
-                    let end = format!("(- (+ {offset} {width}) {})", h.base);
-                    s[h.prefix] = format!("(ite (< {} {end}) {end} {})", s[h.prefix], s[h.prefix]);
+                    if *w == 8 {
+                        s[h.prefix] = format!(
+                            "(ite (= {offset} (+ {} {})) (+ {} 1) {})",
+                            h.base, s[h.prefix], s[h.prefix], s[h.prefix]
+                        );
+                    } else {
+                        let end = format!("(- (+ {offset} {width}) {})", h.base);
+                        s[h.prefix] =
+                            format!("(ite (< {} {end}) {end} {})", s[h.prefix], s[h.prefix]);
+                    }
                     return Ok(());
                 }
                 if *w == 8 {
@@ -771,16 +779,6 @@ impl Builder<'_> {
                     s[i + 1] = k;
                 } else {
                     let offset = self.address(a, s);
-                    if let Value::Heap(site, _) = self.frames.states[&pc].address(a)? {
-                        let ok = self.heap_coverage(site, &offset, "1", s, true)?;
-                        self.check(pre, assume, ok);
-                        let h = self.heaps[&site];
-                        s[h.prefix] = format!(
-                            "(ite (= {offset} (+ {} {})) (+ {} 1) {})",
-                            h.base, s[h.prefix], s[h.prefix], s[h.prefix]
-                        );
-                        return Ok(());
-                    }
                     self.check(
                         pre,
                         assume,

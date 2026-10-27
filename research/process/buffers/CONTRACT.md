@@ -86,3 +86,12 @@ heap diagnostic artifact12764108599 was retained. Its later missing-artifact upl
 error followed skipped steps. Push40570247048 passed all nine jobs on the same
 baseline head9eee3fc. This does not explain the build timeout or validate later
 production changes. No original-program timeout count is added for this build failure.
+
+The recoverable implementation checkpoint39b1ab8 also exposed a solver regression:
+PR40573769735 and push40573762274 rejected the earlier grow/shrink proofs on solver
+wall-time/resource limits. The generalized max-prefix word-store formula had also
+replaced byte stores. Restoring the equivalent existing byte-store equality/plus-one
+formula avoids that search expansion; complete-word stores keep their full-range
+formula. All four unchanged old/new PEs then proved locally with unchanged budgets.
+This failure is distinct from the earlier cl.exe launch timeout. Final CI must
+validate the correction across the full corpus.
