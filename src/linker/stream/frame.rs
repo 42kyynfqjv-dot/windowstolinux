@@ -59,6 +59,7 @@ pub(super) struct State {
     pub(super) initialized: std::collections::BTreeSet<i32>,
     pub(super) argument_known: BTreeMap<i32, u32>,
     pub(super) zero_test: Option<Value>,
+    handle_test: Option<(u32, u32)>,
     pub(super) cf_known: bool,
     pub(super) zf_known: bool,
     pub(super) local_values: BTreeMap<i32, Value>,
@@ -89,6 +90,7 @@ impl State {
             local_known: Default::default(),
             argument_known: Default::default(),
             zero_test: None,
+            handle_test: None,
             cf_known: false,
             zf_known: false,
             local_values: BTreeMap::new(),
@@ -395,6 +397,9 @@ impl State {
         if self.zero_test != rhs.zero_test {
             self.zero_test = None;
         }
+        if self.handle_test != rhs.handle_test {
+            self.handle_test = None;
+        }
         self.finite.retain(|key, values| {
             let Some(other) = rhs.finite.get(key) else {
                 return false;
@@ -661,6 +666,25 @@ impl State {
                 | Operation::Negate(_)
         ) || matches!(op, Operation::Shift { count, .. } if *count != 0)
         {
+            self.handle_test = match op {
+                Operation::Binary(Binary::Test, a, b) if a == b => {
+                    if let Ok(Value::Handle(selector)) = before.operand(a, None) {
+                        Some((selector, 0))
+                    } else {
+                        None
+                    }
+                }
+                Operation::Binary(Binary::Compare, a, Operand::Immediate(v))
+                    if matches!(*v, 0 | u32::MAX) =>
+                {
+                    if let Ok(Value::Handle(selector)) = before.operand(a, None) {
+                        Some((selector, *v))
+                    } else {
+                        None
+                    }
+                }
+                _ => None,
+            };
             self.zero_test = match op {
                 Operation::Binary(Binary::Test, a, b) if a == b => before
                     .operand(a, None)
@@ -1119,6 +1143,36 @@ pub(super) fn prove(bound: &Bound) -> Result<Frames, String> {
         for &next in &node.successors {
             let mut state = state.clone();
             if let Operation::Branch(cond, target) = node.operation {
+                if matches!(cond, Condition::Equal | Condition::NotEqual)
+                    && node.successors.len() == 2
+                {
+                    if let Some((selector, tested)) = state.handle_test {
+                        let equal = (next == target) == (cond == Condition::Equal);
+                        let kind = if selector == 0xfffffff6 { 1 } else { 2 };
+                        let keys: Vec<_> = state
+                            .registers
+                            .iter()
+                            .enumerate()
+                            .filter_map(|(i, v)| {
+                                (*v == Value::Handle(selector)).then_some(i as i32)
+                            })
+                            .chain(state.local_values.iter().filter_map(|(&at, v)| {
+                                (*v == Value::Handle(selector)).then_some(at)
+                            }))
+                            .chain(state.slots.iter().filter_map(|(&at, v)| {
+                                matches!(v,Slot::Argument(Value::Handle(s)) if *s==selector)
+                                    .then_some(at)
+                            }))
+                            .collect();
+                        for key in keys {
+                            let values = state
+                                .finite
+                                .entry(key)
+                                .or_insert_with(|| BTreeSet::from([0, u32::MAX, kind]));
+                            values.retain(|v| (*v == tested) == equal);
+                        }
+                    }
+                }
                 if matches!(cond, Condition::Equal | Condition::NotEqual)
                     && ((next == target) == (cond == Condition::Equal))
                     && node.successors.len() == 2
@@ -1780,5 +1834,59 @@ mod tests {
         )
         .unwrap();
         assert!(!s.cf_known && !s.zf_known);
+    }
+    #[test]
+    fn checked_handle_branches_refine_finite_outcomes_without_assuming_validity() {
+        // Independently assembled get-handle / reject-null / reject-invalid CFG.
+        // Both failing edges remain present, and the failure join includes both
+        // invalid outcomes. The SMT encoder checks these finite facts on edges.
+        let mut code = vec![
+            0x53, 0x6a, 0xf6, 0xff, 0x15, 0, 0x20, 0, 0, 0x89, 0xc3, 0x85, 0xdb, 0x74, 0, 0x83,
+            0xfb, 0xff, 0x74, 0,
+        ];
+        let accepted = code.len() as u32;
+        code.extend([0xb8, 0, 0, 0, 0, 0x5b, 0xc3]);
+        let rejected = code.len() as u32;
+        code.extend([0xb8, 10, 0, 0, 0, 0x5b, 0xc3]);
+        code[14] = (rejected - 15) as u8;
+        code[19] = (rejected - 20) as u8;
+        let bound = Bound {
+            graph: super::super::graph::decode(&code, 0, 0).unwrap(),
+            calls: BTreeMap::from([(3, Function::StandardHandle)]),
+            loads: BTreeMap::from([(3, Function::StandardHandle)]),
+        };
+        let frames = prove(&bound).unwrap();
+        assert_eq!(frames.states[&accepted].finite[&3], BTreeSet::from([1]));
+        assert_eq!(
+            frames.states[&rejected].finite[&3],
+            BTreeSet::from([0, u32::MAX])
+        );
+        // A flag overwrite destroys the predicate; it cannot certify a handle.
+        let mut state = State::entry();
+        state.registers[3] = Value::Handle(0xfffffff6);
+        state.known[3] = u32::MAX;
+        let r = Operand::Reg(Reg {
+            index: 3,
+            width: 32,
+            shift: 0,
+        });
+        state
+            .step(&Operation::Binary(Binary::Test, r.clone(), r), None, None)
+            .unwrap();
+        assert_eq!(state.handle_test, Some((0xfffffff6, 0)));
+        state.registers[0] = Value::Constant(0);
+        state.known[0] = u32::MAX;
+        state
+            .step(
+                &Operation::Increment(Reg {
+                    index: 0,
+                    width: 32,
+                    shift: 0,
+                }),
+                None,
+                None,
+            )
+            .unwrap();
+        assert_eq!(state.handle_test, None);
     }
 }

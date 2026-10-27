@@ -82,7 +82,7 @@ and solver exhaustion; each report retains the actual diagnostic, so a structura
 rejection is not described as a proved memory counterexample. Mutated unsafe PEs are
 never executed. The original PE files remain untouched.
 
-Five new unique root test functions cover types/knowledge/predicates, exact import
+Six new unique root test functions cover types/knowledge/predicates and checked-handle refinement, exact import
 bounds and normalized shifts; 15 literal native shift/OR vectors extend an existing
 emitter test. Ten heap-component tests and earlier evidence remain inherited.
 Per-run artifact reports and exact-head CI determine measured outcomes; local runs
@@ -91,3 +91,18 @@ against saved Windows baselines do not establish fresh cross-host generation.
 ISCC/rcedit and ordinary CRT/startup/module/API composition remain rejected. Modern
 Windows Server 2025 evidence is not XP/7 or general-application compatibility.
 Historical original-Windows timeout causes remain unresolved.
+
+## Preserved integration CI regression
+
+The first integration head 2754d7f passed the fresh heap Windows build/conversion
+and local replay of its exact artifact, but PR run40563615088 rejected an existing
+CLI v2 conversion: Z3 exhausted its unchanged resource budget at a 133-property
+proof. The new invalid-handle failure alternative enlarged the solver search. This
+was a converter proof-budget regression, not an original-Windows launch timeout.
+
+The correction propagates finite handle outcomes along actual checked equality
+branches. Each refined fact is still a successor-domain proof obligation, including
+invalid outcomes on the failure join; no valid-handle fact is assumed and no solver
+limit is increased. A separate root regression checks both branches and predicate
+invalidation. Both unchanged O1/O2 failure-run artifacts and both heap programs
+then proved locally. Exact-head CI must recheck the entire earlier corpus.

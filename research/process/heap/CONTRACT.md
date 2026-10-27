@@ -69,7 +69,7 @@ Call-clobbered registers/flags and stdcall cleanup are enforced by the productio
 No hidden external mutation, callbacks, asynchronous access or other heap user is
 assumed within this bounded component; those effects prevent admission until modeled.
 
-## Evidence categories
+## Historical component evidence categories
 
 - Ten independent Rust test functions (literal bytes/invalid transitions) added to
   138 inherited root tests. Five guard/copy-omission mutations reuse those tests;
@@ -90,7 +90,7 @@ assumed within this bounded component; those effects prevent admission until mod
 - Actual completed results and CI belong in RESULTS.md; intended counts here are
   acceptance criteria. Modern Windows evidence does not validate XP/7.
 
-## Concrete remaining integration gate
+## Historical pre-integration gate
 
 Inspection found a structural barrier, not just missing API names:
 `src/linker/stream/frame.rs::Value` has only frame provenance, and `State::address`
