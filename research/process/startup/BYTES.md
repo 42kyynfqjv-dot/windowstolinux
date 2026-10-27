@@ -9,7 +9,7 @@ not ordinary CRT startup or exception dispatch. There are zero new PE/ELF pairs.
 ## Implemented composition
 
 - Opaque process-backed module and thread tokens, distinct RX code/immutable
-  scope data/cookie pair mappings and thread-owned stacks. Failed composite maps
+  scope data/separate cookie-word mappings and thread-owned stacks. Failed composite maps
   roll back; lifetimes cannot end while registrations use them. Numeric addresses
   remain guest values; token generations cannot be recreated from integers.
 - Module cookie versions with initialized cookie/complement bytes. Establishing
@@ -66,7 +66,7 @@ is assigned that premise by the converter.
 
 ## Evidence and limits
 
-Fourteen new Rust tests use literal byte vectors and independent expected errors:
+Fifteen Rust component tests use literal byte vectors and independent expected errors:
 normal/nested records, retained-prolog offsets, forged numeric bytes, equal partial
 overwrites, unknown initialization, full ranges, map rollback, thread/process/
 module identity, cookie generations, lifetime reuse, active guards, unresolved
@@ -96,3 +96,7 @@ No proprietary implementation or Wine source was ported.
 
 The hard remaining boundary is the actual handler/control graph and incoming
 process state, not a missing authorization. Keep PR #45 draft and SUB-579 In Progress.
+
+See [BINDING.md](BINDING.md) for measured scope-header/handler evidence and the
+nonadjacent cookie/complement correction. The prior fourteen-test count is
+historical; one new regression covers the actual separate-word layout.

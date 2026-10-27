@@ -11,7 +11,7 @@ struct Fixture {
 fn fixture() -> Fixture {
     let mut s = Startup::new().unwrap();
     let m = s
-        .map_module((0x4000, &[0xc3; 32]), (0x5000, &[0; 32]), 0x6000)
+        .map_module((0x4000, &[0xc3; 32]), (0x5000, &[0; 32]), 0x6000, 0x6040)
         .unwrap();
     let t = s.bind_empty_thread(0x8000, 256).unwrap();
     s.establish_cookie(m, 0xa5a5a5a5).unwrap();
@@ -116,11 +116,11 @@ fn initialization_complete_range_permissions_and_atomic_failed_mapping() {
     );
     assert_eq!(f.s.write(f.h, &[0]), Err(Error::Memory(Fault::Permission)));
     assert_eq!(
-        f.s.map_module((0x7000, &[0xc3]), (0x7100, &[0; 4]), 0x6000),
+        f.s.map_module((0x7000, &[0xc3]), (0x7100, &[0; 4]), 0x6000, 0x6040),
         Err(Error::Memory(Fault::Overlap))
     );
     // Rollback leaves both earlier maps free; original module remains intact.
-    f.s.map_module((0x7000, &[0xc3]), (0x7100, &[0; 4]), 0x7200)
+    f.s.map_module((0x7000, &[0xc3]), (0x7100, &[0; 4]), 0x7200, 0x7240)
         .unwrap();
     record(&mut f, p, None);
     f.s.register(f.t, p, f.m, f.h, f.e).unwrap();
@@ -139,7 +139,7 @@ fn process_thread_and_module_identity_not_numeric_coincidence() {
     let other = a.s.bind_empty_thread(0x9000, 256).unwrap();
     assert_eq!(a.s.register(other, p, a.m, a.h, a.e), Err(Error::Identity));
     let m =
-        a.s.map_module((0x10000, &[0xc3]), (0x11000, &[0; 4]), 0x12000)
+        a.s.map_module((0x10000, &[0xc3]), (0x11000, &[0; 4]), 0x12000, 0x12040)
             .unwrap();
     a.s.establish_cookie(m, 0xa5a5a5a5).unwrap();
     assert_eq!(a.s.register(a.t, p, m, a.h, a.e), Err(Error::Identity));
@@ -367,4 +367,20 @@ fn exception_rechecks_backing_bytes_before_exposing_handler_addresses() {
         assert_eq!(f.s.read(p, 4), Err(Error::Pending));
         assert_eq!(f.s.restore(f.t, p), Err(Error::Pending));
     }
+}
+
+#[test]
+fn nonadjacent_cookie_complement_and_failed_fourth_map() {
+    let mut f = fixture();
+    assert_eq!(f.s.memory.read(0x6000, 4).unwrap(), &[0xa5; 4]);
+    assert_eq!(f.s.memory.read(0x6040, 4).unwrap(), &[0x5a; 4]);
+    assert_eq!(f.s.memory.read(0x6004, 4), Err(Fault::Range));
+    assert_eq!(
+        f.s.map_module((0x7000, &[0xc3]), (0x7100, &[0; 16]), 0x7200, 0x6040),
+        Err(Error::Memory(Fault::Overlap))
+    );
+    f.s.map_module((0x7000, &[0xc3]), (0x7100, &[0; 16]), 0x7200, 0x7240)
+        .unwrap();
+    f.s.memory.write(0x6040, &[0; 4]).unwrap();
+    assert_eq!(f.s.encode(f.m, f.e.target), Err(Error::Corrupt));
 }

@@ -56,6 +56,8 @@ struct Image {
     data: Capability,
     cookie: Capability,
     cookie_address: u32,
+    complement: Capability,
+    complement_address: u32,
     value: Option<u32>,
     version: u64,
 }
@@ -142,12 +144,13 @@ impl Startup {
         Ok(id)
     }
     /// Trusted layout input, not a PE loader. Distinct RX, immutable scope bytes
-    /// and an eight-byte mutable cookie/complement pair. Failed maps roll back.
+    /// and separately located mutable cookie/complement words. Failed maps roll back.
     pub fn map_module(
         &mut self,
         code: (u32, &[u8]),
         data: (u32, &[u8]),
         cookie: u32,
+        complement: u32,
     ) -> Result<Module, Error> {
         self.runnable()?;
         let code_size = u32::try_from(code.1.len()).map_err(|_| Error::Budget)?;
@@ -169,7 +172,7 @@ impl Startup {
         };
         let cookie_cap = match self
             .memory
-            .map(cookie, 8, owner, Permissions::READ_WRITE, false)
+            .map(cookie, 4, owner, Permissions::READ_WRITE, false)
         {
             Ok(cap) => cap,
             Err(e) => {
@@ -178,6 +181,19 @@ impl Startup {
                 return Err(e.into());
             }
         };
+        let complement_cap =
+            match self
+                .memory
+                .map(complement, 4, owner, Permissions::READ_WRITE, false)
+            {
+                Ok(cap) => cap,
+                Err(e) => {
+                    self.memory.release(cookie_cap, owner)?;
+                    self.memory.release(data_cap, owner)?;
+                    self.memory.release(code_cap, owner)?;
+                    return Err(e.into());
+                }
+            };
         let token = Module(code_cap);
         self.images.push(Image {
             token,
@@ -186,6 +202,8 @@ impl Startup {
             data: data_cap,
             cookie: cookie_cap,
             cookie_address: cookie,
+            complement: complement_cap,
+            complement_address: complement,
             value: None,
             version: 0,
         });
@@ -293,7 +311,10 @@ impl Startup {
         let mut bytes = [0; 8];
         bytes[..4].copy_from_slice(&bits.to_le_bytes());
         bytes[4..].copy_from_slice(&(!bits).to_le_bytes());
-        self.memory.write(self.images[i].cookie_address, &bytes)?;
+        self.memory
+            .write(self.images[i].cookie_address, &bytes[..4])?;
+        self.memory
+            .write(self.images[i].complement_address, &bytes[4..])?;
         self.images[i].value = Some(bits);
         self.images[i].version = version;
         Ok(())
@@ -307,8 +328,10 @@ impl Startup {
         self.memory
             .prove_read(target.cap, target.owner, target.address, 4)?;
         let bits = m.value.ok_or(Error::Unknown)?;
-        let actual = self.memory.read(m.cookie_address, 8)?;
-        if actual[..4] != bits.to_le_bytes() || actual[4..] != (!bits).to_le_bytes() {
+        let actual = self.memory.read(m.cookie_address, 4)?;
+        if actual != bits.to_le_bytes()
+            || self.memory.read(m.complement_address, 4)? != (!bits).to_le_bytes()
+        {
             return Err(Error::Corrupt);
         }
         Ok(Encoded {
@@ -521,6 +544,7 @@ impl Startup {
         self.memory.release(m.code, m.owner)?;
         self.memory.release(m.data, m.owner)?;
         self.memory.release(m.cookie, m.owner)?;
+        self.memory.release(m.complement, m.owner)?;
         self.images.remove(i);
         Ok(())
     }
