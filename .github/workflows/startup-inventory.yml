@@ -1,0 +1,25 @@
+name: Pinned startup inventory
+on:
+  push:
+    branches: [feature/startup-records]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m unittest discover -s research/process/startup -v
+      - uses: actions/download-artifact@v4
+        with:
+          name: rcedit-windows
+          run-id: 40577863473
+          github-token: ${{ github.token }}
+          path: original
+      - run: python3 research/process/startup/inventory.py original
+      - uses: actions/upload-artifact@v4
+        with:
+          name: startup-inventory
+          path: original/startup-inventory.json
