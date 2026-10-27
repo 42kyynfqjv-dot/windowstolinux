@@ -16,6 +16,7 @@ jobs:
       - run: cargo test --locked
       - run: python3 -m unittest discover -s corpus -p test_launch.py -v
       - run: python3 -m unittest discover -s research/process -v
+      - run: python3 research/process/check_memory.py
       - run: python3 -m unittest discover -s research/crt -p test_runtime_identity.py -v
       - run: python3 -m unittest discover -s research/crt -p test_composition_audit.py -v
       - run: python3 -m unittest discover -s research/input -p test_model.py -v
@@ -254,6 +255,21 @@ jobs:
           python -m pip install --require-hashes --no-deps -r research/cli/v2/proof/requirements.txt
           python research/cli/v2/proof/setup_ci.py
       - run: cargo build --locked
+      - name: Measure frozen checked-memory conformance
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $installation = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (!$installation) { throw 'MSVC unavailable' }
+          $vcvars = Join-Path $installation 'VC\Auxiliary\Build\vcvarsall.bat'
+          cmd /c "`"$vcvars`" x86 && python research/process/conformance/measure.py %RUNNER_TEMP%/memory-conformance"
+          if ($LASTEXITCODE -ne 0) { throw 'Memory conformance measurement failed' }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: memory-conformance-windows
+          path: ${{ runner.temp }}/memory-conformance/*
+          if-no-files-found: warn
       - name: Measure available MSVC x86 output
         shell: pwsh
         run: |
@@ -447,6 +463,18 @@ jobs:
           /tmp/w2l-stream-solver/bin/pip install --require-hashes --no-deps -r research/cli/v2/proof/requirements.txt
           /tmp/w2l-stream-solver/bin/python research/cli/v2/proof/setup_ci.py
       - run: cargo build --locked
+      - uses: actions/download-artifact@v4
+        with:
+          name: memory-conformance-windows
+          path: memory-conformance
+      - name: Compare checked-memory conformance artifacts
+        run: python3 research/process/conformance/check_native.py memory-conformance
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: memory-conformance-native
+          path: memory-conformance/native.json
+          if-no-files-found: warn
       - uses: actions/download-artifact@v4
         with:
           name: cli-v2-measurement

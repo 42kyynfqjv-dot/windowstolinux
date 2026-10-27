@@ -1,5 +1,8 @@
 use std::env;
 mod control;
+#[cfg(test)]
+#[allow(dead_code)]
+mod guest_memory;
 mod imports;
 mod inspection;
 mod linker;

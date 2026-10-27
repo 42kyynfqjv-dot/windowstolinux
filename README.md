@@ -21,13 +21,14 @@ Exact unprefixed `A1 moffs32` loads EAX from four validated immutable data bytes
 
 ## Status
 
-Current active work: SUB-572 integrates all six frozen LLVM 20.1.8 O1/O2
-streaming builds through shared partial-register state and checked modular loop
-invariants. [Contract and evidence gates](research/cli/llvm/INTEGRATION.md) require
-186 actual Windows/ELF pairs and preserve the earlier MSVC corpus. Work through
-SUB-571 is reviewed and merged; this slice awaits final CI and substantive review.
-Z3 is compiler-only; generated binaries require neither Z3 nor Wine. Seven
-original-Windows launch timeout occurrences remain unexplained. Earlier status
+Current active work: SUB-576 integrates a reusable checked-memory core into
+proved streaming-frame accesses. [Contract and conformance gates](research/process/IMPLEMENTATION.md)
+separate byte definedness, read freshness and process-bound proof identity.
+Work through SUB-575 is reviewed and merged, including LLVM streaming validation
+and original ISCC/rcedit measurements. Neither third-party utility translates yet;
+ordinary CRT startup and general process/API composition remain blocked.
+Z3 is compiler-only; generated binaries require neither Z3 nor Wine. Eight
+historical original-Windows launch timeouts remain unexplained. Earlier status
 paragraphs below are historical checkpoints.
 
 
