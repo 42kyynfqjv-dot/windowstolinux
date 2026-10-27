@@ -12,6 +12,7 @@ pub(super) enum Value {
     Handle(u32),
     Boolean,
     Error,
+    ErrorAffine(u32, u32),
     Function(Function),
 }
 impl Value {
@@ -24,6 +25,17 @@ impl Value {
             (Self::Frame(_), Self::Frame(_)) => Self::Frame(None),
             _ => Self::Unknown,
         }
+    }
+    fn affine(self) -> Option<(u32, u32)> {
+        match self {
+            Self::Error => Some((1, 0)),
+            Self::ErrorAffine(a, b) => Some((a, b)),
+            _ => None,
+        }
+    }
+    fn error_zero_safe(self) -> bool {
+        self.affine()
+            .is_some_and(|(a, b)| a.wrapping_mul(109).wrapping_add(b) == 0)
     }
     pub(super) fn scalar(self) -> bool {
         matches!(self, Self::Scalar | Self::Constant(_))
@@ -43,6 +55,7 @@ pub(super) struct State {
     pub(super) argument_known: BTreeMap<i32, u8>,
     pub(super) cf_known: bool,
     pub(super) zf_known: bool,
+    pub(super) local_values: BTreeMap<i32, Value>,
     pub(super) locals: BTreeMap<i32, i32>,
     pub(super) slots: BTreeMap<i32, Slot>,
 }
@@ -69,6 +82,7 @@ impl State {
             argument_known: Default::default(),
             cf_known: false,
             zf_known: false,
+            local_values: BTreeMap::new(),
             locals: BTreeMap::new(),
             slots: BTreeMap::new(),
         }
@@ -137,6 +151,11 @@ impl State {
                         "load crosses local/protected boundary",
                     )?;
                 }
+                if *width == 32 {
+                    if let Value::Frame(Some(at)) = self.address(a)? {
+                        return Ok(*self.local_values.get(&at).unwrap_or(&Value::Scalar));
+                    }
+                }
                 Value::Scalar
             }
         })
@@ -149,12 +168,19 @@ impl State {
                     if r.width == 32 { value } else { Value::Scalar };
             }
             Operand::Memory(a, width) => {
-                require(value.scalar(), "non-scalar local store")?;
+                require(
+                    value.scalar() || (*width == 32 && matches!(value, Value::Handle(_))),
+                    "non-scalar local store",
+                )?;
                 if let Value::Frame(Some(at)) = self.address(a)? {
                     require(
                         self.region(at, i32::from(*width / 8)),
                         "store crosses local/protected boundary",
                     )?;
+                    if *width == 32 {
+                        require(at % 4 == 0, "local word alignment")?;
+                        self.local_values.insert(at, value);
+                    }
                 }
             }
             _ => return Err("stream frame: destination".into()),
@@ -215,6 +241,7 @@ impl State {
             self.locals.get(&self.sp) == Some(&hi),
             "cleanup is not exactly one owned local allocation",
         )?;
+        self.local_values.retain(|at, _| *at < self.sp || *at >= hi);
         self.locals.remove(&self.sp);
         self.set_sp(hi)
     }
@@ -285,6 +312,24 @@ impl State {
             *a = (*a).min(b);
         }
         self.initialized.retain(|at| rhs.initialized.contains(at));
+        let keys: std::collections::BTreeSet<_> = self
+            .local_values
+            .keys()
+            .chain(rhs.local_values.keys())
+            .copied()
+            .collect();
+        for at in keys {
+            let v = self
+                .local_values
+                .get(&at)
+                .copied()
+                .unwrap_or(Value::Unknown)
+                .join(rhs.local_values.get(&at).copied().unwrap_or(Value::Unknown));
+            self.local_values.insert(at, v);
+            if v == Value::Unknown {
+                self.initialized.remove(&at);
+            }
+        }
         self.argument_known.retain(|at, k| {
             *k = (*k).min(*rhs.argument_known.get(at).unwrap_or(&0));
             true
@@ -343,18 +388,21 @@ impl State {
                 self.initialized.clear();
             }
             Operation::Address(r, a) => {
-                self.known[r.index as usize] = if [a.base, a.index]
+                self.known[r.index as usize] = [a.base, a.index]
                     .into_iter()
                     .flatten()
-                    .all(|i| before.known[i as usize] >= 32)
-                {
-                    32
-                } else {
-                    0
-                };
+                    .map(|i| before.known[i as usize])
+                    .min()
+                    .unwrap_or(32);
             }
-            Operation::Increment(r) => {
+            Operation::Increment(r) | Operation::Decrement(r) => {
                 self.zf_known = before.known[r.index as usize] >= 32;
+            }
+            Operation::Negate(r) => {
+                let v = before.registers[r.index as usize];
+                self.cf_known =
+                    before.known[r.index as usize] >= 32 && (v.scalar() || v.error_zero_safe());
+                self.zf_known = self.cf_known;
             }
             Operation::Binary(op, dst, src) => {
                 let width = match dst {
@@ -370,6 +418,11 @@ impl State {
                     width
                 } else {
                     0
+                };
+                let bits = if *op == Binary::Sbb && !before.cf_known {
+                    0
+                } else {
+                    bits
                 };
                 if !matches!(op, Binary::Compare | Binary::Test) {
                     match dst {
@@ -388,9 +441,16 @@ impl State {
                 }
                 if *op != Binary::Move {
                     let pointer = matches!(dst,Operand::Reg(r) if matches!(before.registers[r.index as usize],Value::Frame(_)));
-                    let error = matches!(dst,Operand::Reg(r) if before.registers[r.index as usize]==Value::Error);
-                    self.zf_known = bits >= width && !pointer;
+                    let error = matches!(dst,Operand::Reg(r) if before.registers[r.index as usize].affine().is_some());
+                    self.zf_known = bits >= width && !pointer && !error;
                     self.cf_known = self.zf_known && !error;
+                    if error
+                        && *op == Binary::Compare
+                        && matches!(src, Operand::Immediate(109))
+                        && matches!(dst,Operand::Reg(r) if before.registers[r.index as usize]==Value::Error)
+                    {
+                        self.zf_known = bits >= width;
+                    }
                 }
                 if matches!(
                     dst,
@@ -418,6 +478,7 @@ impl State {
                 if matches!(f, Function::Read | Function::Write) {
                     if let Value::Frame(Some(at)) = before.arguments(5)?[3] {
                         self.initialized.insert(at);
+                        self.local_values.insert(at, Value::Scalar);
                     }
                 }
                 self.known[0] = 32;
@@ -470,6 +531,9 @@ impl State {
                 }
             }
             Operation::Binary(op, dst, src) => {
+                if *op == Binary::Sbb {
+                    require(self.cf_known, "SBB reads unknown/opaque carry")?;
+                }
                 if matches!(op, Binary::Compare | Binary::Test) {
                     let a = self.operand(dst, None)?;
                     let b = self.operand(src, None)?;
@@ -508,6 +572,9 @@ impl State {
                     rhs
                 } else if *op == Binary::Xor && dst == src {
                     Value::Constant(0)
+                } else if *op == Binary::Sbb && dst == src {
+                    require(self.cf_known, "SBB observes unknown/opaque carry")?;
+                    Value::Scalar
                 } else {
                     let lhs = self.operand(dst, None)?;
                     match (op, lhs, rhs) {
@@ -522,6 +589,19 @@ impl State {
                         (Binary::Add | Binary::Sub, Value::Frame(_), Value::Scalar) => {
                             Value::Frame(None)
                         }
+                        (Binary::Add | Binary::Sub, a, Value::Constant(n))
+                            if a.affine().is_some() =>
+                        {
+                            let (scale, offset) = a.affine().unwrap();
+                            Value::ErrorAffine(
+                                scale,
+                                if *op == Binary::Add {
+                                    offset.wrapping_add(n)
+                                } else {
+                                    offset.wrapping_sub(n)
+                                },
+                            )
+                        }
                         (_, a, b) if a.scalar() && b.scalar() => Value::Scalar,
                         _ => return Err("stream frame: arithmetic loses typed provenance".into()),
                     }
@@ -529,15 +609,43 @@ impl State {
                 self.put(dst, result)?;
             }
             Operation::Address(r, a) => {
-                let v = self.address(a)?;
+                let v = if a
+                    .base
+                    .is_some_and(|i| matches!(self.registers[i as usize], Value::Frame(_)))
+                {
+                    self.address(a)?
+                } else {
+                    require(
+                        [a.base, a.index].into_iter().flatten().all(|i| {
+                            matches!(
+                                self.registers[i as usize],
+                                Value::Scalar
+                                    | Value::Constant(_)
+                                    | Value::Unknown
+                                    | Value::Entry(_)
+                            )
+                        }),
+                        "scalar LEA opaque input",
+                    )?;
+                    Value::Scalar
+                };
                 self.put(&Operand::Reg(*r), v)?;
             }
-            Operation::Increment(r) => {
+            Operation::Increment(r) | Operation::Decrement(r) => {
                 require(
                     self.registers[r.index as usize].scalar(),
                     "INC of non-scalar",
                 )?;
                 self.registers[r.index as usize] = Value::Scalar;
+            }
+            Operation::Negate(r) => {
+                let v = self.registers[r.index as usize];
+                self.registers[r.index as usize] = if let Some((a, b)) = v.affine() {
+                    Value::ErrorAffine(a.wrapping_neg(), b.wrapping_neg())
+                } else {
+                    require(v.scalar(), "NEG non-scalar")?;
+                    Value::Scalar
+                };
             }
             Operation::Call(_) => self.call(call.ok_or("stream frame: missing call binding")?)?,
             Operation::Return => {
@@ -726,5 +834,67 @@ mod tests {
                 None
             )
             .is_ok());
+    }
+    #[test]
+    fn affine_errors_only_expose_supported_zero_class() {
+        for index in [0, 1, 2, 3, 6, 7] {
+            for offset in [0u32, 108, 109, 110, u32::MAX] {
+                let mut s = State::entry();
+                s.registers[index] = Value::Error;
+                s.known[index] = 32;
+                let r = Reg {
+                    index: index as u8,
+                    width: 32,
+                };
+                let o = Operand::Reg(r);
+                s.step(
+                    &Operation::Binary(Binary::Sub, o.clone(), Operand::Immediate(offset)),
+                    None,
+                    None,
+                )
+                .unwrap();
+                assert!(!s.cf_known && !s.zf_known);
+                assert!(!s.registers[index].scalar());
+                s.step(&Operation::Negate(r), None, None).unwrap();
+                assert_eq!(s.cf_known, offset == 109);
+                assert_eq!(s.zf_known, offset == 109);
+                let result = s.step(&Operation::Binary(Binary::Sbb, o.clone(), o), None, None);
+                assert_eq!(result.is_ok(), offset == 109);
+            }
+        }
+    }
+    #[test]
+    fn typed_local_joins_cannot_launder_handle_as_scalar() {
+        let mut a = State::entry();
+        a.allocate(8).unwrap();
+        a.initialized.insert(-8);
+        a.local_values.insert(-8, Value::Handle(0xfffffff5));
+        let mut b = a.clone();
+        b.local_values.insert(-8, Value::Scalar);
+        a.join(&b).unwrap();
+        assert!(!a.initialized.contains(&-8));
+        assert_eq!(a.local_values[&-8], Value::Unknown);
+        let mut c = b.clone();
+        c.local_values.clear();
+        b.join(&c).unwrap();
+        assert!(!b.initialized.contains(&-8));
+    }
+    #[test]
+    fn decrement_preserves_carry_and_byte_sbb_requires_it() {
+        let mut s = State::entry();
+        s.registers[0] = Value::Scalar;
+        s.known[0] = 32;
+        let r = Reg {
+            index: 0,
+            width: 32,
+        };
+        s.cf_known = true;
+        s.step(&Operation::Decrement(r), None, None).unwrap();
+        assert!(s.cf_known && s.zf_known);
+        let r = Operand::Reg(Reg { index: 0, width: 8 });
+        s.cf_known = false;
+        assert!(s
+            .step(&Operation::Binary(Binary::Sbb, r.clone(), r), None, None)
+            .is_err());
     }
 }

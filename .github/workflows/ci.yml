@@ -419,12 +419,16 @@ jobs:
           name: stream-corpus-windows
           path: stream-corpus-evidence
       - name: Compare frozen streaming corpus outcomes
-        run: python3 research/cli/corpus/check_native.py stream-corpus-evidence
+        run: |
+          python3 research/cli/corpus/check_native.py stream-corpus-evidence
+          python3 research/cli/corpus/check_integration.py stream-corpus-evidence
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: stream-corpus-native
-          path: stream-corpus-evidence/native.json
+          path: |
+            stream-corpus-evidence/native.json
+            stream-corpus-evidence/integration.json
           if-no-files-found: warn
       - name: Convert same hashed PE on Linux and compare native execution
         run: |

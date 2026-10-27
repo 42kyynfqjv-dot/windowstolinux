@@ -25,6 +25,8 @@ pub enum Binary {
     Add,
     Sub,
     Xor,
+    And,
+    Sbb,
     Compare,
     Test,
 }
@@ -42,6 +44,8 @@ pub enum Operation {
     Binary(Binary, Operand, Operand),
     Address(Reg, Address),
     Increment(Reg),
+    Decrement(Reg),
+    Negate(Reg),
     Push(Operand),
     Pop(Reg),
     Leave,
@@ -141,7 +145,13 @@ fn normalized(i: &Instruction, b: &[u8]) -> Result<Operation, String> {
     use Mnemonic::*;
     // NOP's memory-looking spelling does not access memory. Accept the defined
     // unprefixed 0F1F /0 forms and 66 90 only; don't erase arbitrary prefixes.
-    if i.mnemonic() == Nop && (b == [0x90] || b == [0x66, 0x90] || b.starts_with(&[0x0f, 0x1f])) {
+    if i.mnemonic() == Nop
+        && (b == [0x90]
+            || b == [0x66, 0x90]
+            || b.starts_with(&[0x0f, 0x1f])
+            || b == [0x66, 0x66, 0x0f, 0x1f, 0x84, 0, 0, 0, 0, 0]
+            || b == [0x66, 0x0f, 0x1f, 0x44, 0, 0])
+    {
         return Ok(Operation::Nop);
     }
     if matches!(
@@ -151,7 +161,7 @@ fn normalized(i: &Instruction, b: &[u8]) -> Result<Operation, String> {
         return Err("stream: instruction prefix outside policy".into());
     }
     Ok(match i.mnemonic() {
-        Mov | Add | Sub | Xor | Cmp | Test => {
+        Mov | Add | Sub | Xor | And | Sbb | Cmp | Test => {
             if i.op_count() != 2 {
                 return Err("stream: binary arity".into());
             }
@@ -168,6 +178,8 @@ fn normalized(i: &Instruction, b: &[u8]) -> Result<Operation, String> {
                 Add => Binary::Add,
                 Sub => Binary::Sub,
                 Xor => Binary::Xor,
+                And => Binary::And,
+                Sbb => Binary::Sbb,
                 Cmp => Binary::Compare,
                 _ => Binary::Test,
             };
@@ -180,16 +192,20 @@ fn normalized(i: &Instruction, b: &[u8]) -> Result<Operation, String> {
             }
             Operation::Address(r, address(i)?)
         }
-        Inc if i.op0_kind() == OpKind::Register => {
+        Inc | Dec | Neg if i.op0_kind() == OpKind::Register => {
             let r = reg(i.op0_register())?;
             if r.width != 32 {
                 return Err("stream: inc width".into());
             }
-            Operation::Increment(r)
+            match i.mnemonic() {
+                Inc => Operation::Increment(r),
+                Dec => Operation::Decrement(r),
+                _ => Operation::Negate(r),
+            }
         }
         Push => {
             let a = operand(i, 0)?;
-            if width(&a).is_some_and(|w| w != 32) || matches!(a, Operand::Memory(..)) {
+            if width(&a).is_some_and(|w| w != 32) {
                 return Err("stream: push form".into());
             }
             Operation::Push(a)
@@ -479,5 +495,43 @@ mod tests {
         assert_eq!(a.cyclic_components, vec![vec![16, 18]]);
         assert!(decode(&code, u32::MAX - 2, u32::MAX - 2).is_err());
         assert!(decode(&[0x90; 4097], 0, 0).is_err());
+    }
+    #[test]
+    fn scalar_forms_and_alignment_nops_have_exact_operands() {
+        let b = [
+            0xf7, 0xda, 0x1b, 0xd2, 0x83, 0xe2, 11, 0x49, 0xff, 0x74, 0x24, 4, 0xc3,
+        ];
+        let g = decode(&b, 0, 0).unwrap();
+        assert_eq!(
+            g.nodes[&0].operation,
+            Operation::Negate(Reg {
+                index: 2,
+                width: 32
+            })
+        );
+        assert_eq!(
+            g.nodes[&7].operation,
+            Operation::Decrement(Reg {
+                index: 1,
+                width: 32
+            })
+        );
+        assert!(matches!(
+            g.nodes[&8].operation,
+            Operation::Push(Operand::Memory(_, 32))
+        ));
+        for nop in [
+            &[0x66, 0x0f, 0x1f, 0x44, 0, 0][..],
+            &[0x66, 0x66, 0x0f, 0x1f, 0x84, 0, 0, 0, 0, 0],
+        ] {
+            let mut bytes = nop.to_vec();
+            bytes.push(0xc3);
+            assert_eq!(
+                decode(&bytes, 0, 0).unwrap().nodes[&0].operation,
+                Operation::Nop
+            );
+            bytes.insert(0, 0xf3);
+            assert!(decode(&bytes, 0, 0).is_err());
+        }
     }
 }

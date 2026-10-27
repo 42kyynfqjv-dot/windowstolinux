@@ -59,16 +59,19 @@ pub(super) fn emit(bound: &Bound) -> String {
                     let expr = match op {
                         Binary::Add => "a.wrapping_add(b)",
                         Binary::Sub | Binary::Compare => "a.wrapping_sub(b)",
+                        Binary::Sbb => "a.wrapping_sub(b).wrapping_sub(u32::from(cf))",
+                        Binary::And => "a&b",
                         Binary::Test => "a&b",
                         Binary::Xor => "a^b",
                         _ => unreachable!(),
                     };
                     writeln!(
                         out,
-                        "let v=({expr})&{mask};zf=v==0;cf={};",
+                        "let _borrow=cf;let v=({expr})&{mask};zf=v==0;cf={};",
                         match op {
                             Binary::Add => format!("u64::from(a)+u64::from(b)>{mask}"),
                             Binary::Sub | Binary::Compare => "a<b".into(),
+                            Binary::Sbb => "u64::from(a)<u64::from(b)+u64::from(_borrow)".into(),
                             _ => "false".into(),
                         }
                     )
@@ -96,6 +99,22 @@ pub(super) fn emit(bound: &Bound) -> String {
                     out,
                     "r[{}]=r[{}].wrapping_add(1);zf=r[{}]==0;",
                     r.index, r.index, r.index
+                )
+                .unwrap();
+            }
+            Operation::Decrement(r) => {
+                writeln!(
+                    out,
+                    "r[{}]=r[{}].wrapping_sub(1);zf=r[{}]==0;",
+                    r.index, r.index, r.index
+                )
+                .unwrap();
+            }
+            Operation::Negate(r) => {
+                writeln!(
+                    out,
+                    "cf=r[{}]!=0;r[{}]=r[{}].wrapping_neg();zf=r[{}]==0;",
+                    r.index, r.index, r.index, r.index
                 )
                 .unwrap();
             }
