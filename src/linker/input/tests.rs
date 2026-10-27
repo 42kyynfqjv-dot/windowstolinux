@@ -1,5 +1,20 @@
 use super::*;
 #[test]
+fn structural_calls_do_not_grant_startup_emission_authority() {
+    let graph = BTreeMap::from([
+        (0, (Op::Call(10), 1)),
+        (1, (Op::Ret, 2)),
+        (10, (Op::Ret, 11)),
+    ]);
+    assert!(validate_calls(&graph, 0).is_ok());
+    // The environment-specific proof still requires acquisition before helpers.
+    // Removing this condition would not supply a startup/context proof.
+    assert_eq!(
+        prove(graph, 0).err().as_deref(),
+        Some("input: internal call context")
+    );
+}
+#[test]
 fn emitted_continuations_keep_nested_state_and_terminal_effects() {
     let dir = std::env::temp_dir().join(format!("w2l-continuations-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();

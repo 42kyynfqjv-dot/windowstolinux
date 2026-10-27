@@ -413,38 +413,25 @@ fn normalize(i: &Instruction, b: &[u8]) -> Result<Op, String> {
     }
 }
 fn validate_calls(graph: &Graph, entry: u32) -> Result<(), String> {
-    let mut pending = vec![(entry, vec![entry], Vec::<u32>::new(), BTreeSet::new())];
-    let mut steps = 0;
-    while let Some((pc, mut targets, mut returns, mut seen)) = pending.pop() {
-        need(seen.insert((pc, returns.clone())), "input: control cycle")?;
-        steps += 1;
-        need(steps <= 4096, "input: call graph budget")?;
-        let &(op, next) = graph.get(&pc).ok_or("input: missing control target")?;
-        match op {
-            Op::Call(t) => {
-                need(
-                    targets.len() <= MAX_ACTIVATIONS && !targets.contains(&t),
-                    "input: call cycle/depth",
-                )?;
-                targets.push(t);
-                returns.push(next);
-                pending.push((t, targets, returns, seen));
-            }
-            Op::Ret => {
-                if let Some(t) = returns.pop() {
-                    targets.pop();
-                    pending.push((t, targets, returns, seen));
-                }
-            }
-            Op::Branch(_, t) => {
-                pending.push((t, targets.clone(), returns.clone(), seen.clone()));
-                pending.push((next, targets, returns, seen));
-            }
-            Op::Jump(t) => pending.push((t, targets, returns, seen)),
-            _ => pending.push((next, targets, returns, seen)),
+    use super::control::{Edge, Error};
+    super::control::validate(entry, MAX_ACTIVATIONS, 4096, |pc| {
+        graph.get(&pc).map(|&(op, next)| match op {
+            Op::Call(target) => Edge::Call { target, next },
+            Op::Ret => Edge::Return,
+            Op::Branch(_, target) => Edge::Branch(target, next),
+            Op::Jump(target) => Edge::Next(target),
+            _ => Edge::Next(next),
+        })
+    })
+    .map_err(|e| {
+        match e {
+            Error::Cycle => "input: control cycle",
+            Error::Budget => "input: call graph budget",
+            Error::MissingTarget => "input: missing control target",
+            Error::RecursionOrDepth => "input: call cycle/depth",
         }
-    }
-    Ok(())
+        .into()
+    })
 }
 pub(super) fn translate(image: &Candidate<'_>) -> Result<String, String> {
     let graph = decode(image)?;
