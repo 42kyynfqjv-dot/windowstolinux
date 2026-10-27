@@ -10,6 +10,8 @@ pub(super) enum Value {
     Constant(u32),
     Frame(Option<i32>),
     Handle(u32),
+    HeapHandle,
+    Heap(u32, Option<i32>),
     Boolean,
     Error,
     ErrorAffine(u32, u32),
@@ -23,6 +25,7 @@ impl Value {
         match (self, rhs) {
             (Self::Constant(_) | Self::Scalar, Self::Constant(_) | Self::Scalar) => Self::Scalar,
             (Self::Frame(_), Self::Frame(_)) => Self::Frame(None),
+            (Self::Heap(a, _), Self::Heap(b, _)) if a == b => Self::Heap(a, None),
             _ => Self::Unknown,
         }
     }
@@ -55,6 +58,7 @@ pub(super) struct State {
     pub(super) local_known: BTreeMap<i32, u32>,
     pub(super) initialized: std::collections::BTreeSet<i32>,
     pub(super) argument_known: BTreeMap<i32, u32>,
+    pub(super) zero_test: Option<Value>,
     pub(super) cf_known: bool,
     pub(super) zf_known: bool,
     pub(super) local_values: BTreeMap<i32, Value>,
@@ -84,6 +88,7 @@ impl State {
             initialized: Default::default(),
             local_known: Default::default(),
             argument_known: Default::default(),
+            zero_test: None,
             cf_known: false,
             zf_known: false,
             local_values: BTreeMap::new(),
@@ -108,6 +113,44 @@ impl State {
                 .any(|(&lo, &hi)| at >= lo && at.checked_add(bytes).is_some_and(|end| end <= hi))
     }
     pub(super) fn address(&self, a: &Address) -> Result<Value, String> {
+        let mut heap = None;
+        for (reg, scale) in [(a.base, 1), (a.index, a.scale)] {
+            if let Some(reg) = reg {
+                if let Value::Heap(site, _) = self.registers[reg as usize] {
+                    require(
+                        scale == 1 && heap.is_none(),
+                        "heap address has multiple/scaled owners",
+                    )?;
+                    heap = Some(site);
+                } else {
+                    require(
+                        self.registers[reg as usize].scalar()
+                            || matches!(self.registers[reg as usize], Value::Frame(_)),
+                        "address lacks scalar index",
+                    )?;
+                }
+            }
+        }
+        if let Some(site) = heap {
+            let mut offset = Some(i64::from(a.displacement as i32));
+            for (reg, scale) in [(a.base, 1), (a.index, a.scale)] {
+                if let Some(reg) = reg {
+                    offset = match self.registers[reg as usize] {
+                        Value::Heap(_, at) => offset.zip(at).map(|(n, at)| n + i64::from(at)),
+                        Value::Constant(v) => offset.map(|n| n + i64::from(v) * i64::from(scale)),
+                        Value::Scalar => None,
+                        _ => return Err("stream frame: heap address mixes owners".into()),
+                    };
+                }
+            }
+            return Ok(Value::Heap(
+                site,
+                offset
+                    .map(i32::try_from)
+                    .transpose()
+                    .map_err(|_| "stream frame: heap offset overflow")?,
+            ));
+        }
         let b = a
             .base
             .map(|i| self.registers[i as usize])
@@ -139,7 +182,11 @@ impl State {
                 require(
                     matches!(
                         self.registers[r.index as usize],
-                        Value::Scalar | Value::Constant(_) | Value::Entry(_) | Value::Unknown
+                        Value::Scalar
+                            | Value::Constant(_)
+                            | Value::Entry(_)
+                            | Value::Unknown
+                            | Value::Heap(_, _)
                     ),
                     "partial read of opaque value",
                 )?;
@@ -182,7 +229,12 @@ impl State {
             }
             Operand::Memory(a, width) => {
                 require(
-                    value.scalar() || (*width == 32 && matches!(value, Value::Handle(_))),
+                    value.scalar()
+                        || (*width == 32
+                            && matches!(
+                                value,
+                                Value::Handle(_) | Value::HeapHandle | Value::Heap(_, _)
+                            )),
                     "non-scalar local store",
                 )?;
                 if let Value::Frame(Some(at)) = self.address(a)? {
@@ -266,12 +318,8 @@ impl State {
             })
             .collect()
     }
-    fn call(&mut self, f: Function) -> Result<(), String> {
-        let n = match f {
-            Function::Read | Function::Write => 5,
-            Function::StandardHandle => 1,
-            Function::LastError => 0,
-        };
+    fn call(&mut self, pc: u32, f: Function) -> Result<(), String> {
+        let n = f.arity();
         let args = self.arguments(n)?;
         let ret = match f {
             Function::StandardHandle => {
@@ -292,7 +340,7 @@ impl State {
                 };
                 require(args[0] == Value::Handle(selector), "I/O handle provenance")?;
                 require(
-                    matches!(args[1], Value::Frame(_)) && args[2].scalar(),
+                    matches!(args[1], Value::Frame(_) | Value::Heap(_, _)) && args[2].scalar(),
                     "I/O buffer/count provenance",
                 )?;
                 let Value::Frame(Some(at)) = args[3] else {
@@ -303,6 +351,29 @@ impl State {
                 Value::Boolean
             }
             Function::LastError => Value::Error,
+            Function::ProcessHeap => Value::HeapHandle,
+            Function::HeapAlloc | Function::HeapReAlloc | Function::HeapFree => {
+                require(args[0] == Value::HeapHandle, "heap handle provenance")?;
+                require(
+                    matches!(args[1], Value::Constant(0 | 8)),
+                    "heap flags must be exact supported constant",
+                )?;
+                if f == Function::HeapFree {
+                    require(args[1] == Value::Constant(0), "free flags")?;
+                }
+                if f != Function::HeapAlloc {
+                    require(
+                        matches!(args[2], Value::Heap(_, Some(0))),
+                        "heap operation requires allocation base",
+                    )?;
+                }
+                if f == Function::HeapFree {
+                    Value::Scalar
+                } else {
+                    require(args[n - 1].scalar(), "heap size must be scalar")?;
+                    Value::Heap(pc, Some(0))
+                }
+            }
         };
         for i in 0..n {
             self.slots.remove(&(self.sp + i as i32 * 4));
@@ -321,6 +392,9 @@ impl State {
             "incompatible frame shapes at join",
         )?;
         let old = self.clone();
+        if self.zero_test != rhs.zero_test {
+            self.zero_test = None;
+        }
         self.finite.retain(|key, values| {
             let Some(other) = rhs.finite.get(key) else {
                 return false;
@@ -382,8 +456,14 @@ impl State {
         match o {
             Operand::Immediate(_) => u32::MAX,
             Operand::Reg(r) => {
-                (self.known[r.index as usize] >> r.shift)
-                    & if r.width == 8 { 255 } else { u32::MAX }
+                let mask = if r.width != 32
+                    && matches!(self.registers[r.index as usize], Value::Heap(_, _))
+                {
+                    7
+                } else {
+                    self.known[r.index as usize]
+                };
+                (mask >> r.shift) & if r.width == 8 { 255 } else { u32::MAX }
             }
             Operand::Memory(a, _) if a.base.is_none() && a.index.is_none() => u32::MAX,
             Operand::Memory(_, 8) => 255, // Requires mandatory SMT initialized-prefix proof.
@@ -443,6 +523,7 @@ impl State {
                                         Binary::Add => a.wrapping_add(b),
                                         Binary::Sub => a.wrapping_sub(b),
                                         Binary::And => a & b,
+                                        Binary::Or => a | b,
                                         Binary::Xor => a ^ b,
                                         _ => return None,
                                     });
@@ -498,6 +579,11 @@ impl State {
                 });
                 assign(self, i32::from(r.index), values);
             }
+            Operation::Shift { dst, count, .. } => {
+                if *count != 0 {
+                    assign(self, i32::from(dst.index), None);
+                }
+            }
             Operation::Address(r, _) | Operation::Set(_, r) => {
                 assign(self, i32::from(r.index), None)
             }
@@ -537,14 +623,56 @@ impl State {
                 .retain(|k, _| *k >= 0 || *k + 4 <= lo || *k >= hi);
         }
     }
+    #[cfg(test)]
     fn step(
         &mut self,
         op: &Operation,
         call: Option<Function>,
         load: Option<Function>,
     ) -> Result<(), String> {
+        self.step_at(0, op, call, load)
+    }
+    fn step_at(
+        &mut self,
+        pc: u32,
+        op: &Operation,
+        call: Option<Function>,
+        load: Option<Function>,
+    ) -> Result<(), String> {
         let before = self.clone();
-        self.type_step(op, call, load)?;
+        self.type_step(pc, op, call, load)?;
+        if matches!(
+            op,
+            Operation::Call(_)
+                | Operation::Binary(
+                    Binary::Add
+                        | Binary::Sub
+                        | Binary::Or
+                        | Binary::And
+                        | Binary::Xor
+                        | Binary::Sbb
+                        | Binary::Test
+                        | Binary::Compare,
+                    _,
+                    _
+                )
+                | Operation::Increment(_)
+                | Operation::Decrement(_)
+                | Operation::Negate(_)
+        ) || matches!(op, Operation::Shift { count, .. } if *count != 0)
+        {
+            self.zero_test = match op {
+                Operation::Binary(Binary::Test, a, b) if a == b => before
+                    .operand(a, None)
+                    .ok()
+                    .filter(|v| matches!(v, Value::Heap(_, Some(0)) | Value::HeapHandle)),
+                Operation::Binary(Binary::Compare, a, Operand::Immediate(0)) => before
+                    .operand(a, None)
+                    .ok()
+                    .filter(|v| matches!(v, Value::Heap(_, Some(0)) | Value::HeapHandle)),
+                _ => None,
+            };
+        }
         self.finite_step(&before, op, call);
         match op {
             Operation::Push(o) => {
@@ -568,6 +696,16 @@ impl State {
                     self.known[dst.index as usize] = 0;
                 }
                 self.set_mask(*dst, if before.zf_known { 255 } else { 0 });
+            }
+            Operation::Shift { dst, count, .. } => {
+                if *count != 0 {
+                    let mask = if dst.width == 32 { u32::MAX } else { 255 };
+                    let known = before.mask(&Operand::Reg(*dst)) == mask;
+                    self.set_mask(*dst, if known { mask } else { 0 });
+                    // CF is undefined when the masked count is >= operand width.
+                    self.cf_known = known && *count < dst.width;
+                    self.zf_known = known;
+                }
             }
             Operation::Not(_) => {}
             Operation::ConditionalMove(_, dst, src) => {
@@ -598,7 +736,12 @@ impl State {
                     Operand::Memory(_, w) => *w,
                     _ => 0,
                 };
-                let bits = if *op == Binary::Move {
+                let heap_or = *op == Binary::Or
+                    && matches!(before.operand(dst, None), Ok(Value::Heap(_, Some(0))))
+                    && matches!(before.operand(src, None), Ok(Value::Heap(_, Some(0))));
+                let bits = if heap_or {
+                    3
+                } else if *op == Binary::Move {
                     before.bits(src).min(width)
                 } else if (*op == Binary::Xor && dst == src)
                     || (before.bits(dst) >= width && before.bits(src) >= width)
@@ -649,8 +792,18 @@ impl State {
                         _ => {}
                     }
                 }
+                if *op == Binary::Test {
+                    if let Operand::Immediate(mask) = src {
+                        if before.mask(dst) & mask == *mask {
+                            self.cf_known = true;
+                            self.zf_known = true;
+                            return Ok(());
+                        }
+                    }
+                }
                 if *op != Binary::Move {
-                    let pointer = matches!(dst,Operand::Reg(r) if matches!(before.registers[r.index as usize],Value::Frame(_)));
+                    let pointer = matches!(op, Binary::Add | Binary::Sub)
+                        && matches!(dst,Operand::Reg(r) if matches!(before.registers[r.index as usize],Value::Frame(_) | Value::Heap(_, _)));
                     let error = matches!(dst,Operand::Reg(r) if before.registers[r.index as usize].affine().is_some());
                     self.zf_known = bits >= width && !pointer && !error;
                     self.cf_known = self.zf_known && !error;
@@ -679,11 +832,7 @@ impl State {
             }
             Operation::Call(_) => {
                 let f = call.unwrap();
-                let n = match f {
-                    Function::Read | Function::Write => 5,
-                    Function::StandardHandle => 1,
-                    Function::LastError => 0,
-                };
+                let n = f.arity() as i32;
                 for i in 0..n {
                     self.argument_known.remove(&(before.sp + i * 4));
                 }
@@ -712,6 +861,7 @@ impl State {
     }
     fn type_step(
         &mut self,
+        pc: u32,
         op: &Operation,
         call: Option<Function>,
         load: Option<Function>,
@@ -753,6 +903,10 @@ impl State {
                     let b = self.operand(src, None)?;
                     let test = *op == Binary::Test && dst == src;
                     let supported = match (a, b) {
+                        (Value::Heap(_, Some(0)), Value::Constant(0)) => *op == Binary::Compare,
+                        (Value::HeapHandle, Value::Constant(0)) => *op == Binary::Compare,
+                        (Value::HeapHandle, Value::HeapHandle) => test || *op == Binary::Compare,
+                        (Value::Heap(a, Some(0)), Value::Heap(b, Some(0))) => test && a == b,
                         (Value::Handle(_), Value::Constant(0 | 0xffffffff))
                         | (Value::Boolean, Value::Constant(0)) => *op == Binary::Compare,
                         (Value::Error, Value::Constant(109)) => *op == Binary::Compare,
@@ -792,6 +946,21 @@ impl State {
                 } else {
                     let lhs = self.operand(dst, None)?;
                     match (op, lhs, rhs) {
+                        (Binary::Add | Binary::Sub, Value::Heap(site, at), Value::Constant(n)) => {
+                            let n = i64::from(n as i32) * if *op == Binary::Add { 1 } else { -1 };
+                            Value::Heap(
+                                site,
+                                at.map(|x| i32::try_from(i64::from(x) + n))
+                                    .transpose()
+                                    .map_err(|_| "stream frame: heap offset overflow")?,
+                            )
+                        }
+                        (Binary::Add | Binary::Sub, Value::Heap(site, _), Value::Scalar) => {
+                            Value::Heap(site, None)
+                        }
+                        (Binary::Or, Value::Heap(_, Some(0)), Value::Heap(_, Some(0))) => {
+                            Value::Scalar
+                        }
                         (Binary::Add | Binary::Sub, Value::Frame(at), Value::Constant(n)) => {
                             let n = i64::from(n as i32) * if *op == Binary::Add { 1 } else { -1 };
                             Value::Frame(
@@ -835,6 +1004,15 @@ impl State {
                 require(self.zf_known, "SETNE reads unknown ZF")?;
                 self.put(&Operand::Reg(*dst), Value::Scalar)?;
             }
+            Operation::Shift { dst, count, .. } => {
+                if *count != 0 {
+                    require(
+                        self.registers[dst.index as usize].scalar(),
+                        "shift of opaque value",
+                    )?;
+                    self.put(&Operand::Reg(*dst), Value::Scalar)?;
+                }
+            }
             Operation::Not(r) => {
                 require(self.registers[r.index as usize].scalar(), "NOT non-scalar")?;
                 self.registers[r.index as usize] = Value::Scalar;
@@ -857,9 +1035,14 @@ impl State {
                 self.put(&Operand::Reg(*dst), a.join(b))?;
             }
             Operation::Address(r, a) => {
-                let v = if a
-                    .base
-                    .is_some_and(|i| matches!(self.registers[i as usize], Value::Frame(_)))
+                let v = if a.base.is_some_and(|i| {
+                    matches!(
+                        self.registers[i as usize],
+                        Value::Frame(_) | Value::Heap(_, _)
+                    )
+                }) || a
+                    .index
+                    .is_some_and(|i| matches!(self.registers[i as usize], Value::Heap(_, _)))
                 {
                     self.address(a)?
                 } else {
@@ -895,7 +1078,9 @@ impl State {
                     Value::Scalar
                 };
             }
-            Operation::Call(_) => self.call(call.ok_or("stream frame: missing call binding")?)?,
+            Operation::Call(_) => {
+                self.call(pc, call.ok_or("stream frame: missing call binding")?)?
+            }
             Operation::Return => {
                 require(
                     self.sp == 0 && self.slots.is_empty() && self.locals.is_empty(),
@@ -924,13 +1109,40 @@ pub(super) fn prove(bound: &Bound) -> Result<Frames, String> {
         let mut state = states[&pc].clone();
         let node = &bound.graph.nodes[&pc];
         state
-            .step(
+            .step_at(
+                pc,
                 &node.operation,
                 bound.calls.get(&pc).copied(),
                 bound.loads.get(&pc).copied(),
             )
             .map_err(|e| format!("{e} at {pc:#x}"))?;
         for &next in &node.successors {
+            let mut state = state.clone();
+            if let Operation::Branch(cond, target) = node.operation {
+                if matches!(cond, Condition::Equal | Condition::NotEqual)
+                    && ((next == target) == (cond == Condition::Equal))
+                    && node.successors.len() == 2
+                {
+                    if let Some(tested) = state.zero_test {
+                        for v in state
+                            .registers
+                            .iter_mut()
+                            .chain(state.local_values.values_mut())
+                        {
+                            if *v == tested {
+                                *v = Value::Constant(0);
+                            }
+                        }
+                        for slot in state.slots.values_mut() {
+                            if let Slot::Argument(v) = slot {
+                                if *v == tested {
+                                    *v = Value::Constant(0);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             if let Some(old) = states.get_mut(&next) {
                 if old
                     .join(&state)
@@ -1243,7 +1455,7 @@ mod tests {
         let mut s = State::entry();
         s.allocate(16).unwrap();
         s.push(Value::Entry(3)).unwrap();
-        assert!(s.call(Function::StandardHandle).is_err());
+        assert!(s.call(0, Function::StandardHandle).is_err());
         let mut s = State::entry();
         s.allocate(16).unwrap();
         for v in [
@@ -1255,7 +1467,7 @@ mod tests {
         ] {
             s.push(v).unwrap();
         }
-        assert!(s.call(Function::Read).is_err());
+        assert!(s.call(0, Function::Read).is_err());
     }
     #[test]
     fn opaque_join_loses_defined_scalar_authority_and_stack_flags_stay_unknown() {
@@ -1407,5 +1619,166 @@ mod tests {
         assert!(s
             .step(&Operation::Binary(Binary::Sbb, r.clone(), r), None, None)
             .is_err());
+    }
+    #[test]
+    fn heap_api_types_preserve_identity_and_reject_unowned_arguments() {
+        let mut s = State::entry();
+        s.call(10, Function::ProcessHeap).unwrap();
+        assert_eq!(s.registers[0], Value::HeapHandle);
+        for v in [Value::Constant(7), Value::Constant(0), Value::HeapHandle] {
+            s.push(v).unwrap();
+        }
+        s.call(20, Function::HeapAlloc).unwrap();
+        assert_eq!(s.sp, 0);
+        assert_eq!(s.registers[0], Value::Heap(20, Some(0)));
+        let old = s.registers[0];
+        for v in [
+            Value::Constant(9),
+            old,
+            Value::Constant(8),
+            Value::HeapHandle,
+        ] {
+            s.push(v).unwrap();
+        }
+        s.call(30, Function::HeapReAlloc).unwrap();
+        assert_eq!(s.registers[0], Value::Heap(30, Some(0)));
+        // Shape analysis preserves both identities; liveness is a conditional
+        // SMT obligation, never inferred merely from presence of either token.
+        for bad in [
+            Value::Constant(0),
+            Value::Frame(Some(-8)),
+            Value::Heap(20, Some(1)),
+        ] {
+            let mut s = State::entry();
+            for v in [bad, Value::Constant(0), Value::HeapHandle] {
+                s.push(v).unwrap();
+            }
+            assert!(s.call(40, Function::HeapFree).is_err());
+        }
+        let mut s = State::entry();
+        for v in [Value::Constant(7), Value::Constant(0), Value::Handle(3)] {
+            s.push(v).unwrap();
+        }
+        assert!(s.call(20, Function::HeapAlloc).is_err());
+    }
+    #[test]
+    fn heap_layout_is_not_scalar_knowledge() {
+        let mut s = State::entry();
+        let eax = Reg {
+            index: 0,
+            width: 32,
+            shift: 0,
+        };
+        let al = Reg { width: 8, ..eax };
+        let ah = Reg { shift: 8, ..al };
+        for offset in [Some(0), Some(5), None] {
+            s.registers[0] = Value::Heap(10, offset);
+            s.known[0] = u32::MAX;
+            assert_eq!(s.mask(&Operand::Reg(al)), 7);
+            assert_eq!(s.mask(&Operand::Reg(ah)), 0);
+            assert!(s
+                .clone()
+                .step(&Operation::ZeroExtend(eax, Operand::Reg(al)), None, None)
+                .is_err());
+        }
+        s.registers[0] = Value::Heap(10, Some(0));
+        s.registers[1] = Value::Heap(20, Some(0));
+        s.known[1] = u32::MAX;
+        s.step(
+            &Operation::Binary(
+                Binary::Or,
+                Operand::Reg(eax),
+                Operand::Reg(Reg { index: 1, ..eax }),
+            ),
+            None,
+            None,
+        )
+        .unwrap();
+        assert_eq!(s.known[0], 7);
+        s.step(
+            &Operation::Binary(Binary::Test, Operand::Reg(al), Operand::Immediate(7)),
+            None,
+            None,
+        )
+        .unwrap();
+        assert!(s.zf_known);
+        s.step(
+            &Operation::Binary(Binary::Test, Operand::Reg(al), Operand::Immediate(255)),
+            None,
+            None,
+        )
+        .unwrap();
+        assert!(!s.zf_known);
+    }
+    #[test]
+    fn shift_knowledge_and_zero_predicate_lifetime() {
+        let mut s = State::entry();
+        let eax = Reg {
+            index: 0,
+            width: 32,
+            shift: 0,
+        };
+        let al = Reg { width: 8, ..eax };
+        s.registers[0] = Value::Heap(10, Some(0));
+        s.known[0] = u32::MAX;
+        s.step(
+            &Operation::Binary(Binary::Test, Operand::Reg(eax), Operand::Reg(eax)),
+            None,
+            None,
+        )
+        .unwrap();
+        assert_eq!(s.zero_test, Some(Value::Heap(10, Some(0))));
+        s.step(
+            &Operation::Shift {
+                left: true,
+                dst: eax,
+                count: 0,
+            },
+            None,
+            None,
+        )
+        .unwrap();
+        assert!(s.zero_test.is_some());
+        assert!(s
+            .clone()
+            .step(
+                &Operation::Shift {
+                    left: false,
+                    dst: eax,
+                    count: 1
+                },
+                None,
+                None
+            )
+            .is_err());
+        s.step(
+            &Operation::Binary(Binary::Move, Operand::Reg(eax), Operand::Immediate(0x81)),
+            None,
+            None,
+        )
+        .unwrap();
+        s.step(
+            &Operation::Shift {
+                left: true,
+                dst: al,
+                count: 8,
+            },
+            None,
+            None,
+        )
+        .unwrap();
+        assert!(!s.cf_known && s.zf_known && s.zero_test.is_none());
+        s.known[0] = 7;
+        s.step(
+            &Operation::Shift {
+                left: false,
+                dst: al,
+                count: 1,
+            },
+            None,
+            None,
+        )
+        .unwrap();
+        assert!(!s.cf_known && !s.zf_known);
     }
 }

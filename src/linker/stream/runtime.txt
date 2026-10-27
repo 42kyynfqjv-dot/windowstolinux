@@ -9,18 +9,27 @@ fn assert_contract(ok:bool){if !ok{eprintln!("stream runtime contract violation"
 struct Frame{memory:guest_memory::Space,fresh:[bool;4096],empty:[u8;0]}
 fn checked<T>(r:Result<T,guest_memory::Fault>)->T{r.unwrap_or_else(|_|{assert_contract(false);unreachable!()})}
 impl Frame{
- fn new()->Self{let mut memory=checked(guest_memory::Space::new(4096,1));checked(memory.map(0x10000,4096,guest_memory::Owner::Stack(1),guest_memory::Permissions::READ_WRITE,false));Self{memory,fresh:[false;4096],empty:[]}}
+ fn new()->Self{let mut memory=checked(guest_memory::Space::new(1<<20,64));checked(memory.map(0x10000,4096,guest_memory::Owner::Stack(1),guest_memory::Permissions::READ_WRITE,false));Self{memory,fresh:[false;4096],empty:[]}}
  fn range(p:u32,n:u32)->std::ops::Range<usize>{let end=p.checked_add(n);assert_contract(end.is_some_and(|e|e<=4096));p as usize..end.unwrap() as usize}
- fn address(p:u32,n:u32)->u32{Self::range(p,n);0x10000+p}
+ fn address(p:u32,n:u32)->u32{if p>=0x10000000 {assert_contract(p.checked_add(n).is_some_and(|end|end<=0x20000000));p} else {Self::range(p,n);0x10000+p}}
  fn get(&self,p:u32,n:u8)->u32{assert_contract(matches!(n,1|2|4));let mut word=[0;4];word[..n as usize].copy_from_slice(self.source(p,n as u32));u32::from_le_bytes(word)}
- fn put(&mut self,p:u32,n:u8,v:u32){assert_contract(matches!(n,1|2|4));checked(self.memory.write(Self::address(p,n as u32),&v.to_le_bytes()[..n as usize]));self.fresh[Self::range(p,n as u32)].fill(true);}
+ fn put(&mut self,p:u32,n:u8,v:u32){assert_contract(matches!(n,1|2|4));checked(self.memory.write(Self::address(p,n as u32),&v.to_le_bytes()[..n as usize]));if p<0x10000000{self.fresh[Self::range(p,n as u32)].fill(true);}}
  fn invalidate(&mut self,p:u32,n:u32){self.fresh[Self::range(p,n)].fill(false);}
  fn initialize(&mut self,p:u32,n:u32){let s=Self::range(p,n);if n!=0{checked(self.memory.define(Self::address(p,n),n));}self.fresh[s].fill(true);}
- fn pair(&self,p:u32,n:u32,c:u32){let a=Self::range(p,n);let b=Self::range(c,4);assert_contract(c%4==0&&(a.end<=b.start||b.end<=a.start));}
+ fn pair(&self,p:u32,n:u32,c:u32){let a=Self::address(p,n);let b=Self::address(c,4);Self::range(c,4);assert_contract(c%4==0&&(a.checked_add(n).is_some_and(|end|end<=b)||b+4<=a));}
  fn destination(&mut self,p:u32,n:u32)->&mut[u8]{Self::range(p,n);if n==0{return &mut self.empty;}checked(self.memory.destination(Self::address(p,n),n))}
- fn source(&self,p:u32,n:u32)->&[u8]{let s=Self::range(p,n);assert_contract(self.fresh[s].iter().all(|&b|b));if n==0{return &[];}checked(self.memory.read(Self::address(p,n),n))}
+ fn source(&self,p:u32,n:u32)->&[u8]{if p<0x10000000{let s=Self::range(p,n);assert_contract(self.fresh[s].iter().all(|&b|b));}if n==0{return &[];}checked(self.memory.read(Self::address(p,n),n))}
+ fn heap_alloc(&mut self,flags:u32,n:u32,available:bool)->u32{let h=self.memory.process_heap();heap_checked(self.memory.heap_alloc(h,flags,n,availability(available))).unwrap_or(0)}
+ fn heap_resize(&mut self,flags:u32,p:u32,n:u32,available:bool)->u32{let h=self.memory.process_heap();heap_checked(self.memory.heap_realloc(h,flags,p,n,availability(available))).unwrap_or(0)}
+ fn heap_free(&mut self,flags:u32,p:u32)->u32{let h=self.memory.process_heap();heap_checked(self.memory.heap_free(h,flags,p));1}
+
 }
+fn availability(ok:bool)->guest_memory::Availability{if ok{guest_memory::Availability::Available}else{guest_memory::Availability::AllocationFailed}}
+fn heap_checked<T>(r:Result<T,guest_memory::HeapError>)->T{r.unwrap_or_else(|_|{assert_contract(false);unreachable!()})}
 pub trait StreamIo{
+ // Trusted backend fault injection, never controlled by guest instructions.
+ // Native execution assumes available bounded resources; host failure is an explicit contract error.
+ fn heap_available(&mut self)->bool{true}
  fn standard(&mut self,selector:u32)->u32;
  fn read(&mut self,handle:u32,buffer:&mut[u8])->Result<usize,u32>;
  fn write(&mut self,handle:u32,buffer:&[u8])->Result<usize,u32>;

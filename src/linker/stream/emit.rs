@@ -76,6 +76,7 @@ pub(super) fn emit(bound: &Bound) -> String {
                         Binary::Sub | Binary::Compare => "a.wrapping_sub(b)",
                         Binary::Sbb => "a.wrapping_sub(b).wrapping_sub(u32::from(cf))",
                         Binary::And => "a&b",
+                        Binary::Or => "a|b",
                         Binary::Test => "a&b",
                         Binary::Xor => "a^b",
                         _ => unreachable!(),
@@ -105,6 +106,25 @@ pub(super) fn emit(bound: &Bound) -> String {
                     {
                         writeln!(out, "m.invalidate(r[4],b);").unwrap();
                     }
+                }
+            }
+            Operation::Shift { left, dst, count } => {
+                if *count != 0 {
+                    let a = value(&Operand::Reg(*dst), false);
+                    let mask = if dst.width == 32 { u32::MAX } else { 255 };
+                    let bit = if *count < dst.width {
+                        let bit = if *left { dst.width - count } else { count - 1 };
+                        format!("((a >> {bit}) & 1) != 0")
+                    } else {
+                        "false".into()
+                    }; // Undefined CF cannot be read by proved code.
+                    let op = if *left { "<<" } else { ">>" };
+                    writeln!(
+                        out,
+                        "let a={a};let v=(a {op} {count})&{mask};cf={bit};zf=v==0;{}",
+                        store(&Operand::Reg(*dst), "v")
+                    )
+                    .unwrap();
                 }
             }
             Operation::ZeroExtend(dst, src) => {
@@ -163,6 +183,10 @@ pub(super) fn emit(bound: &Bound) -> String {
                 out.push_str("r[4]=r[5];r[5]=m.get(r[4],4);r[4]+=4;\n");
             }
             Operation::Call(_) => match bound.calls[&pc] {
+                Function::ProcessHeap => out.push_str("r[0]=3;\n"),
+                Function::HeapAlloc => out.push_str("assert_contract(m.get(r[4],4)==3);let flags=m.get(r[4]+4,4);let n=m.get(r[4]+8,4);r[0]=m.heap_alloc(flags,n,io.heap_available());r[4]+=12;\n"),
+                Function::HeapReAlloc => out.push_str("assert_contract(m.get(r[4],4)==3);let flags=m.get(r[4]+4,4);let p=m.get(r[4]+8,4);let n=m.get(r[4]+12,4);r[0]=m.heap_resize(flags,p,n,io.heap_available());r[4]+=16;\n"),
+                Function::HeapFree => out.push_str("assert_contract(m.get(r[4],4)==3);let flags=m.get(r[4]+4,4);let p=m.get(r[4]+8,4);r[0]=m.heap_free(flags,p);r[4]+=12;\n"),
                 Function::StandardHandle => {
                     out.push_str("r[0]=io.standard(m.get(r[4],4));r[4]+=4;\n");
                 }
@@ -292,6 +316,51 @@ mod tests {
                     ));
                 }
             }
+        }
+        // Independently specified result and carry tables, including x86 count masking.
+        for (opcode, modrm, count, input, want) in [
+            (0xc0u8, 0xe0u8, 4u8, 0x12345681u32, 0x12345610u32),
+            (0xc0, 0xe8, 7, 0xaabbccff, 0xaabbcc01),
+            (0xc0, 0xe0, 8, 0x123456ff, 0x12345600),
+            (0xc0, 0xec, 1, 0xaabb8102, 0xaabb4002),
+            (0xc1, 0xe8, 31, 0x80000000, 1),
+            (0xc1, 0xe0, 31, 3, 0x80000000),
+            (0xc1, 0xe8, 32, 0x87654321, 0x87654321),
+            (0xc1, 0xe0, 255, 2, 0),
+        ] {
+            let mut code = vec![0xb8];
+            code.extend(input.to_le_bytes());
+            code.extend([opcode, modrm, count, 0x3d]);
+            code.extend(want.to_le_bytes());
+            code.extend([0x0f, 0x95, 0xc0, 0x0f, 0xb6, 0xc0, 0xc3]);
+            programs.push((code, 0));
+        }
+        for (input, count, carry) in [
+            (0x81u32, 1u8, true),
+            (0x80, 1, false),
+            (1, 31, false),
+            (0x80000000, 31, false),
+        ] {
+            let mut code = vec![0xb8];
+            code.extend(input.to_le_bytes());
+            code.extend([
+                0xc1, 0xe8, count, 0xb8, 3, 0, 0, 0, 0xb9, 7, 0, 0, 0, 0x0f, 0x43, 0xc1, 0xc3,
+            ]);
+            programs.push((code, if carry { 3 } else { 7 }));
+        }
+        for (a, b, want) in [
+            (0x80000001u32, 0x40000002u32, 0xc0000003u32),
+            (0, 0, 0),
+            (0xffff0000, 0x0000ffff, u32::MAX),
+        ] {
+            let mut code = vec![0xb8];
+            code.extend(a.to_le_bytes());
+            code.push(0xb9);
+            code.extend(b.to_le_bytes());
+            code.extend([0x0b, 0xc1, 0x3d]);
+            code.extend(want.to_le_bytes());
+            code.extend([0x0f, 0x95, 0xc0, 0x0f, 0xb6, 0xc0, 0xc3]);
+            programs.push((code, 0));
         }
         // NOT preserves CF and ZF; memory MOVZX reads exactly one initialized byte.
         for a in [0u32, 1, u32::MAX, 0x80000000] {

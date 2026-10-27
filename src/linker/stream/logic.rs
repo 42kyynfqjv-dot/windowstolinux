@@ -51,6 +51,12 @@ fn and_mask(a: &str, mask: u32) -> String {
         format!("(+ 0 {})", terms.join(" "))
     }
 }
+fn or_bits(a: &str, b: &str, width: u8) -> String {
+    format!("(+ 0 {})", (0..width).map(|bit| {
+        let p = 1u64 << bit;
+        format!("(* {p} (ite (or (= (mod (div {a} {p}) 2) 1) (= (mod (div {b} {p}) 2) 1)) 1 0))")
+    }).collect::<Vec<_>>().join(" "))
+}
 /// Candidate discovery is heuristic, never an admission oracle. Binary pending
 /// state uses a separate global proof. Weighted candidates are inductive domain
 /// obligations: entry and EVERY incoming edge check them before continuation may
@@ -305,6 +311,14 @@ struct Region {
     cap: u32,
     prefix: usize,
 }
+#[derive(Clone, Copy)]
+struct HeapRegion {
+    base: i32,
+    size: usize,
+    prefix: usize,
+    live: usize,
+    used: usize,
+}
 struct Builder<'a> {
     bound: &'a Bound,
     frames: &'a Frames,
@@ -314,6 +328,7 @@ struct Builder<'a> {
     cells: BTreeMap<i32, usize>,
     prefix: usize,
     regions: Vec<Region>,
+    heaps: BTreeMap<u32, HeapRegion>,
     cf: usize,
     zf: usize,
     ck: usize,
@@ -344,6 +359,8 @@ impl Builder<'_> {
                 }
                 Value::Frame(None)
                 | Value::Handle(_)
+                | Value::HeapHandle
+                | Value::Heap(_, _)
                 | Value::Boolean
                 | Value::Error
                 | Value::ErrorAffine(_, _) => {
@@ -423,6 +440,8 @@ impl Builder<'_> {
                     | Value::Error
                     | Value::ErrorAffine(_, _)
                     | Value::Handle(_)
+                    | Value::HeapHandle
+                    | Value::Heap(_, _)
             )
         };
         for (i, _) in s.iter().enumerate().take(8) {
@@ -437,6 +456,12 @@ impl Builder<'_> {
         }
         for &i in self.cells.values() {
             terms.push(format!("(and (<= 0 {}) (<= {} 4294967295))", s[i], s[i]));
+        }
+        for h in self.heaps.values() {
+            terms.push(format!(
+                "(and (<= 0 {}) (<= {} 4096) (<= 0 {}) (<= {} {}))",
+                s[h.size], s[h.size], s[h.prefix], s[h.prefix], s[h.size]
+            ));
         }
         for region in &self.regions {
             terms.push(format!(
@@ -584,6 +609,26 @@ impl Builder<'_> {
         }).collect();
         format!("(or false {})", terms.join(" "))
     }
+    fn heap_coverage(
+        &self,
+        site: u32,
+        offset: &str,
+        len: &str,
+        s: &[String],
+        write: bool,
+    ) -> Result<String, String> {
+        let h = self
+            .heaps
+            .get(&site)
+            .ok_or("stream logic: missing heap owner")?;
+        let bound = if write { &s[h.size] } else { &s[h.prefix] };
+        let append = if write {
+            format!("(<= {offset} (+ {} {}))", h.base, s[h.prefix])
+        } else {
+            "true".into()
+        };
+        Ok(format!("(and {} (<= 0 {len}) (<= {} {offset}) (<= (+ {offset} {len}) (+ {} {bound})) {append})",s[h.live],h.base,h.base))
+    }
     fn read(
         &mut self,
         pc: u32,
@@ -640,11 +685,11 @@ impl Builder<'_> {
                             }
                         }
                     }
-                    self.check(
-                        pre,
-                        assume,
-                        self.coverage(pc, &offset, "1", s, false, &self.byte_regions(pc, a)),
-                    );
+                    let coverage = match self.frames.states[&pc].address(a)? {
+                        Value::Heap(site, _) => self.heap_coverage(site, &offset, "1", s, false)?,
+                        _ => self.coverage(pc, &offset, "1", s, false, &self.byte_regions(pc, a)),
+                    };
+                    self.check(pre, assume, coverage);
                     let byte = self.fresh(false);
                     // Any input/stored byte; over-approximate content, never init.
                     (format!("(mod {byte} 256)"), "8".into())
@@ -704,6 +749,16 @@ impl Builder<'_> {
                     s[i + 1] = k;
                 } else {
                     let offset = self.address(a, s);
+                    if let Value::Heap(site, _) = self.frames.states[&pc].address(a)? {
+                        let ok = self.heap_coverage(site, &offset, "1", s, true)?;
+                        self.check(pre, assume, ok);
+                        let h = self.heaps[&site];
+                        s[h.prefix] = format!(
+                            "(ite (= {offset} (+ {} {})) (+ {} 1) {})",
+                            h.base, s[h.prefix], s[h.prefix], s[h.prefix]
+                        );
+                        return Ok(());
+                    }
                     self.check(
                         pre,
                         assume,
@@ -760,10 +815,25 @@ impl Builder<'_> {
                     s[self.zk] = "true".into();
                 } else {
                     let (a, ak) = self.read(pc, dst, &s, &pre, &assume)?;
-                    self.known(&pre, &assume, &ak, width);
-                    self.known(&pre, &assume, &bk, width);
+                    let heap_or = *op == Binary::Or
+                        && matches!(state.operand(dst, None), Ok(Value::Heap(_, Some(0))))
+                        && matches!(state.operand(src, None), Ok(Value::Heap(_, Some(0))));
+                    let observed = if heap_or {
+                        0
+                    } else if *op == Binary::Test {
+                        if let Operand::Immediate(mask) = src {
+                            (32 - mask.leading_zeros()) as u8
+                        } else {
+                            width
+                        }
+                    } else {
+                        width
+                    };
+                    self.known(&pre, &assume, &ak, observed);
+                    self.known(&pre, &assume, &bk, observed);
                     if width == 8 {
                         let exact = match op {
+                            Binary::Or => Some(or_bits(&a, &b, 8)),
                             Binary::Compare => Some(format!("(mod (- {a} {b}) 256)")),
                             Binary::Test | Binary::And => {
                                 if let Operand::Immediate(mask) = src {
@@ -787,14 +857,15 @@ impl Builder<'_> {
                         }
                         s[self.cf] = match op {
                             Binary::Compare => format!("(< {a} {b})"),
-                            Binary::Test | Binary::And => "false".into(),
+                            Binary::Test | Binary::And | Binary::Or => "false".into(),
                             _ => self.fresh(true),
                         };
                         s[self.zf] = eq(&v, "0");
                         s[self.ck] = "true".into();
                         s[self.zk] = "true".into();
                     } else {
-                        let pointer = matches!(dst,Operand::Reg(r) if matches!(state.registers[r.index as usize],Value::Frame(_)));
+                        let pointer = matches!(op, Binary::Add | Binary::Sub)
+                            && matches!(dst,Operand::Reg(r) if matches!(state.registers[r.index as usize],Value::Frame(_) | Value::Heap(_, _)));
                         let modulus = if width == 8 { 256u64 } else { 1u64 << 32 };
                         let raw = match op {
                             Binary::Add => format!("(+ {a} {b})"),
@@ -823,6 +894,8 @@ impl Builder<'_> {
                                     and_mask(&a, *mask)
                                 }
                             }
+                            Binary::Or if heap_or => "0".into(),
+                            Binary::Or => or_bits(&a, &b, 32),
                             Binary::Test if dst == src => a.clone(),
                             _ => {
                                 return Err(
@@ -832,7 +905,7 @@ impl Builder<'_> {
                             }
                         };
                         let opaque = matches!(dst,Operand::Reg(r) if matches!(state.registers[r.index as usize],Value::Error|Value::ErrorAffine(_, _)));
-                        let v = if pointer || *op == Binary::And {
+                        let v = if pointer || matches!(op, Binary::And | Binary::Or) {
                             // AND's mathematical result is always within the operand width.
                             raw.clone()
                         } else if opaque || *op == Binary::Sbb {
@@ -883,6 +956,37 @@ impl Builder<'_> {
                     }
                 }
             }
+            Operation::Shift { left, dst, count } => {
+                if *count != 0 {
+                    let operand = Operand::Reg(*dst);
+                    let (a, k) = self.read(pc, &operand, &s, &pre, &assume)?;
+                    self.known(&pre, &assume, &k, dst.width);
+                    let factor = 1u64 << count;
+                    let modulus = 1u64 << dst.width;
+                    let v = if *left {
+                        format!("(mod (* {a} {factor}) {modulus})")
+                    } else {
+                        format!("(div {a} {factor})")
+                    };
+                    self.write(
+                        pc,
+                        &operand,
+                        (v.clone(), dst.width.to_string()),
+                        &mut s,
+                        &pre,
+                        &assume,
+                    )?;
+                    s[self.zf] = eq(&v, "0");
+                    s[self.zk] = "true".into();
+                    s[self.ck] = (*count < dst.width).to_string();
+                    s[self.cf] = if *count < dst.width {
+                        let bit = if *left { dst.width - count } else { count - 1 };
+                        format!("(= (mod (div {a} {}) 2) 1)", 1u64 << bit)
+                    } else {
+                        self.fresh(true)
+                    };
+                }
+            }
             Operation::ZeroExtend(dst, src) => {
                 let (v, k) = self.read(pc, src, &s, &pre, &assume)?;
                 self.known(&pre, &assume, &k, 8);
@@ -928,8 +1032,11 @@ impl Builder<'_> {
             Operation::Address(r, a) => {
                 if matches!(
                     state.registers[a.base.unwrap_or(4) as usize],
-                    Value::Frame(_)
-                ) {
+                    Value::Frame(_) | Value::Heap(_, _)
+                ) || a
+                    .index
+                    .is_some_and(|i| matches!(state.registers[i as usize], Value::Heap(_, _)))
+                {
                     self.address_known(a, &s, &pre, &assume);
                     s[r.index as usize] = self.address(a, &s);
                     s[8 + r.index as usize] = "32".into();
@@ -1011,11 +1118,7 @@ impl Builder<'_> {
             }
             Operation::Call(_) => {
                 let f = self.bound.calls[&pc];
-                let arity = match f {
-                    Function::Read | Function::Write => 5,
-                    Function::StandardHandle => 1,
-                    Function::LastError => 0,
-                };
+                let arity = f.arity() as i32;
                 let args: Vec<_> = (0..arity)
                     .map(|n| self.arguments[&(state.sp + 4 * n)])
                     .collect();
@@ -1036,11 +1139,17 @@ impl Builder<'_> {
                         s[self.ek] = "false".into();
                     }
                     Function::Read | Function::Write => {
-                        let handle = &s[args[0]];
+                        let handle = s[args[0]].clone();
                         let ptr = s[args[1]].clone();
                         let len = &s[args[2]];
                         let kind = if f == Function::Read { 1 } else { 2 };
-                        self.check(&pre, &assume, format!("(= {handle} {kind})"));
+                        self.check(
+                            &pre,
+                            &assume,
+                            format!(
+                                "(or (= {handle} {kind}) (= {handle} 0) (= {handle} 4294967295))"
+                            ),
+                        );
                         if f == Function::Read {
                             self.check(&pre,&assume,format!("(and (<= 0 {len}) (<= {len} {}) (<= {} {ptr}) (<= (+ {ptr} {len}) {}))",self.cap,num(i64::from(self.base)),num(i64::from(self.base)+i64::from(self.cap))));
                         }
@@ -1057,13 +1166,16 @@ impl Builder<'_> {
                             ),
                         );
                         if f == Function::Write {
-                            self.check(
-                                &pre,
-                                &assume,
-                                self.coverage(pc, &ptr, len, &s, false, &self.regions),
-                            );
+                            let ok = match state.arguments(5)?[1] {
+                                Value::Heap(site, _) => {
+                                    self.heap_coverage(site, &ptr, len, &s, false)?
+                                }
+                                _ => self.coverage(pc, &ptr, len, &s, false, &self.regions),
+                            };
+                            self.check(&pre, &assume, ok);
                         }
                         let success = self.fresh(true);
+                        assume.push(format!("(=> {success} (= {handle} {kind}))"));
                         let n = self.fresh(false);
                         let error = self.fresh(false);
                         assume.push(format!("(and (<= 0 {n}) (<= {n} {len}) (<= 0 {error}) (<= {error} 4294967295))"));
@@ -1081,6 +1193,66 @@ impl Builder<'_> {
                     Function::LastError => {
                         self.check(&pre, &assume, s[self.ek].clone());
                         ret = s[self.error].clone();
+                    }
+                    Function::ProcessHeap => {
+                        ret = "3".into();
+                        s[self.ek] = "false".into();
+                    }
+                    Function::HeapAlloc | Function::HeapReAlloc | Function::HeapFree => {
+                        self.check(&pre, &assume, eq(&s[args[0]], "3"));
+                        let zero = state.arguments(arity as usize)?[1] == Value::Constant(8);
+                        self.check(&pre, &assume, eq(&s[args[1]], if zero { "8" } else { "0" }));
+                        let old = if f != Function::HeapAlloc {
+                            let Value::Heap(site, Some(0)) = state.arguments(arity as usize)?[2]
+                            else {
+                                return Err("stream logic: heap base provenance".into());
+                            };
+                            let old = *self
+                                .heaps
+                                .get(&site)
+                                .ok_or("stream logic: allocation identity")?;
+                            self.check(&pre, &assume, s[old.live].clone());
+                            self.check(&pre, &assume, eq(&s[args[2]], &old.base.to_string()));
+                            Some(old)
+                        } else {
+                            None
+                        };
+                        if f == Function::HeapFree {
+                            s[old.unwrap().live] = "false".into();
+                            ret = "1".into();
+                            s[self.ek] = "false".into();
+                        } else {
+                            let h = self.heaps[&pc];
+                            let size = s[*args.last().unwrap()].clone();
+                            self.check(&pre, &assume, not(&s[h.used]));
+                            self.check(
+                                &pre,
+                                &assume,
+                                format!("(and (< 0 {size}) (<= {size} 4096))"),
+                            );
+                            let success = self.fresh(true);
+                            let prefix = if let Some(old) = old {
+                                let old_prefix = s[old.prefix].clone();
+                                let old_size = s[old.size].clone();
+                                s[old.live] = format!("(and {} (not {success}))", s[old.live]);
+                                if zero {
+                                    format!("(ite (= {old_prefix} {old_size}) {size} (ite (< {old_prefix} {size}) {old_prefix} {size}))")
+                                } else {
+                                    format!("(ite (< {old_prefix} {size}) {old_prefix} {size})")
+                                }
+                            } else if zero {
+                                size.clone()
+                            } else {
+                                "0".into()
+                            };
+                            s[h.used] = "true".into();
+                            s[h.live] = success.clone();
+                            s[h.size] = format!("(ite {success} {size} 0)");
+                            s[h.prefix] = format!("(ite {success} {prefix} 0)");
+                            ret = format!("(ite {success} {} 0)", h.base);
+                            // Failure preserves LastError; successful effects are unspecified.
+                            s[self.ek] = format!("(and (not {success}) {})", s[self.ek]);
+                        }
                     }
                 }
                 s[0] = ret;
@@ -1335,6 +1507,39 @@ fn encode_phase(
     if regions.len() > 64 {
         return Err("stream logic: byte-region budget".into());
     }
+    let mut heaps = BTreeMap::new();
+    let mut heap_bools = BTreeSet::new();
+    for (&pc, f) in &bound.calls {
+        if matches!(f, Function::HeapAlloc | Function::HeapReAlloc) {
+            if bound
+                .graph
+                .cyclic_components
+                .iter()
+                .any(|c| c.contains(&pc))
+                || heaps.len() >= 8
+            {
+                return Err("stream logic: cyclic allocation or allocation-site budget".into());
+            }
+            let at = names.len();
+            names.extend([
+                format!("heap{pc}_size"),
+                format!("heap{pc}_prefix"),
+                format!("heap{pc}_live"),
+                format!("heap{pc}_used"),
+            ]);
+            heaps.insert(
+                pc,
+                HeapRegion {
+                    base: 0x10000000 + heaps.len() as i32 * 0x10000,
+                    size: at,
+                    prefix: at + 1,
+                    live: at + 2,
+                    used: at + 3,
+                },
+            );
+            heap_bools.extend([at + 2, at + 3]);
+        }
+    }
     let cf = names.len();
     names.push("cf".into());
     let zf = names.len();
@@ -1347,7 +1552,8 @@ fn encode_phase(
     names.push("error".into());
     let ek = names.len();
     names.push("ek".into());
-    let bools = BTreeSet::from([cf, zf, ck, zk, ek]);
+    let mut bools = BTreeSet::from([cf, zf, ck, zk, ek]);
+    bools.extend(heap_bools);
     let mut b = Builder {
         bound,
         frames,
@@ -1357,6 +1563,7 @@ fn encode_phase(
         cells,
         prefix,
         regions,
+        heaps,
         cf,
         zf,
         ck,

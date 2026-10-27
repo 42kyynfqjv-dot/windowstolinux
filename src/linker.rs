@@ -262,7 +262,7 @@ impl<'a> Candidate<'a> {
                 && range(self.bytes, at + 20, 20)? == [0; 20],
             "linker import binding/terminator",
         )?;
-        if iat_dir.0 == self.iat && matches!(iat_dir.1, 12 | 16 | 20) {
+        if iat_dir.0 == self.iat && matches!(iat_dir.1, 12 | 16 | 20 | 24 | 28 | 32 | 36) {
             return self.stream_imports(ilt, name, iat_dir.1 / 4 - 1);
         }
         need(

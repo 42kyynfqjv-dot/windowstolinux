@@ -27,6 +27,7 @@ pub enum Binary {
     Sub,
     Xor,
     And,
+    Or,
     Sbb,
     Compare,
     Test,
@@ -48,6 +49,8 @@ pub enum Operation {
     ZeroExtend(Reg, Operand),
     Set(Condition, Reg),
     Not(Reg),
+    // Immediate-count logical shifts; count is x86-masked to five bits.
+    Shift { left: bool, dst: Reg, count: u8 },
     Increment(Reg),
     Decrement(Reg),
     Negate(Reg),
@@ -173,7 +176,7 @@ fn normalized(i: &Instruction, b: &[u8]) -> Result<Operation, String> {
         return Err("stream: instruction prefix outside policy".into());
     }
     Ok(match i.mnemonic() {
-        Mov | Add | Sub | Xor | And | Sbb | Cmp | Test => {
+        Mov | Add | Sub | Xor | And | Or | Sbb | Cmp | Test => {
             if i.op_count() != 2 {
                 return Err("stream: binary arity".into());
             }
@@ -191,11 +194,23 @@ fn normalized(i: &Instruction, b: &[u8]) -> Result<Operation, String> {
                 Sub => Binary::Sub,
                 Xor => Binary::Xor,
                 And => Binary::And,
+                Or => Binary::Or,
                 Sbb => Binary::Sbb,
                 Cmp => Binary::Compare,
                 _ => Binary::Test,
             };
             Operation::Binary(op, a, b)
+        }
+        Shl | Shr if i.op0_kind() == OpKind::Register && i.op1_kind() == OpKind::Immediate8 => {
+            let dst = reg(i.op0_register())?;
+            if dst.index == 4 {
+                return Err("stream: shift of stack pointer".into());
+            }
+            Operation::Shift {
+                left: i.mnemonic() == Shl,
+                dst,
+                count: i.immediate8() & 31,
+            }
         }
         Cmove | Cmova | Cmovae
             if i.op0_kind() == OpKind::Register && i.op1_kind() == OpKind::Register =>
@@ -722,6 +737,37 @@ mod tests {
             );
             bytes.insert(0, 0xf3);
             assert!(decode(&bytes, 0, 0).is_err());
+        }
+    }
+    #[test]
+    fn shifts_mask_count_without_erasing_prefix_or_width_policy() {
+        for (bytes, left, index, width, shift, count) in [
+            (vec![0xc0, 0xe0, 4, 0xc3], true, 0, 8, 0, 4),
+            (vec![0xd1, 0xef, 0xc3], false, 7, 32, 0, 1),
+            (vec![0xc1, 0xe9, 32, 0xc3], false, 1, 32, 0, 0),
+            (vec![0xc0, 0xec, 255, 0xc3], false, 0, 8, 8, 31),
+        ] {
+            assert_eq!(
+                decode(&bytes, 0, 0).unwrap().nodes[&0].operation,
+                Operation::Shift {
+                    left,
+                    dst: Reg {
+                        index,
+                        width,
+                        shift
+                    },
+                    count
+                }
+            );
+        }
+        for b in [
+            vec![0x66, 0xd1, 0xef, 0xc3],
+            vec![0xd3, 0xe8, 0xc3],
+            vec![0xc1, 0x20, 1, 0xc3],
+            vec![0xc1, 0xe4, 1, 0xc3],
+            vec![0xd1, 0xf8, 0xc3],
+        ] {
+            assert!(decode(&b, 0, 0).is_err(), "{b:02x?}");
         }
     }
 }
