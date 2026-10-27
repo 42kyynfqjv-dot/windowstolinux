@@ -36,3 +36,4 @@ with tempfile.TemporaryDirectory() as tmp:
         assert dict(exit=p.returncode,stderr_hex=p.stderr.hex(),destination_hex=path.read_bytes().hex())==row['write_failure']
         got['real_failure_comparisons']=2
 (root/'native.json').write_text(json.dumps(rows,indent=2)+'\n');print(json.dumps(rows,indent=2))
+assert next(r for r in rows if r['name']=='swap')['conversion_exit']==0, 'Required pair-permutation translation regressed'

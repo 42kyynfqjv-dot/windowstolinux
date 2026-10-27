@@ -27,16 +27,18 @@ impl Function {
     }
 }
 impl Candidate<'_> {
-    pub(super) fn stream_imports(&mut self, ilt: u32, name: u32) -> Result<(), String> {
+    pub(super) fn stream_imports(&mut self, ilt: u32, name: u32, count: u32) -> Result<(), String> {
+        need((2..=4).contains(&count), "stream import count")?;
         need(
             ilt.is_multiple_of(4) && self.iat.is_multiple_of(4),
             "stream thunk alignment",
         )?;
-        let ip = self.reserve(self.iat, 20, DATA)?;
-        let lp = self.reserve(ilt, 20, DATA)?;
+        let size = (count + 1) * 4;
+        let ip = self.reserve(self.iat, size, DATA)?;
+        let lp = self.reserve(ilt, size, DATA)?;
         need(
-            range(self.bytes, ip, 20)? == range(self.bytes, lp, 20)?
-                && u32_at(self.bytes, ip + 16)? == 0,
+            range(self.bytes, ip, size as usize)? == range(self.bytes, lp, size as usize)?
+                && u32_at(self.bytes, ip + count as usize * 4)? == 0,
             "stream thunk mismatch/terminator",
         )?;
         let dll = b"KERNEL32.dll\0";
@@ -46,7 +48,7 @@ impl Candidate<'_> {
             "stream DLL identity",
         )?;
         let mut seen = BTreeSet::new();
-        for slot in 0..4 {
+        for slot in 0..count as usize {
             let thunk = u32_at(self.bytes, ip + slot * 4)?;
             need(
                 thunk != 0 && thunk & 0x8000_0000 == 0 && thunk.is_multiple_of(2),
@@ -253,6 +255,121 @@ pub(super) fn translate(bound: &Bound) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn import_bytes(names: &[&[u8]]) -> Vec<u8> {
+        let mut bytes = vec![0u8; 0x400];
+        for (i, name) in names.iter().enumerate() {
+            let at = 0xc0 + i * 32;
+            bytes[at + 2..at + 2 + name.len()].copy_from_slice(name);
+            let rva = (0x2000 + at as u32).to_le_bytes();
+            bytes[i * 4..i * 4 + 4].copy_from_slice(&rva);
+            bytes[0x20 + i * 4..0x24 + i * 4].copy_from_slice(&rva);
+        }
+        bytes[0x60..0x64].copy_from_slice(&0x2020u32.to_le_bytes());
+        bytes[0x6c..0x70].copy_from_slice(&0x20a0u32.to_le_bytes());
+        bytes[0x70..0x74].copy_from_slice(&0x2000u32.to_le_bytes());
+        bytes[0xa0..0xad].copy_from_slice(b"KERNEL32.dll\0");
+        bytes
+    }
+    fn import_table(bytes: &[u8], iat: (u32, u32)) -> Result<Candidate<'_>, String> {
+        let mut image = Candidate {
+            bytes,
+            base: 0x400000,
+            entry: 0x1000,
+            image_size: 0x3000,
+            sections: vec![Section {
+                rva: 0x2000,
+                raw: 0,
+                size: bytes.len() as u32,
+                virtual_size: bytes.len() as u32,
+                flags: DATA,
+            }],
+            metadata: vec![],
+            iat: 0,
+            api: Api::Write,
+            functions: BTreeMap::new(),
+            pointers: BTreeMap::new(),
+        };
+        image.imports((0x2060, 40), iat)?;
+        Ok(image)
+    }
+    #[test]
+    fn bounded_existing_import_subsets_and_order_are_semantic() {
+        let names: [(&[u8], Function); 4] = [
+            (b"WriteFile\0", Function::Write),
+            (b"GetStdHandle\0", Function::StandardHandle),
+            (b"ReadFile\0", Function::Read),
+            (b"GetLastError\0", Function::LastError),
+        ];
+        for bits in 0u32..16 {
+            if bits.count_ones() < 2 {
+                continue;
+            }
+            let selected: Vec<_> = names
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| bits & (1 << i) != 0)
+                .map(|(_, x)| *x)
+                .collect();
+            for reverse in [false, true] {
+                let mut order = selected.clone();
+                if reverse {
+                    order.reverse();
+                }
+                let bytes = import_bytes(&order.iter().map(|x| x.0).collect::<Vec<_>>());
+                let image = import_table(&bytes, (0x2000, (order.len() as u32 + 1) * 4)).unwrap();
+                assert!(image.api == Api::Stream);
+                assert_eq!(
+                    image.functions,
+                    order
+                        .iter()
+                        .enumerate()
+                        .map(|(i, x)| (0x2000 + i as u32 * 4, x.1))
+                        .collect()
+                );
+            }
+        }
+    }
+    #[test]
+    fn import_subsets_reject_aliases_early_nulls_extent_and_unknown_names() {
+        let names: [&[u8]; 3] = [b"ReadFile\0", b"WriteFile\0", b"GetStdHandle\0"];
+        let original = import_bytes(&names);
+        for size in [0, 4, 8, 12, 17, 20, 24] {
+            assert!(import_table(&original, (0x2000, size)).is_err(), "{size}");
+        }
+        assert!(import_table(&original, (0x2004, 16)).is_err());
+        for (offset, value) in [
+            (0, 0u32),
+            (0x20, 0),
+            (12, 1),
+            (0x2c, 1),
+            (0, 0x80000001),
+            (0x60, 0x2000),
+            (0x6c, 0x2000),
+            (0, 0x23fe),
+            (0, 0x20c1),
+        ] {
+            let mut bad = original.clone();
+            bad[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
+            assert!(
+                import_table(&bad, (0x2000, 16)).is_err(),
+                "{offset:x}/{value:x}"
+            );
+        }
+        for names in [
+            [
+                &b"ReadFile\0"[..],
+                &b"ReadFile\0"[..],
+                &b"GetStdHandle\0"[..],
+            ],
+            [
+                &b"ReadFileX\0"[..],
+                &b"WriteFile\0"[..],
+                &b"GetStdHandle\0"[..],
+            ],
+        ] {
+            assert!(import_table(&import_bytes(&names), (0x2000, 16)).is_err());
+        }
+    }
     fn proof(code: &[u8], sites: &[(u32, u32)]) -> Result<Bound, String> {
         let image = Candidate {
             bytes: code,

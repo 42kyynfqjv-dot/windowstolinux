@@ -60,7 +60,11 @@ copies with seven omitted guards (process, generation, definedness, epoch,
 32-bit endpoint, writable permission, W+X) must fail those tests. Ten checks compile
 the actual emitted runtime and exercise aliases, stale tails, failed-read freshness,
 unknown bytes, complete widths, zero slices and count/output overlap. These are
-component tests, not Windows translation evidence. The prior 129 root tests remain.
+component tests, not Windows translation evidence. Two further import-table test functions check all 11 subsets of size 2–4 in both
+orders (22 tables), plus malformed extents, aliases, early nulls, unknown and
+duplicate names. Only the existing four-function allowlist is available; importing
+a supported subset no longer requires an unused GetLastError. The existing
+one-import legacy profiles remain separate. The prior 129 root tests remain.
 
 `conformance/` freezes two independently authored algorithms before measurement:
 leftward overlapping copy and adjacent-pair permutation. The custom-entry MSVC

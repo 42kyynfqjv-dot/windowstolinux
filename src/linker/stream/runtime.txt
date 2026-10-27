@@ -1,6 +1,6 @@
 // Generated from verified PE instructions. Local compiler-time Z3 is not linked.
 // Original runtime support: MIT OR Apache-2.0. Linux regular-file/byte-pipe subset.
-#![allow(unused_assignments,unused_parens)]
+#![allow(unused_assignments,unused_parens,unused_variables)]
 // CHECKED_MEMORY_MODULE
 use std::{fs::File,io::{Read,Write},os::{fd::AsFd,unix::fs::FileTypeExt}};
 fn assert_contract(ok:bool){if !ok{eprintln!("stream runtime contract violation");std::process::exit(125);}}

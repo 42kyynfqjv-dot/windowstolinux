@@ -57,3 +57,5 @@ for row in report['programs']:
     else:assert p.returncode==1 and target.read_text()=='preserve'
     assert sha(pe)==row['pe_sha256'];save(out/'report.json',report)
 print('Two unchanged custom-entry programs; 24 file observations + four real I/O failures; conversion outcomes in report.json')
+# Integration acceptance gate, distinct from the preregistered behavioral oracle.
+assert next(r for r in report['programs'] if r['name']=='swap')['conversion']['exit']==0, 'Required pair-permutation translation regressed'
