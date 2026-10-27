@@ -1,6 +1,7 @@
 """Original entry-state observation, with immutable artifact provenance."""
 from pathlib import Path
 import hashlib,json,subprocess,struct,sys
+from module_identity import observed_module
 root=Path(sys.argv[1]).resolve()
 out=Path(sys.argv[2]).resolve();out.mkdir(parents=True,exist_ok=False)
 original=root/'rcedit.exe';data=original.read_bytes()
@@ -20,6 +21,7 @@ if run.returncode:
     print(run.stderr.decode(errors='replace'))
     raise RuntimeError('entry observation unavailable; exit='+str(run.returncode))
 report=json.loads(run.stdout);report.update(pe_sha256=digest,source_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),translated_pairs=0)
+report['handler_module']=observed_module(report)
 if report['eip']!=report['image_base']+entry: raise ValueError('not original entry')
 if hashlib.sha256(original.read_bytes()).hexdigest()!=digest: raise ValueError('artifact changed')
 (out/'report.json').write_text(json.dumps(report,indent=2)+'\n');print(json.dumps(report,indent=2))

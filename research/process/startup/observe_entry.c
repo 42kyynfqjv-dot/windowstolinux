@@ -5,6 +5,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
+struct Loaded { DWORD base; char path[1024]; };
 
 static BOOL read_exact(HANDLE process, DWORD address, void *out, SIZE_T n) {
     SIZE_T done=0;
@@ -14,6 +16,7 @@ int main(int argc,char **argv) {
     STARTUPINFOA si={0}; PROCESS_INFORMATION pi={0}; DEBUG_EVENT ev={0};
     DWORD entry=0,base=0,result=125; BOOL armed=FALSE,stopped=FALSE,patched=FALSE;
     BYTE original=0,trap=0xcc; SIZE_T written=0;
+    struct Loaded modules[64]={0}; unsigned module_count=0;
     ULONGLONG deadline=GetTickCount64()+10000;
     if(argc!=3) return 125;
     si.cb=sizeof(si);
@@ -28,7 +31,14 @@ int main(int argc,char **argv) {
             entry=base+(DWORD)strtoul(argv[2],NULL,0);
             if(ev.u.CreateProcessInfo.hFile) CloseHandle(ev.u.CreateProcessInfo.hFile);
         } else if(ev.dwDebugEventCode==LOAD_DLL_DEBUG_EVENT) {
-            if(ev.u.LoadDll.hFile) CloseHandle(ev.u.LoadDll.hFile);
+            if(ev.u.LoadDll.hFile) {
+                if(module_count<64) {
+                    struct Loaded *m=&modules[module_count];
+                    DWORD n=GetFinalPathNameByHandleA(ev.u.LoadDll.hFile,m->path,sizeof(m->path),FILE_NAME_NORMALIZED);
+                    if(n>0 && n<sizeof(m->path)) {m->base=(DWORD)(uintptr_t)ev.u.LoadDll.lpBaseOfDll;module_count++;}
+                }
+                CloseHandle(ev.u.LoadDll.hFile);
+            }
         } else if(ev.dwDebugEventCode==CREATE_THREAD_DEBUG_EVENT) {
             CloseHandle(ev.u.CreateThread.hThread);
         } else if(ev.dwDebugEventCode==EXCEPTION_DEBUG_EVENT) {
@@ -54,7 +64,16 @@ int main(int argc,char **argv) {
                     if(!read_exact(pi.hProcess,tib[0],record,sizeof(record)) ||
                        !VirtualQueryEx(pi.hProcess,(void *)(uintptr_t)record[1],&memory,sizeof(memory))) break;
                 }
-                printf("{\"kind\":\"INT3 entry observation; eip normalized from trap; not baseline\","
+                char *module_path=NULL; IMAGE_DOS_HEADER dos={0}; IMAGE_NT_HEADERS32 nt={0};
+                DWORD module_base=(DWORD)(uintptr_t)memory.AllocationBase;
+                for(unsigned k=0;k<module_count;k++) if(modules[k].base==module_base) module_path=modules[k].path;
+                if(!module_path || !read_exact(pi.hProcess,module_base,&dos,sizeof(dos)) || dos.e_magic!=IMAGE_DOS_SIGNATURE ||
+                   dos.e_lfanew<0 || dos.e_lfanew>4096 || !read_exact(pi.hProcess,module_base+dos.e_lfanew,&nt,sizeof(nt)) ||
+                   nt.Signature!=IMAGE_NT_SIGNATURE || nt.FileHeader.Machine!=IMAGE_FILE_MACHINE_I386) break;
+                printf("{\"module_path_hex\":\"");
+                for(size_t k=0;k<strlen(module_path);k++) printf("%02x",(unsigned char)module_path[k]);
+                printf("\",\"module_machine\":%u,\"module_timestamp\":%lu,\"module_size\":%lu,",nt.FileHeader.Machine,nt.FileHeader.TimeDateStamp,nt.OptionalHeader.SizeOfImage);
+                printf("\"kind\":\"INT3 entry observation; eip normalized from trap; not baseline\","
                        "\"image_base\":%lu,\"entry\":%lu,\"eip\":%lu,\"esp\":%lu,\"ebp\":%lu,"
                        "\"teb\":%lu,\"stack_base\":%lu,\"stack_limit\":%lu,\"chain_head\":%lu,"
                        "\"previous\":%lu,\"handler\":%lu,\"handler_allocation\":%lu,\"handler_type\":%lu}\n",
