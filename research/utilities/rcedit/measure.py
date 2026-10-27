@@ -39,7 +39,7 @@ fixture=out/'fixture';fixture.mkdir()
 for f in (here/'fixtures').iterdir():shutil.copy2(f,fixture/f.name)
 run(['rc','/nologo','/fofixture.res','fixture.rc'],'build-fixture-resources',fixture)
 run(['cl','/nologo','/W4','/O2','fixture.c','fixture.res','/Fefixture.exe'],'build-fixture',fixture)
-run(['cl','/nologo','/W4','/O2','observe.c','/Feobserve.exe','/link','version.lib'],'build-observer',fixture)
+run(['cl','/nologo','/W4','/O2','observe.c','/Feobserve.exe','/link','version.lib','user32.lib'],'build-observer',fixture)
 original=fixture/'fixture.exe';observer=fixture/'observe.exe';initial=original.read_bytes();baseline=snapshot(initial)
 def observe(path):
  p=run([observer,path],'independent-observation');return dict(line.split('=',1) for line in p.stdout.decode('ascii').splitlines())

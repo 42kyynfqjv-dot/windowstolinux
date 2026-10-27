@@ -46,3 +46,13 @@ hosted image labels are maintained by the provider, not immutable version select
 This is a build-prerequisite comparison, not selection based on converter results:
 neither earlier cohort produced a binary for converter evaluation. Both failures
 remain outcomes, even if the complete toolkit works. No automatic fallback is used.
+
+The complete Windows2022 toolkit cohort at20aa003/CI40527128011 successfully built
+the UNCHANGED upstream utility, SHA256
+84a1b5a3f22288ed9cf1c1e14680eb4147ae3fb83c78eeca3d7a10d54c86f88c.
+Artifact12744007624 preserves that original PE and complete build/source identities.
+No workload or converter ran: the independently authored observer failed to link
+LoadStringW because its link command omitted user32.lib. Adding that standard
+observer dependency fixes the harness only. The observer source, fixture bytes,
+eleven semantic expectations, upstream build and utility source remain unchanged.
+Do not describe this harness failure as an upstream build or converter rejection.
