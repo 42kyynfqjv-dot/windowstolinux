@@ -182,3 +182,97 @@ pub(super) fn emit(bound: &Bound) -> String {
     out.push_str("_=>unreachable!(),}}}\nfn main(){let mut io=Native::new();std::process::exit(run(&mut io) as i32);}\n");
     out
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn independent_native_wrap_and_carry_vectors() {
+        // Literal architectural expectations, exercised through decoded IR and
+        // emitted native instructions. This isolates emission from admission.
+        let vectors = [
+            (0u8, 0u32, 0u32, false, 0u32, false),
+            (0, 1, 0, false, 0xffffffff, true),
+            (0, 0x80000000, 0, false, 0x80000000, true),
+            (0, 0xffffffff, 0, false, 1, true),
+            (1, 0, 0, false, 0, false),
+            (1, 0, 0, true, 0xffffffff, true),
+            (1, 0, 0xffffffff, true, 0, true),
+            (1, 0xffffffff, 0xffffffff, true, 0xffffffff, true),
+            (1, 0x80000000, 1, false, 0x7fffffff, false),
+            (2, 1, 0, true, 0, true),
+            (2, 0, 0, false, 0xffffffff, false),
+        ];
+        let dir = std::env::temp_dir().join(format!(
+            "w2l-scalar-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&dir).unwrap();
+        let mut source = String::new();
+        let mut checks = String::new();
+        let mut id = 0;
+        for (op, a, b, carry, result, out_carry) in vectors {
+            for flags in [false, true] {
+                let mut code = vec![0x33, 0xd2, 0x83, 0xfa, u8::from(carry), 0xb8];
+                code.extend(a.to_le_bytes());
+                code.push(0xbb);
+                code.extend(b.to_le_bytes());
+                code.extend(match op {
+                    0 => vec![0xf7, 0xd8],
+                    1 => vec![0x1b, 0xc3],
+                    _ => vec![0x48],
+                });
+                let expected = if flags {
+                    code.extend([0x72, 6]);
+                    u32::from(out_carry)
+                } else {
+                    code.push(0x3d);
+                    code.extend(result.to_le_bytes());
+                    code.extend([0x75, 6]);
+                    0
+                };
+                code.extend([0xb8, 0, 0, 0, 0, 0xc3, 0xb8, 1, 0, 0, 0, 0xc3]);
+                let bound = Bound {
+                    graph: super::super::graph::decode(&code, 0, 0).unwrap(),
+                    calls: Default::default(),
+                    loads: Default::default(),
+                };
+                writeln!(source, "mod g{id} {{ {} }}", emit(&bound)).unwrap();
+                writeln!(source,"impl g{id}::StreamIo for NoIo {{ fn standard(&mut self,_:u32)->u32{{panic!()}} fn read(&mut self,_:u32,_:&mut[u8])->Result<usize,u32>{{panic!()}} fn write(&mut self,_:u32,_:&[u8])->Result<usize,u32>{{panic!()}} }}").unwrap();
+                writeln!(
+                    checks,
+                    "assert_eq!(g{id}::run(&mut NoIo),{expected},\"vector {id}\");"
+                )
+                .unwrap();
+                id += 1;
+            }
+        }
+        writeln!(source, "struct NoIo;fn main(){{{checks}}}").unwrap();
+        let rust = dir.join("vectors.rs");
+        let exe = dir.join("vectors");
+        std::fs::write(&rust, source).unwrap();
+        let compiled = std::process::Command::new("rustc")
+            .args(["--edition=2021"])
+            .arg(&rust)
+            .arg("-o")
+            .arg(&exe)
+            .output()
+            .unwrap();
+        assert!(
+            compiled.status.success(),
+            "{}",
+            String::from_utf8_lossy(&compiled.stderr)
+        );
+        let ran = std::process::Command::new(&exe).output().unwrap();
+        assert!(
+            ran.status.success(),
+            "{}",
+            String::from_utf8_lossy(&ran.stderr)
+        );
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+}

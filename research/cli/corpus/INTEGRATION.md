@@ -66,8 +66,11 @@ termination claim is introduced. SAT/UNKNOWN/exhaustion remain emission failures
   backend tests of emitted code, not additional original-Windows process pairs.
 - Ten separate unsafe PE copies: six wrong error-class roots, two counter-direction
   mutations and two inclusive compaction-read guards. Originals remain unchanged.
--119 root functions (four new functions); the six graph example functions are
-  inherited in root and must not be counted again as unique tests. Prior CLI,
+-120 root functions (five new functions); the six graph example functions are
+  inherited in root and must not be counted again as unique tests. One emitter
+  function executes22 independent result/carry checks from11 literal NEG/SBB/DEC
+  boundary vectors, including INT_MIN, UINT_MAX and borrow-in wrap. These isolated
+  native emission checks are not additional original Windows comparisons. Prior CLI,
   broken-pipe adapter checks,14 safety rejections and previous corpus remain required.
 
 Local accepted executions use a labelled copy of saved Windows evidence with local

@@ -144,7 +144,8 @@ fn writable(o: &Operand) -> bool {
 fn normalized(i: &Instruction, b: &[u8]) -> Result<Operation, String> {
     use Mnemonic::*;
     // NOP's memory-looking spelling does not access memory. Accept the defined
-    // unprefixed 0F1F /0 forms and 66 90 only; don't erase arbitrary prefixes.
+    // unprefixed 0F1F /0 forms, 66 90 and two exact compiler alignment forms;
+    // do not erase arbitrary prefixes.
     if i.mnemonic() == Nop
         && (b == [0x90]
             || b == [0x66, 0x90]
