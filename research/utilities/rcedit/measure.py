@@ -20,7 +20,9 @@ report['toolchain']={}
 for name in ['cl.exe','link.exe','rc.exe','nmake.exe','cmake.exe']:
  path=shutil.which(name);report['toolchain'][name]=dict(path=path,sha256=sha(Path(path)) if path else None);save()
  assert path,('missing existing build prerequisite',name)
-report['toolchain']['sdk_version']=os.environ.get('WindowsSDKVersion');save()
+report['toolchain']['sdk_version']=os.environ.get('WindowsSDKVersion');report['build_cohorts']=m['build_cohorts'];save()
+assert '/'+m['toolset_selection']+'.' in report['toolchain']['cl.exe']['path'].replace('\\','/'),'require frozen preinstalled toolset'
+report['toolchain']['installed_msvc_directories']=[p.name for p in Path(report['toolchain']['cl.exe']['path']).parents[4].iterdir() if p.is_dir()];save()
 run(['cl.exe','/Bv'],'compiler-version',allow_failure=True);run(['cmake','--version'],'cmake-version');run(['link.exe'],'linker-version',allow_failure=True)
 source=out/'source';run(['git','init',source],'source-init')
 run(['git','-C',source,'-c','core.autocrlf=false','fetch','--depth=1',m['source_repository'],m['source_commit']],'source-fetch')

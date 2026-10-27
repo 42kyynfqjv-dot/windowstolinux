@@ -164,5 +164,22 @@
     "user executables",
     "converter changes",
     "post-result source/flag tuning"
+  ],
+  "toolset_selection": "14.44",
+  "build_cohorts": [
+    {
+      "name": "VS2026 default",
+      "frozen_commit": "9017c307c666a624b58de11c730b3b9eb4182277",
+      "ci_run": 40525008904,
+      "outcome": "source build failed: std::locale::empty absent; no PE, no converter evaluation"
+    },
+    {
+      "name": "preinstalled MSVC14.44 compatibility build",
+      "toolset": "14.44",
+      "reason": "existing runner component VC.14.44.17.14.x86.x64; Microsoft STL vs-2022-17.14 xlocale preserves locale::empty",
+      "source_changes": false,
+      "optimization_changes": false,
+      "workload_changes": false
+    }
   ]
 }
