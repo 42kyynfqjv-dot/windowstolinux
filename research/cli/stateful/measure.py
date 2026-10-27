@@ -10,7 +10,7 @@ def run(cmd,**kw):
  except subprocess.TimeoutExpired as e:
   save(out/'timeout.json',dict(command=list(map(str,cmd)),stdout=(e.stdout or b'').hex(),stderr=(e.stderr or b'').hex()));raise
 m=json.loads((src/'frozen.json').read_text());cases=json.loads((src/'cases.json').read_text())
-for f,h in m['sha256'].items():assert sha(src/f)==h
+for f,h in m['sha256'].items():assert sha(src/f)==h,(f,sha(src/f),h)
 report=dict(manifest=m,platform=platform.platform(),programs=[])
 for name in m['programs']:
  for cfg,flags in m['configurations'].items():
