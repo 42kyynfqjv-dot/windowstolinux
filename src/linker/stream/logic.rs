@@ -33,6 +33,106 @@ fn num(n: i64) -> String {
         n.to_string()
     }
 }
+/// Candidate discovery is heuristic; candidates grant no authority until the
+/// first, independent Horn system proves them without assuming any candidate.
+#[derive(Clone, Copy)]
+struct Hint {
+    pc: u32,
+    input: u8,
+    output: u8,
+    pending: u8,
+}
+impl Hint {
+    fn expression(&self, s: &[String]) -> String {
+        format!(
+            "(<= (+ {} {}) (+ {} 1))",
+            s[self.output as usize], s[self.pending as usize], s[self.input as usize]
+        )
+    }
+}
+fn hints(bound: &Bound, frames: &Frames) -> Vec<Hint> {
+    let mut result = Vec::new();
+    for (&end, node) in &bound.graph.nodes {
+        let Operation::Branch(Condition::Below, start) = node.operation else {
+            continue;
+        };
+        if start >= end {
+            continue;
+        }
+        // A loop begins with an indexed byte load. Other graphs retain ordinary
+        // safety proofs; this is candidate discovery, never a graph recognizer
+        // that substitutes program behavior or bypasses proof obligations.
+        let Operation::Binary(Binary::Move, _, Operand::Memory(input, 8)) =
+            &bound.graph.nodes[&start].operation
+        else {
+            continue;
+        };
+        let Some(index) = input.index else {
+            continue;
+        };
+        let mut anchor = input.clone();
+        anchor.index = None;
+        let Ok(Value::Frame(Some(input_base))) = frames.states[&start].address(&anchor) else {
+            continue;
+        };
+        let body: Vec<_> = bound.graph.nodes.range(start..=end).collect();
+        let modified: BTreeSet<_> = body
+            .iter()
+            .filter_map(|(_, n)| match n.operation {
+                Operation::Increment(r)
+                | Operation::Decrement(r)
+                | Operation::Negate(r)
+                | Operation::Binary(_, Operand::Reg(r), _) => Some(r.index),
+                _ => None,
+            })
+            .collect();
+        let pending: Vec<_> = frames.states[&start]
+            .finite
+            .iter()
+            .filter_map(|(&r, v)| {
+                ((0..8).contains(&r)
+                    && modified.contains(&(r as u8))
+                    && *v == BTreeSet::from([0, 1]))
+                .then_some(r as u8)
+            })
+            .collect();
+        if pending.len() != 1 {
+            continue;
+        }
+        let mut outputs = BTreeSet::new();
+        for (&pc, n) in &body {
+            if let Operation::Binary(Binary::Move, Operand::Memory(a, 8), _) = &n.operation {
+                let Some(out) = a.index else {
+                    continue;
+                };
+                let mut anchor = a.clone();
+                anchor.index = None;
+                if matches!(frames.states[&pc].address(&anchor),Ok(Value::Frame(Some(base))) if base!=input_base)
+                    && body
+                        .iter()
+                        .any(|(_, n)| matches!(n.operation,Operation::Increment(r) if r.index==out))
+                {
+                    outputs.insert(out);
+                }
+            }
+        }
+        if outputs.len() == 1 && result.len() < 8 {
+            result.push(Hint {
+                pc: start,
+                input: index,
+                output: *outputs.first().unwrap(),
+                pending: pending[0],
+            });
+        }
+    }
+    result
+}
+#[derive(Clone, Copy)]
+struct Region {
+    base: i32,
+    cap: u32,
+    prefix: usize,
+}
 struct Builder<'a> {
     bound: &'a Bound,
     frames: &'a Frames,
@@ -41,6 +141,7 @@ struct Builder<'a> {
     arguments: BTreeMap<i32, usize>,
     cells: BTreeMap<i32, usize>,
     prefix: usize,
+    regions: Vec<Region>,
     cf: usize,
     zf: usize,
     ck: usize,
@@ -53,6 +154,7 @@ struct Builder<'a> {
     declarations: String,
     rules: String,
     safe: Vec<String>,
+    hints: Vec<Hint>,
 }
 impl Builder<'_> {
     fn fixed(&self, pc: u32) -> BTreeMap<usize, String> {
@@ -80,6 +182,7 @@ impl Builder<'_> {
                     fixed.insert(k, "32".into());
                 }
                 Value::Entry(_) | Value::Unknown => {
+                    fixed.insert(i, "0".into());
                     fixed.insert(k, "0".into());
                 }
                 Value::Scalar => {}
@@ -158,10 +261,29 @@ impl Builder<'_> {
         for &i in self.cells.values() {
             terms.push(format!("(and (<= 0 {}) (<= {} 4294967295))", s[i], s[i]));
         }
-        terms.push(format!(
-            "(and (<= 0 {}) (<= {} {}))",
-            s[self.prefix], s[self.prefix], self.cap
-        ));
+        for region in &self.regions {
+            terms.push(format!(
+                "(and (<= 0 {}) (<= {} {}))",
+                s[region.prefix], s[region.prefix], region.cap
+            ));
+        }
+        for (&key, values) in &frame.finite {
+            let index = if key >= 0 {
+                Some(key as usize)
+            } else {
+                self.cells.get(&key).or(self.arguments.get(&key)).copied()
+            };
+            if let Some(i) = index {
+                let alternatives: Vec<_> =
+                    values.iter().map(|v| eq(&s[i], &v.to_string())).collect();
+                terms.push(format!("(or false {})", alternatives.join(" ")));
+            }
+        }
+        for hint in &self.hints {
+            if hint.pc == pc {
+                terms.push(hint.expression(s));
+            }
+        }
         and(&terms)
     }
     fn fresh(&mut self, boolean: bool) -> String {
@@ -210,6 +332,48 @@ impl Builder<'_> {
             num(i64::from(a.displacement as i32))
         )
     }
+    fn byte_regions(&self, pc: u32, a: &Address) -> Vec<Region> {
+        let mut anchor = a.clone();
+        anchor.index = None;
+        let at = match self.frames.states[&pc].address(&anchor) {
+            Ok(Value::Frame(Some(at))) => Some(at),
+            _ => None,
+        };
+        let selected: Vec<_> = self
+            .regions
+            .iter()
+            .copied()
+            .filter(|r| at.is_none_or(|at| at >= r.base && at < r.base + r.cap as i32))
+            .collect();
+        // An addressing displacement may start one byte before a region while
+        // a positive index restores the address (reverse traversal). In that
+        // case require the ordinary disjunction of complete region bounds.
+        if selected.is_empty() {
+            self.regions.clone()
+        } else {
+            selected
+        }
+    }
+    fn coverage(
+        &self,
+        pc: u32,
+        offset: &str,
+        len: &str,
+        s: &[String],
+        append: bool,
+        regions: &[Region],
+    ) -> String {
+        let terms: Vec<_> = regions.iter().filter(|r| self.frames.states[&pc].region(r.base, r.cap as i32)).map(|r| {
+            let base = num(i64::from(r.base));
+            let end = num(i64::from(r.base) + i64::from(r.cap));
+            if append && r.prefix != self.prefix {
+                format!("(and (<= {base} {offset}) (< {offset} {end}) (<= {offset} (+ {base} {})))",s[r.prefix])
+            } else {
+                format!("(and (<= 0 {len}) (<= {base} {offset}) (<= (+ {offset} {len}) (+ {base} {})))",s[r.prefix])
+            }
+        }).collect();
+        format!("(or false {})", terms.join(" "))
+    }
     fn read(
         &mut self,
         pc: u32,
@@ -253,12 +417,7 @@ impl Builder<'_> {
                     self.check(
                         pre,
                         assume,
-                        format!(
-                            "(and (<= {} {offset}) (< {offset} (+ {} {})))",
-                            num(i64::from(self.base)),
-                            num(i64::from(self.base)),
-                            s[self.prefix]
-                        ),
+                        self.coverage(pc, &offset, "1", s, false, &self.byte_regions(pc, a)),
                     );
                     let byte = self.fresh(false);
                     // Any input/stored byte; over-approximate content, never init.
@@ -311,18 +470,24 @@ impl Builder<'_> {
                     s[i + 1] = k;
                 } else {
                     let offset = self.address(a, s);
-                    // Restrict byte writes to current initialized prefix. This
-                    // preserves its initialization without inventing new bytes.
                     self.check(
                         pre,
                         assume,
-                        format!(
-                            "(and (<= {} {offset}) (< {offset} (+ {} {})))",
-                            num(i64::from(self.base)),
-                            num(i64::from(self.base)),
-                            s[self.prefix]
-                        ),
+                        self.coverage(pc, &offset, "1", s, true, &self.byte_regions(pc, a)),
                     );
+                    // A proved store can extend exactly one initialized prefix
+                    // by one byte, or overwrite it. It cannot bridge a gap.
+                    for r in self.byte_regions(pc, a) {
+                        if r.prefix == self.prefix {
+                            continue;
+                        }
+                        let base = num(i64::from(r.base));
+                        let end = num(i64::from(r.base) + i64::from(r.cap));
+                        s[r.prefix] = format!(
+                            "(ite (and (= {offset} (+ {base} {})) (< {offset} {end})) (+ {} 1) {})",
+                            s[r.prefix], s[r.prefix], s[r.prefix]
+                        );
+                    }
                 }
             }
             _ => return Err("stream logic: invalid destination".into()),
@@ -467,6 +632,15 @@ impl Builder<'_> {
                     }
                 }
             }
+            Operation::ConditionalMove(dst, src) => {
+                self.check(&pre, &assume, s[self.zk].clone());
+                self.known(&pre, &assume, &s[8 + dst.index as usize], 32);
+                self.known(&pre, &assume, &s[8 + src.index as usize], 32);
+                s[dst.index as usize] = format!(
+                    "(ite {} {} {})",
+                    s[self.zf], s[src.index as usize], s[dst.index as usize]
+                );
+            }
             Operation::Address(r, a) => {
                 if matches!(
                     state.registers[a.base.unwrap_or(4) as usize],
@@ -584,7 +758,9 @@ impl Builder<'_> {
                         let len = &s[args[2]];
                         let kind = if f == Function::Read { 1 } else { 2 };
                         self.check(&pre, &assume, format!("(= {handle} {kind})"));
-                        self.check(&pre,&assume,format!("(and (<= 0 {len}) (<= {len} {}) (<= {} {ptr}) (<= (+ {ptr} {len}) {}))",self.cap,num(i64::from(self.base)),num(i64::from(self.base)+i64::from(self.cap))));
+                        if f == Function::Read {
+                            self.check(&pre,&assume,format!("(and (<= 0 {len}) (<= {len} {}) (<= {} {ptr}) (<= (+ {ptr} {len}) {}))",self.cap,num(i64::from(self.base)),num(i64::from(self.base)+i64::from(self.cap))));
+                        }
                         let countptr = &s[args[3]];
                         let Value::Frame(Some(at)) = state.arguments(5)?[3] else {
                             unreachable!()
@@ -601,11 +777,7 @@ impl Builder<'_> {
                             self.check(
                                 &pre,
                                 &assume,
-                                format!(
-                                    "(<= (+ {ptr} {len}) (+ {} {}))",
-                                    num(i64::from(self.base)),
-                                    s[self.prefix]
-                                ),
+                                self.coverage(pc, &ptr, len, &s, false, &self.regions),
                             );
                         }
                         let success = self.fresh(true);
@@ -665,8 +837,10 @@ impl Builder<'_> {
                     state.sp
                 };
                 let hi = lo + *n as i32;
-                if lo < self.base + self.cap as i32 && self.base < hi {
-                    s[self.prefix] = "0".into();
+                for r in &self.regions {
+                    if lo < r.base + r.cap as i32 && r.base < hi {
+                        s[r.prefix] = "0".into();
+                    }
                 }
                 for (&at, &i) in &self.cells {
                     if lo < at + 4 && at < hi {
@@ -717,6 +891,28 @@ impl Builder<'_> {
     }
 }
 pub(super) fn encode(bound: &Bound, frames: &Frames) -> Result<Logic, String> {
+    let candidates = hints(bound, frames);
+    if candidates.is_empty() {
+        return encode_phase(bound, frames, &[], false);
+    }
+    let first = encode_phase(bound, frames, &candidates, true)?;
+    let final_ = encode_phase(bound, frames, &candidates, false)?;
+    let text = format!("{}\n(reset)\n{}", first.text, final_.text);
+    if text.len() > 8_000_000 {
+        return Err("stream logic: combined constraint-size budget".into());
+    }
+    let queries = first.queries + final_.queries;
+    if queries > 1024 {
+        return Err("stream logic: combined property budget".into());
+    }
+    Ok(Logic { text, queries })
+}
+fn encode_phase(
+    bound: &Bound,
+    frames: &Frames,
+    candidates: &[Hint],
+    establish: bool,
+) -> Result<Logic, String> {
     let mut names: Vec<_> = (0..8)
         .map(|i| format!("r{i}"))
         .chain((0..8).map(|i| format!("k{i}")))
@@ -795,26 +991,62 @@ pub(super) fn encode(bound: &Bound, frames: &Frames) -> Result<Logic, String> {
         }
     }
     let count_at = read_count.ok_or("stream logic: missing read-count owner")?;
-    for (&pc, &f) in &bound.calls {
-        if f == Function::Write
-            && frames.states[&pc].arguments(5)?[3] == Value::Frame(Some(count_at))
-        {
-            return Err("stream logic: write aliases read-epoch length cell".into());
-        }
-    }
-    for (&pc, node) in &bound.graph.nodes {
-        if let Operation::Binary(op, Operand::Memory(a, 32), _) = &node.operation {
-            if !matches!(op, Binary::Compare | Binary::Test)
-                && frames.states[&pc].address(a)? == Value::Frame(Some(count_at))
-            {
-                return Err("stream logic: scalar store aliases read-epoch length cell".into());
+    let unique_count = !bound.calls.iter().any(|(&pc,&f)| f==Function::Write && frames.states[&pc].arguments(5).is_ok_and(|a|a[3]==Value::Frame(Some(count_at))))
+        && !bound.graph.nodes.iter().any(|(&pc,n)| matches!(&n.operation,Operation::Binary(op,Operand::Memory(a,32),_) if !matches!(op,Binary::Compare|Binary::Test) && frames.states[&pc].address(a)==Ok(Value::Frame(Some(count_at)))));
+    // Split owned stack allocations at every word and the fixed input region.
+    // These are machine-frame byte regions, not recovered C array declarations.
+    // Padding remains owned, but initially unreadable. Access requires the
+    // actual instruction's live allocation plus an initialized prefix.
+    let mut ranges = BTreeSet::new();
+    for state in frames.states.values() {
+        for (&lo, &hi) in &state.locals {
+            let mut cursor = lo;
+            let mut cuts: Vec<_> = cells.keys().map(|&at| (at, at + 4)).collect();
+            cuts.push((base, base + cap as i32));
+            cuts.sort();
+            for (a, b) in cuts {
+                if b <= lo || a >= hi {
+                    continue;
+                }
+                if cursor < a {
+                    ranges.insert((cursor, a));
+                }
+                cursor = cursor.max(b);
+            }
+            if cursor < hi {
+                ranges.insert((cursor, hi));
             }
         }
     }
-    // Structural unique-writer proof: this word is written only by ReadFile,
-    // which resets both count and prefix on every success/failure. All byte
-    // stores are separately proved confined to the disjoint current prefix.
-    let prefix = cells[&count_at];
+    // Equality is an optimization only after a structural unique-writer proof.
+    // Otherwise guest count writes and read initialization have separate state.
+    let prefix = if unique_count {
+        cells[&count_at]
+    } else {
+        let i = names.len();
+        names.push("read_prefix".into());
+        i
+    };
+    let mut regions = vec![Region { base, cap, prefix }];
+    for (lo, hi) in ranges {
+        // Overlapping allocation incarnations need a separate lifetime model.
+        if regions
+            .iter()
+            .any(|r| lo < r.base + r.cap as i32 && r.base < hi)
+        {
+            return Err("stream logic: overlapping byte-region lifetimes".into());
+        }
+        let prefix = names.len();
+        names.push(format!("init{}", -lo));
+        regions.push(Region {
+            base: lo,
+            cap: (hi - lo) as u32,
+            prefix,
+        });
+    }
+    if regions.len() > 64 {
+        return Err("stream logic: byte-region budget".into());
+    }
     let cf = names.len();
     names.push("cf".into());
     let zf = names.len();
@@ -836,6 +1068,7 @@ pub(super) fn encode(bound: &Bound, frames: &Frames) -> Result<Logic, String> {
         arguments,
         cells,
         prefix,
+        regions,
         cf,
         zf,
         ck,
@@ -848,6 +1081,11 @@ pub(super) fn encode(bound: &Bound, frames: &Frames) -> Result<Logic, String> {
         declarations: String::new(),
         rules: String::new(),
         safe: Vec::new(),
+        hints: if establish {
+            vec![]
+        } else {
+            candidates.to_vec()
+        },
     };
     for (i, name) in b.names.iter().enumerate() {
         writeln!(
@@ -910,6 +1148,26 @@ pub(super) fn encode(bound: &Bound, frames: &Frames) -> Result<Logic, String> {
         } else {
             writeln!(text, "{line}").unwrap();
         }
+    }
+    if establish {
+        for (i, hint) in candidates.iter().enumerate() {
+            let state = b.state(hint.pc);
+            writeln!(
+                text,
+                "(declare-rel hint{i} ())\n(rule (=> (and {} {} (not {})) hint{i}))",
+                b.atom(hint.pc, &state),
+                b.domain(hint.pc, &state),
+                hint.expression(&state)
+            )
+            .unwrap();
+        }
+        for i in 0..candidates.len() {
+            writeln!(text, "(query hint{i})").unwrap();
+        }
+        return Ok(Logic {
+            text,
+            queries: candidates.len(),
+        });
     }
     let queries = properties.len();
     if queries == 0 || queries > 1024 {

@@ -183,7 +183,8 @@ pub(super) fn bind(image: &Candidate<'_>) -> Result<Bound, String> {
                     };
                 }
             }
-            Operation::Address(dst, _)
+            Operation::ConditionalMove(dst, _)
+            | Operation::Address(dst, _)
             | Operation::Increment(dst)
             | Operation::Decrement(dst)
             | Operation::Negate(dst)

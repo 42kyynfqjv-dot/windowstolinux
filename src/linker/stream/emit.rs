@@ -91,6 +91,9 @@ pub(super) fn emit(bound: &Bound) -> String {
                     }
                 }
             }
+            Operation::ConditionalMove(dst, src) => {
+                writeln!(out, "if zf {{r[{}]=r[{}];}}", dst.index, src.index).unwrap();
+            }
             Operation::Address(r, a) => {
                 writeln!(out, "r[{}]={};", r.index, addr(a)).unwrap();
             }
@@ -202,6 +205,8 @@ mod tests {
             (1, 0x80000000, 1, false, 0x7fffffff, false),
             (2, 1, 0, true, 0, true),
             (2, 0, 0, false, 0xffffffff, false),
+            (3, 7, 42, false, 42, false),
+            (3, 7, 42, true, 7, true),
         ];
         let dir = std::env::temp_dir().join(format!(
             "w2l-scalar-{}-{}",
@@ -216,7 +221,7 @@ mod tests {
         let mut checks = String::new();
         let mut id = 0;
         for (op, a, b, carry, result, out_carry) in vectors {
-            for flags in [false, true] {
+            for flags in 0..3 {
                 let mut code = vec![0x33, 0xd2, 0x83, 0xfa, u8::from(carry), 0xb8];
                 code.extend(a.to_le_bytes());
                 code.push(0xbb);
@@ -224,11 +229,15 @@ mod tests {
                 code.extend(match op {
                     0 => vec![0xf7, 0xd8],
                     1 => vec![0x1b, 0xc3],
-                    _ => vec![0x48],
+                    2 => vec![0x48],
+                    _ => vec![0x0f, 0x44, 0xc3],
                 });
-                let expected = if flags {
+                let expected = if flags == 1 {
                     code.extend([0x72, 6]);
                     u32::from(out_carry)
+                } else if flags == 2 {
+                    code.extend([0x74, 6]);
+                    u32::from(if op == 3 { !carry } else { result == 0 })
                 } else {
                     code.push(0x3d);
                     code.extend(result.to_le_bytes());

@@ -455,12 +455,18 @@ jobs:
           name: crlf-windows
           path: crlf-evidence
       - name: Compare stateful CRLF converter outcomes
-        run: python3 research/cli/crlf/check_native.py crlf-evidence
+        run: |
+          python3 research/cli/crlf/check_native.py crlf-evidence
+          python3 research/cli/crlf/check_integration.py crlf-evidence
+          python3 research/cli/crlf/check_safety.py crlf-evidence
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: crlf-native
-          path: crlf-evidence/native.json
+          path: |
+            crlf-evidence/native.json
+            crlf-evidence/integration.json
+            crlf-evidence/safety.json
           if-no-files-found: warn
       - name: Convert same hashed PE on Linux and compare native execution
         run: |
