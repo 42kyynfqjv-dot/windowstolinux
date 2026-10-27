@@ -132,3 +132,8 @@ SUB-537 adds only the exact proven finite summation loop in
 The unchanged held-out loop must match Windows empty output/exit10; twelve compiler
 comparisons are now required, with four remaining held-out capabilities rejected.
 This is a narrow recognized graph with explicit ranking, resource and exit bounds.
+
+The streaming corpus integration extends the shared proof/emitter to frozen O1/O2
+ROT13, reverse-XOR and NUL-compaction programs. See
+[its bounded contract and evidence gates](research/cli/corpus/INTEGRATION.md);
+scripted backend tests and Windows/ELF process comparisons are counted separately.

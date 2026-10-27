@@ -183,9 +183,11 @@ pub(super) fn bind(image: &Candidate<'_>) -> Result<Bound, String> {
                     };
                 }
             }
-            Operation::Address(dst, _) | Operation::Increment(dst) | Operation::Pop(dst) => {
-                state[dst.index as usize] = None
-            }
+            Operation::Address(dst, _)
+            | Operation::Increment(dst)
+            | Operation::Decrement(dst)
+            | Operation::Negate(dst)
+            | Operation::Pop(dst) => state[dst.index as usize] = None,
             Operation::Leave => {
                 state[4] = None;
                 state[5] = None;

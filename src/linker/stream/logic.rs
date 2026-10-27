@@ -68,7 +68,11 @@ impl Builder<'_> {
                     fixed.insert(i, num(i64::from(n)));
                     fixed.insert(k, "32".into());
                 }
-                Value::Frame(None) | Value::Handle(_) | Value::Boolean | Value::Error => {
+                Value::Frame(None)
+                | Value::Handle(_)
+                | Value::Boolean
+                | Value::Error
+                | Value::ErrorAffine(_, _) => {
                     fixed.insert(k, "32".into());
                 }
                 Value::Function(_) => {
@@ -137,6 +141,7 @@ impl Builder<'_> {
                     | Value::Constant(_)
                     | Value::Boolean
                     | Value::Error
+                    | Value::ErrorAffine(_, _)
                     | Value::Handle(_)
             )
         };
@@ -383,6 +388,27 @@ impl Builder<'_> {
                         let raw = match op {
                             Binary::Add => format!("(+ {a} {b})"),
                             Binary::Sub | Binary::Compare => format!("(- {a} {b})"),
+                            Binary::Sbb => {
+                                self.check(&pre, &assume, s[self.ck].clone());
+                                format!("(- {a} {b} (ite {} 1 0))", s[self.cf])
+                            }
+                            Binary::And => {
+                                let Operand::Immediate(mask) = src else {
+                                    return Err("stream logic: AND requires immediate mask".into());
+                                };
+                                let terms: Vec<_> = (0..32)
+                                    .filter(|bit| mask & (1u32 << bit) != 0)
+                                    .map(|bit| {
+                                        let power = 1u64 << bit;
+                                        format!("(* {power} (mod (div {a} {power}) 2))")
+                                    })
+                                    .collect();
+                                if terms.is_empty() {
+                                    "0".into()
+                                } else {
+                                    format!("(+ 0 {})", terms.join(" "))
+                                }
+                            }
                             Binary::Test if dst == src => a.clone(),
                             _ => {
                                 return Err(
@@ -391,8 +417,11 @@ impl Builder<'_> {
                                 )
                             }
                         };
+                        let opaque = matches!(dst,Operand::Reg(r) if matches!(state.registers[r.index as usize],Value::Error|Value::ErrorAffine(_, _)));
                         let v = if pointer {
                             raw.clone()
+                        } else if opaque || *op == Binary::Sbb {
+                            format!("(mod {raw} 4294967296)")
                         } else if width == 32 && matches!(op, Binary::Add | Binary::Sub) {
                             let range = format!("(and (<= 0 {raw}) (< {raw} 4294967296))");
                             self.check(&pre, &assume, range.clone());
@@ -429,18 +458,34 @@ impl Builder<'_> {
                         s[self.cf] = match op {
                             Binary::Add => format!("(>= {raw} {modulus})"),
                             Binary::Sub | Binary::Compare => format!("(< {a} {b})"),
+                            Binary::Sbb => format!("(< {raw} 0)"),
                             _ => "false".into(),
                         };
-                        let error_predicate = matches!(dst,Operand::Reg(r) if state.registers[r.index as usize]==Value::Error);
+                        let error_predicate = opaque;
                         s[self.ck] = (!pointer && !error_predicate).to_string();
                         s[self.zk] = (!pointer).to_string();
                     }
                 }
             }
             Operation::Address(r, a) => {
-                self.address_known(a, &s, &pre, &assume);
-                s[r.index as usize] = self.address(a, &s);
-                s[8 + r.index as usize] = "32".into();
+                if matches!(
+                    state.registers[a.base.unwrap_or(4) as usize],
+                    Value::Frame(_)
+                ) {
+                    self.address_known(a, &s, &pre, &assume);
+                    s[r.index as usize] = self.address(a, &s);
+                    s[8 + r.index as usize] = "32".into();
+                } else {
+                    let bits = [a.base, a.index]
+                        .into_iter()
+                        .flatten()
+                        .map(|i| state.known[i as usize])
+                        .min()
+                        .unwrap_or(32);
+                    let modulus = 1u64 << bits;
+                    s[r.index as usize] = format!("(mod {} {modulus})", self.address(a, &s));
+                    s[8 + r.index as usize] = bits.to_string();
+                }
             }
             Operation::Increment(r) => {
                 let i = r.index as usize;
@@ -450,6 +495,26 @@ impl Builder<'_> {
                 assume.push(range);
                 s[i] = format!("(+ {} 1)", s[i]);
                 s[self.zf] = eq(&s[i], "0");
+                s[self.zk] = "true".into();
+            }
+            Operation::Decrement(r) => {
+                let i = r.index as usize;
+                self.known(&pre, &assume, &s[i + 8], 32);
+                let ok = format!("(and (< 0 {}) (<= {} 4294967295))", s[i], s[i]);
+                self.check(&pre, &assume, ok.clone());
+                assume.push(ok);
+                s[i] = format!("(- {} 1)", s[i]);
+                s[self.zf] = eq(&s[i], "0");
+                s[self.zk] = "true".into();
+            }
+            Operation::Negate(r) => {
+                let i = r.index as usize;
+                self.known(&pre, &assume, &s[i + 8], 32);
+                s[self.cf] = not(&eq(&s[i], "0"));
+                s[i] = format!("(mod (- {}) 4294967296)", s[i]);
+                s[self.zf] = eq(&s[i], "0");
+                // The frame proof separately limits opaque-error flag observations.
+                s[self.ck] = "true".into();
                 s[self.zk] = "true".into();
             }
             Operation::Push(o) => {
@@ -696,6 +761,30 @@ pub(super) fn encode(bound: &Bound, frames: &Frames) -> Result<Logic, String> {
                     );
                 }
                 region = Some((base, cap));
+            }
+        }
+    }
+    // Inventory fixed owned local words, independently of API count cells.
+    for (&pc, node) in &bound.graph.nodes {
+        let ops: Vec<&Operand> = match &node.operation {
+            Operation::Binary(_, a, b) => vec![a, b],
+            Operation::Push(o) => vec![o],
+            _ => vec![],
+        };
+        for o in ops {
+            if let Operand::Memory(a, 32) = o {
+                if a.base.is_some() {
+                    let Value::Frame(Some(at)) = frames.states[&pc].address(a)? else {
+                        return Err("stream logic: dynamic local word".into());
+                    };
+                    if at % 4 != 0 || !frames.states[&pc].region(at, 4) {
+                        return Err("stream logic: local word ownership".into());
+                    }
+                    if let std::collections::btree_map::Entry::Vacant(e) = cells.entry(at) {
+                        e.insert(names.len());
+                        names.extend([format!("m{}", -at), format!("mk{}", -at)]);
+                    }
+                }
             }
         }
     }
