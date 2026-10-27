@@ -103,3 +103,29 @@ obligations, modular counter wrap, scalar-word byte aliases and cross-host hash
 provenance. A useful next validation gate is a bounded held-out streaming corpus
 with different state/control composition across both pinned compilers, evaluated
 without support changes, before another capability expansion.
+
+## Local checkpoint before publication
+
+At code/harness commit `1310b1615faecdc01117cedbc4816f6143e95aad`, all six LLVM
+PEs from the reviewed SUB-571 Windows artifact (run 40455888153) passed the
+production proof. Newly generated Linux ELFs matched all 186 retained Windows
+observations. The 144 scripted runs, 224,988 partition/EOF executions and all 22
+negative checks passed. Four of the 18 mutated PEs rejected without a SAT
+counterexample; the other 14 reported SAT. Both false-invariant certificates
+reported SAT, and both deliberately exhausted solver runs rejected.
+
+The prior 16 MSVC streaming builds also passed 500 retained Windows comparisons:
+uppercase 62, ROT13/reverse-XOR/compaction 174, CRLF 78 and stateful composition 186.
+For these local checks, only temporary copies of the generated-Rust metadata were
+regenerated; original PE hashes and Windows expected observations were retained.
+This establishes local deterministic regeneration and execution agreement with
+recorded originals. It does not establish same-commit cross-host Rust identity.
+Formatting, Clippy with warnings denied, and all Cargo test targets passed;
+129 root functions are unique, with inherited tests repeated by examples.
+
+Public push and the progress comment to SUB-572 were rejected by automatic
+approval review for missing accepted payload/destination authorization. Both
+specific permissions were requested; no alternate publication route was used.
+The feature branch is local, no new PR exists, and final-head Windows/full CI
+remains an outstanding acceptance gate. Substantive medium review follows that
+verification; this checkpoint does not authorize a merge without those gates.
