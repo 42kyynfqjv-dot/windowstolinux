@@ -67,7 +67,7 @@ def main():
         assert sha(HERE / name) == digest, name
     report = dict(manifest=manifest, platform=platform.platform(), programs=[],
                   toolchain={key: os.environ.get(key) for key in ['VCToolsVersion', 'WindowsSDKVersion']})
-    for tool in ['cl.exe', 'link.exe']:
+    for tool in ['cl.exe', 'link.exe', 'dumpbin.exe']:
         path = Path(shutil.which(tool))
         report['toolchain'][tool] = dict(path=str(path), sha256=sha(path))
     for name in manifest['programs']:

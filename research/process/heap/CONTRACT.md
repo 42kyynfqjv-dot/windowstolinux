@@ -114,3 +114,38 @@ application hash/name or independent algorithm answer.
 ISCC/rcedit additionally require unresolved ordinary startup, TLS/SEH, modules and
 many external effects. They still reject. Kernel/driver/hardware and the unverified
 Wine-failure track are separate. No timeout cause is claimed fixed by this work.
+
+## Measured instruction and utility grounding
+
+The first Windows artifacts (af2b420 measurement) both import seven functions:
+ReadFile/WriteFile/GetStdHandle and the four heap functions. The current IAT gate
+rejects their 32-byte table before decoding. Independent structural decoding of
+unchanged .text additionally rejects grow's SHL AL,4 at RVA10a5 and shrink's SHR
+EDI,1 at RVA1077. The full shrink listing also has OR EAX,ESI for alignment checks.
+Do not present those first errors as a complete list of semantic prerequisites.
+Both listings contain saved registers, spilled heap handles/pointers, nullable
+allocation branches, heap-indexed byte access, resize-failure cleanup, bounded fill
+and copy loops, partial-register arithmetic and partial-output loops. Shrink's
+reverse load uses [EDI+EAX-1] after EAX=returned pointer-counter. Copying its low byte
+into AL leaves the other pointer bits present but unused by that store. This needs
+bit/byte provenance, not treating an opaque pointer as a known scalar zero.
+
+The preserved rcedit PE21efa80badc137bbcfde7d8478dd78b38b67e0081a5b9b1c46331f04d3e6a428
+has calls to HeapAlloc at VA420f87, HeapFree at4224c4, GetProcessHeap at4225de and
+HeapReAlloc at423323. The inspected allocation/free/resize wrappers pass flags0;
+free guards null, and the resize wrapper dispatches null and zero-size cases through
+other methods before the HeapReAlloc call. This is static reachability evidence,
+not proof of observed execution or a license to skip the wrappers. Default-heap
+initialization also reaches thread-initialization and atexit machinery, still
+unresolved. ISCC's preserved import inventory has GetProcessHeap/HeapAlloc/HeapFree
+and HeapDestroy; related compression modules additionally import HeapReAlloc.
+Private heap lifetime, global objects, callbacks and startup remain separate gates.
+
+Recommended continuation: one shared typed-memory/effect proof and native-emission
+integration in this PR, including the observed scalar OR/shift forms with independent
+flag/partial-width tests. Keep nullable outcomes and failure-preserved old pointers
+on separate edges; carry allocation identity and initialized extents through spills
+and joins; prove or check complete accesses and mutation effects. Do not expand
+imports first or create a fixture-specific alternate execution engine. A checked
+runtime access may enforce safety, but cannot by itself justify address-dependent
+observable behavior or erase unknown original register bits.
