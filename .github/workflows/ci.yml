@@ -121,7 +121,7 @@ jobs:
         if: always()
         with:
           name: windows-launch-diagnosis
-          path: ${{ runner.temp }}/w2l-launch-diagnosis/*
+          path: ${{ runner.temp }}/w2l-launch-diagnosis/**
           if-no-files-found: error
       - name: Imported output Windows comparisons
         shell: pwsh
