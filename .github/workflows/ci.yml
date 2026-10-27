@@ -138,6 +138,12 @@ jobs:
           name: corpus-launch-evidence
           path: ${{ runner.temp }}/w2l-corpus-launch/*
           if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: imported-launch-evidence
+          path: ${{ runner.temp }}/w2l-imported-launch/*
+          if-no-files-found: warn
       - name: Execute authored PE32 fixture on Windows
         shell: pwsh
         run: |
@@ -327,6 +333,20 @@ jobs:
           name: stream-corpus-windows
           path: ${{ runner.temp }}/stream-corpus/*
           if-no-files-found: warn
+      - name: Measure frozen stateful CRLF normalizer
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $installation = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $vcvars = Join-Path $installation 'VC\Auxiliary\Build\vcvarsall.bat'
+          cmd /c "`"$vcvars`" x86 && python research/cli/crlf/measure.py %RUNNER_TEMP%/crlf-corpus"
+          if ($LASTEXITCODE -ne 0) { throw 'CRLF measurement failed' }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: crlf-windows
+          path: ${{ runner.temp }}/crlf-corpus/*
+          if-no-files-found: warn
       - name: Validate design-only permissioned intake against all held-out originals
         run: python tools/check_permissioned_corpus.py "${{ runner.temp }}/w2l-compiler-measurement"
       - name: Check scalar local-frame contract against unchanged compiler artifact
@@ -429,6 +449,18 @@ jobs:
           path: |
             stream-corpus-evidence/native.json
             stream-corpus-evidence/integration.json
+          if-no-files-found: warn
+      - uses: actions/download-artifact@v4
+        with:
+          name: crlf-windows
+          path: crlf-evidence
+      - name: Compare stateful CRLF converter outcomes
+        run: python3 research/cli/crlf/check_native.py crlf-evidence
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: crlf-native
+          path: crlf-evidence/native.json
           if-no-files-found: warn
       - name: Convert same hashed PE on Linux and compare native execution
         run: |
