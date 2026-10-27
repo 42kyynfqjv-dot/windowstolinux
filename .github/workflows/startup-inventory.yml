@@ -23,6 +23,7 @@ jobs:
       - run: cargo build --locked --example stream_graph
       - run: python3 research/process/startup/observe_boundary.py original target/debug/examples/stream_graph
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: startup-inventory
           path: |

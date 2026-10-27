@@ -78,3 +78,24 @@ All eight other jobs passed in each run; dedicated startup run 40583591034 passe
 These failures differ from earlier case 6 and the prior compiler-build timeout.
 No root cause is established, no retries or threshold increases were introduced,
 and improved diagnostics are not represented as fixing the timeout.
+
+## Composed execution boundary experiment
+
+See [EXECUTION-BOUNDARY.md](EXECUTION-BOUNDARY.md) and
+`execution-boundary-results.json`. At e9c32e7, dedicated run 40591497396 passed:
+five unchanged original-Windows observations plus two new independently frozen
+context/nonlocal observations (`VR` and `IOFH`, exit0, empty stderr). Four original
+byte slices were exercised through the production graph decoder: one structural
+callback graph and three explicit rejections (indirect transfer, FS state, MXCSR).
+These are not four translated programs or seven Windows/ELF pairs. New translated
+startup pairs remain zero; full rcedit/ISCC/CRT admission remains rejected.
+
+The actual helper path reaches RtlUnwind, installs a nested unwind registration,
+mutates exception/dispatcher state and ends in a non-returning indirect transfer.
+The current call/emission effect contract cannot represent that composition.
+Implement shared guest activation/continuation effects before admitting it;
+do not simply clear the isolated component's pending bit. Keep PR45 unmerged and
+SUB-579 In Progress. Local formatting, Clippy, all170 root tests (155 inherited and
+15 component) and15 startup Python tests pass. Exact final-head full CI status is
+recorded in PR45/Linear; the successful dedicated experiment does not substitute
+for full CI or resolve historical Windows timeouts.

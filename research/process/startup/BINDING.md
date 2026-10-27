@@ -1,5 +1,11 @@
 # Original record binding: concrete integration blocker and correction
 
+Historical cookie-layout checkpoint below. The subsequent composed-execution
+experiment and current architectural boundary are in
+[EXECUTION-BOUNDARY.md](EXECUTION-BOUNDARY.md); it extends the handler/helper
+evidence and records successful original-Windows context/unwind observations.
+It still adds no translated startup programs.
+
 At checkpoint 26b8d9d, workflow 40588769618 downloaded the same retained rcedit
 artifact (PE SHA256 ce252fb1eddd05c3ea6acd73871995b1badd32446d76c6df07abaf8fa44fd22f).
 The new reader requires unique complete file backing, verifies displayed instruction

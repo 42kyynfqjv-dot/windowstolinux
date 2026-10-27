@@ -1,5 +1,13 @@
 # Cohesive handler execution milestone — SUB-579 / same PR45
 
+Execution of this plan reached the explicit architectural stop criterion:
+[EXECUTION-BOUNDARY.md](EXECUTION-BOUNDARY.md) records the original helper dependency
+graph, production decoder experiments and two independently frozen Windows
+counterexamples to normal-return/clear-pending shortcuts. The required next work
+is shared effectful activation/continuation integration, with actual handler
+instructions preserved. This is not completed startup translation or permission
+to merge the unfinished milestone.
+
 Medium review of f53ad06 found the separate cookie/complement mapping correction
 consistent with the pinned original instructions. Focused formatting/Clippy,
 15 Rust component tests and 15 startup Python tests pass. Existing evidence is
