@@ -38,3 +38,5 @@ src/linker/stream/runtime.txt text eol=lf
 research/cli/v2/proof/* text eol=lf
 research/cli/corpus/*.json text eol=lf
 research/cli/corpus/*.py text eol=lf
+research/cli/crlf/*.json text eol=lf
+research/cli/crlf/*.py text eol=lf

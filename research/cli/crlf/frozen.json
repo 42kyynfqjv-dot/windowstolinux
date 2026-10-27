@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "programs": [
+    "filter"
+  ],
+  "configurations": {
+    "O1": [
+      "/O1"
+    ],
+    "O2": [
+      "/O2"
+    ]
+  },
+  "compile_flags": [
+    "/nologo",
+    "/Bv",
+    "/W4",
+    "/GS-",
+    "/Zl",
+    "/c"
+  ],
+  "link_flags": [
+    "/nologo",
+    "/machine:x86",
+    "/subsystem:console",
+    "/nodefaultlib",
+    "/entry:entry@0"
+  ],
+  "libraries": [
+    "kernel32.lib"
+  ],
+  "failure_exits": {
+    "read": 11,
+    "write": 12,
+    "closedpipe": 12
+  },
+  "sha256": {
+    "filter.c": "b7b2655cd8a02a9650a4498dcbb1f766be6e6cc892ade7aea730c9ed0b271512",
+    "cases.json": "9e56da9c8f224927f02d110838eddac13b462c56950f3959c18d48b87885db2f"
+  }
+}
