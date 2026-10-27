@@ -637,7 +637,7 @@ jobs:
           path: utility-evidence/native-rejection.json
           if-no-files-found: warn
   rcedit-windows:
-    runs-on: windows-latest
+    runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable

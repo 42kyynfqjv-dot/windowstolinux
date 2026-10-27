@@ -179,7 +179,20 @@
       "reason": "existing runner component VC.14.44.17.14.x86.x64; Microsoft STL vs-2022-17.14 xlocale preserves locale::empty",
       "source_changes": false,
       "optimization_changes": false,
+      "workload_changes": false,
+      "frozen_commit": "397ebd2b40b585812fd22404e348e8b73a00b5f3",
+      "ci_run": 40526142134,
+      "outcome": "source build failed: matching ATL atlstr.h missing; no PE or converter evaluation"
+    },
+    {
+      "name": "existing Windows2022 complete VS2022 toolkit",
+      "runner": "windows-2022",
+      "toolset": "14.44",
+      "reason": "published image includes matching VS17.14 VC tools, ATL and ATLMFC; no component installation",
+      "source_changes": false,
+      "optimization_changes": false,
       "workload_changes": false
     }
-  ]
+  ],
+  "runner_selection": "windows-2022"
 }

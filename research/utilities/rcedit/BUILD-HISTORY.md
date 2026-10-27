@@ -27,3 +27,22 @@ been evaluated for either build at this registration point.
 The first failed cohort remains part of the results even if this build succeeds.
 A missing older component or another compiler incompatibility must be reported;
 there is no automatic source edit, alternate compiler or success fallback.
+
+The separately registered14.44 cohort at397ebd2/CI40526142134 selected the expected
+compiler14.44.35207, but failed BEFORE a PE or observations because its matching
+ATL headers were absent: rescle.cc:11, C1083 atlstr.h. Artifact12744446792 records
+that failure. The source was not changed, and no utility or converter ran.
+Actual installed tool directories were14.29.30133,14.44.35207 and14.51.36231.
+The older compiler alone was not a complete compatible SDK environment.
+
+The existing GitHub Windows2022 image publishes a complete VS2022 17.14 toolkit,
+including VC.Tools.x86.x64, VC.ATL and VC.ATLMFC components17.14.36510.44:
+https://github.com/actions/runner-images/blob/main/images/windows/Windows2022-Readme.md
+(read as image20261022.344.1). A third cohort is registered using that normal hosted
+image and the same14.44 compiler family, without installing any component. Source,
+CMake policy, optimization, configuration and eleven expectations remain unchanged.
+The actual image/tool binaries and SDK versions are recorded before building;
+hosted image labels are maintained by the provider, not immutable version selectors.
+This is a build-prerequisite comparison, not selection based on converter results:
+neither earlier cohort produced a binary for converter evaluation. Both failures
+remain outcomes, even if the complete toolkit works. No automatic fallback is used.
