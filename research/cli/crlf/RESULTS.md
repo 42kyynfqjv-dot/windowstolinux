@@ -47,8 +47,8 @@ The selected18 vectors and finite schedules cannot establish all-input equivalen
 OS partial-I/O behavior or termination. Missing-handle10 and malformed count14 are
 contract boundaries, not claimed real observations in this corpus. Real permission
 failures/closed pipe are counted separately from backend substitutions. OrdinaryCRT,
-general memory/devices/async/XP7 remain unsupported; historical five Windows timeout
-causes stay unresolved. No source revision, compiler-flag tuning, binary surgery or
+general memory/devices/async/XP7 remain unsupported; historical Windows timeout
+causes stay unresolved (sixth occurrence recorded below). No source revision, compiler-flag tuning, binary surgery or
 support expansion was used during measurement.
 
 Reproduction: python research/cli/crlf/measure.py <dir> in x86 MSVC shell; download
@@ -57,3 +57,18 @@ Primary contracts: Microsoft ReadFile/WriteFile/GetLastError documentation; succ
 file EOF and broken byte-pipe EOF are distinguished. Probe is an ordinary-CRT-linked
 authored harness with substituted API functions; only the frozen freestanding
 originals are converter targets.
+
+## Final-report CI timeout and diagnostic correction
+
+CI40442369605 failed imported/changed in the older authored-Windows suite:
+PE SHA256 da01f1ee79c6c355c746480daa67d5b9e8d447e3fc80d5a4015a542fbc8c9483
+produced expected World (576f726c64), empty stderr, but exceeded15seconds.
+This is a sixth historical original-Windows timeout occurrence; cause remains
+unexplained. The preflight's18 launch probes passed, which does not diagnose it.
+The old imported harness deleted its temporary binary after failure and did not
+upload process-state evidence. It now uses the existing bounded launch helper,
+preserving exact program/hash, command, allowlisted environment, timings,
+pre-kill poll/PID and output under an always-uploaded imported-launch-evidence
+artifact. The15second deadline is unchanged, no automatic retries added, and a
+later passing run cannot count as a root-cause fix. This is a diagnostic gap fix,
+not CRLF converter support or a claim that the timeout is solved.

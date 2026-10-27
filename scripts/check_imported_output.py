@@ -10,6 +10,8 @@ from make_pe32_fixture import put
 
 
 from imported_fixture import fixture
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'corpus'))
+from launch import execute
 
 CASES = [('hello', b'Hello', False, False), ('changed', b'World', False, False),
          ('one', b'!', False, False), ('max', b'A'*64, False, False),
@@ -38,14 +40,10 @@ with tempfile.TemporaryDirectory() as directory:
         identity=dict(case=name, platform='windows' if windows else 'linux',
                       pe_sha256=hashlib.sha256(b).hexdigest())
         print('imported launching '+json.dumps(identity),flush=True)
-        try:
-            with open(root/'stdout','wb') as out, open(root/'stderr','wb') as err:
-                p = subprocess.run([str(exe if windows else elf)], stdout=out, stderr=err, timeout=15)
-        except subprocess.TimeoutExpired:
-            print('imported timeout '+json.dumps(dict(identity,
-                  stdout_hex=(root/'stdout').read_bytes().hex(),
-                  stderr_hex=(root/'stderr').read_bytes().hex())),flush=True)
-            raise
+        evidence = Path(os.environ.get('RUNNER_TEMP', tempfile.gettempdir())) / 'w2l-imported-launch' / name
+        p = execute([str(exe if windows else elf)], root/'stdout', root/'stderr',
+                    evidence, identity,
+                    dict(stdout_hex=(b'' if skip else payload).hex(), stderr_hex='', exit=0), timeout=15)
         actual = ((root/'stdout').read_bytes(), (root/'stderr').read_bytes(), p.returncode)
         assert actual == (b'' if skip else payload, b'', 0), (name, actual)
         print(f'imported {name}: stdout={actual[0].hex()} stderr={actual[1].hex()} exit={p.returncode}')

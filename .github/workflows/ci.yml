@@ -138,6 +138,12 @@ jobs:
           name: corpus-launch-evidence
           path: ${{ runner.temp }}/w2l-corpus-launch/*
           if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: imported-launch-evidence
+          path: ${{ runner.temp }}/w2l-imported-launch/*
+          if-no-files-found: warn
       - name: Execute authored PE32 fixture on Windows
         shell: pwsh
         run: |
