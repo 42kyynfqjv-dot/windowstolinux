@@ -1,0 +1,23 @@
+{
+  "kind": "INT3 entry observation; eip normalized from trap; not baseline",
+  "image_base": 13828096,
+  "entry": 13854862,
+  "eip": 13854862,
+  "esp": 7339164,
+  "ebp": 7339176,
+  "teb": 5427200,
+  "stack_base": 7340032,
+  "stack_limit": 7327744,
+  "chain_head": 7339248,
+  "previous": 7339272,
+  "handler": 1995490864,
+  "handler_allocation": 1994981376,
+  "handler_type": 16777216,
+  "pe_sha256": "ce252fb1eddd05c3ea6acd73871995b1badd32446d76c6df07abaf8fa44fd22f",
+  "source_sha256": "a780ea85e593ac941328cc2ca43b7ff5620829b181d7e2994c435e77ab8c1d18",
+  "translated_pairs": 0,
+  "workflow_run": 40595682305,
+  "job_id": 122510872069,
+  "commit": "e3d98a74b9461fbd28e93ac447269aa8deff6c5e",
+  "limitation": "Instrumented own-child entry observation. One INT3 byte restored before termination; PE file unchanged. Module name/loaded-module hash and handler effects not established."
+}

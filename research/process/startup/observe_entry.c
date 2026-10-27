@@ -12,7 +12,7 @@ static BOOL read_exact(HANDLE process, DWORD address, void *out, SIZE_T n) {
 }
 int main(int argc,char **argv) {
     STARTUPINFOA si={0}; PROCESS_INFORMATION pi={0}; DEBUG_EVENT ev={0};
-    DWORD entry=0,base=0,result=125; BOOL armed=FALSE,stopped=FALSE;
+    DWORD entry=0,base=0,result=125; BOOL armed=FALSE,stopped=FALSE,patched=FALSE;
     BYTE original=0,trap=0xcc; SIZE_T written=0;
     ULONGLONG deadline=GetTickCount64()+10000;
     if(argc!=3) return 125;
@@ -37,8 +37,9 @@ int main(int argc,char **argv) {
             action=DBG_EXCEPTION_NOT_HANDLED;
             if(ev.dwThreadId==pi.dwThreadId && code==EXCEPTION_BREAKPOINT && !armed) {
                 if(!entry || !read_exact(pi.hProcess,entry,&original,1) || original==0xcc) break;
-                if(!WriteProcessMemory(pi.hProcess,(void *)(uintptr_t)entry,&trap,1,&written) || written!=1 ||
-                   !FlushInstructionCache(pi.hProcess,(void *)(uintptr_t)entry,1)) break;
+                BOOL wrote=WriteProcessMemory(pi.hProcess,(void *)(uintptr_t)entry,&trap,1,&written);
+                patched=written==1;
+                if(!wrote || !patched || !FlushInstructionCache(pi.hProcess,(void *)(uintptr_t)entry,1)) break;
                 armed=TRUE;action=DBG_CONTINUE;
             } else if(ev.dwThreadId==pi.dwThreadId && code==EXCEPTION_BREAKPOINT && armed &&
                       (DWORD)(uintptr_t)ev.u.Exception.ExceptionRecord.ExceptionAddress==entry) {
@@ -70,7 +71,7 @@ int main(int argc,char **argv) {
     /* Never let the measured utility continue into its workload. Drain the owned
      * child's termination event, including failures while an event was pending. */
     fprintf(stderr,"observation stopped=%d result=%lu error=%lu entry=%lu events=%u\n",stopped,result,GetLastError(),entry,events);
-    if(armed && (!WriteProcessMemory(pi.hProcess,(void *)(uintptr_t)entry,&original,1,&written) || written!=1 ||
+    if(patched && (!WriteProcessMemory(pi.hProcess,(void *)(uintptr_t)entry,&original,1,&written) || written!=1 ||
                  !FlushInstructionCache(pi.hProcess,(void *)(uintptr_t)entry,1))) result=125;
     TerminateProcess(pi.hProcess,125);
     ContinueDebugEvent(ev.dwProcessId,ev.dwThreadId,DBG_CONTINUE);
