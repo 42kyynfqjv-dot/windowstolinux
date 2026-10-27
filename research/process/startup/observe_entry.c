@@ -36,6 +36,7 @@ int main(int argc,char **argv) {
             action=DBG_EXCEPTION_NOT_HANDLED;
             if(ev.dwThreadId==pi.dwThreadId && code==EXCEPTION_BREAKPOINT && !armed) {
                 if(!entry || !GetThreadContext(pi.hThread,&c) || (c.Dr7&0xff)!=0) break;
+                c.ContextFlags=CONTEXT_DEBUG_REGISTERS;
                 c.Dr0=entry;c.Dr7|=1; /* local execution breakpoint, one byte */
                 if(!SetThreadContext(pi.hThread,&c)) break;
                 armed=TRUE;action=DBG_CONTINUE;
@@ -60,6 +61,7 @@ int main(int argc,char **argv) {
                 fflush(stdout); result=0;stopped=TRUE;break;
             }
         } else if(ev.dwDebugEventCode==EXIT_PROCESS_DEBUG_EVENT) {
+            fprintf(stderr,"child exit=%lu\n",ev.u.ExitProcess.dwExitCode);
             ContinueDebugEvent(ev.dwProcessId,ev.dwThreadId,DBG_CONTINUE);break;
         }
         if(!ContinueDebugEvent(ev.dwProcessId,ev.dwThreadId,action)) break;
