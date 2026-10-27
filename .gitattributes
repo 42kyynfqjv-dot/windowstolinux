@@ -52,3 +52,6 @@ research/utilities/rcedit/*.py text eol=lf
 research/process/*.py text eol=lf
 research/process/conformance/*.json text eol=lf
 research/process/conformance/*.py text eol=lf
+# Heap conformance expectations retain the exact preregistered bytes on Windows.
+research/process/heap/*.json text eol=lf
+research/process/heap/*.py text eol=lf

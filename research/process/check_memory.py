@@ -22,7 +22,7 @@ mutations=[
 ]
 rows=[]
 with tempfile.TemporaryDirectory() as tmp:
-    d=Path(tmp);shutil.copyfile(repo/'src/guest_memory_tests.rs',d/'guest_memory_tests.rs')
+    d=Path(tmp);shutil.copyfile(repo/'src/guest_memory_tests.rs',d/'guest_memory_tests.rs');shutil.copyfile(repo/'src/guest_heap_tests.rs',d/'guest_heap_tests.rs')
     src=d/'core.rs';exe=d/('core.exe' if os.name=='nt' else 'core')
     src.write_text(source);compile_(src,exe,True);p=run([str(exe)]);assert p.returncode==0,p.stdout
     for name,old,new in mutations:
@@ -51,4 +51,4 @@ with tempfile.TemporaryDirectory() as tmp:
     for name,_,code in vectors:
         p=run([str(exe),name]);assert p.returncode==code,(name,p.returncode,p.stdout,p.stderr)
         assert p.stdout==b'' and p.stderr==(b'stream runtime contract violation\n' if code else b''),(name,p.stderr)
-print(json.dumps(dict(unique_core_tests=7,guard_mutations=rows,emitted_frame_vectors=len(vectors)),indent=2))
+print(json.dumps(dict(inherited_memory_tests=7,heap_effect_tests=10,guard_mutations=rows,emitted_frame_vectors=len(vectors)),indent=2))

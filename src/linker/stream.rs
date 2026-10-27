@@ -15,20 +15,37 @@ pub(super) enum Function {
     Write,
     LastError,
     StandardHandle,
+    ProcessHeap,
+    HeapAlloc,
+    HeapReAlloc,
+    HeapFree,
 }
 impl Function {
+    fn arity(self) -> usize {
+        match self {
+            Self::Read | Self::Write => 5,
+            Self::StandardHandle => 1,
+            Self::LastError | Self::ProcessHeap => 0,
+            Self::HeapAlloc | Self::HeapFree => 3,
+            Self::HeapReAlloc => 4,
+        }
+    }
     fn name(self) -> &'static [u8] {
         match self {
             Self::Read => b"ReadFile\0",
             Self::Write => b"WriteFile\0",
             Self::LastError => b"GetLastError\0",
             Self::StandardHandle => b"GetStdHandle\0",
+            Self::ProcessHeap => b"GetProcessHeap\0",
+            Self::HeapAlloc => b"HeapAlloc\0",
+            Self::HeapReAlloc => b"HeapReAlloc\0",
+            Self::HeapFree => b"HeapFree\0",
         }
     }
 }
 impl Candidate<'_> {
     pub(super) fn stream_imports(&mut self, ilt: u32, name: u32, count: u32) -> Result<(), String> {
-        need((2..=4).contains(&count), "stream import count")?;
+        need((2..=8).contains(&count), "stream import count")?;
         need(
             ilt.is_multiple_of(4) && self.iat.is_multiple_of(4),
             "stream thunk alignment",
@@ -60,6 +77,10 @@ impl Candidate<'_> {
                 Function::Write,
                 Function::LastError,
                 Function::StandardHandle,
+                Function::ProcessHeap,
+                Function::HeapAlloc,
+                Function::HeapReAlloc,
+                Function::HeapFree,
             ] {
                 if let Ok(at) = self.location(thunk, (2 + f.name().len()) as u32, DATA) {
                     if range(self.bytes, at + 2, f.name().len())? == f.name() {
@@ -192,6 +213,7 @@ pub(super) fn bind(image: &Candidate<'_>) -> Result<Bound, String> {
             | Operation::Decrement(dst)
             | Operation::Negate(dst)
             | Operation::Not(dst)
+            | Operation::Shift { dst, .. }
             | Operation::Set(_, dst)
             | Operation::Pop(dst) => state[dst.index as usize] = None,
             Operation::Leave => {
@@ -449,5 +471,45 @@ mod tests {
             proof(&code, &[(0x1002, 0x2000)]).unwrap().calls[&0x1006],
             Function::Read
         );
+    }
+    #[test]
+    fn complete_heap_import_family_remains_exact_and_non_aliasing() {
+        let names: [&[u8]; 8] = [
+            b"ReadFile\0",
+            b"WriteFile\0",
+            b"HeapAlloc\0",
+            b"HeapReAlloc\0",
+            b"HeapFree\0",
+            b"GetProcessHeap\0",
+            b"GetStdHandle\0",
+            b"GetLastError\0",
+        ];
+        let mut bytes = vec![0u8; 0x400];
+        for (i, name) in names.iter().enumerate() {
+            let at = 0xc0 + i * 32;
+            bytes[at + 2..at + 2 + name.len()].copy_from_slice(name);
+            let rva = (0x2000 + at as u32).to_le_bytes();
+            bytes[i * 4..i * 4 + 4].copy_from_slice(&rva);
+            bytes[0x30 + i * 4..0x34 + i * 4].copy_from_slice(&rva);
+        }
+        bytes[0x60..0x64].copy_from_slice(&0x2030u32.to_le_bytes());
+        bytes[0x6c..0x70].copy_from_slice(&0x20a0u32.to_le_bytes());
+        bytes[0x70..0x74].copy_from_slice(&0x2000u32.to_le_bytes());
+        bytes[0xa0..0xad].copy_from_slice(b"KERNEL32.dll\0");
+        let image = import_table(&bytes, (0x2000, 36)).unwrap();
+        assert_eq!(image.functions.len(), 8);
+        assert_eq!(image.functions[&0x2008], Function::HeapAlloc);
+        assert_eq!(image.functions[&0x2014], Function::ProcessHeap);
+        for size in [8, 12, 16, 20, 24, 28, 32, 35, 40, u32::MAX] {
+            assert!(import_table(&bytes, (0x2000, size)).is_err());
+        }
+        let mut alias = bytes.clone();
+        alias[0x60..0x64].copy_from_slice(&0x2000u32.to_le_bytes());
+        assert!(import_table(&alias, (0x2000, 36)).is_err());
+        let mut duplicate = bytes.clone();
+        let first = duplicate[8..12].to_vec();
+        duplicate[12..16].copy_from_slice(&first);
+        duplicate[0x3c..0x40].copy_from_slice(&first);
+        assert!(import_table(&duplicate, (0x2000, 36)).is_err());
     }
 }

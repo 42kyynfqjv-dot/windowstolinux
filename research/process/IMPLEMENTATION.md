@@ -89,6 +89,11 @@ then Linux `conformance/check_native.py OUT`. The complete existing cross-host
 workflow remains required. Modern Windows evidence is not XP/7 validation.
 Eight historical original-Windows timeout causes remain unresolved.
 
+The subsequent [SUB-577 heap integration](heap/INTEGRATION.md) shares this storage,
+adds bounded allocation/free/resize ownership and native emission, and requires
+same-artifact Windows/ELF comparisons separately from component tests. It remains
+in draft pending exact-head CI and substantive production review.
+
 ## Reuse, provenance and remaining gates
 
 Independent Rust and authored tests: MIT OR Apache-2.0. No implementation source
