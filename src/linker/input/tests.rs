@@ -20,6 +20,7 @@ fn main() {{
  assert_eq!(stack.pop_normal(c).err(),Some(Error::Phase));
  assert_eq!(stack.select_unwind(foreign),Err(Error::Identity));
  stack.select_unwind(a).unwrap();
+ assert_eq!(stack.event_context().unwrap(),&context());
  assert_eq!(stack.retire_cleaned(b).err(),Some(Error::Identity));
  let mut order=Vec::new();
  while let Some(frame)=stack.cleanup_frame().unwrap() {{
@@ -28,6 +29,7 @@ fn main() {{
    order.push(frame.next);let id=frame.id;stack.retire_cleaned(id).unwrap();
  }}
  assert_eq!(order,vec![300,200]);assert_eq!(stack.top().unwrap().id,a);
+ assert_eq!(stack.event_context().unwrap(),&context());
  assert_eq!(stack.retire_cleaned(a).err(),Some(Error::Identity));
  stack.block();assert_eq!(stack.pop_normal(a).err(),Some(Error::Phase));
  let mut retry=Stack::new(1).unwrap();let mut original=context();

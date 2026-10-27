@@ -42,6 +42,7 @@ enum Phase {
     },
     Unwind {
         target: Id,
+        captured: Context,
     },
     Restoration {
         captured: Context,
@@ -122,19 +123,30 @@ impl Stack {
         Ok(())
     }
     pub fn select_unwind(&mut self, target: Id) -> Result<(), Error> {
-        if !matches!(self.phase, Phase::Search { .. }) {
+        let Phase::Search { captured, .. } = &self.phase else {
             return Err(Error::Phase);
-        }
+        };
         if !self.frames.iter().any(|f| f.id == target) {
             return Err(Error::Identity);
         }
-        self.phase = Phase::Unwind { target };
+        self.phase = Phase::Unwind {
+            target,
+            captured: captured.clone(),
+        };
         Ok(())
+    }
+    pub fn event_context(&self) -> Result<&Context, Error> {
+        match &self.phase {
+            Phase::Search { captured, .. }
+            | Phase::Unwind { captured, .. }
+            | Phase::Restoration { captured } => Ok(captured),
+            _ => Err(Error::Phase),
+        }
     }
     /// The caller must execute the original cleanup while this frame is live.
     /// The selected activation is never returned for retirement.
     pub fn cleanup_frame(&self) -> Result<Option<&Frame>, Error> {
-        let Phase::Unwind { target } = self.phase else {
+        let Phase::Unwind { target, .. } = self.phase else {
             return Err(Error::Phase);
         };
         let top = self.top().ok_or(Error::Identity)?;
