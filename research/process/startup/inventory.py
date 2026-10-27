@@ -7,6 +7,53 @@ import struct
 import sys
 
 
+def mapped_bytes(data, address, size):
+    """Read only a uniquely file-backed range in the retained PE32 image."""
+    pe = struct.unpack_from('<I', data, 60)[0]
+    base = struct.unpack_from('<I', data, pe+52)[0]
+    count = struct.unpack_from('<H', data, pe+6)[0]
+    optional = struct.unpack_from('<H', data, pe+20)[0]
+    start = pe+24+optional
+    if not 0 < size <= 512 or not base <= address < address+size <= 2**32:
+        raise ValueError('invalid requested range')
+    rva = address-base
+    matches = []
+    for index in range(count):
+        at = start+40*index
+        virtual, va, raw_size, raw = struct.unpack_from('<IIII', data, at+8)
+        if va <= rva and rva+size <= va+min(virtual, raw_size):
+            offset = raw+rva-va
+            if offset+size > len(data):
+                raise ValueError('truncated file-backed range')
+            matches.append(data[offset:offset+size])
+    if len(matches) != 1:
+        raise ValueError('missing or ambiguous file-backed range')
+    return matches[0]
+
+
+def focus(data, disassembly):
+    """Pinned measurement addresses only; never converter dispatch or eligibility."""
+    scope = mapped_bytes(data, 0x5191f8, 16)
+    ranges = []
+    for start, size in [(0x475ba0, 96), (0x47b290, 256), (0x475c79, 192)]:
+        raw = mapped_bytes(data, start, size)
+        rows = []
+        for line in disassembly.splitlines():
+            m = re.match(r'\s*([0-9a-fA-F]{8}): ((?:[0-9a-fA-F]{2} )+)', line)
+            if not m or not start <= int(m[1],16) < start+size:
+                continue
+            address = int(m[1],16)
+            instruction = bytes.fromhex(m[2])
+            if mapped_bytes(data,address,len(instruction)) != instruction:
+                raise ValueError('disassembly bytes differ from original PE')
+            rows.append(line)
+        ranges.append(dict(start=hex(start), size=size, bytes_hex=raw.hex(), lines=rows))
+    return dict(kind='bounded original ranges; adjacent code may be included; not CFG closure',
+                scope_va='0x5191f8', scope_header_hex=scope.hex(),
+                scope_header_signed_words=list(struct.unpack('<iiii',scope)),
+                ranges=ranges, emission_allowed=False)
+
+
 def inventory(data, disassembly, expected_hash):
     digest = hashlib.sha256(data).hexdigest()
     if digest != expected_hash:
@@ -65,5 +112,9 @@ if __name__ == '__main__':
                        report['utility_sha256'])
     result['source_commit'] = report['source_commit']
     result['toolchain'] = report['toolchain']
+    if report['utility_sha256'] != 'ce252fb1eddd05c3ea6acd73871995b1badd32446d76c6df07abaf8fa44fd22f':
+        raise ValueError('focus addresses require the pinned original artifact')
+    result['record_binding'] = focus((root/'rcedit.exe').read_bytes(),
+                                     (root/'rcedit-disasm.txt').read_text(errors='replace'))
     (root/'startup-inventory.json').write_text(json.dumps(result, indent=2)+'\n')
     print(json.dumps(result, indent=2))

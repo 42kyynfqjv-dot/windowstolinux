@@ -40,3 +40,20 @@ class Evidence(unittest.TestCase):
         r = inventory(b, text, hashlib.sha256(b).hexdigest())
         self.assertEqual([x['va'] for x in r['excerpts']], ['0x401234', '0x401240'])
         self.assertEqual(len(r['excerpts'][0]['lines']), 1)
+
+class FileRanges(unittest.TestCase):
+    def test_complete_file_backing_and_alias_rejection(self):
+        from inventory import mapped_bytes
+        b=bytearray(512)
+        struct.pack_into('<I',b,60,64)
+        struct.pack_into('<H',b,70,1)
+        struct.pack_into('<H',b,84,64)
+        struct.pack_into('<I',b,116,0x400000)
+        struct.pack_into('<IIII',b,160,8,0x1000,4,256)
+        b[256:260]=bytes.fromhex('feffffff')
+        self.assertEqual(mapped_bytes(b,0x401000,4),bytes.fromhex('feffffff'))
+        for address,size in [(0x401001,4),(0x401004,4),(0x401000,0),(0xffffffff,2)]:
+            with self.assertRaises(ValueError): mapped_bytes(b,address,size)
+        struct.pack_into('<H',b,70,2)
+        b[192:232]=b[152:192]
+        with self.assertRaises(ValueError): mapped_bytes(b,0x401000,4)
