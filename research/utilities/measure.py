@@ -34,5 +34,5 @@ converter=repo/'target/debug/w2l.exe';target=out/'converted.rs';target.write_tex
 p=run([converter,compiler,target],'conversion');report['conversion']=dict(exit=p.returncode,stdout_hex=p.stdout.hex(),stderr=p.stderr.decode(errors='replace'),sentinel_preserved=target.read_text()=='preserve');save()
 assert sha(compiler)==original_hash==sha(out/'ISCC.exe')
 assert p.returncode==1 and target.read_text()=='preserve','Unexpected admission requires dependency/effect review; not translation evidence'
-p=run([converter,'inspect-image',compiler],'inspection');report['inspection']=dict(exit=p.returncode,stdout=p.stdout.decode(errors='replace'),stderr=p.stderr.decode(errors='replace'));save()
+p=run([converter,'--inspect-image',compiler],'inspection');report['inspection']=dict(exit=p.returncode,stdout=p.stdout.decode(errors='replace'),stderr=p.stderr.decode(errors='replace'));save()
 print('Six original compiler observations and honest conversion rejection retained')
