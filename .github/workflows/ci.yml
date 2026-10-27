@@ -313,6 +313,20 @@ jobs:
           name: cli-v2-measurement
           path: ${{ runner.temp }}/w2l-cli-v2/*
           if-no-files-found: warn
+      - name: Measure frozen independent streaming corpus
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $installation = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $vcvars = Join-Path $installation 'VC\Auxiliary\Build\vcvarsall.bat'
+          cmd /c "`"$vcvars`" x86 && python research/cli/corpus/measure.py %RUNNER_TEMP%/stream-corpus"
+          if ($LASTEXITCODE -ne 0) { throw 'Stream corpus measurement failed' }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: stream-corpus-windows
+          path: ${{ runner.temp }}/stream-corpus/*
+          if-no-files-found: warn
       - name: Validate design-only permissioned intake against all held-out originals
         run: python tools/check_permissioned_corpus.py "${{ runner.temp }}/w2l-compiler-measurement"
       - name: Check scalar local-frame contract against unchanged compiler artifact
@@ -399,6 +413,18 @@ jobs:
           path: |
             cli-v2-evidence/translation-native.json
             cli-v2-evidence/safety-native.json
+          if-no-files-found: warn
+      - uses: actions/download-artifact@v4
+        with:
+          name: stream-corpus-windows
+          path: stream-corpus-evidence
+      - name: Compare frozen streaming corpus outcomes
+        run: python3 research/cli/corpus/check_native.py stream-corpus-evidence
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: stream-corpus-native
+          path: stream-corpus-evidence/native.json
           if-no-files-found: warn
       - name: Convert same hashed PE on Linux and compare native execution
         run: |
