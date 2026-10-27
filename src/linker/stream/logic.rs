@@ -64,6 +64,8 @@ struct Hint {
     pending: u8,
     weight: u32,
     inner: bool,
+    modular: bool,
+    owner: Option<i32>,
 }
 impl Hint {
     fn expression(&self, s: &[String]) -> String {
@@ -73,7 +75,11 @@ impl Hint {
                     "(<= (+ {} (- {} {})) (* {} (+ {} 1)))",
                     s[self.output as usize],
                     self.weight,
-                    s[self.pending as usize],
+                    if self.modular {
+                        format!("(mod {} {})", s[self.pending as usize], self.weight)
+                    } else {
+                        s[self.pending as usize].clone()
+                    },
                     self.weight,
                     s[self.input as usize]
                 )
@@ -168,6 +174,8 @@ fn hints(bound: &Bound, frames: &Frames) -> Vec<Hint> {
                     frames.states[&start].finite[&i32::from(pending[0])].len() as u32
                 },
                 inner: false,
+                modular: false,
+                owner: None,
             });
             let outer = *result.last().unwrap();
             if outer.weight > 1 {
@@ -183,6 +191,107 @@ fn hints(bound: &Bound, frames: &Frames) -> Vec<Hint> {
                                 ..outer
                             });
                         }
+                    }
+                }
+            }
+        }
+    }
+    // Additional structural candidates for rotated/equality-counted loops.
+    // Candidates carry no authority: every incoming CFG edge proves the bound.
+    for (&start, node) in &bound.graph.nodes {
+        if result.len() >= 64 {
+            break;
+        }
+        let input = match &node.operation {
+            Operation::Binary(Binary::Move, _, Operand::Memory(a, 8))
+            | Operation::ZeroExtend(_, Operand::Memory(a, 8)) => a,
+            _ => continue,
+        };
+        if result.iter().any(|h| h.pc == start) {
+            continue;
+        }
+        let Some(index) = input.index else {
+            continue;
+        };
+        let mut anchor = input.clone();
+        anchor.index = None;
+        let Ok(Value::Frame(Some(base))) = frames.states[&start].address(&anchor) else {
+            continue;
+        };
+        // Reach only the transformation cycle; API calls delimit read epochs.
+        let mut seen = BTreeSet::new();
+        let mut todo = vec![start];
+        while let Some(pc) = todo.pop() {
+            if !seen.insert(pc) {
+                continue;
+            }
+            let n = &bound.graph.nodes[&pc];
+            if matches!(n.operation, Operation::Call(_) | Operation::Return) {
+                continue;
+            }
+            todo.extend(n.successors.iter().copied().filter(|p| *p != start));
+        }
+        let mut outputs = BTreeSet::new();
+        let mut owners = BTreeMap::new();
+        let mut modular = None;
+        for &pc in &seen {
+            match &bound.graph.nodes[&pc].operation {
+                Operation::Binary(Binary::Move, Operand::Memory(a, 8), _) => {
+                    let Some(out) = a.index else {
+                        continue;
+                    };
+                    let mut a = a.clone();
+                    a.index = None;
+                    if matches!(frames.states[&pc].address(&a),Ok(Value::Frame(Some(b))) if b!=base)
+                        && frames.states[&start].registers[out as usize].scalar()
+                        && frames.states[&start].known[out as usize] == u32::MAX
+                    {
+                        outputs.insert(out);
+                        if let Ok(Value::Frame(Some(b))) = frames.states[&pc].address(&a) {
+                            owners.insert(out, b);
+                        }
+                    }
+                }
+                Operation::Binary(Binary::Test, Operand::Reg(r), Operand::Immediate(mask))
+                    if r.width == 8 && r.shift == 0 && [3, 7].contains(mask) =>
+                {
+                    modular = Some((r.index, mask + 1));
+                }
+                _ => (),
+            }
+        }
+        if outputs.len() != 1 {
+            continue;
+        }
+        let (pending, weight) = modular.unwrap_or((0, 2));
+        let outer = Hint {
+            pc: start,
+            input: index,
+            output: *outputs.first().unwrap(),
+            pending,
+            weight,
+            inner: false,
+            modular: modular.is_some(),
+            owner: owners.get(outputs.first().unwrap()).copied(),
+        };
+        result.push(outer);
+        if modular.is_some() {
+            for &pc in &seen {
+                if result.len() >= 64 {
+                    break;
+                }
+                if let Operation::Branch(Condition::NotEqual, head) =
+                    bound.graph.nodes[&pc].operation
+                {
+                    if head < pc
+                        && seen.contains(&head)
+                        && matches!(&bound.graph.nodes[&head].operation,Operation::Binary(Binary::Move,Operand::Memory(a,8),_) if a.index==Some(outer.output))
+                    {
+                        result.push(Hint {
+                            pc: head,
+                            inner: true,
+                            ..outer
+                        });
                     }
                 }
             }
@@ -266,23 +375,28 @@ impl Builder<'_> {
         // Must-definedness is a separate finite dataflow proof. Removing these
         // Boolean/mask dimensions leaves relational solving to numeric bounds.
         for i in 0..8 {
-            fixed.insert(i + 8, frame.known[i].to_string());
+            fixed.insert(i + 8, frame.known[i].trailing_ones().to_string());
         }
         for (&at, &i) in &self.arguments {
             fixed.insert(
                 i + 1,
-                frame.argument_known.get(&at).unwrap_or(&0).to_string(),
+                frame
+                    .argument_known
+                    .get(&at)
+                    .unwrap_or(&0)
+                    .trailing_ones()
+                    .to_string(),
             );
         }
         for (&at, &i) in &self.cells {
             fixed.insert(
                 i + 1,
-                if frame.initialized.contains(&at) {
-                    "32"
-                } else {
-                    "0"
-                }
-                .into(),
+                frame
+                    .local_known
+                    .get(&at)
+                    .unwrap_or(&0)
+                    .trailing_ones()
+                    .to_string(),
             );
         }
         fixed.insert(self.ck, frame.cf_known.to_string());
@@ -345,6 +459,18 @@ impl Builder<'_> {
         for hint in &self.hints {
             if hint.pc == pc {
                 terms.push(hint.expression(s));
+                terms.push(format!(
+                    "(and (<= 0 {}) (< {} {}))",
+                    s[hint.input as usize], s[hint.input as usize], s[self.prefix]
+                ));
+                if let Some(base) = hint.owner {
+                    if let Some(region) = self.regions.iter().find(|r| r.base == base) {
+                        terms.push(format!(
+                            "(<= {} {})",
+                            s[hint.output as usize], s[region.prefix]
+                        ));
+                    }
+                }
             }
         }
         and(&terms)
@@ -451,11 +577,11 @@ impl Builder<'_> {
                 let v = s[r.index as usize].clone();
                 (
                     if r.width == 8 {
-                        format!("(mod {v} 256)")
+                        format!("(mod (div {v} {}) 256)", 1u32 << r.shift)
                     } else {
                         v
                     },
-                    s[8 + r.index as usize].clone(),
+                    self.frames.states[&pc].bits(o).to_string(),
                 )
             }
             Operand::Memory(a, _) if a.base.is_none() && a.index.is_none() => {
@@ -477,6 +603,22 @@ impl Builder<'_> {
                         .ok_or("stream logic: word read outside API count cells")?;
                     (s[i].clone(), s[i + 1].clone())
                 } else {
+                    if let Ok(Value::Frame(Some(at))) = self.frames.states[&pc].address(a) {
+                        if let Some((&base, &i)) = self.cells.range(..=at).next_back() {
+                            if at < base + 4 {
+                                let shift = (at - base) * 8;
+                                let mask = self.frames.states[&pc]
+                                    .local_known
+                                    .get(&base)
+                                    .copied()
+                                    .unwrap_or(0);
+                                return Ok((
+                                    format!("(mod (div {} {}) 256)", s[i], 1u32 << shift),
+                                    ((mask >> shift) & 255).trailing_ones().to_string(),
+                                ));
+                            }
+                        }
+                    }
                     self.check(
                         pre,
                         assume,
@@ -508,11 +650,17 @@ impl Builder<'_> {
             Operand::Reg(r) => {
                 let i = r.index as usize;
                 if r.width == 8 {
-                    // Forget upper-bit knowledge in the proof after a partial
-                    // write. The emitter still preserves actual upper bits;
-                    // subsequent full reads must be re-established by a full write.
-                    s[i] = format!("(mod {v} 256)");
-                    s[8 + i] = format!("(ite (>= {k} 8) 8 0)");
+                    if !self.frames.states[&pc].registers[i].scalar() {
+                        s[i] = "0".into();
+                    }
+                    let scale = 1u32 << r.shift;
+                    let end = scale * 256;
+                    s[i] = format!(
+                        "(+ (mod {} {scale}) (* (mod {v} 256) {scale}) (* (div {} {end}) {end}))",
+                        s[i], s[i]
+                    );
+                    // The finite known-mask analysis supplies successor knowledge.
+                    s[8 + i] = "0".into();
                 } else {
                     s[i] = v;
                     s[8 + i] = k;
@@ -520,7 +668,9 @@ impl Builder<'_> {
             }
             Operand::Memory(a, w) => {
                 self.address_known(a, s, pre, assume);
-                self.known(pre, assume, &k, *w);
+                if *w == 8 {
+                    self.known(pre, assume, &k, *w);
+                }
                 if *w == 32 {
                     let Value::Frame(Some(at)) = self.frames.states[&pc].address(a)? else {
                         return Err("stream logic: dynamic word store unsupported".into());
@@ -592,22 +742,34 @@ impl Builder<'_> {
                     self.known(&pre, &assume, &ak, width);
                     self.known(&pre, &assume, &bk, width);
                     if width == 8 {
-                        // Content is deliberately over-approximated. This proof
-                        // establishes access/definedness, not the result of the
-                        // byte transform. Emission retains exact x86 arithmetic.
+                        let exact = match op {
+                            Binary::Compare => Some(format!("(mod (- {a} {b}) 256)")),
+                            Binary::Test | Binary::And => {
+                                if let Operand::Immediate(mask) = src {
+                                    Some(and_mask(&a, *mask & 255))
+                                } else {
+                                    // Exact byte AND; eight bits, no unverified boolean shortcut.
+                                    Some(format!("(+ 0 {})", (0..8).map(|bit| {
+                                        let p = 1u32 << bit;
+                                        format!("(* {p} (ite (and (= (mod (div {a} {p}) 2) 1) (= (mod (div {b} {p}) 2) 1)) 1 0))")
+                                    }).collect::<Vec<_>>().join(" ")))
+                                }
+                            }
+                            _ => None,
+                        };
+                        let v = exact.unwrap_or_else(|| {
+                            let v = self.fresh(false);
+                            format!("(mod {v} 256)")
+                        });
                         if !matches!(op, Binary::Compare | Binary::Test) {
-                            let byte = self.fresh(false);
-                            self.write(
-                                pc,
-                                dst,
-                                (format!("(mod {byte} 256)"), "8".into()),
-                                &mut s,
-                                &pre,
-                                &assume,
-                            )?;
+                            self.write(pc, dst, (v.clone(), "8".into()), &mut s, &pre, &assume)?;
                         }
-                        s[self.cf] = self.fresh(true);
-                        s[self.zf] = self.fresh(true);
+                        s[self.cf] = match op {
+                            Binary::Compare => format!("(< {a} {b})"),
+                            Binary::Test | Binary::And => "false".into(),
+                            _ => self.fresh(true),
+                        };
+                        s[self.zf] = eq(&v, "0");
                         s[self.ck] = "true".into();
                         s[self.zk] = "true".into();
                     } else {
@@ -655,10 +817,11 @@ impl Builder<'_> {
                         } else if opaque || *op == Binary::Sbb {
                             format!("(mod {raw} 4294967296)")
                         } else if width == 32 && matches!(op, Binary::Add | Binary::Sub) {
-                            let range = format!("(and (<= 0 {raw}) (< {raw} 4294967296))");
-                            self.check(&pre, &assume, range.clone());
-                            assume.push(range);
-                            raw.clone()
+                            if *op == Binary::Add {
+                                format!("(ite (>= {raw} 4294967296) (- {raw} 4294967296) {raw})")
+                            } else {
+                                format!("(ite (< {raw} 0) (+ {raw} 4294967296) {raw})")
+                            }
                         } else {
                             {
                                 let overflow = self.fresh(false);
@@ -700,15 +863,37 @@ impl Builder<'_> {
                 }
             }
             Operation::ZeroExtend(dst, src) => {
-                self.known(&pre, &assume, &s[8 + src.index as usize], 8);
-                s[dst.index as usize] = format!("(mod {} 256)", s[src.index as usize]);
+                let (v, k) = self.read(pc, src, &s, &pre, &assume)?;
+                self.known(&pre, &assume, &k, 8);
+                s[dst.index as usize] = v;
                 s[8 + dst.index as usize] = "32".into();
             }
-            Operation::ConditionalMove(cond, dst, src) => {
+            Operation::Set(_, dst) => {
                 self.check(&pre, &assume, s[self.zk].clone());
+                let value = format!("(ite {} 0 1)", s[self.zf]);
+                self.write(
+                    pc,
+                    &Operand::Reg(*dst),
+                    (value, "8".into()),
+                    &mut s,
+                    &pre,
+                    &assume,
+                )?;
+            }
+            Operation::Not(dst) => {
+                self.known(&pre, &assume, &s[8 + dst.index as usize], 32);
+                s[dst.index as usize] = format!("(- 4294967295 {})", s[dst.index as usize]);
+            }
+            Operation::ConditionalMove(cond, dst, src) => {
+                if *cond != Condition::AboveEqual {
+                    self.check(&pre, &assume, s[self.zk].clone());
+                }
                 let predicate = if *cond == Condition::Above {
                     self.check(&pre, &assume, s[self.ck].clone());
                     format!("(and (not {}) (not {}))", s[self.cf], s[self.zf])
+                } else if *cond == Condition::AboveEqual {
+                    self.check(&pre, &assume, s[self.ck].clone());
+                    not(&s[self.cf])
                 } else {
                     s[self.zf].clone()
                 };
@@ -731,31 +916,30 @@ impl Builder<'_> {
                     let bits = [a.base, a.index]
                         .into_iter()
                         .flatten()
-                        .map(|i| state.known[i as usize])
+                        .map(|i| state.known[i as usize].trailing_ones())
                         .min()
                         .unwrap_or(32);
                     let modulus = 1u64 << bits;
-                    s[r.index as usize] = format!("(mod {} {modulus})", self.address(a, &s));
+                    let raw = self.address(a, &s);
+                    s[r.index as usize] = if bits == 32 && a.index.is_none() {
+                        format!("(ite (< {raw} 0) (+ {raw} 4294967296) (ite (>= {raw} 4294967296) (- {raw} 4294967296) {raw}))")
+                    } else {
+                        format!("(mod {raw} {modulus})")
+                    };
                     s[8 + r.index as usize] = bits.to_string();
                 }
             }
             Operation::Increment(r) => {
                 let i = r.index as usize;
                 self.known(&pre, &assume, &s[i + 8], 32);
-                let range = format!("(and (<= 0 {}) (< {} 4294967295))", s[i], s[i]);
-                self.check(&pre, &assume, range.clone());
-                assume.push(range);
-                s[i] = format!("(+ {} 1)", s[i]);
+                s[i] = format!("(ite (= {} 4294967295) 0 (+ {} 1))", s[i], s[i]);
                 s[self.zf] = eq(&s[i], "0");
                 s[self.zk] = "true".into();
             }
             Operation::Decrement(r) => {
                 let i = r.index as usize;
                 self.known(&pre, &assume, &s[i + 8], 32);
-                let ok = format!("(and (< 0 {}) (<= {} 4294967295))", s[i], s[i]);
-                self.check(&pre, &assume, ok.clone());
-                assume.push(ok);
-                s[i] = format!("(- {} 1)", s[i]);
+                s[i] = format!("(ite (= {} 0) 4294967295 (- {} 1))", s[i], s[i]);
                 s[self.zf] = eq(&s[i], "0");
                 s[self.zk] = "true".into();
             }
@@ -902,6 +1086,7 @@ impl Builder<'_> {
         if let Operation::Binary(
             op,
             Operand::Reg(Reg {
+                shift: 0,
                 index: 4,
                 width: 32,
             }),

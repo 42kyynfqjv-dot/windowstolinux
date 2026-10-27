@@ -51,9 +51,10 @@ pub(super) struct State {
     pub(super) registers: [Value; 8],
     pub(super) finite: BTreeMap<i32, BTreeSet<u32>>,
     pub(super) sp: i32,
-    pub(super) known: [u8; 8],
+    pub(super) known: [u32; 8],
+    pub(super) local_known: BTreeMap<i32, u32>,
     pub(super) initialized: std::collections::BTreeSet<i32>,
-    pub(super) argument_known: BTreeMap<i32, u8>,
+    pub(super) argument_known: BTreeMap<i32, u32>,
     pub(super) cf_known: bool,
     pub(super) zf_known: bool,
     pub(super) local_values: BTreeMap<i32, Value>,
@@ -79,8 +80,9 @@ impl State {
             registers,
             finite: BTreeMap::new(),
             sp: 0,
-            known: [0, 0, 0, 0, 32, 0, 0, 0],
+            known: [0, 0, 0, 0, u32::MAX, 0, 0, 0],
             initialized: Default::default(),
+            local_known: Default::default(),
             argument_known: Default::default(),
             cf_known: false,
             zf_known: false,
@@ -152,6 +154,15 @@ impl State {
                         self.region(at, i32::from(*width / 8)),
                         "load crosses local/protected boundary",
                     )?;
+                }
+                if *width == 8 {
+                    if let Value::Frame(Some(at)) = self.address(a)? {
+                        if let Some((&base, v)) = self.local_values.range(..=at).next_back() {
+                            if at < base + 4 {
+                                require(v.scalar(), "partial local read of opaque value")?;
+                            }
+                        }
+                    }
                 }
                 if *width == 32 {
                     if let Value::Frame(Some(at)) = self.address(a)? {
@@ -318,9 +329,13 @@ impl State {
             values.len() <= 8
         });
         for (a, b) in self.known.iter_mut().zip(rhs.known) {
-            *a = (*a).min(b);
+            *a &= b;
         }
         self.initialized.retain(|at| rhs.initialized.contains(at));
+        self.local_known.retain(|at, k| {
+            *k &= rhs.local_known.get(at).copied().unwrap_or(0);
+            *k != 0
+        });
         let keys: std::collections::BTreeSet<_> = self
             .local_values
             .keys()
@@ -337,10 +352,11 @@ impl State {
             self.local_values.insert(at, v);
             if v == Value::Unknown {
                 self.initialized.remove(&at);
+                self.local_known.remove(&at);
             }
         }
         self.argument_known.retain(|at, k| {
-            *k = (*k).min(*rhs.argument_known.get(at).unwrap_or(&0));
+            *k &= rhs.argument_known.get(at).copied().unwrap_or(0);
             true
         });
         self.cf_known &= rhs.cf_known;
@@ -362,23 +378,38 @@ impl State {
         }
         Ok(*self != old)
     }
-    fn bits(&self, o: &Operand) -> u8 {
+    pub(super) fn mask(&self, o: &Operand) -> u32 {
         match o {
-            Operand::Immediate(_) => 32,
-            Operand::Reg(r) => self.known[r.index as usize],
-            Operand::Memory(a, _) if a.base.is_none() && a.index.is_none() => 32,
-            Operand::Memory(_, 8) => 8, // Conditional on mandatory SMT prefix proof.
+            Operand::Immediate(_) => u32::MAX,
+            Operand::Reg(r) => {
+                (self.known[r.index as usize] >> r.shift)
+                    & if r.width == 8 { 255 } else { u32::MAX }
+            }
+            Operand::Memory(a, _) if a.base.is_none() && a.index.is_none() => u32::MAX,
+            Operand::Memory(_, 8) => 255, // Requires mandatory SMT initialized-prefix proof.
             Operand::Memory(a, 32) => match self.address(a) {
-                Ok(Value::Frame(Some(at))) if self.initialized.contains(&at) => 32,
+                Ok(Value::Frame(Some(at))) => self.local_known.get(&at).copied().unwrap_or(0),
                 _ => 0,
             },
             _ => 0,
         }
     }
+    pub(super) fn bits(&self, o: &Operand) -> u8 {
+        self.mask(o).trailing_ones() as u8
+    }
+    fn set_mask(&mut self, r: Reg, mask: u32) {
+        let lane = if r.width == 8 { 255 } else { u32::MAX };
+        self.known[r.index as usize] =
+            (self.known[r.index as usize] & !(lane << r.shift)) | ((mask & lane) << r.shift);
+    }
     fn finite_operand(&self, o: &Operand) -> Option<BTreeSet<u32>> {
         match o {
             Operand::Immediate(n) => Some(BTreeSet::from([*n])),
-            Operand::Reg(Reg { index, width: 32 }) => self.finite.get(&i32::from(*index)).cloned(),
+            Operand::Reg(Reg {
+                shift: 0,
+                index,
+                width: 32,
+            }) => self.finite.get(&i32::from(*index)).cloned(),
             Operand::Memory(a, 32) => match self.address(a).ok()? {
                 Value::Frame(Some(at)) => self.finite.get(&at).cloned(),
                 _ => None,
@@ -437,8 +468,7 @@ impl State {
             }
             Operation::ZeroExtend(dst, src) => {
                 let values = before
-                    .finite
-                    .get(&i32::from(src.index))
+                    .finite_operand(src)
                     .map(|v| v.iter().map(|x| x & 255).collect());
                 assign(self, i32::from(dst.index), values);
             }
@@ -452,19 +482,25 @@ impl State {
                     });
                 assign(self, i32::from(dst.index), values);
             }
-            Operation::Increment(r) | Operation::Decrement(r) | Operation::Negate(r) => {
+            Operation::Increment(r)
+            | Operation::Decrement(r)
+            | Operation::Negate(r)
+            | Operation::Not(r) => {
                 let values = before.finite_operand(&Operand::Reg(*r)).map(|v| {
                     v.into_iter()
                         .map(|v| match op {
                             Operation::Increment(_) => v.wrapping_add(1),
                             Operation::Decrement(_) => v.wrapping_sub(1),
+                            Operation::Not(_) => !v,
                             _ => v.wrapping_neg(),
                         })
                         .collect()
                 });
                 assign(self, i32::from(r.index), values);
             }
-            Operation::Address(r, _) => assign(self, i32::from(r.index), None),
+            Operation::Address(r, _) | Operation::Set(_, r) => {
+                assign(self, i32::from(r.index), None)
+            }
             Operation::Push(o) => assign(self, self.sp, before.finite_operand(o)),
             Operation::Pop(r) => {
                 assign(
@@ -512,7 +548,7 @@ impl State {
         self.finite_step(&before, op, call);
         match op {
             Operation::Push(o) => {
-                self.argument_known.insert(self.sp, before.bits(o));
+                self.argument_known.insert(self.sp, before.mask(o));
             }
             Operation::Pop(r) => {
                 self.known[r.index as usize] = *before.argument_known.get(&before.sp).unwrap_or(&0);
@@ -522,33 +558,38 @@ impl State {
                 self.known[5] = 0;
                 self.argument_known.retain(|at, _| *at >= self.sp);
                 self.initialized.clear();
+                self.local_known.clear();
             }
             Operation::ZeroExtend(dst, src) => {
-                self.known[dst.index as usize] = if before.known[src.index as usize] >= 8 {
-                    32
-                } else {
-                    0
-                };
+                self.known[dst.index as usize] = before.mask(src) | !255;
             }
+            Operation::Set(_, dst) => {
+                if !before.registers[dst.index as usize].scalar() {
+                    self.known[dst.index as usize] = 0;
+                }
+                self.set_mask(*dst, if before.zf_known { 255 } else { 0 });
+            }
+            Operation::Not(_) => {}
             Operation::ConditionalMove(_, dst, src) => {
                 self.known[dst.index as usize] =
-                    before.known[dst.index as usize].min(before.known[src.index as usize]);
+                    before.known[dst.index as usize] & before.known[src.index as usize];
             }
             Operation::Address(r, a) => {
                 self.known[r.index as usize] = [a.base, a.index]
                     .into_iter()
                     .flatten()
-                    .map(|i| before.known[i as usize])
+                    .map(|i| before.known[i as usize].trailing_ones())
                     .min()
-                    .unwrap_or(32);
+                    .map(|n| if n == 32 { u32::MAX } else { (1u32 << n) - 1 })
+                    .unwrap_or(u32::MAX);
             }
             Operation::Increment(r) | Operation::Decrement(r) => {
-                self.zf_known = before.known[r.index as usize] >= 32;
+                self.zf_known = before.known[r.index as usize] == u32::MAX;
             }
             Operation::Negate(r) => {
                 let v = before.registers[r.index as usize];
-                self.cf_known =
-                    before.known[r.index as usize] >= 32 && (v.scalar() || v.error_zero_safe());
+                self.cf_known = before.known[r.index as usize] == u32::MAX
+                    && (v.scalar() || v.error_zero_safe());
                 self.zf_known = self.cf_known;
             }
             Operation::Binary(op, dst, src) => {
@@ -573,9 +614,31 @@ impl State {
                 };
                 if !matches!(op, Binary::Compare | Binary::Test) {
                     match dst {
-                        Operand::Reg(r) => self.known[r.index as usize] = bits,
+                        Operand::Reg(r) => {
+                            if r.width != 32 && !before.registers[r.index as usize].scalar() {
+                                self.known[r.index as usize] = 0;
+                            }
+                            self.set_mask(
+                                *r,
+                                if *op == Binary::Move {
+                                    before.mask(src)
+                                } else if bits == 32 {
+                                    u32::MAX
+                                } else {
+                                    (1u32 << bits) - 1
+                                },
+                            );
+                        }
                         Operand::Memory(a, 32) => {
                             if let Ok(Value::Frame(Some(at))) = before.address(a) {
+                                let mask = if *op == Binary::Move {
+                                    before.mask(src)
+                                } else if bits == 32 {
+                                    u32::MAX
+                                } else {
+                                    (1u32 << bits) - 1
+                                };
+                                self.local_known.insert(at, mask);
                                 if bits == 32 {
                                     self.initialized.insert(at);
                                 } else {
@@ -602,6 +665,7 @@ impl State {
                 if matches!(
                     dst,
                     Operand::Reg(Reg {
+                        shift: 0,
                         index: 4,
                         width: 32
                     })
@@ -610,6 +674,7 @@ impl State {
                     let lo = self.sp.min(before.sp);
                     let hi = self.sp.max(before.sp);
                     self.initialized.retain(|at| *at + 4 <= lo || *at >= hi);
+                    self.local_known.retain(|at, _| *at + 4 <= lo || *at >= hi);
                 }
             }
             Operation::Call(_) => {
@@ -625,10 +690,11 @@ impl State {
                 if matches!(f, Function::Read | Function::Write) {
                     if let Value::Frame(Some(at)) = before.arguments(5)?[3] {
                         self.initialized.insert(at);
+                        self.local_known.insert(at, u32::MAX);
                         self.local_values.insert(at, Value::Scalar);
                     }
                 }
-                self.known[0] = 32;
+                self.known[0] = u32::MAX;
                 self.known[1] = 0;
                 self.known[2] = 0;
                 self.cf_known = false;
@@ -641,7 +707,7 @@ impl State {
                 self.known[i] = 0;
             }
         }
-        self.known[4] = 32;
+        self.known[4] = u32::MAX;
         Ok(())
     }
     fn type_step(
@@ -666,6 +732,7 @@ impl State {
             Operation::Binary(
                 op,
                 Operand::Reg(Reg {
+                    shift: 0,
                     index: 4,
                     width: 32,
                 }),
@@ -756,18 +823,27 @@ impl State {
                 self.put(dst, result)?;
             }
             Operation::ZeroExtend(dst, src) => {
-                let value = self.registers[src.index as usize];
-                require(value.scalar(), "zero extension requires scalar source")?;
-                self.put(
-                    &Operand::Reg(*dst),
-                    match value {
-                        Value::Constant(n) => Value::Constant(n & 255),
-                        _ => Value::Scalar,
-                    },
+                let value = self.operand(src, None)?;
+                require(
+                    value.scalar()
+                        && !matches!(src, Operand::Reg(r) if !self.registers[r.index as usize].scalar()),
+                    "zero extension requires scalar source",
                 )?;
+                self.put(&Operand::Reg(*dst), Value::Scalar)?;
+            }
+            Operation::Set(_, dst) => {
+                require(self.zf_known, "SETNE reads unknown ZF")?;
+                self.put(&Operand::Reg(*dst), Value::Scalar)?;
+            }
+            Operation::Not(r) => {
+                require(self.registers[r.index as usize].scalar(), "NOT non-scalar")?;
+                self.registers[r.index as usize] = Value::Scalar;
             }
             Operation::ConditionalMove(cond, dst, src) => {
-                require(self.zf_known, "conditional move reads unknown ZF")?;
+                require(
+                    *cond == Condition::AboveEqual || self.zf_known,
+                    "conditional move reads unknown ZF",
+                )?;
                 require(
                     *cond == Condition::Equal || self.cf_known,
                     "conditional move reads unknown CF",
@@ -883,21 +959,129 @@ mod tests {
         prove(&bound)
     }
     #[test]
+    fn partial_masks_aliases_spills_and_opaque_boundaries() {
+        let lo = Reg {
+            index: 2,
+            width: 8,
+            shift: 0,
+        };
+        let hi = Reg {
+            index: 2,
+            width: 8,
+            shift: 8,
+        };
+        let full = Reg {
+            index: 2,
+            width: 32,
+            shift: 0,
+        };
+        let mut state = State::entry();
+        state
+            .step(
+                &Operation::Binary(Binary::Move, Operand::Reg(hi), Operand::Immediate(0x81)),
+                None,
+                None,
+            )
+            .unwrap();
+        assert_eq!(state.known[2], 0xff00);
+        assert_eq!(state.bits(&Operand::Reg(lo)), 0);
+        assert_eq!(state.bits(&Operand::Reg(hi)), 8);
+        state
+            .step(
+                &Operation::Binary(Binary::Move, Operand::Reg(lo), Operand::Immediate(7)),
+                None,
+                None,
+            )
+            .unwrap();
+        assert_eq!(state.known[2], 0xffff);
+        state.allocate(8).unwrap();
+        let cell = Operand::Memory(
+            Address {
+                base: Some(4),
+                index: None,
+                scale: 1,
+                displacement: 0,
+            },
+            32,
+        );
+        state
+            .step(
+                &Operation::Binary(Binary::Move, cell.clone(), Operand::Reg(full)),
+                None,
+                None,
+            )
+            .unwrap();
+        assert_eq!(state.local_known[&-8], 0xffff);
+        assert!(!state.initialized.contains(&-8));
+        state
+            .step(
+                &Operation::Binary(Binary::Move, Operand::Reg(Reg { index: 1, ..full }), cell),
+                None,
+                None,
+            )
+            .unwrap();
+        assert_eq!(state.known[1], 0xffff);
+        let mut other = state.clone();
+        other.known[2] = 0xff00;
+        state.join(&other).unwrap();
+        assert_eq!(state.known[2], 0xff00);
+        for v in [
+            Value::Frame(Some(-8)),
+            Value::Handle(1),
+            Value::Error,
+            Value::Function(Function::Read),
+        ] {
+            let mut s = State::entry();
+            s.registers[2] = v;
+            s.known[2] = u32::MAX;
+            s.step(
+                &Operation::Binary(Binary::Move, Operand::Reg(hi), Operand::Immediate(1)),
+                None,
+                None,
+            )
+            .unwrap();
+            assert_eq!(s.known[2], 0xff00); // Original opaque upper bits remain unobservable.
+            assert_eq!(s.bits(&Operand::Reg(full)), 0);
+        }
+        let mut s = State::entry();
+        assert!(s
+            .step(&Operation::Set(Condition::NotEqual, lo), None, None)
+            .is_err());
+        s.zf_known = true;
+        s.step(&Operation::Set(Condition::NotEqual, hi), None, None)
+            .unwrap();
+        assert_eq!(s.known[2], 0xff00);
+        assert!(s.zf_known);
+        assert!(!s.cf_known);
+    }
+    #[test]
     fn extension_definedness_provenance_and_unsigned_flags() {
         let dst = Reg {
+            shift: 0,
             index: 0,
             width: 32,
         };
-        let src = Reg { index: 1, width: 8 };
+        let src = Reg {
+            shift: 0,
+            index: 1,
+            width: 8,
+        };
         for known in [0, 7, 8, 16, 32] {
             let mut s = State::entry();
             s.registers[1] = Value::Scalar;
-            s.known[1] = known;
+            s.known[1] = if known == 32 {
+                u32::MAX
+            } else {
+                (1u32 << known) - 1
+            };
             s.cf_known = true;
             s.zf_known = true;
-            s.step(&Operation::ZeroExtend(dst, src), None, None)
+            s.step(&Operation::ZeroExtend(dst, Operand::Reg(src)), None, None)
                 .unwrap();
-            assert_eq!(s.known[0], if known >= 8 { 32 } else { 0 });
+            assert_eq!(
+                s.known[0],
+                (!255u32) | if known >= 8 { 255 } else { (1u32 << known) - 1 }
+            );
             assert!(s.cf_known && s.zf_known);
         }
         for value in [
@@ -909,9 +1093,9 @@ mod tests {
         ] {
             let mut s = State::entry();
             s.registers[1] = value;
-            s.known[1] = 32;
+            s.known[1] = u32::MAX;
             assert!(s
-                .step(&Operation::ZeroExtend(dst, src), None, None)
+                .step(&Operation::ZeroExtend(dst, Operand::Reg(src)), None, None)
                 .is_err());
         }
         for (cf, zf, ok) in [
@@ -923,8 +1107,8 @@ mod tests {
             let mut s = State::entry();
             s.registers[0] = Value::Constant(7);
             s.registers[1] = Value::Constant(42);
-            s.known[0] = 32;
-            s.known[1] = 32;
+            s.known[0] = u32::MAX;
+            s.known[1] = u32::MAX;
             s.cf_known = cf;
             s.zf_known = zf;
             assert_eq!(
@@ -941,10 +1125,12 @@ mod tests {
     #[test]
     fn conditional_selection_requires_known_scalar_state_and_preserves_flags() {
         let dst = Reg {
+            shift: 0,
             index: 0,
             width: 32,
         };
         let src = Reg {
+            shift: 0,
             index: 1,
             width: 32,
         };
@@ -952,8 +1138,8 @@ mod tests {
             let mut state = State::entry();
             state.registers[0] = Value::Constant(a);
             state.registers[1] = Value::Constant(b);
-            state.known[0] = 32;
-            state.known[1] = 32;
+            state.known[0] = u32::MAX;
+            state.known[1] = u32::MAX;
             state.zf_known = true;
             state.cf_known = true;
             state
@@ -963,7 +1149,7 @@ mod tests {
                     None,
                 )
                 .unwrap();
-            assert_eq!(state.known[0], 32);
+            assert_eq!(state.known[0], u32::MAX);
             assert!(state.zf_known && state.cf_known);
             assert!(state.registers[0].scalar());
         }
@@ -1002,10 +1188,11 @@ mod tests {
         assert!(!a.finite.contains_key(&0));
         let mut s = State::entry();
         s.registers[0] = Value::Constant(u32::MAX);
-        s.known[0] = 32;
+        s.known[0] = u32::MAX;
         s.finite.insert(0, BTreeSet::from([u32::MAX]));
         s.step(
             &Operation::Increment(Reg {
+                shift: 0,
                 index: 0,
                 width: 32,
             }),
@@ -1074,7 +1261,7 @@ mod tests {
     fn opaque_join_loses_defined_scalar_authority_and_stack_flags_stay_unknown() {
         let mut a = State::entry();
         a.registers[0] = Value::Handle(0xfffffff6);
-        a.known[0] = 32;
+        a.known[0] = u32::MAX;
         let mut b = a.clone();
         b.registers[0] = Value::Constant(42);
         a.join(&b).unwrap();
@@ -1084,6 +1271,7 @@ mod tests {
             &Operation::Binary(
                 Binary::Sub,
                 Operand::Reg(Reg {
+                    shift: 0,
                     index: 4,
                     width: 32,
                 }),
@@ -1098,6 +1286,7 @@ mod tests {
             &Operation::Binary(
                 Binary::Move,
                 Operand::Reg(Reg {
+                    shift: 0,
                     index: 0,
                     width: 32,
                 }),
@@ -1114,6 +1303,7 @@ mod tests {
         let mut s = State::entry();
         s.registers[0] = Value::Handle(0xfffffff6);
         let r = Operand::Reg(Reg {
+            shift: 0,
             index: 0,
             width: 32,
         });
@@ -1125,7 +1315,14 @@ mod tests {
             )
             .is_err());
         assert!(s
-            .operand(&Operand::Reg(Reg { index: 0, width: 8 }), None)
+            .operand(
+                &Operand::Reg(Reg {
+                    shift: 0,
+                    index: 0,
+                    width: 8
+                }),
+                None
+            )
             .is_err());
         s.registers[0] = Value::Error;
         assert!(s
@@ -1149,8 +1346,9 @@ mod tests {
             for offset in [0u32, 108, 109, 110, u32::MAX] {
                 let mut s = State::entry();
                 s.registers[index] = Value::Error;
-                s.known[index] = 32;
+                s.known[index] = u32::MAX;
                 let r = Reg {
+                    shift: 0,
                     index: index as u8,
                     width: 32,
                 };
@@ -1191,15 +1389,20 @@ mod tests {
     fn decrement_preserves_carry_and_byte_sbb_requires_it() {
         let mut s = State::entry();
         s.registers[0] = Value::Scalar;
-        s.known[0] = 32;
+        s.known[0] = u32::MAX;
         let r = Reg {
+            shift: 0,
             index: 0,
             width: 32,
         };
         s.cf_known = true;
         s.step(&Operation::Decrement(r), None, None).unwrap();
         assert!(s.cf_known && s.zf_known);
-        let r = Operand::Reg(Reg { index: 0, width: 8 });
+        let r = Operand::Reg(Reg {
+            shift: 0,
+            index: 0,
+            width: 8,
+        });
         s.cf_known = false;
         assert!(s
             .step(&Operation::Binary(Binary::Sbb, r.clone(), r), None, None)

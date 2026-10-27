@@ -14,7 +14,7 @@ fn value(o: &Operand, load: bool) -> String {
     match o {
         Operand::Reg(r) => {
             if r.width == 8 {
-                format!("(r[{}]&255)", r.index)
+                format!("((r[{}]>>{})&255)", r.index, r.shift)
             } else {
                 format!("r[{}]", r.index)
             }
@@ -28,7 +28,13 @@ fn store(o: &Operand, v: &str) -> String {
     match o {
         Operand::Reg(r) => {
             if r.width == 8 {
-                format!("r[{}]=(r[{}]&!255)|(({v})&255);", r.index, r.index)
+                format!(
+                    "r[{}]=(r[{}]&!{}u32)|((({v})&255)<<{});",
+                    r.index,
+                    r.index,
+                    255u32 << r.shift,
+                    r.shift
+                )
             } else {
                 format!("r[{}]={v};", r.index)
             }
@@ -82,6 +88,7 @@ pub(super) fn emit(bound: &Bound) -> String {
                     if matches!(
                         dst,
                         Operand::Reg(Reg {
+                            shift: 0,
                             index: 4,
                             width: 32
                         })
@@ -92,11 +99,19 @@ pub(super) fn emit(bound: &Bound) -> String {
                 }
             }
             Operation::ZeroExtend(dst, src) => {
-                writeln!(out, "r[{}]=r[{}]&255;", dst.index, src.index).unwrap();
+                writeln!(out, "r[{}]={};", dst.index, value(src, false)).unwrap();
+            }
+            Operation::Set(_, dst) => {
+                writeln!(out, "{}", store(&Operand::Reg(*dst), "u32::from(!zf)")).unwrap();
+            }
+            Operation::Not(dst) => {
+                writeln!(out, "r[{}]=!r[{}];", dst.index, dst.index).unwrap();
             }
             Operation::ConditionalMove(cond, dst, src) => {
                 let predicate = if *cond == Condition::Above {
                     "!cf&&!zf"
+                } else if *cond == Condition::AboveEqual {
+                    "!cf"
                 } else {
                     "zf"
                 };
@@ -197,6 +212,167 @@ pub(super) fn emit(bound: &Bound) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn native_byte_alias_and_flag_preservation_vectors() {
+        let mut programs = Vec::new();
+        for lane in 0u8..8 {
+            let reg = lane % 4;
+            let shift = if lane < 4 { 0 } else { 8 };
+            for (initial, byte, want) in [
+                (
+                    0x12345678u32,
+                    0xa5u32,
+                    if shift == 0 {
+                        0x123456a5u32
+                    } else {
+                        0x1234a578
+                    },
+                ),
+                (
+                    0xffffffff,
+                    0,
+                    if shift == 0 { 0xffffff00 } else { 0xffff00ff },
+                ),
+            ] {
+                let mut b = vec![0xb8 + reg];
+                b.extend(initial.to_le_bytes());
+                b.extend([0xb0 + lane, byte as u8, 0x8b, 0xc0 | reg, 0x3d]);
+                b.extend(want.to_le_bytes());
+                b.extend([0x0f, 0x95, 0xc0, 0x0f, 0xb6, 0xc0, 0xc3]);
+                programs.push((b, 0));
+            }
+            // SETNE preserves all other bytes and flags; both predicate values.
+            for (a, b) in [(7u32, 7u32), (7, 8)] {
+                let mut code = vec![0xb8];
+                code.extend(a.to_le_bytes());
+                code.push(0x3d);
+                code.extend(b.to_le_bytes());
+                code.push(0xb8 + reg);
+                code.extend(0xaabbccddu32.to_le_bytes());
+                code.extend([0x0f, 0x95, 0xc0 | lane, 0x8b, 0xc0 | reg, 0x3d]);
+                let want = (0xaabbccddu32 & !(255 << shift)) | (u32::from(a != b) << shift);
+                code.extend(want.to_le_bytes());
+                code.extend([0x0f, 0x95, 0xc0, 0x0f, 0xb6, 0xc0, 0xc3]);
+                programs.push((code, 0));
+            }
+            for (a, b, result, carry) in [
+                (255u8, 1u8, 0u32, true),
+                (127, 1, 128, false),
+                (0, 255, 255, false),
+            ] {
+                for observe_carry in [false, true] {
+                    let mut code = vec![0xb8 + reg];
+                    code.extend(0x12345678u32.to_le_bytes());
+                    code.extend([0xb0 + lane, a, 0x80, 0xc0 | lane, b]);
+                    code.extend([0x0f, 0xb6, 0xc0 | lane]); // Must preserve ADD's flags.
+                    if observe_carry {
+                        code.extend([0xb9, 7, 0, 0, 0, 0xb8, 3, 0, 0, 0, 0x0f, 0x43, 0xc1]);
+                    }
+                    code.push(0xc3);
+                    programs.push((
+                        code,
+                        if observe_carry {
+                            if carry {
+                                3
+                            } else {
+                                7
+                            }
+                        } else {
+                            result
+                        },
+                    ));
+                }
+            }
+        }
+        // NOT preserves CF and ZF; memory MOVZX reads exactly one initialized byte.
+        for a in [0u32, 1, u32::MAX, 0x80000000] {
+            let mut code = vec![0xb8];
+            code.extend(a.to_le_bytes());
+            code.extend([0xf7, 0xd0, 0x3d]);
+            code.extend((!a).to_le_bytes());
+            code.extend([0x0f, 0x95, 0xc0, 0x0f, 0xb6, 0xc0, 0xc3]);
+            programs.push((code, 0));
+        }
+        for (b, z, c) in [(0u8, 0u32, 7u32), (1, 1, 3)] {
+            let start = vec![
+                0x31, 0xc0, 0x83, 0xf8, b, 0xb8, 0x78, 0x56, 0x34, 0x12, 0xf7, 0xd0,
+            ];
+            let mut code = start.clone();
+            code.extend([0x0f, 0x95, 0xc1, 0x0f, 0xb6, 0xc1, 0xc3]);
+            programs.push((code, z));
+            let mut code = start;
+            code.extend([0xb8, 3, 0, 0, 0, 0xb9, 7, 0, 0, 0, 0x0f, 0x43, 0xc1, 0xc3]);
+            programs.push((code, c));
+        }
+        programs.push((
+            vec![
+                0x83, 0xec, 4, 0xc6, 0x44, 0x24, 2, 0xff, 0x0f, 0xb6, 0x44, 0x24, 2, 0x83, 0xc4, 4,
+                0xc3,
+            ],
+            255,
+        ));
+        // Full-width column wrap near 2^32: expected steps to the next
+        // four-column stop are specified independently of the lifted loop.
+        for (column, steps) in [
+            (0u32, 4u32),
+            (1, 3),
+            (2, 2),
+            (3, 1),
+            (0xfffffffc, 4),
+            (0xfffffffd, 3),
+            (0xfffffffe, 2),
+            (u32::MAX, 1),
+        ] {
+            let mut code = vec![0xbb];
+            code.extend(column.to_le_bytes());
+            code.extend([
+                0x31, 0xc0, 0x40, 0x8d, 0x53, 1, 0xf7, 0xd3, 0xf6, 0xc3, 3, 0x89, 0xd3, 0x75, 0xf3,
+                0xc3,
+            ]);
+            programs.push((code, steps));
+        }
+        let dir = std::env::temp_dir().join(format!("w2l-lanes-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut source = String::from("struct NoIo;\n");
+        let mut checks = String::new();
+        for (id, (code, expected)) in programs.iter().enumerate() {
+            let bound = Bound {
+                graph: super::super::graph::decode(code, 0, 0).unwrap(),
+                calls: Default::default(),
+                loads: Default::default(),
+            };
+            writeln!(source, "mod g{id} {{ {} }}", emit(&bound)).unwrap();
+            writeln!(source,"impl g{id}::StreamIo for NoIo {{fn standard(&mut self,_:u32)->u32{{panic!()}} fn read(&mut self,_:u32,_:&mut[u8])->Result<usize,u32>{{panic!()}} fn write(&mut self,_:u32,_:&[u8])->Result<usize,u32>{{panic!()}}}}").unwrap();
+            writeln!(
+                checks,
+                "assert_eq!(g{id}::run(&mut NoIo),{expected},\"vector {id}\");"
+            )
+            .unwrap();
+        }
+        writeln!(source, "fn main(){{{checks}}}").unwrap();
+        std::fs::write(dir.join("vectors.rs"), source).unwrap();
+        let compiled = std::process::Command::new("rustc")
+            .arg("--edition=2021")
+            .arg(dir.join("vectors.rs"))
+            .arg("-o")
+            .arg(dir.join("vectors"))
+            .output()
+            .unwrap();
+        assert!(
+            compiled.status.success(),
+            "{}",
+            String::from_utf8_lossy(&compiled.stderr)
+        );
+        let ran = std::process::Command::new(dir.join("vectors"))
+            .output()
+            .unwrap();
+        assert!(
+            ran.status.success(),
+            "{}",
+            String::from_utf8_lossy(&ran.stderr)
+        );
+        std::fs::remove_dir_all(dir).unwrap();
+    }
     #[test]
     fn unsigned_selection_and_extension_native_truth_tables() {
         let mut programs = Vec::new();
