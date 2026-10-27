@@ -35,7 +35,29 @@ def focus(data, disassembly):
     """Pinned measurement addresses only; never converter dispatch or eligibility."""
     scope = mapped_bytes(data, 0x5191f8, 16)
     ranges = []
-    for start, size in [(0x475ba0, 96), (0x47b290, 256), (0x475c79, 192)]:
+    requested = [(0x475ba0, 96), (0x47b290, 512), (0x475c79, 192), (0x47b250, 64)]
+    dependencies = []
+    # Actual call sites observed in the pinned handler. Resolve direct thunks
+    # from bytes; no symbol name is used to manufacture a destination.
+    for site in [0x47b2a9, 0x47b2cf, 0x47b312, 0x47b34f]:
+        call = mapped_bytes(data, site, 5)
+        if call[0] != 0xe8:
+            raise ValueError('pinned call-site bytes changed')
+        target = (site+5+int.from_bytes(call[1:], 'little', signed=True)) % 2**32
+        chain = [target]
+        for _ in range(4):
+            thunk = mapped_bytes(data, target, 5)
+            if thunk[0] != 0xe9:
+                break
+            target = (target+5+int.from_bytes(thunk[1:], 'little', signed=True)) % 2**32
+            if target in chain:
+                raise ValueError('cyclic direct thunk')
+            chain.append(target)
+        else:
+            raise ValueError('direct thunk budget exhausted')
+        dependencies.append(dict(call_site=hex(site), chain=[hex(x) for x in chain]))
+        requested.append((target,512))
+    for start, size in requested:
         raw = mapped_bytes(data, start, size)
         rows = []
         for line in disassembly.splitlines():
@@ -51,7 +73,7 @@ def focus(data, disassembly):
     return dict(kind='bounded original ranges; adjacent code may be included; not CFG closure',
                 scope_va='0x5191f8', scope_header_hex=scope.hex(),
                 scope_header_signed_words=list(struct.unpack('<iiii',scope)),
-                ranges=ranges, emission_allowed=False)
+                ranges=ranges, direct_dependencies=dependencies, emission_allowed=False)
 
 
 def inventory(data, disassembly, expected_hash):
