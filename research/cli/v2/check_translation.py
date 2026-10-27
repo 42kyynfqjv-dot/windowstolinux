@@ -32,6 +32,14 @@ with tempfile.TemporaryDirectory() as td:
   path.write_bytes(bytes.fromhex(extra['closed_output_pipe']['input_hex']));rd,wr=os.pipe();os.close(rd)
   with path.open('rb') as f,os.fdopen(wr,'wb',buffering=0) as dest:p=subprocess.run([str(exe)],stdin=f,stdout=dest,stderr=subprocess.PIPE,timeout=30)
   got=dict(exit=p.returncode,stderr_hex=p.stderr.hex(),stdout=extra['closed_output_pipe']['stdout']);assert got==row['closed_output_pipe'];actual.append(dict(kind='closed-output-pipe',**got))
+  # Independent native-adapter contract: a failed pipe write must expose
+  # ERROR_BROKEN_PIPE to admitted subsequent GetLastError predicates.
+  adapter=d/'adapter.rs';adapter_exe=d/'adapter'
+  adapter.write_text(generated.read_text().replace('fn main(){','fn original_main(){')+'\nfn main(){let mut io=Native::new();assert_eq!(io.write(2,b"x"),Err(109));}\n')
+  p=subprocess.run(['rustc','--edition=2021',str(adapter),'-o',str(adapter_exe)],capture_output=True,timeout=30);assert p.returncode==0,p.stderr
+  rd,wr=os.pipe();os.close(rd)
+  with os.fdopen(wr,'wb',buffering=0) as dest:p=subprocess.run([str(adapter_exe)],stdout=dest,stderr=subprocess.PIPE,timeout=30)
+  assert p.returncode==0 and not p.stderr,p.stderr
   # The same emitted instruction function with a substituted backend: eight
   # documented-result probes, not additional unchanged Windows executions.
   (d/'generated.rs').write_bytes(generated.read_bytes())

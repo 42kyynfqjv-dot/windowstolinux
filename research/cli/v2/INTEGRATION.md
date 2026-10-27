@@ -14,7 +14,9 @@ binary pipe cases across both native outputs (sizes0,1,254..258,511..513,
 Review covered checked import binding, protected frame joins, incoming-domain
 checks, first-violation obligations, unique read-count ownership, fresh prefix
 replacement, coincident successors, solver failure policy and emitted arithmetic
-and I/O. No additional production defect was reproduced during this review.
+and I/O. Review then found that failed native pipe writes returned1117 rather than109,
+observable by admitted GetLastError equality. Corrected BrokenPipe mapping and
+added two direct adapter regressions, separately counted from Windows pairs.
 
 The implementation contract below under "Integrated" remains authoritative.
 Earlier checkpoint sections are retained as history; their zero-translation and

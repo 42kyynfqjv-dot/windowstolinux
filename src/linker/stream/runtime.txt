@@ -33,5 +33,5 @@ impl Native{
 impl StreamIo for Native{
  fn standard(&mut self,s:u32)->u32{match s{0xfffffff6 if self.input.is_some()=>1,0xfffffff5 if self.output.is_some()=>2,_=>u32::MAX}}
  fn read(&mut self,h:u32,b:&mut[u8])->Result<usize,u32>{if h!=1{return Err(6)}let f=self.input.as_mut().ok_or(6u32)?;if b.is_empty(){return Ok(0)}loop{match f.read(b){Err(e) if e.kind()==std::io::ErrorKind::Interrupted=>continue,Err(_)=>return Err(1117),Ok(0) if self.pipe=>return Err(109),Ok(n)=>return Ok(n)}}}
- fn write(&mut self,h:u32,b:&[u8])->Result<usize,u32>{if h!=2{return Err(6)}let f=self.output.as_mut().ok_or(6u32)?;loop{match f.write(b){Err(e) if e.kind()==std::io::ErrorKind::Interrupted=>continue,Err(_)=>return Err(1117),Ok(n)=>return Ok(n)}}}
+ fn write(&mut self,h:u32,b:&[u8])->Result<usize,u32>{if h!=2{return Err(6)}let f=self.output.as_mut().ok_or(6u32)?;loop{match f.write(b){Err(e) if e.kind()==std::io::ErrorKind::Interrupted=>continue,Err(e) if e.kind()==std::io::ErrorKind::BrokenPipe=>return Err(109),Err(_)=>return Err(1117),Ok(n)=>return Ok(n)}}}
 }
