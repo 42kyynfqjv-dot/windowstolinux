@@ -7,14 +7,14 @@ translation. Production rejection stays in place.
 
 ## Identity established, symbol and effects not inferred
 
-At commit853146d8da5ffa027eaafe203a07a2b9f9ff8080, startup workflow40598163347,
-job122519267246 stopped the same retained rcedit PE before its entry instruction.
+At commit 853146d8da5ffa027eaafe203a07a2b9f9ff8080, startup workflow 40598163347,
+job 122519267246 stopped the same retained rcedit PE before its entry instruction.
 `entry-module-observed.json` records the report. The first incoming handler is in
 the actual LOAD_DLL file `C:\Windows\SysWOW64\ntdll.dll`:
 
-- x86 machine0x14c, file version10.0.20348.5756, SizeOfImage0x1aa000;
-- file SHA2561e78588dcb44d47c1656f9f6eab8ab5beb5279959bcebf74c0f869d8d1c73322;
-- handler RVA0x7c630; **no exact named export**, private symbol unresolved;
+- x86 machine 0x14c, file version 10.0.20348.5756, SizeOfImage 0x1aa000;
+- file SHA256 1e78588dcb44d47c1656f9f6eab8ab5beb5279959bcebf74c0f869d8d1c73322;
+- handler RVA 0x7c630; **no exact named export**, private symbol unresolved;
 - file machine/timestamp/image size match headers read from the mapped image.
 
 The file path comes from its debug-event file handle, not a guessed System32
@@ -60,6 +60,11 @@ from the end-of-chain sentinel and from application-owned registration storage.
 Original prolog/epilog may copy, retain, compare for identity and restore this
 predecessor through validated operations. Numeric address equality alone cannot
 mint it. Its lifetime encloses every application registration that points to it.
+Identity comparison means an established relationship between preserved values;
+it does not justify comparison with an arbitrary literal, ordering, or a claim
+that every Windows entry has the same nonempty chain. Those observations require
+their own contract. Root normal-return/exit effects also require explicit binding;
+finishing an application activation cannot silently retire the incoming frames.
 
 For the first integrated handler path, admit only a proved **application-contained
 exception domain**. This allows actual faults, filters, resume and unwind; it is
@@ -111,6 +116,22 @@ ordinary uninstrumented Windows executions are separate from original-entry
 metadata and existing VR/IOFH probes. They test observable contract distinctions,
 not private ntdll identity or complete effect closure. The source and expectations
 are committed before execution. No new translated pair is claimed.
+
+At commit d4aea434c0ff7591a270136a6c5f538fc366a29b, dedicated workflow
+[40598659445](https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/40598659445)
+passed both jobs. Windows job 122520935321 observed all three frozen outcomes,
+with empty stderr, on Windows Server 2022 10.0.20348. The exact source/compiler/
+PE hashes and outputs are in `root-observed.json`; the workflow retains the
+unchanged executed PE and per-launch diagnostics in artifact 12776469490.
+The previous five SEH and two context probes also passed separately. These are
+ten original Windows observations in three suites, zero startup translations.
+
+This demonstrates why one cannot erase a reachable external root or assume it
+always terminates. It also tests an application-handled case where that callback
+is not invoked. It does not prove rcedit's handlers close every path, identify
+ntdll's private symbol, or establish absence of unseen external effects. The
+recommended opacity proof is the concrete next integration gate, not a result
+inferred from the three samples.
 
 ## Cohesive next implementation and stopping rule
 

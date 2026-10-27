@@ -5,6 +5,8 @@ from pathlib import Path
 import struct
 
 def identify(data, handler_rva, machine, timestamp, image_size):
+    if machine != 0x14c or not 0 <= handler_rva < image_size:
+        raise ValueError('handler outside observed x86 image')
     def read(at,n):
         if at<0 or n<0 or at+n>len(data): raise ValueError('truncated module metadata')
         return data[at:at+n]

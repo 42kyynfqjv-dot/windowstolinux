@@ -34,6 +34,9 @@ class Identity(unittest.TestCase):
         for machine, stamp, size in [(0x8664,77,0x3000),(0x14c,78,0x3000),(0x14c,77,0x4000)]:
             with self.assertRaises(ValueError):
                 identify(fixture(), 0x1200, machine, stamp, size)
+        for address in (-1, 0x3000):
+            with self.assertRaises(ValueError):
+                identify(fixture(), address, 0x14c, 77, 0x3000)
 
     def test_truncated_or_invalid_export_mapping_rejected(self):
         data = fixture()
