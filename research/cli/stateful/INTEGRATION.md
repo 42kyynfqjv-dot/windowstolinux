@@ -23,7 +23,10 @@ https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.h
   memory/word forms and ESP destination reject. Existing CMOVE remains supported.
 - AND with a contiguous low-bit mask is encoded as integer modulo mask+1. For a
   nonnegative u32 this is exactly the same bit operation; other masks retain the
-  bit-sum encoding. Runtime instructions and flags are unchanged.
+  bit-sum encoding. When finite input values are known, guarded exact constant
+  results precede that general expression as a fallback. This removes nonlinear
+  search from small loop-control states without assuming unproved input values.
+  Runtime instructions and flags are unchanged.
 
 ## Weighted invariants and trust boundary
 
@@ -102,3 +105,10 @@ Windows Server 2025 does not establish XP/7 support. Stable synchronous regular
 files/byte pipes, valid stack and no concurrent mutation remain assumptions.
 Ordinary CRT, general applications, PE32+, devices and asynchronous I/O remain
 unsupported. Six historical original-Windows timeout causes remain unresolved.
+
+Development CI at909daa1 (run40452176178) failed on Windows tabs O1 at the inner
+backedge invariant query (resource exhaustion); the same graph had passed locally.
+The failure remains recorded, not retried as acceptance. Subsequent proof encoding
+uses exact guarded finite AND results and removes a redundant overflow alternative
+for AND, whose result is always within u32. Solver budgets stay unchanged; both
+hosts must pass the new final commit.

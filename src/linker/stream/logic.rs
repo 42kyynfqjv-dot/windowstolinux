@@ -33,6 +33,24 @@ fn num(n: i64) -> String {
         n.to_string()
     }
 }
+// Exact unsigned bit mask, with a linear finite-control specialization at use sites.
+fn and_mask(a: &str, mask: u32) -> String {
+    if mask.checked_add(1).is_some_and(|n| n.is_power_of_two()) {
+        return format!("(mod {a} {})", u64::from(mask) + 1);
+    }
+    let terms: Vec<_> = (0..32)
+        .filter(|bit| mask & (1u32 << bit) != 0)
+        .map(|bit| {
+            let power = 1u64 << bit;
+            format!("(* {power} (mod (div {a} {power}) 2))")
+        })
+        .collect();
+    if terms.is_empty() {
+        "0".into()
+    } else {
+        format!("(+ 0 {})", terms.join(" "))
+    }
+}
 /// Candidate discovery is heuristic, never an admission oracle. Binary pending
 /// state uses a separate global proof. Weighted candidates are inductive domain
 /// obligations: entry and EVERY incoming edge check them before continuation may
@@ -606,21 +624,20 @@ impl Builder<'_> {
                                 let Operand::Immediate(mask) = src else {
                                     return Err("stream logic: AND requires immediate mask".into());
                                 };
-                                if mask.checked_add(1).is_some_and(|n| n.is_power_of_two()) {
-                                    format!("(mod {a} {})", u64::from(*mask) + 1)
-                                } else {
-                                    let terms: Vec<_> = (0..32)
-                                        .filter(|bit| mask & (1u32 << bit) != 0)
-                                        .map(|bit| {
-                                            let power = 1u64 << bit;
-                                            format!("(* {power} (mod (div {a} {power}) 2))")
+                                if let Operand::Reg(r) = dst {
+                                    if let Some(values) = state.finite.get(&i32::from(r.index)) {
+                                        // Each finite input has an exact constant result. Keep
+                                        // the general bit expression as the fallback below;
+                                        // this avoids nonlinear modulo search on loop control.
+                                        let fallback = and_mask(&a, *mask);
+                                        values.iter().rev().fold(fallback, |tail, value| {
+                                            format!("(ite (= {a} {value}) {} {tail})", value & mask)
                                         })
-                                        .collect();
-                                    if terms.is_empty() {
-                                        "0".into()
                                     } else {
-                                        format!("(+ 0 {})", terms.join(" "))
+                                        and_mask(&a, *mask)
                                     }
+                                } else {
+                                    and_mask(&a, *mask)
                                 }
                             }
                             Binary::Test if dst == src => a.clone(),
@@ -632,7 +649,8 @@ impl Builder<'_> {
                             }
                         };
                         let opaque = matches!(dst,Operand::Reg(r) if matches!(state.registers[r.index as usize],Value::Error|Value::ErrorAffine(_, _)));
-                        let v = if pointer {
+                        let v = if pointer || *op == Binary::And {
+                            // AND's mathematical result is always within the operand width.
                             raw.clone()
                         } else if opaque || *op == Binary::Sbb {
                             format!("(mod {raw} 4294967296)")
