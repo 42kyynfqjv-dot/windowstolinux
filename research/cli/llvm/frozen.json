@@ -1,0 +1,46 @@
+{
+  "programs": [
+    "fold",
+    "tabs",
+    "escape"
+  ],
+  "configurations": {
+    "O1": [
+      "/O1"
+    ],
+    "O2": [
+      "/O2"
+    ]
+  },
+  "link_flags": [
+    "/nologo",
+    "/machine:x86",
+    "/subsystem:console",
+    "/nodefaultlib",
+    "/entry:entry@0"
+  ],
+  "libraries": [
+    "kernel32.lib"
+  ],
+  "sha256": {
+    "payload.json": "6caf34fca10e167694287974fa6cac36b982ef93531b4dce2b290939d5e22236",
+    "escape.c": "2ce5ff08a93b8c80c4e9082fcc6d7110094d6f5d6f6b26f3b4e3dff681c51214",
+    "tabs.c": "b564ef84ed91651b10e09a8e9edf6fc7e092c7610c9342cd2b4e53f8747c89cc",
+    "probe-expectations.json": "d1571ed707df91f1692c665bde1a19fce90ce0dca0e30a6db251ba93d09f3276",
+    "cases.json": "79d17c31f186e53ff5211b38362f6dcf9e0b80646282de05157cea86ead44f80",
+    "fold.c": "d6e7b5a2295a79badf0c87de1c1fb40f468a94476a295843b57cf99f8d8512be",
+    "probe.c": "747938a952d7cd936151afeae3660504fa0342325d5fe7247101fa91b1f5c774"
+  },
+  "version": 1,
+  "toolchain_version": "20.1.8",
+  "asset_url": "https://github.com/llvm/llvm-project/releases/download/llvmorg-20.1.8/LLVM-20.1.8-win64.exe",
+  "asset_sha256": "3197846a2b19063687dd56e93e34cd941e3548d907f23a6131571321bdf9fe7b",
+  "compile_flags": [
+    "/nologo",
+    "/W4",
+    "/GS-",
+    "/Zl",
+    "/c",
+    "/clang:--target=i686-pc-windows-msvc"
+  ]
+}

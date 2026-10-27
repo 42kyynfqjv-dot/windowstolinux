@@ -360,6 +360,31 @@ jobs:
           name: stateful-windows
           path: ${{ runner.temp }}/stateful-corpus/*
           if-no-files-found: warn
+      - name: Measure pinned independent LLVM compiler
+        shell: pwsh
+        run: |
+          $manifest = Get-Content research/cli/llvm/frozen.json | ConvertFrom-Json
+          $archive = Join-Path $env:RUNNER_TEMP 'llvm-pinned.exe'
+          Invoke-WebRequest $manifest.asset_url -OutFile $archive
+          if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLower() -ne $manifest.asset_sha256) { throw 'LLVM archive hash mismatch' }
+          $unpack = Join-Path $env:RUNNER_TEMP 'llvm-pinned'
+          & 7z x $archive "-o$unpack" -y > "$env:RUNNER_TEMP/llvm-extract.txt"
+          if ($LASTEXITCODE -ne 0) { throw 'LLVM extraction failed' }
+          $compiler = @(Get-ChildItem $unpack -Filter clang-cl.exe -Recurse)
+          if ($compiler.Count -ne 1) { throw 'Ambiguous or missing clang-cl' }
+          $env:W2L_CLANG_CL = $compiler[0].FullName
+          $vs = & "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe" -latest -products * -property installationPath
+          $vcvars = Join-Path $vs "VC/Auxiliary/Build/vcvarsall.bat"
+          cmd /c "`"$vcvars`" x86 && python research/cli/llvm/measure.py %RUNNER_TEMP%/llvm-corpus"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: llvm-windows
+          path: |
+            ${{ runner.temp }}/llvm-corpus/*
+            ${{ runner.temp }}/llvm-extract.txt
+          if-no-files-found: warn
       - name: Validate design-only permissioned intake against all held-out originals
         run: python tools/check_permissioned_corpus.py "${{ runner.temp }}/w2l-compiler-measurement"
       - name: Check scalar local-frame contract against unchanged compiler artifact
@@ -471,6 +496,18 @@ jobs:
         with:
           name: stateful-windows
           path: stateful-evidence
+      - uses: actions/download-artifact@v4
+        with:
+          name: llvm-windows
+          path: llvm-evidence
+      - name: Compare independent LLVM outcomes
+        run: python3 research/cli/llvm/check_native.py llvm-evidence/llvm-corpus
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: llvm-native
+          path: llvm-evidence/llvm-corpus/native.json
+          if-no-files-found: warn
       - name: Compare frozen stateful composition outcomes
         run: |
           python3 research/cli/stateful/check_native.py stateful-evidence
