@@ -106,3 +106,17 @@ class Contract(unittest.TestCase):
         m.external_unknown(u)
         with self.assertRaises(Rejected): m.restore(t, f)
         with self.assertRaises(Rejected): m.encode(s)
+
+    def test_unresolved_exception_blocks_ordinary_operations_atomically(self):
+        m, f, s = self.setup_model()
+        m.store(f, 42)
+        e = m.encode(s)
+        t = m.thread()
+        m.exception(t, 0xe0420001)
+        before = dict(m.cells)
+        for action in [lambda: m.load(f), lambda: m.store(f, 99),
+                       lambda: m.encode(s), lambda: m.decode(e),
+                       lambda: m.owner(0x6000, 16), lambda: m.thread(),
+                       lambda: m.offset(f, 4), lambda: m.retire(s)]:
+            with self.assertRaises(Rejected): action()
+        self.assertEqual(m.cells, before)

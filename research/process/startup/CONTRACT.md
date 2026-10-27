@@ -70,7 +70,11 @@ obligations; register does not execute __SEH_prolog4, initialize actual record
 bytes, establish a handler code target, or issue an executable eligibility token.
 Those missing operations are mandatory integration gates.
 
-An exception event produces dispatch-required and blocks normal restoration.
+An exception event produces dispatch-required and blocks all ordinary model
+operations process-wide: loads, stores, pointer encoding/decoding, allocation,
+thread creation and restoration. This conservative barrier also covers alias
+writes into active records. It does not claim that independent Windows threads
+actually stop; finer thread/effect isolation is a future proof obligation.
 There is deliberately no transition turning that marker into success. A future
 shared dispatcher must model first/second chance behavior as applicable, handler
 search, filters, continuation restrictions, unwind/termination handlers and
@@ -86,7 +90,7 @@ debugger effects and asynchronous mutation remain unmodeled.
 
 ## Independent expectations and evidence classes
 
-Ten model tests use literal address/byte relations and adversarial transitions:
+Eleven model tests use literal address/byte relations and adversarial transitions:
 identity and reuse, partial alias overwrite, global external invalidation, nested
 and cross-thread cleanup, overlapping active ranges, cookie generation, tampered
 encodings, unresolved exceptions and complete-word boundaries. Three inherited
@@ -101,6 +105,14 @@ mode explicitly requests its control-flow scenario. Probe observations do not pr
 rcedit's handler graph, original incoming state, or all exceptional paths.
 
 ## Production acceptance gate for this same cohesive milestone
+
+The generic model owner has no stack/module/permission class. Therefore it cannot
+prove that a registration lives in the correct thread stack or that a scope/handler
+is in a valid immutable module. Model constructor premises are test inputs, not
+validated incoming Windows process state. Registration does not prove a record
+initialized, cookie entropy secure, or a complete record chain well-formed. These
+are blocking integration requirements, not facts supplied by the five probes.
+
 
 1. Extend checked memory/IR with module cookie versions, thread identity/FS base,
    typed pointer fields and overlap invalidation while preserving numeric bits.

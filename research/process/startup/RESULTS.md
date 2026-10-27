@@ -43,3 +43,16 @@ Medium review should challenge module/thread isolation, alias invalidation,
 numeric encoded-pointer relations, lifetime and failed/unknown effects, and probe
 independence. Production integration and original utility acceptance remain open.
 Keep SUB-579 In Progress and PR #45 unmerged at this substantive contract boundary.
+
+
+## Medium review correction
+
+At the initial checkpoint an unresolved exception blocked restore but still allowed
+ordinary loads/stores. A literal reproduction loaded 42 and overwrote it with 99
+after dispatch-required. The review adds a process-wide ordinary-operation barrier
+and an atomicity regression for load/store, encoding, mapping and thread creation.
+Eleven model tests plus three inventory tests now pass locally. The existing ten
+model tests are retained; this is one new regression, not fourteen new tests.
+Production converter code is unchanged. No Windows probe source or expectation was
+modified. The contract now explicitly lists missing stack/module/permission classes
+and initial-state/initialized-record premises before production admission.

@@ -37,7 +37,12 @@ class Records:
         self.version = 0
         self.pending = set()
 
+    def runnable(self):
+        if self.pending:
+            raise Rejected("unresolved process effects")
+
     def owner(self, base, size):
+        self.runnable()
         word(base)
         if len(self.owners) >= 64:
             raise Rejected("owner budget")
@@ -50,6 +55,7 @@ class Records:
         return Pointer(self.process, key, 1, base)
 
     def check(self, p, size=4):
+        self.runnable()
         if not isinstance(p, Pointer) or p.process is not self.process:
             raise Rejected('process identity')
         state = self.owners.get(p.owner)
@@ -122,6 +128,7 @@ class Records:
         return value
 
     def thread(self):
+        self.runnable()
         if len(self.threads) >= 32:
             raise Rejected("thread budget")
         identity = object()
