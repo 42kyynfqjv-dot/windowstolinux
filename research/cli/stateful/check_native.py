@@ -15,7 +15,7 @@ with tempfile.TemporaryDirectory() as td:
    assert p.returncode==1 and target.read_text()=='preserve'
    got['windows_stderr']=c['stderr'];got['diagnostic_text_equal']=got['stderr']==c['stderr']
    def budget(text):return 'wall-time budget exhausted' in text or ('max. resource limit exceeded' in text and '"sat"' not in text)
-   if budget(got['stderr']) and budget(c['stderr']):got['rejection_class']='proof-budget';got['exact_diagnostic_parity']=False
+   if budget(got['stderr']) and budget(c['stderr']):got['rejection_class']='proof-budget';got['exact_diagnostic_parity_required']=False
    else:assert got['stderr']==c['stderr'],(stem,got['stderr'],c['stderr']);got['rejection_class']='exact-diagnostic'
    rows.append(got);(root/'native-partial.json').write_text(json.dumps(rows,indent=2)+'\n');continue
   assert sha(target)==c['rust_sha256'] and target.read_bytes()==(root/(stem+'.rs')).read_bytes();got['rust_sha256']=sha(target)
