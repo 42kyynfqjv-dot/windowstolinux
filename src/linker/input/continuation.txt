@@ -1,23 +1,26 @@
 // Native compiled-block control. No guest byte decoding or host-stack recursion.
 enum Flow { Next(u32), Call{target:u32,next:u32}, Return, Terminal(u32) }
-struct Activation { next:u32, stack_len:usize, saved:[u32;3] }
+fn snapshot(s:&Machine)->activation::Context {
+ activation::Context { registers:[Some(s.r[0]),Some(s.r[1]),Some(s.r[2]),None,None,Some(s.r[5]),Some(s.r[3]),Some(s.r[4])],ip:None,flags:None }
+}
 fn execute(entry:u32,s:&mut Machine)->u32 {
  let mut pc=entry;
- let mut activations:Vec<Activation>=Vec::new();
+ let mut activations=match activation::Stack::new(MAX_ACTIVATIONS){Ok(v)=>v,Err(_)=>return 203};
  loop { match block(pc,s) {
   Flow::Next(next)=>pc=next,
   Flow::Call{target,next}=>{
    // Same four-active-call bound as the production ownership proof.
-   if activations.len()>=MAX_ACTIVATIONS {return 203;}
-   activations.push(Activation{next,stack_len:s.stack.len(),saved:[s.r[3],s.r[4],s.r[5]]});
+   if activations.push(next,s.stack.len(),snapshot(s)).is_err(){return 203;}
    s.stack.push(next);pc=target;
   },
-  Flow::Return=>match activations.last(){
+  Flow::Return=>match activations.top(){
    Some(a)=>{
     // Validate before removing either the activation or its protected word.
     if s.stack.len()!=a.stack_len+1 || s.stack.last()!=Some(&a.next)
-       || s.r[3..]!=a.saved {return 203;}
-    pc=a.next;s.stack.pop();activations.pop();
+       || [Some(s.r[3]),Some(s.r[4]),Some(s.r[5])]!=[a.saved.registers[6],a.saved.registers[7],a.saved.registers[5]] {return 203;}
+    pc=a.next;let id=a.id;
+    if activations.pop_normal(id).is_err(){return 203;}
+    s.stack.pop();
    },
    None=>return s.r[0],
   },

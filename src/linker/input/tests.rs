@@ -1,5 +1,69 @@
 use super::*;
 #[test]
+fn emitted_activation_storage_preserves_context_and_cleanup_lifetimes() {
+    let dir = std::env::temp_dir().join(format!("w2l-event-phases-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let source = format!(
+        r#"
+#![allow(dead_code)]
+mod activation {{ {} }}
+use activation::*;
+fn context() -> Context {{ Context {{registers:[Some(10),Some(11),Some(12),Some(13),Some(0x8000),Some(0x8100),Some(16),Some(17)],ip:Some(0x1000),flags:Some(0x202)}} }}
+fn main() {{
+ let mut stack=Stack::new(3).unwrap();
+ let a=stack.push(100,1,context()).unwrap();
+ let b=stack.push(200,2,context()).unwrap();
+ let c=stack.push(300,3,context()).unwrap();
+ let mut other=Stack::new(3).unwrap();let foreign=other.push(100,1,context()).unwrap();
+ let mut captured=context();stack.begin_search(captured.clone(),true).unwrap();
+ captured.registers[0]=Some(99);
+ assert_eq!(stack.pop_normal(c).err(),Some(Error::Phase));
+ assert_eq!(stack.select_unwind(foreign),Err(Error::Identity));
+ stack.select_unwind(a).unwrap();
+ assert_eq!(stack.retire_cleaned(b).err(),Some(Error::Identity));
+ let mut order=Vec::new();
+ while let Some(frame)=stack.cleanup_frame().unwrap() {{
+   // Observe original frame state while live, before retirement.
+   assert_eq!(frame.saved.registers[4],Some(0x8000));
+   order.push(frame.next);let id=frame.id;stack.retire_cleaned(id).unwrap();
+ }}
+ assert_eq!(order,vec![300,200]);assert_eq!(stack.top().unwrap().id,a);
+ assert_eq!(stack.retire_cleaned(a).err(),Some(Error::Identity));
+ stack.block();assert_eq!(stack.pop_normal(a).err(),Some(Error::Phase));
+ let mut retry=Stack::new(1).unwrap();let mut original=context();
+ retry.begin_search(original.clone(),true).unwrap();original.registers[0]=Some(99);
+ assert_eq!(retry.retry_candidate().unwrap(),&context());
+ assert_eq!(retry.push(0,0,context()),Err(Error::Phase));
+ assert_eq!(retry.retry_candidate().err(),Some(Error::Phase));
+ let mut unknown=context();unknown.registers[4]=None;
+ let mut failed=Stack::new(1).unwrap();
+ assert_eq!(failed.begin_search(unknown,true),Err(Error::UnknownContext));
+ assert_eq!(failed.push(0,0,context()),Err(Error::Phase));
+ let mut failed=Stack::new(1).unwrap();
+ failed.begin_search(context(),false).unwrap();
+ assert_eq!(failed.retry_candidate().err(),Some(Error::Noncontinuable));
+ let mut stale=Stack::new(1).unwrap();let old=stale.push(1,1,context()).unwrap();
+ stale.pop_normal(old).unwrap();let fresh=stale.push(1,1,context()).unwrap();
+ assert_ne!(old,fresh);assert_eq!(stale.pop_normal(old).err(),Some(Error::Identity));
+}}
+"#,
+        include_str!("../activation.rs")
+    );
+    let file = dir.join("phases.rs");
+    let bin = dir.join("phases");
+    std::fs::write(&file, source).unwrap();
+    assert!(std::process::Command::new("rustc")
+        .args(["--edition=2021"])
+        .arg(&file)
+        .arg("-o")
+        .arg(&bin)
+        .status()
+        .unwrap()
+        .success());
+    assert!(std::process::Command::new(&bin).status().unwrap().success());
+    std::fs::remove_dir_all(dir).unwrap();
+}
+#[test]
 fn structural_calls_do_not_grant_startup_emission_authority() {
     let graph = BTreeMap::from([
         (0, (Op::Call(10), 1)),
@@ -50,7 +114,11 @@ fn main() {{
  }}
 }}
 "#,
-        include_str!("continuation.txt")
+        format_args!(
+            "mod activation {{ {} }}\n{}",
+            include_str!("../activation.rs"),
+            include_str!("continuation.txt")
+        )
     );
     std::fs::write(&file, source).unwrap();
     assert!(std::process::Command::new("rustc")

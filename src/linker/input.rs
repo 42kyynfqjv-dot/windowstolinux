@@ -454,6 +454,9 @@ impl Proven {
             "}\nstruct Machine { r:[u32;6], stack:Vec<u32>, bytes:[u8;12], cf:bool,zf:bool }\n",
         );
         writeln!(s, "const MAX_ACTIVATIONS:usize={MAX_ACTIVATIONS};").unwrap();
+        s.push_str("mod activation {\n");
+        s.push_str(include_str!("activation.rs"));
+        s.push_str("\n}\n");
         s.push_str(include_str!("input/continuation.txt"));
         // Each compiled block returns an explicit guest control effect.
         for (&pc, &(op, next)) in &self.graph {
