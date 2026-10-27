@@ -1,3 +1,8 @@
+> Implemented in the same PR25: the production CFG/frame proof, bounded local
+> solver and mechanical emitter now exist. See ../INTEGRATION.md for the exact
+> admitted profile and final CI/review gates. This document preserves the earlier
+> decision experiment; its nine standalone checks are not the integrated evidence.
+
 # Relational loop proof: architecture decision required before emission
 
 The next integration step needs an expressive relational verifier. This is a

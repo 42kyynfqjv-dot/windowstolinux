@@ -219,3 +219,105 @@ correlations lost by per-value intervals, nine standalone proof-language checks,
 and the proposed coherent frame/SSA/epoch/induction/emission route. The recommended
 Z3 dependency is research-only pending architecture review; production emission
 remains blocked. These solver outcomes are not whole-program proofs.
+
+## Integrated production implementation (SUB-564, pending final CI/review)
+
+The earlier partial checkpoints above are history. The production stream route now
+binds the same checked graph to a finite frame/definedness analysis and local Z3
+4.15.4 constrained-Horn-clause safety proof, then mechanically emits native Rust.
+It does not emit the authored component consumer. O1/O2 use one normalized operand,
+frame, effect, proof and emitter implementation; no artifact hash/graph recognition.
+
+The private frame proof tracks stack coordinates, exact local allocations,
+protected saved registers, argument snapshots/stdcall cleanup, complete local
+word ranges, nonvolatile restoration, per-register width knowledge, count-word
+initialization and CF/ZF knowledge. Unknown/opaque joins lose knowledge. Entry
+registers and actual stack addresses are not invented observable constants.
+
+The current relational profile supports one fixed owned read region and capacity,
+one read-count cell that is written only by ReadFile, separate write-count cells,
+and initialized-prefix byte accesses. All reads must use that same read-count
+identity; scalar stores or WriteFile aliases to it reject. The fresh prefix and
+read count share one capability value only after this structural unique-writer
+check. Every acquisition replaces it, including failure/zero-length results;
+allocation/cleanup invalidates it. Stale counts cannot retain initialization.
+
+The proof retains every CFG edge, including a conditional branch whose target is
+its fallthrough. Each instruction's safety property is checked against the entire
+cyclic transition system. Numeric sort/capability bounds are checked on incoming
+edges before becoming preconditions; a first invalid invariant reaches the error
+relation. Safety checks are recorded before safe continuation is assumed. Every
+query must be UNSAT. There is no sampled unrolling, per-artifact invariant or
+fallback after SAT/UNKNOWN. This proves the admitted safety/definedness conditions,
+not a complete formal proof of the decoder, encoding, solver or emitter.
+
+Byte content and byte-arithmetic flags are over-approximated in the safety proof;
+actual byte operations and branches remain exact in emitted Rust. Upper-bit
+knowledge is conservatively forgotten after partial writes, though native code
+preserves upper bits. Full reads require a subsequent full definition. Scalar
+32-bit ADD/SUB/INC must prove no wrap in this stream profile; other translator
+profiles retain their existing wrapping contracts. Pointer arithmetic is owned
+frame-relative arithmetic, with actual-load-base/valid-stack/no-wrap assumptions.
+Opaque handles/BOOL/error values permit only the reviewed observation predicates;
+GetLastError comparison supports equality with109, not arbitrary error-number
+emulation. Unproved flags or initialized ranges reject.
+
+No static proof of total stream termination is claimed. Native basic blocks execute
+faithful cyclic control flow with constant live storage and no hidden total-input
+cap. EOF/errors remain external events. This is semantic compilation, not a runtime
+instruction decoder, interpreter, solver, Wine wrapper or AI service. Runtime range
+and initialization checks supplement admission proof; violations exit125 and are
+not successful compatibility.
+
+### Dependency, budgets and reproduction
+
+Install the official version/hash-pinned wheel from `proof/requirements.txt` or
+supply the matching official Z3 executable on PATH / `W2L_Z3`. The license and
+platform wheel hashes are recorded in `proof/`. The compiler runs it locally with
+no network. It requires the exact64-bit4.15.4 version, uses a fixed Spacer
+configuration, a15-second query timeout,512MiB solver memory limit,20-million
+resource-unit ceiling and25-second total process deadline. `W2L_Z3_RLIMIT` may
+lower the ceiling for diagnostics/tests; it cannot raise it. Absence, version
+mismatch, malformed output, exhaustion or any non-UNSAT property blocks emission.
+There are no automatic proof retries. `W2L_STREAM_OBLIGATIONS` optionally records
+SMT-LIB in a **new** file for reproduction; an existing path is never overwritten.
+No solver or decoder dependency appears in generated Rust/ELF.
+
+```
+cargo build --locked
+W2L_Z3=/path/to/z3 target/debug/w2l original.exe generated.rs
+rustc --edition=2021 generated.rs -o native-cli
+# Both original.exe and generated.rs must be the exact CI-recorded artifacts.
+python3 research/cli/v2/check_translation.py downloaded-cli-v2-evidence
+python3 research/cli/v2/check_safety.py downloaded-cli-v2-evidence
+```
+
+Generated native endpoints duplicate existing standard file descriptions without
+buffering or reopening them. Domain: stable single-threaded regular-file or byte-
+pipe standard endpoints, available descriptor-duplication resources, synchronous
+calls, no external buffer mutation. Consoles/devices/message pipes/async I/O are
+outside admission. Descriptor setup/resource failures produce explicit contract
+failure; they are not proof of Windows handle-allocation equivalence. Read/write
+permission failures and closed output pipe are tested as real I/O failures. Native
+other-error values map to a non109 category; opaque error-use restrictions prevent
+claiming complete Win32 error-number equivalence.
+
+### Integrated evidence gates
+
+CI must produce matching hashes and generated source for the same untouched O1/O2
+PEs, with62 real Windows/ELF comparisons:28 file,28 pipe, six failures. Sixteen
+additional native scripted executions compare eight valid API-result probes per
+emitted program to the separately labelled Windows probes. The two scripted cases
+that violate ReadFile/WriteFile's maximum-count contract remain negative component
+contract evidence, not real OS translation pairs.
+
+Production negative tests cover inclusive index guards, saved-register owners,
+read region overflow, undefined count reads, stale-count identity after a fresh
+read, coincident branch successors and unavailable/exhausted solver. Two separately
+labelled mutated arithmetic fixtures check that decoded SUB immediates actually
+change native output; they are not unchanged compiler baselines. No original PE,
+source freeze, compiler flags or expected baseline results are edited to pass.
+
+Five historical Windows fixture timeouts remain unexplained. New proof-performance
+experiments that returned UNKNOWN were rejected, not silently retried in production.
+PR25 remains draft until exact-head CI and substantive medium review complete.
