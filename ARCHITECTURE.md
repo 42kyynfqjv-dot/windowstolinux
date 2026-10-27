@@ -79,3 +79,9 @@ unknown runtime values and tagged stack ownership; path-specific modular predica
 refinement proves initialized full reads before deterministic native emission.
 Acquisition is a shared native API effect, while application operations come from
 decoded instructions. No test model/report can confer this capability.
+
+The cyclic streaming path now supports independently owned byte regions and a
+fresh read prefix distinct from writable guest count words. Exhaustive finite
+scalar facts and independently established loop hints assist the mandatory Horn
+safety proof; only both all-UNSAT phases admit emission. [CRLF contract](research/cli/crlf/INTEGRATION.md)
+records hint trust boundaries, resource limits and unchanged native execution.

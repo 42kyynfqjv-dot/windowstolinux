@@ -137,3 +137,8 @@ The streaming corpus integration extends the shared proof/emitter to frozen O1/O
 ROT13, reverse-XOR and NUL-compaction programs. See
 [its bounded contract and evidence gates](research/cli/corpus/INTEGRATION.md);
 scripted backend tests and Windows/ELF process comparisons are counted separately.
+
+Stateful CRLF normalization now uses shared conditional selection and independent
+input/output initialization proofs. See [integration and evidence gates](research/cli/crlf/INTEGRATION.md).
+The unchanged O1/O2 artifacts must match 78 Windows/ELF observations; scripted and
+partition executions remain separately counted.

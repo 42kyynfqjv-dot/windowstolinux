@@ -346,10 +346,14 @@ and separately labeled short-I/O probes precede production changes. See
 [CLI contract](research/cli/CONTRACT.md). Pipe EOF, mutable buffer ownership,
 runtime loops and synchronous handle effects must be resolved together.
 
-### SUB-564 cohesive streaming integration (in progress)
+### Cohesive streaming milestones
 
-[Versioned v2 integration checkpoint](research/cli/v2/INTEGRATION.md): frozen
-pipeline-correct originals and shared checked memory/I/O/graph components.
-Production CLI admission remains blocked by loop-carried frame/state proof and
-native emission. Keep the same cohesive PR through completion; component and
-structural comparisons are not PE-to-ELF acceptance.
+SUB-564 and SUB-566 are merged: unchanged uppercase O1/O2 and six independent
+ROT13, reverse-XOR and compaction artifacts have real Windows/ELF comparisons.
+The current stateful CRLF integration follows the frozen SUB-567 measurement in
+one cohesive PR: conditional selection, separate initialized byte regions,
+fresh read epochs and pending state across chunks/EOF. See
+[the implementation and acceptance contract](research/cli/crlf/INTEGRATION.md).
+Substantive review and final-commit cross-host evidence precede merge. The next
+capability decision should follow this review and measured independent utility
+diversity; ordinary CRT and general-app compatibility remain separate gaps.
