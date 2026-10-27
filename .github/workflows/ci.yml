@@ -15,6 +15,7 @@ jobs:
       - run: cargo clippy --all-targets --locked -- -D warnings
       - run: cargo test --locked
       - run: python3 -m unittest discover -s corpus -p test_launch.py -v
+      - run: python3 -m unittest discover -s research/process -v
       - run: python3 -m unittest discover -s research/crt -p test_runtime_identity.py -v
       - run: python3 -m unittest discover -s research/crt -p test_composition_audit.py -v
       - run: python3 -m unittest discover -s research/input -p test_model.py -v
