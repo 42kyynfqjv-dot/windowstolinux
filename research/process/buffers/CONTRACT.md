@@ -70,3 +70,19 @@ The first measurement runs 40569901179 and 40569814714 stopped at frozen JSON ha
 verification because Windows checkout changed line endings. No new executable
 comparison was counted. Commit 9eee3fc pins JSON/Python LF checkout; frozen sources,
 expected JSON contents and hashes were not changed.
+
+## Integration evidence pending fresh CI
+
+Local unchanged baseline PEs both translate, and twelve emitted ELF outcomes match
+the saved Windows observations. These local conversions do not establish cross-host
+Rust equality. Six hundred scripted emitted-program cases cover differing read/write
+sizes, allocation failure, first/second-read failure, write errors and zero progress.
+Five mutated PE safety checks never execute the unsafe binaries. One additional root
+function checks scalar-field opaque-value rejection and mixed owner addresses; total
+155 root functions, not 155 new tests. Seven adapter vectors are separately counted.
+
+PR run40570260388 failed cl.exe's 30-second build deadline on the older grow fixture;
+heap diagnostic artifact12764108599 was retained. Its later missing-artifact upload
+error followed skipped steps. Push40570247048 passed all nine jobs on the same
+baseline head9eee3fc. This does not explain the build timeout or validate later
+production changes. No original-program timeout count is added for this build failure.

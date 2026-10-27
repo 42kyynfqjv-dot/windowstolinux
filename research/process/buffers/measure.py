@@ -30,4 +30,5 @@ for p in r['programs']:
  if o['exit']==0:p['conversion']['rust_sha256']=sha(target)
  else:assert o['exit']==1 and target.read_text()=='preserve'
  save(out/'report.json',r)
-print('12 frozen original Windows observations; conversion outcomes recorded separately')
+assert all(p['conversion']['exit']==0 for p in r['programs']), 'Buffer production proof/emission failed'
+print('12 frozen original Windows observations; both untouched PEs converted; Linux comparison required')

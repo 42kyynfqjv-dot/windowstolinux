@@ -502,6 +502,22 @@ jobs:
         with:
           name: heap-conformance-windows
           path: heap-conformance
+      - uses: actions/download-artifact@v4
+        with:
+          name: heap-buffers-windows
+          path: heap-buffers
+      - name: Compare unchanged heap buffer programs and safety checks
+        run: |
+          python3 research/process/buffers/check_native.py heap-buffers --require-translation
+          python3 research/process/buffers/check_translation.py heap-buffers
+          python3 research/process/buffers/check_runtime.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: heap-buffers-native
+          path: |
+            heap-buffers/native.json
+            heap-buffers/translation.json
       - name: Compare unchanged heap PE translations and separate component effects
         run: |
           python3 research/process/heap/check_native.py heap-conformance
