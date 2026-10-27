@@ -1,0 +1,8 @@
+{
+  "LICENSE": "493db50edda9d35fb7fdba7a0e10ed68c257ffb0",
+  "CMakeLists.txt": "439d8382e0972c68e7051707a8d0d40007b8bdaa",
+  "src/main.cc": "35a234d7bf6099c72b49e6d89788a3feee4536f0",
+  "src/rescle.h": "713231e909ea1ccd6c4ec9bb4de28afb02d1665a",
+  "src/rescle.cc": "4cdff4af03b53d12b951b65bd4f5d0cfe36f22f2",
+  "src/rcedit.rc": "79ca01dca8c45c4af4af638782103fb7138bd2c4"
+}

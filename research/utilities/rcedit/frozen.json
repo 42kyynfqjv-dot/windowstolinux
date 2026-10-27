@@ -1,0 +1,168 @@
+{
+  "version": 1,
+  "source_repository": "https://github.com/electron/rcedit.git",
+  "source_commit": "e95698dd8d79b1da648ef70771a709d1bab0ba51",
+  "license": "MIT; upstream Rescle-derived file headers retained",
+  "architecture": "Win32",
+  "configuration": "RelWithDebInfo",
+  "generator": "NMake Makefiles",
+  "source_changes": false,
+  "upstream_runtime_policy": "CMAKE_MSVC_RUNTIME_LIBRARY MultiThreaded, upstream /Ox /Os; no overrides",
+  "base_observer": {
+    "FILE": "1.2.3.4",
+    "PRODUCT": "5.6.7.8",
+    "NAME": "004f0072006900670069006e0061006c002000500072006f0064007500630074",
+    "FILESTRING": "0031002e0032002e0033002e0034",
+    "STRING42": "004f0072006900670069006e0061006c0020005200650073006f0075007200630065",
+    "RCDATA": "00112233445566778899aabbccddeeff"
+  },
+  "cases": [
+    {
+      "name": "get-version",
+      "args": [
+        "--get-version-string",
+        "ProductName"
+      ],
+      "exit": 0,
+      "stdout": "Original Product",
+      "mutates": false
+    },
+    {
+      "name": "get-string",
+      "args": [
+        "--get-resource-string",
+        "42"
+      ],
+      "exit": 0,
+      "stdout": "Original Resource",
+      "mutates": false
+    },
+    {
+      "name": "set-product-name",
+      "args": [
+        "--set-version-string",
+        "ProductName",
+        "Edited Product"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "mutates": true,
+      "resource_type": 16,
+      "expected": {
+        "NAME": "004500640069007400650064002000500072006f0064007500630074"
+      }
+    },
+    {
+      "name": "set-unicode-name",
+      "args": [
+        "--set-version-string",
+        "ProductName",
+        "Caf\u00e9 \u03a9"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "mutates": true,
+      "resource_type": 16,
+      "expected": {
+        "NAME": "00430061006600e9002003a9"
+      }
+    },
+    {
+      "name": "set-file-version",
+      "args": [
+        "--set-file-version",
+        "9.10.11.12"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "mutates": true,
+      "resource_type": 16,
+      "expected": {
+        "FILE": "9.10.11.12",
+        "FILESTRING": "0039002e00310030002e00310031002e00310032"
+      }
+    },
+    {
+      "name": "set-string",
+      "args": [
+        "--set-resource-string",
+        "42",
+        "Replaced Resource"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "mutates": true,
+      "resource_type": 6,
+      "expected": {
+        "STRING42": "005200650070006c00610063006500640020005200650073006f0075007200630065"
+      }
+    },
+    {
+      "name": "replace-rcdata",
+      "args": [
+        "--set-rcdata",
+        "77",
+        "{replacement}"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "mutates": true,
+      "resource_type": 10,
+      "expected": {
+        "RCDATA": "ff000102fe807f"
+      }
+    },
+    {
+      "name": "missing-version-key",
+      "args": [
+        "--get-version-string",
+        "W2LAbsentKey"
+      ],
+      "exit": 1,
+      "mutates": false
+    },
+    {
+      "name": "invalid-version",
+      "args": [
+        "--set-file-version",
+        "not-a-version"
+      ],
+      "exit": 1,
+      "mutates": false
+    },
+    {
+      "name": "unknown-option",
+      "args": [
+        "--W2LUnknownOption"
+      ],
+      "exit": 1,
+      "mutates": false
+    },
+    {
+      "name": "malformed-target",
+      "args": [
+        "--get-version-string",
+        "ProductName"
+      ],
+      "exit": 1,
+      "mutates": false,
+      "malformed": true
+    }
+  ],
+  "fixtures": {
+    "fixture.c": "74a0733c36d43edfe6c31840093776c9d2386de03b63b876d7d70e4e75573752",
+    "fixture.rc": "4d5c6b691b826c49badeec82d91e40547dd91c9b85ea886f9596abcf4458e685",
+    "observe.c": "0f05260f8c64e27c92ec4d757ffca8ef9fb8a686785d17f2506c5eb57988a82a",
+    "original.bin": "a8faed6abbf35c12a4b26e40f6feb19d736d90045c83b9f9a31f638d323e6811",
+    "replacement.bin": "f0358acca54ee445408f430dadf9616acfaa0d566668a320f34cf4033ec9c896"
+  },
+  "forbidden": [
+    "fixture execution",
+    "privilege-manifest modification",
+    "signing",
+    "network access by test utility",
+    "user executables",
+    "converter changes",
+    "post-result source/flag tuning"
+  ]
+}
