@@ -347,6 +347,19 @@ jobs:
           name: crlf-windows
           path: ${{ runner.temp }}/crlf-corpus/*
           if-no-files-found: warn
+      - name: Measure frozen stateful compositions
+        shell: pwsh
+        run: |
+          $vs = & "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe" -latest -products * -property installationPath
+          $vcvars = Join-Path $vs "VC/Auxiliary/Build/vcvarsall.bat"
+          cmd /c "`"$vcvars`" x86 && python research/cli/stateful/measure.py %RUNNER_TEMP%/stateful-corpus"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: stateful-windows
+          path: ${{ runner.temp }}/stateful-corpus/*
+          if-no-files-found: warn
       - name: Validate design-only permissioned intake against all held-out originals
         run: python tools/check_permissioned_corpus.py "${{ runner.temp }}/w2l-compiler-measurement"
       - name: Check scalar local-frame contract against unchanged compiler artifact
@@ -454,6 +467,18 @@ jobs:
         with:
           name: crlf-windows
           path: crlf-evidence
+      - uses: actions/download-artifact@v4
+        with:
+          name: stateful-windows
+          path: stateful-evidence
+      - name: Compare frozen stateful composition outcomes
+        run: python3 research/cli/stateful/check_native.py stateful-evidence
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: stateful-native
+          path: stateful-evidence/native.json
+          if-no-files-found: warn
       - name: Compare stateful CRLF converter outcomes
         run: |
           python3 research/cli/crlf/check_native.py crlf-evidence

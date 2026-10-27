@@ -40,3 +40,5 @@ research/cli/corpus/*.json text eol=lf
 research/cli/corpus/*.py text eol=lf
 research/cli/crlf/*.json text eol=lf
 research/cli/crlf/*.py text eol=lf
+research/cli/stateful/*.json text eol=lf
+research/cli/stateful/*.py text eol=lf
