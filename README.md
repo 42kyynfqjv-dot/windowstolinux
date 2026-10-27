@@ -21,12 +21,14 @@ Exact unprefixed `A1 moffs32` loads EAX from four validated immutable data bytes
 
 ## Status
 
-Current active work: SUB-564 integrates a freestanding binary stdin/stdout ASCII
-uppercase CLI through shared cyclic x86 lifting, owned byte frames and bounded
-local Z3 proofs. [Implementation and explicit limits](research/cli/v2/INTEGRATION.md)
-include exact original-PE/ELF evidence gates. PR25 remains draft pending final CI
-and substantive review. Z3 is compiler-only; generated binaries require neither
-Z3 nor Wine. Earlier paragraphs below are historical checkpoints.
+Current active work: SUB-570 integrates the four frozen stateful fold/tab-expansion
+builds through reusable scalar semantics and checked weighted loop invariants.
+[Contract and evidence gates](research/cli/stateful/INTEGRATION.md) distinguish
+actual Windows/ELF comparisons, scripted effects and native partition tests.
+Reviewed streaming work through SUB-569 is merged. This slice requires final CI
+and substantive review before merge. Z3 is compiler-only; generated binaries
+require neither Z3 nor Wine. Seven original-Windows launch timeout occurrences
+remain unexplained. Earlier paragraphs below are historical checkpoints.
 
 
 Reviewed work is merged through SUB-561. SUB-562's cohesive

@@ -11,13 +11,7 @@ with tempfile.TemporaryDirectory() as td:
   stem=row['name']+'_'+row['config'];pe=root/(stem+'.exe');target=d/(stem+'.rs');target.write_text('preserve');assert sha(pe)==row['pe_sha256']
   p=run([str(repo/'target/debug/w2l'),str(pe),str(target)]);c=row['conversion'];assert p.returncode==c['exit']
   got=dict(name=row['name'],config=row['config'],pe_sha256=sha(pe),conversion_exit=p.returncode,stderr=p.stderr.decode(errors='replace'))
-  if p.returncode:
-   assert p.returncode==1 and target.read_text()=='preserve'
-   got['windows_stderr']=c['stderr'];got['diagnostic_text_equal']=got['stderr']==c['stderr']
-   def budget(text):return 'wall-time budget exhausted' in text or ('max. resource limit exceeded' in text and '"sat"' not in text)
-   if budget(got['stderr']) and budget(c['stderr']):got['rejection_class']='proof-budget';got['exact_diagnostic_parity_required']=False
-   else:assert got['stderr']==c['stderr'],(stem,got['stderr'],c['stderr']);got['rejection_class']='exact-diagnostic'
-   rows.append(got);(root/'native-partial.json').write_text(json.dumps(rows,indent=2)+'\n');continue
+  assert p.returncode==0,(stem,p.stderr)
   assert sha(target)==c['rust_sha256'] and target.read_bytes()==(root/(stem+'.rs')).read_bytes();got['rust_sha256']=sha(target)
   exe=d/stem;p=run(['rustc','--edition=2021',str(target),'-o',str(exe)]);assert p.returncode==0,p.stderr;actual=[]
   for expected in row['observations']:

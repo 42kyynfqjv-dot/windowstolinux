@@ -357,3 +357,11 @@ fresh read epochs and pending state across chunks/EOF. See
 Substantive review and final-commit cross-host evidence precede merge. The next
 capability decision should follow this review and measured independent utility
 diversity; ordinary CRT and general-app compatibility remain separate gaps.
+
+SUB-568/569 are reviewed and merged. SUB-570 integrates all four rejected frozen
+fold/tabs artifacts in one milestone: shared low-byte zero-extension, unsigned
+selection and checked weighted expansion invariants. Target124 additional actual
+Windows/ELF pairs, preserving escape62 and all prior evidence. See
+[implementation gates](research/cli/stateful/INTEGRATION.md). Further utility
+measurement should exercise different state/expansion composition or compiler
+layouts after substantive review, without treating fixture counts as compatibility.

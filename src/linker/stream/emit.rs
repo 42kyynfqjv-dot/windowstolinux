@@ -91,8 +91,16 @@ pub(super) fn emit(bound: &Bound) -> String {
                     }
                 }
             }
-            Operation::ConditionalMove(dst, src) => {
-                writeln!(out, "if zf {{r[{}]=r[{}];}}", dst.index, src.index).unwrap();
+            Operation::ZeroExtend(dst, src) => {
+                writeln!(out, "r[{}]=r[{}]&255;", dst.index, src.index).unwrap();
+            }
+            Operation::ConditionalMove(cond, dst, src) => {
+                let predicate = if *cond == Condition::Above {
+                    "!cf&&!zf"
+                } else {
+                    "zf"
+                };
+                writeln!(out, "if {predicate} {{r[{}]=r[{}];}}", dst.index, src.index).unwrap();
             }
             Operation::Address(r, a) => {
                 writeln!(out, "r[{}]={};", r.index, addr(a)).unwrap();
@@ -189,6 +197,116 @@ pub(super) fn emit(bound: &Bound) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn unsigned_selection_and_extension_native_truth_tables() {
+        let mut programs = Vec::new();
+        // Concrete unsigned comparisons, including opposite signed ordering.
+        for (a, b) in [
+            (0u32, 0u32),
+            (0, 1),
+            (1, 0),
+            (u32::MAX, 0),
+            (0x80000000, 0x7fffffff),
+            (0x7fffffff, 0x80000000),
+        ] {
+            for (dst, src) in [(0u8, 1u8), (2, 3), (6, 7)] {
+                for observed in 0..3 {
+                    let mut code = vec![0xb8];
+                    code.extend(a.to_le_bytes());
+                    code.push(0x3d);
+                    code.extend(b.to_le_bytes());
+                    code.push(0xb8 + dst);
+                    code.extend(17u32.to_le_bytes());
+                    code.push(0xb8 + src);
+                    code.extend(213u32.to_le_bytes());
+                    code.extend([0x0f, 0x47, 0xc0 | dst << 3 | src]);
+                    let expected = if observed == 0 {
+                        code.extend([0x8b, 0xc0 | dst, 0xc3]);
+                        if a > b {
+                            213
+                        } else {
+                            17
+                        }
+                    } else {
+                        code.extend([
+                            if observed == 1 { 0x72 } else { 0x74 },
+                            6,
+                            0xb8,
+                            0,
+                            0,
+                            0,
+                            0,
+                            0xc3,
+                            0xb8,
+                            1,
+                            0,
+                            0,
+                            0,
+                            0xc3,
+                        ]);
+                        u32::from(if observed == 1 { a < b } else { a == b })
+                    };
+                    programs.push((code, expected));
+                }
+            }
+        }
+        for (input, expected) in [
+            (0xffffff00u32, 0u32),
+            (0x123456ff, 255),
+            (0x80000080, 128),
+            (0xabcdef01, 1),
+        ] {
+            for src in 0u8..4 {
+                for dst in [0u8, 1, 2, 3, 5, 6, 7] {
+                    let mut code = vec![0xb8 + src];
+                    code.extend(input.to_le_bytes());
+                    code.extend([0x0f, 0xb6, 0xc0 | dst << 3 | src, 0x8b, 0xc0 | dst, 0xc3]);
+                    programs.push((code, expected));
+                }
+            }
+        }
+        let dir = std::env::temp_dir().join(format!("w2l-zext-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut source = String::from("struct NoIo;\n");
+        let mut checks = String::new();
+        for (id, (code, expected)) in programs.iter().enumerate() {
+            let bound = Bound {
+                graph: super::super::graph::decode(code, 0, 0).unwrap(),
+                calls: Default::default(),
+                loads: Default::default(),
+            };
+            writeln!(source, "mod g{id} {{ {} }}", emit(&bound)).unwrap();
+            writeln!(source,"impl g{id}::StreamIo for NoIo {{fn standard(&mut self,_:u32)->u32{{panic!()}} fn read(&mut self,_:u32,_:&mut[u8])->Result<usize,u32>{{panic!()}} fn write(&mut self,_:u32,_:&[u8])->Result<usize,u32>{{panic!()}}}}").unwrap();
+            writeln!(
+                checks,
+                "assert_eq!(g{id}::run(&mut NoIo),{expected},\"vector {id}\");"
+            )
+            .unwrap();
+        }
+        writeln!(source, "fn main(){{{checks}}}").unwrap();
+        std::fs::write(dir.join("vectors.rs"), source).unwrap();
+        let compiled = std::process::Command::new("rustc")
+            .arg("--edition=2021")
+            .arg(dir.join("vectors.rs"))
+            .arg("-o")
+            .arg(dir.join("vectors"))
+            .output()
+            .unwrap();
+        assert!(
+            compiled.status.success(),
+            "{}",
+            String::from_utf8_lossy(&compiled.stderr)
+        );
+        let ran = std::process::Command::new(dir.join("vectors"))
+            .output()
+            .unwrap();
+        assert!(
+            ran.status.success(),
+            "{}",
+            String::from_utf8_lossy(&ran.stderr)
+        );
+        std::fs::remove_dir_all(dir).unwrap();
+    }
     #[test]
     fn independent_native_wrap_and_carry_vectors() {
         // Literal architectural expectations, exercised through decoded IR and

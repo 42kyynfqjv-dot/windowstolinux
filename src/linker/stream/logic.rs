@@ -33,17 +33,57 @@ fn num(n: i64) -> String {
         n.to_string()
     }
 }
-/// Candidate discovery is heuristic; candidates grant no authority until the
-/// first, independent Horn system proves them without assuming any candidate.
+// Exact unsigned bit mask, with a linear finite-control specialization at use sites.
+fn and_mask(a: &str, mask: u32) -> String {
+    if mask.checked_add(1).is_some_and(|n| n.is_power_of_two()) {
+        return format!("(mod {a} {})", u64::from(mask) + 1);
+    }
+    let terms: Vec<_> = (0..32)
+        .filter(|bit| mask & (1u32 << bit) != 0)
+        .map(|bit| {
+            let power = 1u64 << bit;
+            format!("(* {power} (mod (div {a} {power}) 2))")
+        })
+        .collect();
+    if terms.is_empty() {
+        "0".into()
+    } else {
+        format!("(+ 0 {})", terms.join(" "))
+    }
+}
+/// Candidate discovery is heuristic, never an admission oracle. Binary pending
+/// state uses a separate global proof. Weighted candidates are inductive domain
+/// obligations: entry and EVERY incoming edge check them before continuation may
+/// assume them. All such checks and memory checks are mandatory UNSAT queries;
+/// a first failed invariant cannot be removed by the successor's precondition.
 #[derive(Clone, Copy)]
 struct Hint {
     pc: u32,
     input: u8,
     output: u8,
     pending: u8,
+    weight: u32,
+    inner: bool,
 }
 impl Hint {
     fn expression(&self, s: &[String]) -> String {
+        if self.weight > 1 {
+            return if self.inner {
+                format!(
+                    "(<= (+ {} (- {} {})) (* {} (+ {} 1)))",
+                    s[self.output as usize],
+                    self.weight,
+                    s[self.pending as usize],
+                    self.weight,
+                    s[self.input as usize]
+                )
+            } else {
+                format!(
+                    "(<= {} (* {} {}))",
+                    s[self.output as usize], self.weight, s[self.input as usize]
+                )
+            };
+        }
         format!(
             "(<= (+ {} {}) (+ {} 1))",
             s[self.output as usize], s[self.pending as usize], s[self.input as usize]
@@ -92,7 +132,7 @@ fn hints(bound: &Bound, frames: &Frames) -> Vec<Hint> {
             .filter_map(|(&r, v)| {
                 ((0..8).contains(&r)
                     && modified.contains(&(r as u8))
-                    && *v == BTreeSet::from([0, 1]))
+                    && [2u32, 4, 8].iter().any(|n| *v == (0..*n).collect()))
                 .then_some(r as u8)
             })
             .collect();
@@ -122,7 +162,30 @@ fn hints(bound: &Bound, frames: &Frames) -> Vec<Hint> {
                 input: index,
                 output: *outputs.first().unwrap(),
                 pending: pending[0],
+                weight: if frames.states[&start].finite[&i32::from(pending[0])].len() == 2 {
+                    1
+                } else {
+                    frames.states[&start].finite[&i32::from(pending[0])].len() as u32
+                },
+                inner: false,
             });
+            let outer = *result.last().unwrap();
+            if outer.weight > 1 {
+                for (&tail, n) in &body {
+                    if let Operation::Branch(Condition::NotEqual, head) = n.operation {
+                        if head < tail
+                            && head >= start
+                            && matches!(&bound.graph.nodes[&head].operation, Operation::Binary(Binary::Move, Operand::Memory(a,8),_) if a.index==Some(outer.output))
+                        {
+                            result.push(Hint {
+                                pc: head,
+                                inner: true,
+                                ..outer
+                            });
+                        }
+                    }
+                }
+            }
         }
     }
     result
@@ -561,17 +624,20 @@ impl Builder<'_> {
                                 let Operand::Immediate(mask) = src else {
                                     return Err("stream logic: AND requires immediate mask".into());
                                 };
-                                let terms: Vec<_> = (0..32)
-                                    .filter(|bit| mask & (1u32 << bit) != 0)
-                                    .map(|bit| {
-                                        let power = 1u64 << bit;
-                                        format!("(* {power} (mod (div {a} {power}) 2))")
-                                    })
-                                    .collect();
-                                if terms.is_empty() {
-                                    "0".into()
+                                if let Operand::Reg(r) = dst {
+                                    if let Some(values) = state.finite.get(&i32::from(r.index)) {
+                                        // Each finite input has an exact constant result. Keep
+                                        // the general bit expression as the fallback below;
+                                        // this avoids nonlinear modulo search on loop control.
+                                        let fallback = and_mask(&a, *mask);
+                                        values.iter().rev().fold(fallback, |tail, value| {
+                                            format!("(ite (= {a} {value}) {} {tail})", value & mask)
+                                        })
+                                    } else {
+                                        and_mask(&a, *mask)
+                                    }
                                 } else {
-                                    format!("(+ 0 {})", terms.join(" "))
+                                    and_mask(&a, *mask)
                                 }
                             }
                             Binary::Test if dst == src => a.clone(),
@@ -583,7 +649,8 @@ impl Builder<'_> {
                             }
                         };
                         let opaque = matches!(dst,Operand::Reg(r) if matches!(state.registers[r.index as usize],Value::Error|Value::ErrorAffine(_, _)));
-                        let v = if pointer {
+                        let v = if pointer || *op == Binary::And {
+                            // AND's mathematical result is always within the operand width.
                             raw.clone()
                         } else if opaque || *op == Binary::Sbb {
                             format!("(mod {raw} 4294967296)")
@@ -632,13 +699,24 @@ impl Builder<'_> {
                     }
                 }
             }
-            Operation::ConditionalMove(dst, src) => {
+            Operation::ZeroExtend(dst, src) => {
+                self.known(&pre, &assume, &s[8 + src.index as usize], 8);
+                s[dst.index as usize] = format!("(mod {} 256)", s[src.index as usize]);
+                s[8 + dst.index as usize] = "32".into();
+            }
+            Operation::ConditionalMove(cond, dst, src) => {
                 self.check(&pre, &assume, s[self.zk].clone());
+                let predicate = if *cond == Condition::Above {
+                    self.check(&pre, &assume, s[self.ck].clone());
+                    format!("(and (not {}) (not {}))", s[self.cf], s[self.zf])
+                } else {
+                    s[self.zf].clone()
+                };
                 self.known(&pre, &assume, &s[8 + dst.index as usize], 32);
                 self.known(&pre, &assume, &s[8 + src.index as usize], 32);
                 s[dst.index as usize] = format!(
                     "(ite {} {} {})",
-                    s[self.zf], s[src.index as usize], s[dst.index as usize]
+                    predicate, s[src.index as usize], s[dst.index as usize]
                 );
             }
             Operation::Address(r, a) => {
@@ -892,8 +970,12 @@ impl Builder<'_> {
 }
 pub(super) fn encode(bound: &Bound, frames: &Frames) -> Result<Logic, String> {
     let candidates = hints(bound, frames);
-    if candidates.is_empty() {
-        return encode_phase(bound, frames, &[], false);
+    // Weighted loops use assertion-before-assumption induction over the entire
+    // CFG. The independent global search need not rediscover nested-loop bounds:
+    // candidate preservation itself is part of the mandatory safety certificate.
+    // No cutpoint is seeded with an assumed reachable state or skipped edge.
+    if candidates.is_empty() || candidates.iter().any(|h| h.weight > 1) {
+        return encode_phase(bound, frames, &candidates, false);
     }
     let first = encode_phase(bound, frames, &candidates, true)?;
     let final_ = encode_phase(bound, frames, &candidates, false)?;

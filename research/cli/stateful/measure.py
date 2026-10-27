@@ -1,4 +1,4 @@
-"""Frozen-source Windows baselines first, then converter measurement. No support edits."""
+"""Frozen-source Windows baselines first, then mandatory integrated conversion."""
 import hashlib,json,os,platform,subprocess,sys,time,re
 from pathlib import Path
 src=Path(__file__).resolve().parent;repo=src.parents[2];out=Path(sys.argv[1]).resolve();out.mkdir(parents=True,exist_ok=True)
@@ -56,6 +56,7 @@ for row in report['programs']:
  if p.returncode==0:row['conversion']['rust_sha256']=sha(target)
  else:assert p.returncode==1 and target.read_text()=='preserve'
  assert sha(pe)==row['pe_sha256'];save(out/'report.json',report)
+ assert p.returncode==0,(stem,row['conversion'])
 print('6 untouched compiler artifacts;186 real Windows baselines;72 separately scripted backend cases;conversion outcomes recorded')
 
 p=subprocess.run([sys.executable,str(src/'inventory.py'),str(out)],timeout=30);assert p.returncode==0
