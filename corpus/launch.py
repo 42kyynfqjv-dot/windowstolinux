@@ -64,8 +64,11 @@ def execute(command, stdout, stderr, evidence, identity, expected, timeout=15):
                 save()  # Retain pre-kill state even if diagnostics/termination fail.
                 record['process_state_capture'] = capture_process_state(process.pid, evidence)
                 save()
-                process.kill()
-                record['exit_after_kill'] = process.wait(timeout=5)
+                if process.poll() is None:
+                    process.kill()
+                    record['exit_after_kill'] = process.wait(timeout=5)
+                else:
+                    record['exit_during_diagnostics'] = process.wait(timeout=5)
                 raise
             finally:
                 record['wait_seconds'] = time.perf_counter()-wait
