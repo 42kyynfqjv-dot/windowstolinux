@@ -21,3 +21,10 @@ convert on both hosts to identical Rust and match exact stdout/stderr/exit. Reje
 artifacts remain explicit; build failure is separate from conversion rejection.
 No source edits, flag tuning or production expansion to fit this experiment.
 Timeouts fail and retain the exact program/launch record; no retry is introduced.
+
+Reproduce under the same x86 MSVC SDK/linker environment: extract the hash-checked
+LLVM archive, set W2L_CLANG_CL to its bin/clang-cl.exe, run
+`python research/cli/llvm/measure.py OUTPUT`, then on Linux run
+`python research/cli/llvm/check_native.py OUTPUT` on that exact Windows artifact.
+CI's multi-root upload retains OUTPUT under llvm-corpus. See RESULTS.md for
+observations, selection limits and the next integrated architecture gate.

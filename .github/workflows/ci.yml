@@ -501,12 +501,12 @@ jobs:
           name: llvm-windows
           path: llvm-evidence
       - name: Compare independent LLVM outcomes
-        run: python3 research/cli/llvm/check_native.py llvm-evidence
+        run: python3 research/cli/llvm/check_native.py llvm-evidence/llvm-corpus
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: llvm-native
-          path: llvm-evidence/native.json
+          path: llvm-evidence/llvm-corpus/native.json
           if-no-files-found: warn
       - name: Compare frozen stateful composition outcomes
         run: |

@@ -14,7 +14,7 @@ with tempfile.TemporaryDirectory() as td:
   got=dict(name=row['name'],config=row['config'],pe_sha256=sha(pe),conversion_exit=p.returncode,stderr=p.stderr.decode(errors='replace'))
   if p.returncode:
    assert p.returncode==1 and target.read_text()=='preserve'
-   def budget(t):return 'wall-time budget exhausted' in t or 'max. resource limit exceeded' in t
+   def budget(t):return ('wall-time budget exhausted' in t or 'max. resource limit exceeded' in t) and '"sat"' not in t
    assert got['stderr']==c['stderr'] or (budget(got['stderr']) and budget(c['stderr'])),(stem,got['stderr'],c['stderr'])
    got.update(windows_stderr=c['stderr'],diagnostic_text_equal=got['stderr']==c['stderr'],rejection_class='proof-budget' if budget(got['stderr']) else 'exact-diagnostic');rows.append(got);continue
   assert sha(target)==c['rust_sha256'] and target.read_bytes()==(root/(stem+'.rs')).read_bytes();got['rust_sha256']=sha(target)

@@ -1,4 +1,4 @@
-"""Frozen-source Windows baselines first, then mandatory integrated conversion."""
+"""Frozen-source Windows baselines first, then explicit conversion measurement."""
 import hashlib,json,os,platform,subprocess,sys,time,re
 from pathlib import Path
 here=Path(__file__).resolve().parent;src=here.parent/"stateful";repo=src.parents[2];out=Path(sys.argv[1]).resolve();out.mkdir(parents=True,exist_ok=True)
@@ -16,7 +16,8 @@ for f,h in m['sha256'].items():assert sha(src/f)==h,(f,sha(src/f),h)
 import shutil
 compiler=Path(os.environ['W2L_CLANG_CL']).resolve();linker=Path(shutil.which('link.exe')).resolve()
 p=run([str(compiler),'--version']);assert p.returncode==0 and 'clang version '+m['toolchain_version'] in p.stdout.decode()
-report=dict(manifest=m,platform=platform.platform(),toolchain=dict(compiler=str(compiler),compiler_sha256=sha(compiler),compiler_version=p.stdout.decode(),linker=str(linker),linker_sha256=sha(linker),sdk_version=os.environ.get('WindowsSDKVersion'),sdk_dir=os.environ.get('WindowsSdkDir')),programs=[])
+link_version=run([str(linker)])
+report=dict(manifest=m,platform=platform.platform(),toolchain=dict(linker_version=(link_version.stdout+link_version.stderr).decode(errors='replace'),compiler=str(compiler),compiler_sha256=sha(compiler),compiler_version=p.stdout.decode(),linker=str(linker),linker_sha256=sha(linker),sdk_version=os.environ.get('WindowsSDKVersion'),sdk_dir=os.environ.get('WindowsSdkDir')),programs=[])
 save(out/'report.json',report)
 for name in m['programs']:
  for cfg,flags in m['configurations'].items():
