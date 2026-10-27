@@ -1,0 +1,12 @@
+{
+  "release_tag": "is-7_1_0",
+  "release_url": "https://github.com/jrsoftware/issrc/releases/tag/is-7_1_0",
+  "published_at": "2026-08-12T09:02:28Z",
+  "asset": "innosetup-7.1.0-x86.exe",
+  "url": "https://github.com/jrsoftware/issrc/releases/download/is-7_1_0/innosetup-7.1.0-x86.exe",
+  "sha256": "f9671174e0d15ba9b4f6b56564c6aed32ea8db9c3cb9bf6f2af0850fe7894f60",
+  "bytes": 13119232,
+  "role": "official distribution installer; NOT yet extracted ISCC.exe",
+  "local_download_executed": false,
+  "ci_tool_preparation": "official portable current-user mode in RUNNER_TEMP; generated installers never executed"
+}

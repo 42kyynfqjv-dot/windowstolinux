@@ -14,6 +14,7 @@ jobs:
       - run: rustfmt --check src/linker/state.rs src/inspection/read_state.rs src/inspection/loop_state.rs src/linker/input/acquisition.rs
       - run: cargo clippy --all-targets --locked -- -D warnings
       - run: cargo test --locked
+      - run: python3 -m unittest discover -s corpus -p test_launch.py -v
       - run: python3 -m unittest discover -s research/crt -p test_runtime_identity.py -v
       - run: python3 -m unittest discover -s research/crt -p test_composition_audit.py -v
       - run: python3 -m unittest discover -s research/input -p test_model.py -v
@@ -588,4 +589,50 @@ jobs:
             evidence/input-native.rs
             evidence/input-diversity-native.json
             evidence/held-input-native.json
+          if-no-files-found: warn
+  utility-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --locked
+      - name: Prepare official isolated portable compiler payload
+        run: python research/utilities/prepare.py ${{ runner.temp }}/utility-corpus
+      - name: Measure frozen ISCC workloads before conversion
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $install = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $vcvars = Join-Path $install 'VC\Auxiliary\Build\vcvars32.bat'
+          cmd /c "`"$vcvars`" && python research/utilities/measure.py %RUNNER_TEMP%/utility-corpus"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: independent-utility-windows
+          path: |
+            ${{ runner.temp }}/utility-corpus/*.json
+            ${{ runner.temp }}/utility-corpus/*.log
+            ${{ runner.temp }}/utility-corpus/*.txt
+            ${{ runner.temp }}/utility-corpus/*.bin
+            ${{ runner.temp }}/utility-corpus/ISCC.exe
+          if-no-files-found: warn
+  utility-native:
+    runs-on: ubuntu-latest
+    needs: utility-windows
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --locked
+      - uses: actions/download-artifact@v4
+        with:
+          name: independent-utility-windows
+          path: utility-evidence
+      - name: Verify same compiler artifact rejection without an ELF claim
+        run: python3 research/utilities/check_native.py utility-evidence
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: independent-utility-native
+          path: utility-evidence/native-rejection.json
           if-no-files-found: warn

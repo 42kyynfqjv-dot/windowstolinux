@@ -1,0 +1,56 @@
+{
+  "inno_source": "7d634620f1d1caca6c76e8398da7133153db9e7b",
+  "winscp_source": "246bbd42342c4443bd9ff806e91dc0bca9f83869",
+  "sources": [
+    {
+      "label": "inno-license.txt",
+      "blob": "ac4dfe9e6543a360c5422b6f1fb88075e8b6073d",
+      "url": "https://github.com/jrsoftware/issrc/blob/7d634620f1d1caca6c76e8398da7133153db9e7b/license.txt"
+    },
+    {
+      "label": "inno-README.md",
+      "blob": "ee7ebbb6f36646f08884371aff9139576c7445cb",
+      "url": "https://github.com/jrsoftware/issrc/blob/7d634620f1d1caca6c76e8398da7133153db9e7b/README.md"
+    },
+    {
+      "label": "inno-setup.iss",
+      "blob": "c3a1ff6ffcff925acf2ca47c024bbf531aa24be9",
+      "url": "https://github.com/jrsoftware/issrc/blob/7d634620f1d1caca6c76e8398da7133153db9e7b/setup.iss"
+    },
+    {
+      "label": "inno-isportable.iss",
+      "blob": "a4b1529856b6717f34dbd3ac14cfb7c11df91064",
+      "url": "https://github.com/jrsoftware/issrc/blob/7d634620f1d1caca6c76e8398da7133153db9e7b/isportable.iss"
+    },
+    {
+      "label": "inno-isdonateandmail.iss",
+      "blob": "b33c0e2e4962301fdc20e233f0526946adb5d54a",
+      "url": "https://github.com/jrsoftware/issrc/blob/7d634620f1d1caca6c76e8398da7133153db9e7b/isdonateandmail.iss"
+    },
+    {
+      "label": "jrsoftware/issrcProjects/ISCC.dpr",
+      "blob": "3a7e335336b8bb30c469eda6f4669f02f229122a",
+      "url": "https://github.com/jrsoftware/issrc/blob/7d634620f1d1caca6c76e8398da7133153db9e7b/Projects/ISCC.dpr"
+    },
+    {
+      "label": "inno-Projects/Src/Shared.CompilerInt.pas",
+      "blob": "b6db9a16e861101b38f1affeed56c6c626edfa54",
+      "url": "https://github.com/jrsoftware/issrc/blob/7d634620f1d1caca6c76e8398da7133153db9e7b/Projects/Src/Shared.CompilerInt.pas"
+    },
+    {
+      "label": "inno-Projects/Src/Compiler.Compile.pas",
+      "blob": "386b0f178538c4d1ea97398885f2e17d91250646",
+      "url": "https://github.com/jrsoftware/issrc/blob/7d634620f1d1caca6c76e8398da7133153db9e7b/Projects/Src/Compiler.Compile.pas"
+    },
+    {
+      "label": "winscp/winscplicense.txt",
+      "blob": "f2b0606d17345d4259c2d322caf2ae1e715bdf23",
+      "url": "https://github.com/winscp/winscp/blob/246bbd42342c4443bd9ff806e91dc0bca9f83869/license.txt"
+    },
+    {
+      "label": "winscp/winscpreadme.md",
+      "blob": "ee1ef1a4d73559da1545fd2bbcec8829867d461b",
+      "url": "https://github.com/winscp/winscp/blob/246bbd42342c4443bd9ff806e91dc0bca9f83869/readme.md"
+    }
+  ]
+}
