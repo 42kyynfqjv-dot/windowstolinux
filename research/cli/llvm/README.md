@@ -28,3 +28,8 @@ LLVM archive, set W2L_CLANG_CL to its bin/clang-cl.exe, run
 `python research/cli/llvm/check_native.py OUTPUT` on that exact Windows artifact.
 CI's multi-root upload retains OUTPUT under llvm-corpus. See RESULTS.md for
 observations, selection limits and the next integrated architecture gate.
+
+SUB-572 adds a separate [production integration contract](INTEGRATION.md).
+The historical no-support-expansion measurement above is complete. CI now passes
+`--require-translation` to both commands to require all six translations while
+retaining the same frozen sources/configuration and the original results.

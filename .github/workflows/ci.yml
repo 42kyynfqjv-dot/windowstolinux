@@ -375,7 +375,7 @@ jobs:
           $env:W2L_CLANG_CL = $compiler[0].FullName
           $vs = & "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe" -latest -products * -property installationPath
           $vcvars = Join-Path $vs "VC/Auxiliary/Build/vcvarsall.bat"
-          cmd /c "`"$vcvars`" x86 && python research/cli/llvm/measure.py %RUNNER_TEMP%/llvm-corpus"
+          cmd /c "`"$vcvars`" x86 && python research/cli/llvm/measure.py %RUNNER_TEMP%/llvm-corpus --require-translation"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@v4
         if: always()
@@ -501,12 +501,18 @@ jobs:
           name: llvm-windows
           path: llvm-evidence
       - name: Compare independent LLVM outcomes
-        run: python3 research/cli/llvm/check_native.py llvm-evidence/llvm-corpus
+        run: |
+          python3 research/cli/llvm/check_native.py llvm-evidence/llvm-corpus --require-translation
+          python3 research/cli/llvm/check_safety.py llvm-evidence/llvm-corpus
+          python3 research/cli/stateful/check_partitions.py llvm-evidence/llvm-corpus
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: llvm-native
-          path: llvm-evidence/llvm-corpus/native.json
+          path: |
+            llvm-evidence/llvm-corpus/native.json
+            llvm-evidence/llvm-corpus/safety*.json
+            llvm-evidence/llvm-corpus/partitions.json
           if-no-files-found: warn
       - name: Compare frozen stateful composition outcomes
         run: |
