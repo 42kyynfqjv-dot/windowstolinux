@@ -34,6 +34,12 @@ could detect stale epoch while missing stale same-address generation; a direct
 capability check now catches that omitted generation update. No production defect
 was inferred from the original incomplete test alone.
 
+Further review reproduced an evidence-harness defect: a report with an empty
+program list exited0 and printed32 matches. Strict program/order, full observation,
+image identity, timeout and error-outcome validation now precedes execution; six
+malformed-report regressions reject. Summary counts are computed from checked
+rows. This corrected evidence reporting, not converter semantics.
+
 Complete listings establish additional SHL/SHR/OR forms and nullable heap ownership,
 spills, byte access, resize-failure cleanup and output loops. See CONTRACT.md for
 the exact first structural errors and cohesive continuation; permitting larger IAT

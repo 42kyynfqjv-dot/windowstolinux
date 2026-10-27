@@ -5,6 +5,7 @@ from pathlib import Path
 import subprocess
 import sys
 import struct
+from evidence import validate_report
 
 here=Path(__file__).resolve().parent
 repo=here.parents[2]
@@ -15,6 +16,7 @@ assert report['manifest']==manifest
 for name,digest in manifest['sha256'].items():
     assert hashlib.sha256((here/name).read_bytes()).hexdigest()==digest
 cases=json.loads((here/'cases.json').read_text())
+validate_report(report,manifest,cases)
 subprocess.run(['cargo','build','--locked','--example','heap_effects','--example','stream_graph'],cwd=repo,check=True)
 rows=[]
 inventory=[]
@@ -58,4 +60,4 @@ for row in report['programs']:
 result=dict(structural_inventory=inventory,component_comparisons=rows,translated_pe_comparisons=0,unchanged_pe_rejections=2,
             component_source_sha256=hashlib.sha256((repo/'examples/heap_effects.rs').read_bytes()).hexdigest())
 (out/'native-component.json').write_text(json.dumps(result,indent=2)+'\n')
-print('32 native COMPONENT comparisons; zero heap PE translations; two unchanged rejections')
+print(f'{len(rows)} native COMPONENT comparisons; zero heap PE translations; {len(report["programs"])} unchanged rejections')
