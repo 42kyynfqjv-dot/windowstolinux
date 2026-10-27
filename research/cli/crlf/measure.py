@@ -39,7 +39,7 @@ for name in m['programs']:
   with path.open('rb') as f,os.fdopen(wr,'wb',buffering=0) as dest:p=run([str(pe)],stdin=f,stdout=dest)
   assert p.returncode==12 and not p.stderr;row['closedpipe_failure']=dict(exit=12,stderr_hex='',stdout='unobservable')
   save(out/'report.json',report)
-# All six independent Windows baselines finish before any converter evaluation.
+# All original baselines and scripted probes finish before converter evaluation.
 p=run(['cl']+m['probe_flags']+[str(src/'probe.c'),'/Fe:probe.exe'],cwd=out);(out/'probe-build.txt').write_bytes(p.stdout+p.stderr);assert p.returncode==0,p.stderr
 p=run([str(out/'probe.exe')]);assert p.returncode==0 and not p.stderr
 (out/'probe-output.txt').write_bytes(p.stdout)
@@ -55,3 +55,5 @@ for row in report['programs']:
  else:assert p.returncode==1 and target.read_text()=='preserve'
  assert sha(pe)==row['pe_sha256'];save(out/'report.json',report)
 print('2 untouched compiler artifacts;78 real Windows baselines;24 separately scripted backend cases;conversion outcomes recorded')
+
+p=subprocess.run([sys.executable,str(src/'inventory.py'),str(out)],timeout=30);assert p.returncode==0
