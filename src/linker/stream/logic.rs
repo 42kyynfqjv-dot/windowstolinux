@@ -659,7 +659,15 @@ impl Builder<'_> {
             Operand::Memory(a, w) => {
                 self.address_known(a, s, pre, assume);
                 let offset = self.address(a, s);
-                if *w == 32 {
+                if *w == 32 && matches!(self.frames.states[&pc].address(a)?, Value::Heap(_, _)) {
+                    let Value::Heap(site, _) = self.frames.states[&pc].address(a)? else {
+                        unreachable!()
+                    };
+                    let ok = self.heap_coverage(site, &offset, "4", s, false)?;
+                    self.check(pre, assume, ok);
+                    let value = self.fresh(false);
+                    (format!("(mod {value} 4294967296)"), "32".into())
+                } else if *w == 32 {
                     let Value::Frame(Some(at)) = self.frames.states[&pc].address(a)? else {
                         return Err("stream logic: dynamic word read unsupported".into());
                     };
@@ -734,6 +742,28 @@ impl Builder<'_> {
             }
             Operand::Memory(a, w) => {
                 self.address_known(a, s, pre, assume);
+                if let Value::Heap(site, _) = self.frames.states[&pc].address(a)? {
+                    if !matches!(*w, 8 | 32) {
+                        return Err("stream logic: heap scalar width".into());
+                    }
+                    self.known(pre, assume, &k, *w);
+                    let offset = self.address(a, s);
+                    let width = (*w / 8).to_string();
+                    let ok = self.heap_coverage(site, &offset, &width, s, true)?;
+                    self.check(pre, assume, ok);
+                    let h = self.heaps[&site];
+                    if *w == 8 {
+                        s[h.prefix] = format!(
+                            "(ite (= {offset} (+ {} {})) (+ {} 1) {})",
+                            h.base, s[h.prefix], s[h.prefix], s[h.prefix]
+                        );
+                    } else {
+                        let end = format!("(- (+ {offset} {width}) {})", h.base);
+                        s[h.prefix] =
+                            format!("(ite (< {} {end}) {end} {})", s[h.prefix], s[h.prefix]);
+                    }
+                    return Ok(());
+                }
                 if *w == 8 {
                     self.known(pre, assume, &k, *w);
                 }
@@ -749,16 +779,6 @@ impl Builder<'_> {
                     s[i + 1] = k;
                 } else {
                     let offset = self.address(a, s);
-                    if let Value::Heap(site, _) = self.frames.states[&pc].address(a)? {
-                        let ok = self.heap_coverage(site, &offset, "1", s, true)?;
-                        self.check(pre, assume, ok);
-                        let h = self.heaps[&site];
-                        s[h.prefix] = format!(
-                            "(ite (= {offset} (+ {} {})) (+ {} 1) {})",
-                            h.base, s[h.prefix], s[h.prefix], s[h.prefix]
-                        );
-                        return Ok(());
-                    }
                     self.check(
                         pre,
                         assume,
@@ -1151,7 +1171,19 @@ impl Builder<'_> {
                             ),
                         );
                         if f == Function::Read {
-                            self.check(&pre,&assume,format!("(and (<= 0 {len}) (<= {len} {}) (<= {} {ptr}) (<= (+ {ptr} {len}) {}))",self.cap,num(i64::from(self.base)),num(i64::from(self.base)+i64::from(self.cap))));
+                            if let Value::Heap(site, Some(0)) = state.arguments(5)?[1] {
+                                let h = self.heaps[&site];
+                                self.check(
+                                    &pre,
+                                    &assume,
+                                    format!(
+                                        "(and {} (= {ptr} {}) (<= 0 {len}) (<= {len} {}))",
+                                        s[h.live], h.base, s[h.size]
+                                    ),
+                                );
+                            } else {
+                                self.check(&pre,&assume,format!("(and (<= 0 {len}) (<= {len} {}) (<= {} {ptr}) (<= (+ {ptr} {len}) {}))",self.cap,num(i64::from(self.base)),num(i64::from(self.base)+i64::from(self.cap))));
+                            }
                         }
                         let countptr = &s[args[3]];
                         let Value::Frame(Some(at)) = state.arguments(5)?[3] else {
@@ -1183,8 +1215,12 @@ impl Builder<'_> {
                         s[cell] = format!("(ite {success} {n} 0)");
                         s[cell + 1] = "32".into();
                         if f == Function::Read {
-                            self.check(&pre, &assume, eq(&ptr, &num(i64::from(self.base))));
-                            s[self.prefix] = format!("(ite {success} {n} 0)");
+                            if let Value::Heap(site, Some(0)) = state.arguments(5)?[1] {
+                                s[self.heaps[&site].prefix] = format!("(ite {success} {n} 0)");
+                            } else {
+                                self.check(&pre, &assume, eq(&ptr, &num(i64::from(self.base))));
+                                s[self.prefix] = format!("(ite {success} {n} 0)");
+                            }
                         }
                         ret = format!("(ite {success} 1 0)");
                         s[self.error] = error;
@@ -1401,6 +1437,9 @@ fn encode_phase(
                 names.extend([format!("m{}", -at), format!("mk{}", -at)]);
             }
             if f == Function::Read {
+                if matches!(args[1], Value::Heap(_, Some(0))) {
+                    continue;
+                }
                 if read_count.is_some_and(|old| old != at) {
                     return Err("stream logic: read epoch count-cell identity changes".into());
                 }
@@ -1430,6 +1469,9 @@ fn encode_phase(
         for o in ops {
             if let Operand::Memory(a, 32) = o {
                 if a.base.is_some() {
+                    if matches!(frames.states[&pc].address(a)?, Value::Heap(_, _)) {
+                        continue;
+                    }
                     let Value::Frame(Some(at)) = frames.states[&pc].address(a)? else {
                         return Err("stream logic: dynamic local word".into());
                     };
@@ -1444,14 +1486,14 @@ fn encode_phase(
             }
         }
     }
-    let (base, cap) = region.ok_or("stream logic: no read region")?;
+    let (base, cap) = region.unwrap_or((0, 0));
     for &at in cells.keys() {
         if at < base + cap as i32 && base < at + 4 {
             return Err("stream logic: count cell aliases read region".into());
         }
     }
-    let count_at = read_count.ok_or("stream logic: missing read-count owner")?;
-    let unique_count = !bound.calls.iter().any(|(&pc,&f)| f==Function::Write && frames.states[&pc].arguments(5).is_ok_and(|a|a[3]==Value::Frame(Some(count_at))))
+    let count_at = read_count.unwrap_or(0);
+    let unique_count = read_count.is_some() && !bound.calls.iter().any(|(&pc,&f)| f==Function::Write && frames.states[&pc].arguments(5).is_ok_and(|a|a[3]==Value::Frame(Some(count_at))))
         && !bound.graph.nodes.iter().any(|(&pc,n)| matches!(&n.operation,Operation::Binary(op,Operand::Memory(a,32),_) if !matches!(op,Binary::Compare|Binary::Test) && frames.states[&pc].address(a)==Ok(Value::Frame(Some(count_at)))));
     // Split owned stack allocations at every word and the fixed input region.
     // These are machine-frame byte regions, not recovered C array declarations.
@@ -1487,7 +1529,11 @@ fn encode_phase(
         names.push("read_prefix".into());
         i
     };
-    let mut regions = vec![Region { base, cap, prefix }];
+    let mut regions = if cap == 0 {
+        vec![]
+    } else {
+        vec![Region { base, cap, prefix }]
+    };
     for (lo, hi) in ranges {
         // Overlapping allocation incarnations need a separate lifetime model.
         if regions

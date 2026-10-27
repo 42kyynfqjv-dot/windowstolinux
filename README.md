@@ -24,7 +24,7 @@ Exact unprefixed `A1 moffs32` loads EAX from four validated immutable data bytes
 Want to contribute? See the [public roadmap and initial issues](docs/COMMUNITY-ROADMAP.md)
 and [contribution guide](CONTRIBUTING.md). Fork, submit a PR, and maintainers review.
 
-Current active work: SUB-577 integrates [bounded shared heap ownership and native emission](research/process/heap/INTEGRATION.md)
+Completed SUB-577 integrates [bounded shared heap ownership and native emission](research/process/heap/INTEGRATION.md)
 for two unchanged, independently frozen compiler programs. Local ELF execution matches
 32 recorded Windows successes and four I/O failures; fresh cross-host CI and substantive
 production review gate the draft PR. The 32 separate component matches are not translated evidence.
@@ -150,3 +150,5 @@ Stateful CRLF normalization now uses shared conditional selection and independen
 input/output initialization proofs. See [integration and evidence gates](research/cli/crlf/INTEGRATION.md).
 The unchanged O1/O2 artifacts must match 78 Windows/ELF observations; scripted and
 partition executions remain separately counted.
+
+Current work: SUB-578 adds [shared heap API buffers and scalar fields](research/process/buffers/CONTRACT.md), with per-owner read freshness and complete word bounds. Independent utility startup remains unsupported.

@@ -271,6 +271,21 @@ jobs:
           name: heap-conformance-windows
           path: ${{ runner.temp }}/heap-conformance/**
           if-no-files-found: warn
+      - name: Measure frozen heap buffer and scalar record compositions
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $installation = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (!$installation) { throw 'MSVC unavailable' }
+          $vcvars = Join-Path $installation 'VC\Auxiliary\Build\vcvarsall.bat'
+          cmd /c "`"$vcvars`" x86 && python research/process/buffers/measure.py %RUNNER_TEMP%/heap-buffers"
+          if ($LASTEXITCODE -ne 0) { throw 'Heap buffer measurement failed' }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: heap-buffers-windows
+          path: ${{ runner.temp }}/heap-buffers/**
+          if-no-files-found: warn
       - name: Measure frozen checked-memory conformance
         shell: pwsh
         run: |
@@ -487,6 +502,22 @@ jobs:
         with:
           name: heap-conformance-windows
           path: heap-conformance
+      - uses: actions/download-artifact@v4
+        with:
+          name: heap-buffers-windows
+          path: heap-buffers
+      - name: Compare unchanged heap buffer programs and safety checks
+        run: |
+          python3 research/process/buffers/check_native.py heap-buffers --require-translation
+          python3 research/process/buffers/check_translation.py heap-buffers
+          python3 research/process/buffers/check_runtime.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: heap-buffers-native
+          path: |
+            heap-buffers/native.json
+            heap-buffers/translation.json
       - name: Compare unchanged heap PE translations and separate component effects
         run: |
           python3 research/process/heap/check_native.py heap-conformance
