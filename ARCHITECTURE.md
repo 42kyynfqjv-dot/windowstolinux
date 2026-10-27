@@ -89,3 +89,10 @@ incoming domain before assuming it; all safety/invariant queries must be UNSAT.
 [Weighted contract](research/cli/stateful/INTEGRATION.md) explains this distinction.
 [CRLF contract](research/cli/crlf/INTEGRATION.md)
 records hint trust boundaries, resource limits and unchanged native execution.
+
+SUB-572 extends the same streaming graph/proof/emitter with overlapping low/high
+byte lanes, defined-bit masks through scalar spills, owned byte MOVZX, SETNE,
+CMOVAE and exact wrapping scalar control. Modular loop candidates and initialized
+frontier bounds remain mandatory incoming-edge obligations. The independent
+compiler corpus and proof limits are documented in
+[the cross-compiler contract](research/cli/llvm/INTEGRATION.md).

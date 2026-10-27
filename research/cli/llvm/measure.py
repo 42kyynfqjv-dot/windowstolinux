@@ -62,3 +62,6 @@ for row in report['programs']:
 print('LLVM measurement: builds/baselines/conversion outcomes retained in report.json')
 
 p=subprocess.run([sys.executable,str(here/'inventory.py'),str(out)],timeout=30);assert p.returncode==0
+
+if '--require-translation' in sys.argv:
+ assert len(report['programs'])==6 and all('build_failure' not in r and r['conversion']['exit']==0 for r in report['programs']), 'SUB-572 requires all six translations; see retained diagnostics'

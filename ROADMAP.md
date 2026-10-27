@@ -365,3 +365,10 @@ Windows/ELF pairs, preserving escape62 and all prior evidence. See
 [implementation gates](research/cli/stateful/INTEGRATION.md). Further utility
 measurement should exercise different state/expansion composition or compiler
 layouts after substantive review, without treating fixture counts as compatibility.
+
+SUB-570/571 are reviewed and merged. SUB-572 targets the six unchanged LLVM builds
+and 186 actual Windows/ELF pairs in one cohesive partial-scalar/modular-loop slice.
+See [cross-compiler integration](research/cli/llvm/INTEGRATION.md). After review,
+measure a bounded held-out streaming composition corpus across both pinned
+compilers without widening support to fit it. Compiler portability is not ordinary
+CRT, general application, PE32+ or XP/7 compatibility.

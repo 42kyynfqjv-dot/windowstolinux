@@ -189,6 +189,8 @@ pub(super) fn bind(image: &Candidate<'_>) -> Result<Bound, String> {
             | Operation::Increment(dst)
             | Operation::Decrement(dst)
             | Operation::Negate(dst)
+            | Operation::Not(dst)
+            | Operation::Set(_, dst)
             | Operation::Pop(dst) => state[dst.index as usize] = None,
             Operation::Leave => {
                 state[4] = None;

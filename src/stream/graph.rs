@@ -5,6 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 pub struct Reg {
     pub index: u8,
     pub width: u8,
+    pub shift: u8,
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Address {
@@ -44,7 +45,9 @@ pub enum Operation {
     Binary(Binary, Operand, Operand),
     Address(Reg, Address),
     ConditionalMove(Condition, Reg, Reg),
-    ZeroExtend(Reg, Reg),
+    ZeroExtend(Reg, Operand),
+    Set(Condition, Reg),
+    Not(Reg),
     Increment(Reg),
     Decrement(Reg),
     Negate(Reg),
@@ -85,9 +88,17 @@ fn reg(r: Register) -> Result<Reg, String> {
         CL => (1, 8),
         DL => (2, 8),
         BL => (3, 8),
+        AH => (0, 8),
+        CH => (1, 8),
+        DH => (2, 8),
+        BH => (3, 8),
         _ => return Err("stream: register width/alias outside policy".into()),
     };
-    Ok(Reg { index, width })
+    Ok(Reg {
+        shift: if matches!(r, AH | CH | DH | BH) { 8 } else { 0 },
+        index,
+        width,
+    })
 }
 fn address(i: &Instruction) -> Result<Address, String> {
     let base = if i.memory_base() == Register::None {
@@ -145,15 +156,13 @@ fn writable(o: &Operand) -> bool {
 }
 fn normalized(i: &Instruction, b: &[u8]) -> Result<Operation, String> {
     use Mnemonic::*;
-    // NOP's memory-looking spelling does not access memory. Accept the defined
-    // unprefixed 0F1F /0 forms, 66 90 and two exact compiler alignment forms;
-    // do not erase arbitrary prefixes.
-    if i.mnemonic() == Nop
-        && (b == [0x90]
-            || b == [0x66, 0x90]
-            || b.starts_with(&[0x0f, 0x1f])
-            || b == [0x66, 0x66, 0x0f, 0x1f, 0x84, 0, 0, 0, 0, 0]
-            || b == [0x66, 0x0f, 0x1f, 0x44, 0, 0])
+    // Architecturally inert compiler alignment NOPs: optional operand-size
+    // repetitions and CS override on 0F1F /0 only. No prefix is erased on an
+    // instruction with observable effects. iced validates the 15-byte limit.
+    let alignment = b.iter().position(|v| *v != 0x66).unwrap_or(b.len());
+    let tail = &b[alignment..];
+    let tail = tail.strip_prefix(&[0x2e]).unwrap_or(tail);
+    if i.mnemonic() == Nop && (b == [0x90] || b == [0x66, 0x90] || tail.starts_with(&[0x0f, 0x1f]))
     {
         return Ok(Operation::Nop);
     }
@@ -188,7 +197,9 @@ fn normalized(i: &Instruction, b: &[u8]) -> Result<Operation, String> {
             };
             Operation::Binary(op, a, b)
         }
-        Cmove | Cmova if i.op0_kind() == OpKind::Register && i.op1_kind() == OpKind::Register => {
+        Cmove | Cmova | Cmovae
+            if i.op0_kind() == OpKind::Register && i.op1_kind() == OpKind::Register =>
+        {
             let dst = reg(i.op0_register())?;
             let src = reg(i.op1_register())?;
             if dst.width != 32 || src.width != 32 || dst.index == 4 {
@@ -197,20 +208,36 @@ fn normalized(i: &Instruction, b: &[u8]) -> Result<Operation, String> {
             Operation::ConditionalMove(
                 if i.mnemonic() == Cmove {
                     Condition::Equal
-                } else {
+                } else if i.mnemonic() == Cmova {
                     Condition::Above
+                } else {
+                    Condition::AboveEqual
                 },
                 dst,
                 src,
             )
         }
-        Movzx if i.op0_kind() == OpKind::Register && i.op1_kind() == OpKind::Register => {
+        Movzx if i.op0_kind() == OpKind::Register => {
             let dst = reg(i.op0_register())?;
-            let src = reg(i.op1_register())?;
-            if dst.width != 32 || src.width != 8 || dst.index == 4 {
+            let src = operand(i, 1)?;
+            if dst.width != 32 || width(&src) != Some(8) || dst.index == 4 {
                 return Err("stream: zero extension form".into());
             }
             Operation::ZeroExtend(dst, src)
+        }
+        Setne if i.op0_kind() == OpKind::Register => {
+            let dst = reg(i.op0_register())?;
+            if dst.width != 8 {
+                return Err("stream: SETNE width".into());
+            }
+            Operation::Set(Condition::NotEqual, dst)
+        }
+        Not if i.op0_kind() == OpKind::Register => {
+            let dst = reg(i.op0_register())?;
+            if dst.width != 32 || dst.index == 4 {
+                return Err("stream: NOT form".into());
+            }
+            Operation::Not(dst)
         }
         Lea if i.op0_kind() == OpKind::Register && i.op1_kind() == OpKind::Memory => {
             let r = reg(i.op0_register())?;
@@ -424,21 +451,60 @@ fn components(nodes: &BTreeMap<u32, Node>) -> Vec<Vec<u32>> {
 mod tests {
     use super::*;
     #[test]
+    fn partial_alias_forms_and_prefix_boundaries() {
+        for lane in 0u8..8 {
+            let g = decode(&[0x0f, 0x95, 0xc0 | lane, 0xc3], 0, 0).unwrap();
+            assert_eq!(
+                g.nodes[&0].operation,
+                Operation::Set(
+                    Condition::NotEqual,
+                    Reg {
+                        index: lane % 4,
+                        width: 8,
+                        shift: if lane < 4 { 0 } else { 8 }
+                    }
+                )
+            );
+        }
+        for mut bytes in [
+            vec![0x66, 0x0f, 0x95, 0xc0],
+            vec![0x0f, 0x95, 0x00],
+            vec![0xf7, 0x10],
+            vec![0x66, 0xf7, 0xd0],
+            vec![0x0f, 0x43, 0x00],
+            vec![0x0f, 0xb7, 0xc0],
+            vec![0x64, 0x0f, 0xb6, 0x00],
+            vec![0xf0, 0x0f, 0x1f, 0x00],
+        ] {
+            bytes.push(0xc3);
+            assert!(decode(&bytes, 0, 0).is_err(), "{bytes:x?}");
+        }
+        let padding = [
+            0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x2e, 0x0f, 0x1f, 0x84, 0, 0, 0, 0, 0, 0xc3,
+        ];
+        assert_eq!(
+            decode(&padding, 0, 0).unwrap().nodes[&0].operation,
+            Operation::Nop
+        );
+    }
+    #[test]
     fn zero_extension_and_unsigned_selection_exact_forms() {
         for dst in [0u8, 1, 2, 3, 5, 6, 7] {
-            for src in 0u8..4 {
+            for src in 0u8..8 {
                 let g = decode(&[0x0f, 0xb6, 0xc0 | dst << 3 | src, 0xc3], 0, 0).unwrap();
                 assert_eq!(
                     g.nodes[&0].operation,
                     Operation::ZeroExtend(
                         Reg {
+                            shift: 0,
                             index: dst,
                             width: 32
                         },
-                        Reg {
-                            index: src,
+                        Operand::Reg(Reg {
+                            shift: if src < 4 { 0 } else { 8 },
+                            index: src % 4,
                             width: 8
-                        }
+                        })
                     )
                 );
             }
@@ -449,10 +515,12 @@ mod tests {
                     Operation::ConditionalMove(
                         Condition::Above,
                         Reg {
+                            shift: 0,
                             index: dst,
                             width: 32
                         },
                         Reg {
+                            shift: 0,
                             index: src,
                             width: 32
                         }
@@ -462,9 +530,7 @@ mod tests {
         }
         for mut bytes in [
             vec![0x66, 0x0f, 0xb6, 0xc1],
-            vec![0x0f, 0xb6, 0xc4],
             vec![0x0f, 0xb7, 0xc1],
-            vec![0x0f, 0xb6, 0x01],
             vec![0x0f, 0xb6, 0xe1],
             vec![0x66, 0x0f, 0x47, 0xc1],
             vec![0x0f, 0x47, 0x01],
@@ -486,10 +552,12 @@ mod tests {
                     Operation::ConditionalMove(
                         Condition::Equal,
                         Reg {
+                            shift: 0,
                             index: dst,
                             width: 32
                         },
                         Reg {
+                            shift: 0,
                             index: src,
                             width: 32
                         }
@@ -533,7 +601,11 @@ mod tests {
             a.nodes[&0].operation,
             Operation::Binary(
                 Binary::Move,
-                Operand::Reg(Reg { index: 2, width: 8 }),
+                Operand::Reg(Reg {
+                    shift: 0,
+                    index: 2,
+                    width: 8
+                }),
                 Operand::Memory(
                     Address {
                         base: Some(5),
@@ -550,7 +622,11 @@ mod tests {
             b.nodes[&0].operation,
             Operation::Binary(
                 Binary::Move,
-                Operand::Reg(Reg { index: 1, width: 8 }),
+                Operand::Reg(Reg {
+                    shift: 0,
+                    index: 1,
+                    width: 8
+                }),
                 Operand::Memory(
                     Address {
                         base: Some(4),
@@ -593,6 +669,7 @@ mod tests {
         assert_eq!(
             g.nodes[&6].operation,
             Operation::Call(Operand::Reg(Reg {
+                shift: 0,
                 index: 3,
                 width: 32
             }))
@@ -616,6 +693,7 @@ mod tests {
         assert_eq!(
             g.nodes[&0].operation,
             Operation::Negate(Reg {
+                shift: 0,
                 index: 2,
                 width: 32
             })
@@ -623,6 +701,7 @@ mod tests {
         assert_eq!(
             g.nodes[&7].operation,
             Operation::Decrement(Reg {
+                shift: 0,
                 index: 1,
                 width: 32
             })

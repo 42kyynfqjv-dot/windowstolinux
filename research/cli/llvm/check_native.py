@@ -2,6 +2,12 @@
 import hashlib,json,os,subprocess,sys,tempfile
 from pathlib import Path
 root=Path(sys.argv[1]).resolve();repo=Path(__file__).resolve().parents[3];report=json.loads((root/'report.json').read_text());src=Path(__file__).resolve().parent.parent/'stateful';cases=json.loads((src/'cases.json').read_text())
+# SUB-572 integration gate; historical measurement mode still reports rejections.
+if '--require-translation' in sys.argv:
+ import runpy
+ assert len(report['programs'])==6 and all('build_failure' not in r and r['conversion']['exit']==0 for r in report['programs'])
+ runpy.run_path(str(src/'check_native.py'),run_name='__main__')
+ raise SystemExit(0)
 def sha(p):return hashlib.sha256(p.read_bytes()).hexdigest()
 def run(cmd,**kw):return subprocess.run(cmd,timeout=30,**(dict(stderr=subprocess.PIPE) if 'stdout' in kw else dict(capture_output=True)),**kw)
 rows=[]
