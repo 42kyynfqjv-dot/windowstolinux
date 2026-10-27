@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "programs": [
+    "grow",
+    "shrink"
+  ],
+  "configurations": {
+    "O2": [
+      "/O2"
+    ]
+  },
+  "compile_flags": [
+    "/nologo",
+    "/Bv",
+    "/W4",
+    "/GS-",
+    "/Zl",
+    "/c"
+  ],
+  "link_flags": [
+    "/nologo",
+    "/machine:x86",
+    "/subsystem:console",
+    "/nodefaultlib",
+    "/entry:entry@0"
+  ],
+  "libraries": [
+    "kernel32.lib"
+  ],
+  "sha256": {
+    "grow.c": "c06db707512b62c03a4e868aaaa33d03d27c52e32b57ec79baed04547945ffa4",
+    "shrink.c": "d2c865af76043371d9ada41048e5c822605f060712f62851eb331bfedadb2b1c",
+    "cases.json": "08e4dbf0a238df8f8bfc40805b8263c7f2e362a8ec3f2585cc112b521bbe5973"
+  },
+  "scope": "Original Windows heap conformance and frozen converter measurement. Native component comparisons are not PE translation."
+}
