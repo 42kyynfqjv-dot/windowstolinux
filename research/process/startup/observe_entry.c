@@ -1,6 +1,6 @@
-/* Own-child x86 entry observation. No target code/data writes, privilege changes,
- * or unrelated process access. A temporary hardware execution breakpoint stops
- * before the original entry instruction. Observation is not a normal baseline. */
+/* Own-child x86 debugger observation. One temporary INT3 byte at original entry,
+ * restored before termination; the PE file is never modified. No privilege or
+ * security-setting changes or unrelated process access. Not a normal baseline. */
 #include <windows.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,6 +13,7 @@ static BOOL read_exact(HANDLE process, DWORD address, void *out, SIZE_T n) {
 int main(int argc,char **argv) {
     STARTUPINFOA si={0}; PROCESS_INFORMATION pi={0}; DEBUG_EVENT ev={0};
     DWORD entry=0,base=0,result=125; BOOL armed=FALSE,stopped=FALSE;
+    BYTE original=0,trap=0xcc; SIZE_T written=0;
     ULONGLONG deadline=GetTickCount64()+10000;
     if(argc!=3) return 125;
     si.cb=sizeof(si);
@@ -35,15 +36,15 @@ int main(int argc,char **argv) {
             DWORD code=ev.u.Exception.ExceptionRecord.ExceptionCode;
             action=DBG_EXCEPTION_NOT_HANDLED;
             if(ev.dwThreadId==pi.dwThreadId && code==EXCEPTION_BREAKPOINT && !armed) {
-                if(!entry || !GetThreadContext(pi.hThread,&c) || (c.Dr7&0xff)!=0) break;
-                c.ContextFlags=CONTEXT_DEBUG_REGISTERS;
-                c.Dr0=entry;c.Dr7|=1; /* local execution breakpoint, one byte */
-                if(!SetThreadContext(pi.hThread,&c)) break;
+                if(!entry || !read_exact(pi.hProcess,entry,&original,1) || original==0xcc) break;
+                if(!WriteProcessMemory(pi.hProcess,(void *)(uintptr_t)entry,&trap,1,&written) || written!=1 ||
+                   !FlushInstructionCache(pi.hProcess,(void *)(uintptr_t)entry,1)) break;
                 armed=TRUE;action=DBG_CONTINUE;
-            } else if(ev.dwThreadId==pi.dwThreadId && code==EXCEPTION_SINGLE_STEP && armed) {
+            } else if(ev.dwThreadId==pi.dwThreadId && code==EXCEPTION_BREAKPOINT && armed &&
+                      (DWORD)(uintptr_t)ev.u.Exception.ExceptionRecord.ExceptionAddress==entry) {
                 LDT_ENTRY selector={0}; DWORD tib[3]={0},record[2]={0};
                 MEMORY_BASIC_INFORMATION memory={0};
-                if(!GetThreadContext(pi.hThread,&c) || c.Eip!=entry || !(c.Dr6&1) ||
+                if(!GetThreadContext(pi.hThread,&c) || c.Eip!=entry+1 ||
                    !GetThreadSelectorEntry(pi.hThread,c.SegFs,&selector)) break;
                 DWORD teb=selector.BaseLow | ((DWORD)selector.HighWord.Bytes.BaseMid<<16) |
                           ((DWORD)selector.HighWord.Bytes.BaseHi<<24);
@@ -52,11 +53,11 @@ int main(int argc,char **argv) {
                     if(!read_exact(pi.hProcess,tib[0],record,sizeof(record)) ||
                        !VirtualQueryEx(pi.hProcess,(void *)(uintptr_t)record[1],&memory,sizeof(memory))) break;
                 }
-                printf("{\"kind\":\"debugger entry observation; not baseline\","
+                printf("{\"kind\":\"INT3 entry observation; eip normalized from trap; not baseline\","
                        "\"image_base\":%lu,\"entry\":%lu,\"eip\":%lu,\"esp\":%lu,\"ebp\":%lu,"
                        "\"teb\":%lu,\"stack_base\":%lu,\"stack_limit\":%lu,\"chain_head\":%lu,"
                        "\"previous\":%lu,\"handler\":%lu,\"handler_allocation\":%lu,\"handler_type\":%lu}\n",
-                       base,entry,c.Eip,c.Esp,c.Ebp,teb,tib[1],tib[2],tib[0],record[0],record[1],
+                       base,entry,c.Eip-1,c.Esp,c.Ebp,teb,tib[1],tib[2],tib[0],record[0],record[1],
                        (DWORD)(uintptr_t)memory.AllocationBase,memory.Type);
                 fflush(stdout); result=0;stopped=TRUE;break;
             }
@@ -69,6 +70,8 @@ int main(int argc,char **argv) {
     /* Never let the measured utility continue into its workload. Drain the owned
      * child's termination event, including failures while an event was pending. */
     fprintf(stderr,"observation stopped=%d result=%lu error=%lu entry=%lu events=%u\n",stopped,result,GetLastError(),entry,events);
+    if(armed && (!WriteProcessMemory(pi.hProcess,(void *)(uintptr_t)entry,&original,1,&written) || written!=1 ||
+                 !FlushInstructionCache(pi.hProcess,(void *)(uintptr_t)entry,1))) result=125;
     TerminateProcess(pi.hProcess,125);
     ContinueDebugEvent(ev.dwProcessId,ev.dwThreadId,DBG_CONTINUE);
     for(int i=0;i<32 && WaitForDebugEvent(&ev,100);++i) {
