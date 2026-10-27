@@ -230,6 +230,12 @@ impl State {
                     if r.width == 32 { value } else { Value::Scalar };
             }
             Operand::Memory(a, width) => {
+                if matches!(self.address(a)?, Value::Heap(_, _)) {
+                    require(
+                        value.scalar(),
+                        "heap fields cannot store opaque pointers or handles",
+                    )?;
+                }
                 require(
                     value.scalar()
                         || (*width == 32
@@ -474,6 +480,7 @@ impl State {
             Operand::Memory(_, 8) => 255, // Requires mandatory SMT initialized-prefix proof.
             Operand::Memory(a, 32) => match self.address(a) {
                 Ok(Value::Frame(Some(at))) => self.local_known.get(&at).copied().unwrap_or(0),
+                Ok(Value::Heap(_, _)) => u32::MAX, // Mandatory full-range initialized-word proof.
                 _ => 0,
             },
             _ => 0,
@@ -1888,5 +1895,34 @@ mod tests {
             )
             .unwrap();
         assert_eq!(state.handle_test, None);
+    }
+    #[test]
+    fn heap_scalar_fields_reject_opaque_values_and_mixed_owners() {
+        let mut s = State::entry();
+        s.registers[0] = Value::Heap(10, Some(0));
+        s.known[0] = u32::MAX;
+        let address = Address {
+            base: Some(0),
+            index: None,
+            scale: 1,
+            displacement: 4,
+        };
+        let dst = Operand::Memory(address.clone(), 32);
+        for value in [
+            Value::Heap(20, Some(0)),
+            Value::HeapHandle,
+            Value::Handle(0xfffffff5),
+            Value::Frame(Some(-4)),
+        ] {
+            assert!(s.put(&dst, value).is_err());
+        }
+        s.put(&dst, Value::Constant(0x04030201)).unwrap();
+        assert_eq!(s.operand(&dst, None).unwrap(), Value::Scalar);
+        s.registers[1] = Value::Heap(20, Some(0));
+        let mixed = Address {
+            index: Some(1),
+            ..address
+        };
+        assert!(s.address(&mixed).is_err());
     }
 }
