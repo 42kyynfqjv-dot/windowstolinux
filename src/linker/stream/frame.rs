@@ -1,7 +1,7 @@
 //! Private whole-graph frame-shape proof. Scalar bounds and initialization are
 //! deliberately separate obligations: a Frame value is provenance, not access.
 use super::{graph::*, Bound, Function};
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Value {
     Unknown,
@@ -49,6 +49,7 @@ pub(super) enum Slot {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct State {
     pub(super) registers: [Value; 8],
+    pub(super) finite: BTreeMap<i32, BTreeSet<u32>>,
     pub(super) sp: i32,
     pub(super) known: [u8; 8],
     pub(super) initialized: std::collections::BTreeSet<i32>,
@@ -76,6 +77,7 @@ impl State {
         registers[4] = Value::Frame(Some(0));
         Self {
             registers,
+            finite: BTreeMap::new(),
             sp: 0,
             known: [0, 0, 0, 0, 32, 0, 0, 0],
             initialized: Default::default(),
@@ -308,6 +310,13 @@ impl State {
             "incompatible frame shapes at join",
         )?;
         let old = self.clone();
+        self.finite.retain(|key, values| {
+            let Some(other) = rhs.finite.get(key) else {
+                return false;
+            };
+            values.extend(other);
+            values.len() <= 8
+        });
         for (a, b) in self.known.iter_mut().zip(rhs.known) {
             *a = (*a).min(b);
         }
@@ -366,6 +375,125 @@ impl State {
             _ => 0,
         }
     }
+    fn finite_operand(&self, o: &Operand) -> Option<BTreeSet<u32>> {
+        match o {
+            Operand::Immediate(n) => Some(BTreeSet::from([*n])),
+            Operand::Reg(Reg { index, width: 32 }) => self.finite.get(&i32::from(*index)).cloned(),
+            Operand::Memory(a, 32) => match self.address(a).ok()? {
+                Value::Frame(Some(at)) => self.finite.get(&at).cloned(),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+    fn finite_step(&mut self, before: &Self, op: &Operation, call: Option<Function>) {
+        let assign = |state: &mut Self, key: i32, values: Option<BTreeSet<u32>>| {
+            if let Some(v) = values.filter(|v| v.len() <= 8) {
+                state.finite.insert(key, v);
+            } else {
+                state.finite.remove(&key);
+            }
+        };
+        match op {
+            Operation::Binary(op, dst, src) if !matches!(op, Binary::Compare | Binary::Test) => {
+                let values = if *op == Binary::Move {
+                    before.finite_operand(src)
+                } else if *op == Binary::Xor && dst == src {
+                    Some(BTreeSet::from([0]))
+                } else {
+                    before
+                        .finite_operand(dst)
+                        .zip(before.finite_operand(src))
+                        .and_then(|(a, b)| {
+                            let mut values = BTreeSet::new();
+                            for a in a {
+                                for &b in &b {
+                                    values.insert(match op {
+                                        Binary::Add => a.wrapping_add(b),
+                                        Binary::Sub => a.wrapping_sub(b),
+                                        Binary::And => a & b,
+                                        Binary::Xor => a ^ b,
+                                        _ => return None,
+                                    });
+                                }
+                            }
+                            Some(values)
+                        })
+                };
+                match dst {
+                    Operand::Reg(r) => assign(
+                        self,
+                        i32::from(r.index),
+                        if r.width == 32 { values } else { None },
+                    ),
+                    Operand::Memory(a, 32) => {
+                        if let Ok(Value::Frame(Some(at))) = before.address(a) {
+                            assign(self, at, values);
+                        }
+                    }
+                    // Byte regions are disjoint from all tracked words in the mandatory layout proof.
+                    _ => (),
+                }
+            }
+            Operation::ConditionalMove(dst, src) => {
+                let values = before
+                    .finite_operand(&Operand::Reg(*dst))
+                    .zip(before.finite_operand(&Operand::Reg(*src)))
+                    .map(|(mut a, b)| {
+                        a.extend(b);
+                        a
+                    });
+                assign(self, i32::from(dst.index), values);
+            }
+            Operation::Increment(r) | Operation::Decrement(r) | Operation::Negate(r) => {
+                let values = before.finite_operand(&Operand::Reg(*r)).map(|v| {
+                    v.into_iter()
+                        .map(|v| match op {
+                            Operation::Increment(_) => v.wrapping_add(1),
+                            Operation::Decrement(_) => v.wrapping_sub(1),
+                            _ => v.wrapping_neg(),
+                        })
+                        .collect()
+                });
+                assign(self, i32::from(r.index), values);
+            }
+            Operation::Address(r, _) => assign(self, i32::from(r.index), None),
+            Operation::Push(o) => assign(self, self.sp, before.finite_operand(o)),
+            Operation::Pop(r) => {
+                assign(
+                    self,
+                    i32::from(r.index),
+                    before.finite.get(&before.sp).cloned(),
+                );
+                self.finite.remove(&before.sp);
+            }
+            Operation::Leave => {
+                self.finite.remove(&5);
+                self.finite.retain(|k, _| *k >= 0);
+            }
+            Operation::Call(_) => {
+                for r in 0..3 {
+                    self.finite.remove(&r);
+                }
+                if matches!(call, Some(Function::Read | Function::Write)) {
+                    self.finite.insert(0, BTreeSet::from([0, 1]));
+                    if let Ok(args) = before.arguments(5) {
+                        if let Value::Frame(Some(at)) = args[3] {
+                            self.finite.remove(&at);
+                        }
+                    }
+                }
+                self.finite.retain(|k, _| *k >= 0 || *k >= self.sp);
+            }
+            _ => (),
+        }
+        if self.sp != before.sp && matches!(op, Operation::Binary(..)) {
+            let lo = self.sp.min(before.sp);
+            let hi = self.sp.max(before.sp);
+            self.finite
+                .retain(|k, _| *k >= 0 || *k + 4 <= lo || *k >= hi);
+        }
+    }
     fn step(
         &mut self,
         op: &Operation,
@@ -374,6 +502,7 @@ impl State {
     ) -> Result<(), String> {
         let before = self.clone();
         self.type_step(op, call, load)?;
+        self.finite_step(&before, op, call);
         match op {
             Operation::Push(o) => {
                 self.argument_known.insert(self.sp, before.bits(o));
@@ -386,6 +515,10 @@ impl State {
                 self.known[5] = 0;
                 self.argument_known.retain(|at, _| *at >= self.sp);
                 self.initialized.clear();
+            }
+            Operation::ConditionalMove(dst, src) => {
+                self.known[dst.index as usize] =
+                    before.known[dst.index as usize].min(before.known[src.index as usize]);
             }
             Operation::Address(r, a) => {
                 self.known[r.index as usize] = [a.base, a.index]
@@ -608,6 +741,16 @@ impl State {
                 };
                 self.put(dst, result)?;
             }
+            Operation::ConditionalMove(dst, src) => {
+                require(self.zf_known, "conditional move reads unknown ZF")?;
+                let a = self.registers[dst.index as usize];
+                let b = self.registers[src.index as usize];
+                require(
+                    a.scalar() && b.scalar(),
+                    "conditional move requires scalar values",
+                )?;
+                self.put(&Operand::Reg(*dst), a.join(b))?;
+            }
             Operation::Address(r, a) => {
                 let v = if a
                     .base
@@ -709,6 +852,74 @@ mod tests {
             graph: super::super::graph::decode(bytes, 0x1000, 0x1000)?,
         };
         prove(&bound)
+    }
+    #[test]
+    fn conditional_selection_requires_known_scalar_state_and_preserves_flags() {
+        let dst = Reg {
+            index: 0,
+            width: 32,
+        };
+        let src = Reg {
+            index: 1,
+            width: 32,
+        };
+        for (a, b) in [(0, 1), (7, 42), (u32::MAX, 0x80000000)] {
+            let mut state = State::entry();
+            state.registers[0] = Value::Constant(a);
+            state.registers[1] = Value::Constant(b);
+            state.known[0] = 32;
+            state.known[1] = 32;
+            state.zf_known = true;
+            state.cf_known = true;
+            state
+                .step(&Operation::ConditionalMove(dst, src), None, None)
+                .unwrap();
+            assert_eq!(state.known[0], 32);
+            assert!(state.zf_known && state.cf_known);
+            assert!(state.registers[0].scalar());
+        }
+        let mut state = State::entry();
+        state.registers[0] = Value::Constant(0);
+        state.registers[1] = Value::Constant(1);
+        assert!(state
+            .step(&Operation::ConditionalMove(dst, src), None, None)
+            .is_err());
+        state.zf_known = true;
+        state.registers[1] = Value::Frame(Some(-4));
+        assert!(state
+            .step(&Operation::ConditionalMove(dst, src), None, None)
+            .is_err());
+    }
+    #[test]
+    fn finite_facts_union_then_forget_and_wrap_independently() {
+        let mut a = State::entry();
+        a.finite.insert(0, BTreeSet::from([0]));
+        let mut b = a.clone();
+        b.finite.insert(0, BTreeSet::from([1]));
+        a.join(&b).unwrap();
+        assert_eq!(a.finite[&0], BTreeSet::from([0, 1]));
+        for value in 2..=8 {
+            b.finite.insert(0, BTreeSet::from([value]));
+            a.join(&b).unwrap();
+        }
+        assert!(!a.finite.contains_key(&0));
+        let mut s = State::entry();
+        s.registers[0] = Value::Constant(u32::MAX);
+        s.known[0] = 32;
+        s.finite.insert(0, BTreeSet::from([u32::MAX]));
+        s.step(
+            &Operation::Increment(Reg {
+                index: 0,
+                width: 32,
+            }),
+            None,
+            None,
+        )
+        .unwrap();
+        assert_eq!(s.finite[&0], BTreeSet::from([0]));
+        let b = State::entry();
+        a.join(&b).unwrap();
+        assert!(a.finite.is_empty());
     }
     #[test]
     fn ebp_and_esp_frames_restore_owned_saves() {

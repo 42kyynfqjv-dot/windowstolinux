@@ -43,6 +43,7 @@ pub enum Condition {
 pub enum Operation {
     Binary(Binary, Operand, Operand),
     Address(Reg, Address),
+    ConditionalMove(Reg, Reg),
     Increment(Reg),
     Decrement(Reg),
     Negate(Reg),
@@ -185,6 +186,14 @@ fn normalized(i: &Instruction, b: &[u8]) -> Result<Operation, String> {
                 _ => Binary::Test,
             };
             Operation::Binary(op, a, b)
+        }
+        Cmove if i.op0_kind() == OpKind::Register && i.op1_kind() == OpKind::Register => {
+            let dst = reg(i.op0_register())?;
+            let src = reg(i.op1_register())?;
+            if dst.width != 32 || src.width != 32 || dst.index == 4 {
+                return Err("stream: conditional move form".into());
+            }
+            Operation::ConditionalMove(dst, src)
         }
         Lea if i.op0_kind() == OpKind::Register && i.op1_kind() == OpKind::Memory => {
             let r = reg(i.op0_register())?;
@@ -397,6 +406,36 @@ fn components(nodes: &BTreeMap<u32, Node>) -> Vec<Vec<u32>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn conditional_move_exact_register_form_only() {
+        for dst in [0u8, 1, 2, 3, 5, 6, 7] {
+            for src in 0u8..8 {
+                let g = decode(&[0x0f, 0x44, 0xc0 | dst << 3 | src, 0xc3], 0, 0).unwrap();
+                assert_eq!(
+                    g.nodes[&0].operation,
+                    Operation::ConditionalMove(
+                        Reg {
+                            index: dst,
+                            width: 32
+                        },
+                        Reg {
+                            index: src,
+                            width: 32
+                        }
+                    )
+                );
+            }
+        }
+        for bytes in [
+            vec![0x66, 0x0f, 0x44, 0xc1, 0xc3],
+            vec![0x0f, 0x44, 0x01, 0xc3],
+            vec![0x0f, 0x44, 0xe1, 0xc3],
+            vec![0x0f, 0x45, 0xc1, 0xc3],
+            vec![0x0f, 0x44],
+        ] {
+            assert!(decode(&bytes, 0, 0).is_err());
+        }
+    }
     #[test]
     fn backedges_are_represented_not_unrolled_or_claimed_terminating() {
         let g = decode(
