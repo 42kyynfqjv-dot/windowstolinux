@@ -211,3 +211,11 @@ module; they are inherited tests, not five new independent cases. Root test coun
 is now108 (99 previous +5 inherited graph +4 new binding). Twelve malformed import
 mutations across the two unchanged originals reject through production intake;
 the two originals reach the proof barrier with output files preserved.
+
+### Relational verifier decision
+
+[Compiler-time solver evaluation](proof/DECISION.md) documents the concrete
+correlations lost by per-value intervals, nine standalone proof-language checks,
+and the proposed coherent frame/SSA/epoch/induction/emission route. The recommended
+Z3 dependency is research-only pending architecture review; production emission
+remains blocked. These solver outcomes are not whole-program proofs.

@@ -1,0 +1,67 @@
+{
+  "solver": "4.15.4",
+  "scope": "standalone invariant obligations; not whole-program proof",
+  "results": [
+    {
+      "name": "transform-entry",
+      "result": "unsat",
+      "proved": true
+    },
+    {
+      "name": "transform-step",
+      "result": "unsat",
+      "proved": true
+    },
+    {
+      "name": "transform-backedge",
+      "result": "unsat",
+      "proved": true
+    },
+    {
+      "name": "interval-only-join-is-insufficient",
+      "result": "sat",
+      "proved": false,
+      "counterexample": {
+        "count": "1",
+        "index": "1"
+      }
+    },
+    {
+      "name": "write-progress-no-wrap",
+      "result": "unsat",
+      "proved": true
+    },
+    {
+      "name": "wrong-written-bound-rejected",
+      "result": "sat",
+      "proved": false,
+      "counterexample": {
+        "count32": "242",
+        "sent32": "112",
+        "written32": "133"
+      }
+    },
+    {
+      "name": "stale-read-prefix-rejected",
+      "result": "sat",
+      "proved": false,
+      "counterexample": {
+        "old_epoch": "0",
+        "new_epoch": "1",
+        "old_length": "1",
+        "new_length": "0"
+      }
+    },
+    {
+      "name": "fresh-capability-access",
+      "result": "unsat",
+      "proved": true
+    },
+    {
+      "name": "resource-exhaustion-rejects",
+      "result": "unknown",
+      "proved": false,
+      "reason": "max. resource limit exceeded"
+    }
+  ]
+}

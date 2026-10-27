@@ -21,6 +21,11 @@ jobs:
       - run: python3 -m unittest discover -s research/input/scalar -p test_nonlinear.py -v
       - run: python3 -m unittest discover -s research/input/helper -p test_model.py -v
       - run: python3 -m unittest discover -s research/input/postcall -p test_model.py -v
+      - name: Check bounded relational proof-domain experiment
+        run: |
+          python3 -m venv /tmp/w2l-proof-env
+          /tmp/w2l-proof-env/bin/pip install --require-hashes --no-deps -r research/cli/v2/proof/requirements.txt
+          /tmp/w2l-proof-env/bin/python research/cli/v2/proof/obligations.py > /tmp/w2l-proof-results.json
       - run: cargo test --locked --example stream_core
       - run: cargo test --locked --example stream_graph
       - run: cargo test --locked --example bounded_input
