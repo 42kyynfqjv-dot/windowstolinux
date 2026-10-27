@@ -21,6 +21,8 @@ jobs:
       - run: python3 -m unittest discover -s research/input/scalar -p test_nonlinear.py -v
       - run: python3 -m unittest discover -s research/input/helper -p test_model.py -v
       - run: python3 -m unittest discover -s research/input/postcall -p test_model.py -v
+      - run: cargo test --locked --example stream_core
+      - run: cargo test --locked --example stream_graph
       - run: cargo test --locked --example bounded_input
       - run: cargo test --locked --example runtime_boundary
       - run: cargo test --locked --example crt_external_cell
@@ -284,6 +286,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'CLI v2 measurement failed' }
           python research/cli/v2/inventory.py "$env:RUNNER_TEMP/w2l-cli-v2"
           if ($LASTEXITCODE -ne 0) { throw 'CLI v2 inventory failed' }
+          cargo build --locked --example stream_graph
+          if ($LASTEXITCODE -ne 0) { throw 'Stream graph build failed' }
+          python research/cli/v2/check_components.py "$env:RUNNER_TEMP/w2l-cli-v2" --windows
+          if ($LASTEXITCODE -ne 0) { throw 'Stream graph evidence failed' }
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -345,6 +351,20 @@ jobs:
           path: evidence
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo build --locked
+      - uses: actions/download-artifact@v4
+        with:
+          name: cli-v2-measurement
+          path: cli-v2-evidence
+      - name: Compare stream components and structural graphs (not PE translation)
+        run: |
+          cargo build --locked --example stream_graph --example stream_core
+          python3 research/cli/v2/check_components.py cli-v2-evidence
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cli-v2-component-native
+          path: cli-v2-evidence/component-native.json
+          if-no-files-found: warn
       - name: Convert same hashed PE on Linux and compare native execution
         run: |
           python3 compiler/check_native.py evidence
