@@ -71,11 +71,14 @@ verification because Windows checkout changed line endings. No new executable
 comparison was counted. Commit 9eee3fc pins JSON/Python LF checkout; frozen sources,
 expected JSON contents and hashes were not changed.
 
-## Integration evidence pending fresh CI
+## Verified integration evidence
 
-Local unchanged baseline PEs both translate, and twelve emitted ELF outcomes match
-the saved Windows observations. These local conversions do not establish cross-host
-Rust equality. Six hundred scripted emitted-program cases cover differing read/write
+Both unchanged PEs translate on Windows and Linux with byte-identical generated
+Rust. Twelve emitted ELF outcomes match the independent Windows observations on
+Windows Server 2025 build 26100 (MSVC 14.51.36231, SDK 10.0.26100.0).
+Implementation head 06a5e77 passed all nine jobs in PR run 40574407655 and push
+run 40574399127; artifacts 12766406977 and 12766438786 preserve the PE/Rust hashes
+and original/native observations. Six hundred scripted emitted-program cases cover differing read/write
 sizes, allocation failure, first/second-read failure, write errors and zero progress.
 Five mutated PE safety checks never execute the unsafe binaries. One additional root
 function checks scalar-field opaque-value rejection and mixed owner addresses; total
@@ -93,5 +96,5 @@ wall-time/resource limits. The generalized max-prefix word-store formula had als
 replaced byte stores. Restoring the equivalent existing byte-store equality/plus-one
 formula avoids that search expansion; complete-word stores keep their full-range
 formula. All four unchanged old/new PEs then proved locally with unchanged budgets.
-This failure is distinct from the earlier cl.exe launch timeout. Final CI must
-validate the correction across the full corpus.
+This failure is distinct from the earlier cl.exe launch timeout. Both final implementation CI runs above validated the correction across the full
+corpus. The earlier failures remain recorded and are not counted as successful runs.
