@@ -472,12 +472,18 @@ jobs:
           name: stateful-windows
           path: stateful-evidence
       - name: Compare frozen stateful composition outcomes
-        run: python3 research/cli/stateful/check_native.py stateful-evidence
+        run: |
+          python3 research/cli/stateful/check_native.py stateful-evidence
+          python3 research/cli/stateful/check_safety.py stateful-evidence
+          python3 research/cli/stateful/check_partitions.py stateful-evidence
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: stateful-native
-          path: stateful-evidence/native.json
+          path: |
+            stateful-evidence/native.json
+            stateful-evidence/safety*.json
+            stateful-evidence/partitions.json
           if-no-files-found: warn
       - name: Compare stateful CRLF converter outcomes
         run: |

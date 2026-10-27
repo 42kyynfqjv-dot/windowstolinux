@@ -40,3 +40,7 @@ and sections before choosing one cohesive next architecture gate. Windows Server
 
 See [measured outcomes and integrated next gate](RESULTS.md). Accepted emitted
 programs also run the24 frozen backend scenarios; these are separately counted.
+
+The later [SUB-570 integration](INTEGRATION.md) makes all six conversions mandatory.
+Historical rejection outcomes above and in RESULTS.md remain measurement history;
+current acceptance requires the full same-artifact cross-host checks.

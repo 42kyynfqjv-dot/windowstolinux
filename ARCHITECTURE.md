@@ -83,5 +83,9 @@ decoded instructions. No test model/report can confer this capability.
 The cyclic streaming path now supports independently owned byte regions and a
 fresh read prefix distinct from writable guest count words. Exhaustive finite
 scalar facts and independently established loop hints assist the mandatory Horn
-safety proof; only both all-UNSAT phases admit emission. [CRLF contract](research/cli/crlf/INTEGRATION.md)
+safety proof. Binary-state hints retain two mandatory all-UNSAT phases. Weighted
+expansion candidates use one full-CFG inductive system that checks entry and every
+incoming domain before assuming it; all safety/invariant queries must be UNSAT.
+[Weighted contract](research/cli/stateful/INTEGRATION.md) explains this distinction.
+[CRLF contract](research/cli/crlf/INTEGRATION.md)
 records hint trust boundaries, resource limits and unchanged native execution.
