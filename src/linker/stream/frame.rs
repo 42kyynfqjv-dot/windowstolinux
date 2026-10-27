@@ -435,7 +435,14 @@ impl State {
                     _ => (),
                 }
             }
-            Operation::ConditionalMove(dst, src) => {
+            Operation::ZeroExtend(dst, src) => {
+                let values = before
+                    .finite
+                    .get(&i32::from(src.index))
+                    .map(|v| v.iter().map(|x| x & 255).collect());
+                assign(self, i32::from(dst.index), values);
+            }
+            Operation::ConditionalMove(_, dst, src) => {
                 let values = before
                     .finite_operand(&Operand::Reg(*dst))
                     .zip(before.finite_operand(&Operand::Reg(*src)))
@@ -516,7 +523,14 @@ impl State {
                 self.argument_known.retain(|at, _| *at >= self.sp);
                 self.initialized.clear();
             }
-            Operation::ConditionalMove(dst, src) => {
+            Operation::ZeroExtend(dst, src) => {
+                self.known[dst.index as usize] = if before.known[src.index as usize] >= 8 {
+                    32
+                } else {
+                    0
+                };
+            }
+            Operation::ConditionalMove(_, dst, src) => {
                 self.known[dst.index as usize] =
                     before.known[dst.index as usize].min(before.known[src.index as usize]);
             }
@@ -741,8 +755,23 @@ impl State {
                 };
                 self.put(dst, result)?;
             }
-            Operation::ConditionalMove(dst, src) => {
+            Operation::ZeroExtend(dst, src) => {
+                let value = self.registers[src.index as usize];
+                require(value.scalar(), "zero extension requires scalar source")?;
+                self.put(
+                    &Operand::Reg(*dst),
+                    match value {
+                        Value::Constant(n) => Value::Constant(n & 255),
+                        _ => Value::Scalar,
+                    },
+                )?;
+            }
+            Operation::ConditionalMove(cond, dst, src) => {
                 require(self.zf_known, "conditional move reads unknown ZF")?;
+                require(
+                    *cond == Condition::Equal || self.cf_known,
+                    "conditional move reads unknown CF",
+                )?;
                 let a = self.registers[dst.index as usize];
                 let b = self.registers[src.index as usize];
                 require(
@@ -854,6 +883,62 @@ mod tests {
         prove(&bound)
     }
     #[test]
+    fn extension_definedness_provenance_and_unsigned_flags() {
+        let dst = Reg {
+            index: 0,
+            width: 32,
+        };
+        let src = Reg { index: 1, width: 8 };
+        for known in [0, 7, 8, 16, 32] {
+            let mut s = State::entry();
+            s.registers[1] = Value::Scalar;
+            s.known[1] = known;
+            s.cf_known = true;
+            s.zf_known = true;
+            s.step(&Operation::ZeroExtend(dst, src), None, None)
+                .unwrap();
+            assert_eq!(s.known[0], if known >= 8 { 32 } else { 0 });
+            assert!(s.cf_known && s.zf_known);
+        }
+        for value in [
+            Value::Frame(Some(-4)),
+            Value::Handle(1),
+            Value::Function(Function::Read),
+            Value::Error,
+            Value::Entry(1),
+        ] {
+            let mut s = State::entry();
+            s.registers[1] = value;
+            s.known[1] = 32;
+            assert!(s
+                .step(&Operation::ZeroExtend(dst, src), None, None)
+                .is_err());
+        }
+        for (cf, zf, ok) in [
+            (false, false, false),
+            (false, true, false),
+            (true, false, false),
+            (true, true, true),
+        ] {
+            let mut s = State::entry();
+            s.registers[0] = Value::Constant(7);
+            s.registers[1] = Value::Constant(42);
+            s.known[0] = 32;
+            s.known[1] = 32;
+            s.cf_known = cf;
+            s.zf_known = zf;
+            assert_eq!(
+                s.step(
+                    &Operation::ConditionalMove(Condition::Above, dst, Reg { width: 32, ..src }),
+                    None,
+                    None
+                )
+                .is_ok(),
+                ok
+            );
+        }
+    }
+    #[test]
     fn conditional_selection_requires_known_scalar_state_and_preserves_flags() {
         let dst = Reg {
             index: 0,
@@ -872,7 +957,11 @@ mod tests {
             state.zf_known = true;
             state.cf_known = true;
             state
-                .step(&Operation::ConditionalMove(dst, src), None, None)
+                .step(
+                    &Operation::ConditionalMove(Condition::Equal, dst, src),
+                    None,
+                    None,
+                )
                 .unwrap();
             assert_eq!(state.known[0], 32);
             assert!(state.zf_known && state.cf_known);
@@ -882,12 +971,20 @@ mod tests {
         state.registers[0] = Value::Constant(0);
         state.registers[1] = Value::Constant(1);
         assert!(state
-            .step(&Operation::ConditionalMove(dst, src), None, None)
+            .step(
+                &Operation::ConditionalMove(Condition::Equal, dst, src),
+                None,
+                None
+            )
             .is_err());
         state.zf_known = true;
         state.registers[1] = Value::Frame(Some(-4));
         assert!(state
-            .step(&Operation::ConditionalMove(dst, src), None, None)
+            .step(
+                &Operation::ConditionalMove(Condition::Equal, dst, src),
+                None,
+                None
+            )
             .is_err());
     }
     #[test]

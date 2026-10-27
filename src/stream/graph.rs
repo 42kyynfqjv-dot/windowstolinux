@@ -43,7 +43,8 @@ pub enum Condition {
 pub enum Operation {
     Binary(Binary, Operand, Operand),
     Address(Reg, Address),
-    ConditionalMove(Reg, Reg),
+    ConditionalMove(Condition, Reg, Reg),
+    ZeroExtend(Reg, Reg),
     Increment(Reg),
     Decrement(Reg),
     Negate(Reg),
@@ -187,13 +188,29 @@ fn normalized(i: &Instruction, b: &[u8]) -> Result<Operation, String> {
             };
             Operation::Binary(op, a, b)
         }
-        Cmove if i.op0_kind() == OpKind::Register && i.op1_kind() == OpKind::Register => {
+        Cmove | Cmova if i.op0_kind() == OpKind::Register && i.op1_kind() == OpKind::Register => {
             let dst = reg(i.op0_register())?;
             let src = reg(i.op1_register())?;
             if dst.width != 32 || src.width != 32 || dst.index == 4 {
                 return Err("stream: conditional move form".into());
             }
-            Operation::ConditionalMove(dst, src)
+            Operation::ConditionalMove(
+                if i.mnemonic() == Cmove {
+                    Condition::Equal
+                } else {
+                    Condition::Above
+                },
+                dst,
+                src,
+            )
+        }
+        Movzx if i.op0_kind() == OpKind::Register && i.op1_kind() == OpKind::Register => {
+            let dst = reg(i.op0_register())?;
+            let src = reg(i.op1_register())?;
+            if dst.width != 32 || src.width != 8 || dst.index == 4 {
+                return Err("stream: zero extension form".into());
+            }
+            Operation::ZeroExtend(dst, src)
         }
         Lea if i.op0_kind() == OpKind::Register && i.op1_kind() == OpKind::Memory => {
             let r = reg(i.op0_register())?;
@@ -407,6 +424,58 @@ fn components(nodes: &BTreeMap<u32, Node>) -> Vec<Vec<u32>> {
 mod tests {
     use super::*;
     #[test]
+    fn zero_extension_and_unsigned_selection_exact_forms() {
+        for dst in [0u8, 1, 2, 3, 5, 6, 7] {
+            for src in 0u8..4 {
+                let g = decode(&[0x0f, 0xb6, 0xc0 | dst << 3 | src, 0xc3], 0, 0).unwrap();
+                assert_eq!(
+                    g.nodes[&0].operation,
+                    Operation::ZeroExtend(
+                        Reg {
+                            index: dst,
+                            width: 32
+                        },
+                        Reg {
+                            index: src,
+                            width: 8
+                        }
+                    )
+                );
+            }
+            for src in 0u8..8 {
+                let g = decode(&[0x0f, 0x47, 0xc0 | dst << 3 | src, 0xc3], 0, 0).unwrap();
+                assert_eq!(
+                    g.nodes[&0].operation,
+                    Operation::ConditionalMove(
+                        Condition::Above,
+                        Reg {
+                            index: dst,
+                            width: 32
+                        },
+                        Reg {
+                            index: src,
+                            width: 32
+                        }
+                    )
+                );
+            }
+        }
+        for bytes in [
+            vec![0x66, 0x0f, 0xb6, 0xc1],
+            vec![0x0f, 0xb6, 0xc4],
+            vec![0x0f, 0xb7, 0xc1],
+            vec![0x0f, 0xb6, 0x01],
+            vec![0x0f, 0xb6, 0xe1],
+            vec![0x0f, 0xb6],
+            vec![0x66, 0x0f, 0x47, 0xc1],
+            vec![0x0f, 0x47, 0x01],
+            vec![0x0f, 0x47, 0xe1],
+            vec![0xf3, 0x0f, 0x47, 0xc1],
+        ] {
+            assert!(decode(&bytes, 0, 0).is_err(), "{bytes:x?}");
+        }
+    }
+    #[test]
     fn conditional_move_exact_register_form_only() {
         for dst in [0u8, 1, 2, 3, 5, 6, 7] {
             for src in 0u8..8 {
@@ -414,6 +483,7 @@ mod tests {
                 assert_eq!(
                     g.nodes[&0].operation,
                     Operation::ConditionalMove(
+                        Condition::Equal,
                         Reg {
                             index: dst,
                             width: 32
