@@ -84,21 +84,37 @@ impl NormalScopeStoreProof {
 /// Exact admitted x86 frame prolog for the original EH4 handler. This does
 /// not prove the following helper calls or exception delivery.
 pub(crate) fn emit_handler_prolog(bytes: &[u8], origin: u32) -> Result<String, String> {
+    emit_handler_prolog_for(
+        bytes,
+        origin,
+        "original_handler_prolog",
+        "CrtLiveFrame<'_,'_>",
+    )
+}
+pub(crate) fn emit_handler_prolog_for(
+    bytes: &[u8],
+    origin: u32,
+    name: &str,
+    frame_type: &str,
+) -> Result<String, String> {
     if bytes != [0x55, 0x8b, 0xec, 0x83, 0xec, 0x1c]
         || origin == 0
         || origin.checked_add(6).is_none()
     {
         return Err("handler prolog instruction contract".into());
     }
-    Ok(r#"fn original_handler_prolog(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu)->RegistryResult<()>{
+    let body = r#"
  frame.validate()?;let entry=CrtCpu::pointer(cpu.r[4])?;
- if cpu.returned||cpu.return_id!=frame.state.activation||cpu.r[4]!=cpu.entry[4]
+ if cpu.returned||cpu.return_id!=frame.active_call()||cpu.r[4]!=cpu.entry[4]
   ||frame.rt.load(entry,32)?!=CrtValue::ProtectedReturn(cpu.return_id){return Err("handler prolog activation");}
  let low=frame.rt.offset(entry,-32)?;frame.rt.valid(low,32)?;
  if !frame.rt.overlapping_tags(low.address(),32).is_empty(){return Err("handler prolog typed stack overlap");}
- frame.epoch.registry.range(low.address(),u64::from(entry.address()))?;
+ frame.stack_range(low.address(),u64::from(entry.address()))?;
  cpu.push(frame.rt,cpu.r[5])?;cpu.r[5]=cpu.r[4];cpu.r[4]=CrtValue::Pointer(low);cpu.flags=CrtFlags::unknown();Ok(())
-}"#.into())
+"#;
+    Ok(format!(
+        "fn {name}(frame:&mut {frame_type},cpu:&mut CrtCpu)->RegistryResult<()>{{{body}}}"
+    ))
 }
 impl super::PrologProof {
     pub(crate) fn guard_proof(
@@ -462,6 +478,8 @@ struct CrtLiveFrame<'a,'e> {
  state:&'a mut CrtLiveDispatchState,
 }
 impl CrtLiveFrame<'_,'_> {
+ fn active_call(&self)->u64{self.state.activation}
+ fn stack_range(&self,low:u32,high:u64)->RegistryResult<()>{self.epoch.registry.range(low,high)}
  fn preflight_bridge(&self,cpu:&CrtCpu,bytes:u32)->RegistryResult<()>{
   self.validate()?;let sp=CrtCpu::pointer(cpu.r[4])?;let source=CrtCpu::pointer(self.interrupted.r[4])?;
   if bytes==0||bytes>256||cpu.returned||cpu.return_id!=self.state.activation||cpu.r[4]!=cpu.entry[4]||sp.cap!=source.cap||sp.address()>=source.address()||self.rt.load(sp,32)?!=CrtValue::ProtectedReturn(cpu.return_id){return Err("normal bridge entry/scratch alias");}

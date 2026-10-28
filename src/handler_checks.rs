@@ -35,6 +35,8 @@ pub(crate) struct PrefixProof {
     #[allow(dead_code)]
     pub(crate) front: String,
     pub(crate) caller: String,
+    #[allow(dead_code)] // Owned CRT entry binding; other slice emitters use call sites.
+    pub(crate) entry: u32,
     pub calls: Vec<CallSite>,
     pub exception_flags_mask: u8,
     pub exception_flags_branch: u32,
@@ -484,6 +486,7 @@ pub(crate) fn prove_prefix(code: &[u8], origin: u32, b: &Bindings) -> Result<Pre
     Ok(PrefixProof {
         front: front[..front_end.ok_or("prefix missing live front")?].into(),
         caller: front,
+        entry: origin,
         calls,
         exception_flags_mask: 0x66,
         exception_flags_branch: flag_branch.ok_or("handler flags branch absent")?,

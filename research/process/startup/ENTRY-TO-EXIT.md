@@ -497,3 +497,47 @@ The same de253f4f push run40737845011 also failed original Windows corpus29
 (PEhashd782a279...) after15seconds; all other jobs passed. Artifact12837473505 is
 retained separately from PR hello artifact12837907867. These are two preserved
 failures, not a passing retry or proof of a shared cause.
+
+
+## Main activation and owned handler entry
+
+The original Main activation at VA 0x40130f (`MOV [EBP-4],0`, seven
+unchanged bytes) now has a separate instruction certificate. Its emitter checks
+the original frame shape and module identity and updates both checked live
+TryLevel storage and its protected metadata before event issuance. Replay,
+post-event use, corrupted prior storage and the independently smaller Inner
+frame reject. This is a separate fragment after an unproved Main-body gap: it
+does not execute or certify the intervening initialization/external calls.
+
+The owned handler-entry binding checks the live event/registration, actual
+callback arguments and protected return, complete disjoint captured-object
+ranges, initialized record fields and captured ESP, plus the original full
+prefix scratch extent. Captured Windows ESP is deliberately different from
+the callback CALL ESP. The same instruction-derived handler prolog lowering
+now supports either the normal or owned storage view. It pushes the actual
+saved EBP and allocates the original 28-byte handler locals without granting
+unknown values scalar knowledge. Owned prefix entry requires the exact record
+and context already bound to the event's checked pointer graph.
+
+An independent same-byte/different-object regression reproduced acceptance by
+the first unpublished binding; matching object identity is now required both
+at binding and later validation. Additional negatives cover unknown captured
+ESP, scalar-for-pointer arguments, wrong establisher, nonzero exception flags,
+typed scratch overlap, post-binding captured-ESP changes and guard corruption.
+A second positive relocates the Main frame and callback stacks while keeping
+the original instruction bytes and frame-relative semantics unchanged.
+
+There are 24 owned native scenarios (the previous 13, plus 11 covering activation
+and prefix entry), 37 inherited normal adapter scenarios and two inherited
+projection controls. These are generated native component executions, not new
+Windows/ELF whole-PE pairs. Five original-Windows prolog/epilog observations
+remain separate, and their unchanged PE/hash provenance is retained.
+
+Next executable connection: adapt the existing decoded normalizer, guard and
+context-check helper calls and full prefix caller to the owned source, preserving
+its distinct identity and actual two-guard Main scope header. The present work
+binds prefix entry and executes its prolog, not the remaining original prefix,
+OS captured-state acquisition, table-driven selection/local unwind or validated
+restoration. Original startup and full rcedit remain rejected. The earlier
+de253f4f hello and corpus29 timeouts remain unresolved; successful later CI does
+not explain either failure.
