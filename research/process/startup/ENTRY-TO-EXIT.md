@@ -595,3 +595,74 @@ The independent host controls and18launch samples passed earlier on that runner.
 The same-head push's authored fixture passed; this neither explains the PR
 failure nor erases it. Both full runs' final Linux jobs were still running at
 inspection. No retry or timeout-threshold relaxation was performed.
+
+
+## Live owned table search to the original global-unwind call
+
+The next connected slice reuses HandlerDispatch's existing semantic proof and
+the shared CRT IR/native emitter. The routing certificate now retains its exact
+original scope-table bytes. Native binding rejects a table with a changed parent
+even if the filter address is unchanged; an independently constructed regression
+protects that proof/input identity. The unchanged Main table has one row with
+parent -2, filter VA0x401333 and landing VA0x40135c. Its complete28bytes and the
+complete350byte handler are extracted and cross-host hashed.
+
+CrtOwnedSearch lowers the original search instructions after the installed pair
+atVA0x402272. It validates actual post-prefix registers/locals, live callback
+return, complete table/code bytes and typed source ownership. Actual table loads
+and indexed LEAs select the filter; only the original proved code-cell binding
+can turn the loaded function value into an executable Module capability. The
+original protected bridge and unchanged filter run, followed by actual partial
+CL stores, TEST/signed branches, record-class comparison and call-argument moves.
+The component stops immediately before the original global-unwind CALL at
+VA0x402332. ECX is the live registration pointer and EDX the live exception
+record. No expected filter result is substituted for instruction execution.
+
+Shared path lowering accepts only a path from a semantic proof, with exact
+instruction boundaries, original legal successors, finite instruction budgets
+and no repeated-PC loop assumptions. Every conditional edge is checked against
+the actual runtime flags before following the proved route. Independent native
+inputs check the valid edge, a disagreeing edge and unknown scalar/flags;
+malformed cuts, wrong successors, repeats, overlapping cuts and unproved RET cuts reject.
+An independent overlapping-short-jump/indirect-call vector reproduced acceptance
+by the first unpublished path utility; a disjoint-span check now rejects it.
+The existing full routing decoder already enforces complete instruction starts;
+this closes a reusable utility gap without claiming an admitted-PE defect. The
+generated runtime has no decoder, solver or dynamic instruction fallback.
+
+Two normal/relocated owned cases now connect prefix through table-derived filter
+search. Seven new negatives cover changed original body/table/filter bytes,
+stale scope, expired callback, scalar table-address alias and wrong owner-frame
+register. Failure preserves prior original effects and never invokes the filter
+when its code binding is wrong. Protected nested bridge/filter calls remain
+distinct from nested exception delivery, which is still unproved. Successful
+search explicitly fails an attempted restoration before its callback executes;
+the saved owned context remains unknown and unchanged.
+
+Counts:42owned scenarios =33inherited +9new. Three independent native edge
+cases are separate. CRT134passed/one ignored =130prior +3inherited routing tests
+newly imported +1new branch-regression test function. Frame171tests remain
+inherited. Five recorded original-Windows wrapper observations and37normal
+adapter/two projection cases remain separate; zero new whole-PE pairs.
+
+The remaining executable bridge is specific: original global-unwind wrapper
+VA0x402840 must be bound to the live registry's younger-frame schedule and
+target-preservation/continuation contract. Original local-unwind/selected
+TryLevel stores must write through checked owned storage and its protected
+metadata, not mutate a detached FrameMemory projection. The selected-transfer
+VA0x402820 and original landing/context preparation must then consume actual
+cleanup/restoration authority and initialized saved state. Current search
+creates none of that authority. Main body/capture/formatter/exit cuts also
+remain open; full startup/rcedit conversion is still rejected.
+
+CI reconciliation for0ab40304: both full Rust runs40787171592/40787165663
+completed SUCCESS. Dedicated startup40787165757 failed original-entry observer
+compilation at60seconds before new cross-host handler cases ran. Job123163126584
+retains the exact cl command/TimeoutExpired; artifact12858954284 contains
+observer.exe and observer.obj, archive SHA256
+d4e7215c8bb6ddf3f0148edcba812745b9fe48e5337b8e68bde10d0d1d324183.
+The archive is retained locally. Binary output existing does not prove compiler
+completion or establish why it timed out. No retry or threshold relaxation.
+Earlier f7a0968e PR40785300452 is now terminal FAILURE(corpus10); its push
+40785293650 and dedicated40785293748 completed SUCCESS. All earlier original
+Windows timeout causes remain unresolved.

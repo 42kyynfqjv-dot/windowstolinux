@@ -74,6 +74,8 @@ def check(original, observation, out, compare=None):
     (out/'Inner-prolog.bin').write_bytes(mapped(image, 0x4010c0, 48, executable=True))
     (out/'main-activate.bin').write_bytes(mapped(image, 0x40130f, 7, executable=True))
     (out/'Main-scope-header.bin').write_bytes(mapped(image, 0x41b218, 16))
+    (out/'Main-scope-table.bin').write_bytes(mapped(image, 0x41b218, 28))
+    (out/'handler-complete.bin').write_bytes(mapped(image, 0x402210, 350, executable=True))
     # These new native cases execute original outer FILE scope code with an
     # explicitly supplied driver. They are NOT additional Windows comparisons.
     base, _ = pe_sections(image)
@@ -119,6 +121,10 @@ def check(original, observation, out, compare=None):
     (out/'owned-main-cargo.stdout').write_bytes(owned_run.stdout)
     (out/'owned-main-cargo.stderr').write_bytes(owned_run.stderr)
     if owned_run.returncode or b'1 passed' not in owned_run.stdout: raise ValueError('owned Main live storage checks failed')
+    edges_run=subprocess.run(['cargo','test','--locked','--example','crt_stream','instruction_path_checks_reject_unknown_flags_and_disagreeing_original_edges'],env=env,capture_output=True,timeout=180)
+    (out/'path-edge-cargo.stdout').write_bytes(edges_run.stdout)
+    (out/'path-edge-cargo.stderr').write_bytes(edges_run.stderr)
+    if edges_run.returncode or b'1 passed' not in edges_run.stdout: raise ValueError('native branch obligation checks failed')
     expected = [[w['return_eax'], w['return_flags'], w['caller_stack_delta'], *w['saved']] for w in observed]
     actual = [[int(n) for n in line.split()] for line in (out/'normal-wrapper-results.txt').read_text().splitlines()]
     if actual != expected:
@@ -141,7 +147,10 @@ def check(original, observation, out, compare=None):
                   inner_prolog_sha256=sha((out/'Inner-prolog.bin').read_bytes()),
                   main_activation_sha256=sha((out/'main-activate.bin').read_bytes()),
                   main_scope_header_sha256=sha((out/'Main-scope-header.bin').read_bytes()),
-                  owned_frame_native_cases=33,
+                  owned_frame_native_cases=42,
+                  branch_obligation_native_cases=3,
+                  main_scope_table_sha256=sha((out/'Main-scope-table.bin').read_bytes()),
+                  complete_handler_sha256=sha((out/'handler-complete.bin').read_bytes()),
                   observation_sha256=sha((observation/'report.json').read_bytes()),
                   vectors_sha256=sha(vector_bytes), rust_sha256=source_hash, command=command,
                   comparisons=5, whole_pe_translation_pairs=0,
@@ -152,7 +161,7 @@ def check(original, observation, out, compare=None):
                   scope='Live registry fixture; body EAX/flags inputs; original stack/FS/saved-state restoration only')
     if compare:
         previous = json.loads(compare.read_text())
-        for key in ['pe_sha256', 'helper_sha256', 'epilog_sha256', 'handler_scope_store_sha256', 'handler_prolog_sha256', 'handler_installer_sha256', 'event_normalizer_sha256', 'guard_validator_sha256', 'security_check_sha256', 'scope_header_sha256', 'prefix_sha256', 'context_helper_sha256', 'filter_bridge_sha256', 'main_filter_sha256', 'main_prolog_sha256', 'inner_prolog_sha256', 'main_activation_sha256', 'main_scope_header_sha256', 'observation_sha256', 'vectors_sha256', 'rust_sha256', 'file_scope_code_sha256', 'file_scope_imports']:
+        for key in ['pe_sha256', 'helper_sha256', 'epilog_sha256', 'handler_scope_store_sha256', 'handler_prolog_sha256', 'handler_installer_sha256', 'event_normalizer_sha256', 'guard_validator_sha256', 'security_check_sha256', 'scope_header_sha256', 'prefix_sha256', 'context_helper_sha256', 'filter_bridge_sha256', 'main_filter_sha256', 'main_prolog_sha256', 'inner_prolog_sha256', 'main_activation_sha256', 'main_scope_header_sha256', 'main_scope_table_sha256', 'complete_handler_sha256', 'observation_sha256', 'vectors_sha256', 'rust_sha256', 'file_scope_code_sha256', 'file_scope_imports']:
             if previous[key] != result[key]:
                 raise ValueError('wrapper cross-host provenance differs: '+key)
         result['matching_windows_native_report'] = str(compare)

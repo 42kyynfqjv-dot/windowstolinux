@@ -222,3 +222,11 @@ mod unwind_bridges;
 #[allow(dead_code)]
 #[path = "../src/crt_owned_frame.rs"]
 mod crt_owned_frame;
+
+#[cfg(test)]
+#[path = "../src/crt_owned_search.rs"]
+mod crt_owned_search;
+#[cfg(test)]
+#[allow(dead_code)]
+#[path = "../src/handler_dispatch.rs"]
+mod handler_dispatch;

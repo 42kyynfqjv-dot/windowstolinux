@@ -106,6 +106,8 @@ pub(crate) struct InstructionStep {
 }
 
 pub(crate) struct DispatchProof {
+    #[allow(dead_code)] // Retained for native live-source table binding.
+    pub source_table: Vec<u8>,
     pub actions: Vec<Action>,
     pub instructions: Vec<InstructionStep>,
     pub final_level: i32,
@@ -905,6 +907,7 @@ pub(crate) fn prove_dispatch(
         })
         .collect();
     Ok(DispatchProof {
+        source_table: table_bytes.to_vec(),
         actions,
         instructions,
         final_level: s.level,

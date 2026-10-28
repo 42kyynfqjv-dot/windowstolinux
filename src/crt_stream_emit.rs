@@ -105,6 +105,98 @@ pub(crate) fn emit_graph(
     let body = emit_body(graph, call, roles, step_budget)?;
     Ok(format!("fn {name}(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,lease:CrtLock,backend:&mut impl CrtBackend)->Result<CrtValue,&'static str>{{{body}}}"))
 }
+/// A path established by a separate semantic proof, not sampled execution.
+/// Original conditional edges are still checked at runtime before lowering the
+/// branch. Only a bound terminal call may have an explicit unexecuted cut.
+#[allow(dead_code)] // Used by the connected owned handler compiler.
+pub(crate) struct PathStep<'a> {
+    pub pc: u32,
+    pub bytes: &'a [u8],
+    pub next: Option<u32>,
+}
+#[allow(dead_code)] // Used by the connected owned handler compiler.
+pub(crate) fn emit_proved_path(
+    path: &[PathStep<'_>],
+    call: impl FnMut(u32, Target) -> Result<String, String>,
+    roles: &BTreeMap<u32, String>,
+    mut before: impl FnMut(u32, &Op) -> Result<String, String>,
+) -> Result<String, String> {
+    if path.is_empty() || path.len() > 2048 {
+        return Err("CRT path: instruction budget".into());
+    }
+    let mut nodes: BTreeMap<u32, super::crt_stream_ir::Node> = BTreeMap::new();
+    let mut expected = BTreeMap::new();
+    let mut end = 0;
+    for (index, step) in path.iter().enumerate() {
+        let mut node = Graph::decode_instruction(step.bytes, step.pc)?;
+        if nodes.contains_key(&step.pc) {
+            return Err("CRT path: repeated instruction requires loop proof".into());
+        }
+        let instruction_end = step.pc + node.length;
+        if nodes
+            .range(..step.pc)
+            .next_back()
+            .is_some_and(|(&pc, previous)| pc + previous.length > step.pc)
+            || nodes.range(step.pc..instruction_end).next().is_some()
+        {
+            return Err("CRT path: overlapping instruction cuts".into());
+        }
+        if index + 1 == path.len() {
+            if step.next.is_some() || !matches!(node.op, Op::Call(_)) {
+                return Err("CRT path: terminal call cut".into());
+            }
+        } else if step.next != Some(path[index + 1].pc)
+            || !node.successors.contains(&path[index + 1].pc)
+        {
+            return Err("CRT path: original successor mismatch".into());
+        }
+        end = end.max(step.pc + node.length);
+        expected.insert(step.pc, step.next);
+        node.successors = step.next.into_iter().collect();
+        nodes.insert(step.pc, node);
+    }
+    let graph = Graph {
+        origin: path[0].pc,
+        end,
+        nodes,
+    };
+    emit_body_with_hooks(
+        &graph,
+        call,
+        roles,
+        path.len() as u32,
+        |_, _| Err("CRT path: unbound thread effect".into()),
+        |pc, op| {
+            let branch = match op {
+                Op::Ordinary(Operation::Branch(c, t)) => Some((condition(*c), *t)),
+                Op::SignedBranch {
+                    condition: c,
+                    target,
+                } => Some((
+                    match c {
+                        SignedCondition::Less => 6,
+                        SignedCondition::LessEqual => 7,
+                        SignedCondition::Greater => 8,
+                        SignedCondition::GreaterEqual => 9,
+                        SignedCondition::Sign => 10,
+                        SignedCondition::NotSign => 11,
+                    },
+                    *target,
+                )),
+                _ => None,
+            };
+            let mut code = String::new();
+            if let Some((kind, target)) = branch {
+                let next = expected[&pc].ok_or("CRT path: branch without proved edge")?;
+                let fallthrough = pc + graph.nodes[&pc].length;
+                code.push_str(&format!("if (if cpu.condition({kind})?{{{target}u32}}else{{{fallthrough}u32}})!={next}u32{{return Err(\"CRT branch disagrees with semantic proof\");}}"));
+            }
+            code.push_str(&before(pc, op)?);
+            Ok(code)
+        },
+        |_, _| Err("CRT path: unproved return".into()),
+    )
+}
 /// Lexical lowering for a certified caller with its own typed lifecycle token.
 /// Atomic effects still require an actual `lease`; no dummy lock is introduced.
 pub(crate) fn emit_body(

@@ -382,6 +382,37 @@ pub(crate) fn normalize(i: &Instruction, raw: &[u8]) -> Result<Op, String> {
     extended(i, raw, &[])
 }
 impl Graph {
+    /// Structural lowering of one exactly bounded original instruction. This
+    /// supplies no reachability, ownership or call-effect proof.
+    #[allow(dead_code)] // Shared bounded-path compiler; not all standalone slices use it.
+    pub(crate) fn decode_instruction(raw: &[u8], origin: u32) -> Result<Node, String> {
+        if origin == 0
+            || raw.is_empty()
+            || raw.len() > 15
+            || origin.checked_add(raw.len() as u32).is_none()
+        {
+            return Err("CRT IR: instruction cut extent".into());
+        }
+        let mut decoder = Decoder::with_ip(32, raw, u64::from(origin), DecoderOptions::NONE);
+        let i = decoder.decode();
+        if i.is_invalid() || i.len() != raw.len() {
+            return Err("CRT IR: instruction cut boundary".into());
+        }
+        let op = extended(&i, raw, &[])?;
+        let successors = match &op {
+            Op::Ordinary(Operation::Return) | Op::ReturnPop(_) => vec![],
+            Op::Ordinary(Operation::Jump(t)) => vec![*t],
+            Op::Ordinary(Operation::Branch(_, t)) | Op::SignedBranch { target: t, .. } => {
+                vec![i.next_ip32(), *t]
+            }
+            _ => vec![i.next_ip32()],
+        };
+        Ok(Node {
+            length: i.len() as u32,
+            op,
+            successors,
+        })
+    }
     pub fn decode(code: &[u8], origin: u32) -> Result<Self, String> {
         Self::decode_with_tables(code, origin, &[])
     }
