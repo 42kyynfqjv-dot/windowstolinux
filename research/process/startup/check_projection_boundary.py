@@ -1,4 +1,4 @@
-"""Reproduce the unresolved projection/live-storage boundary; no PE translation."""
+"""Retain the projection counterexample and verify the live adapter; no PE translation."""
 import argparse
 import hashlib
 import json
@@ -31,11 +31,14 @@ println!("projected=-2 live=0 suspended=true");'''
     result = subprocess.run([str(binary.resolve()), 'pending'], capture_output=True, check=True, timeout=15)
     if result.stdout.splitlines() != [b'projected=-2 live=0 suspended=true']*2 or result.stderr:
         raise ValueError('projection boundary expectations differ')
-    report = dict(kind='native unresolved-boundary reproduction; no new translated pairs',
+    live = subprocess.run([str(binary.resolve()), 'live'], capture_output=True, check=True, timeout=15)
+    if live.stdout or live.stderr:
+        raise ValueError('live adapter regression emitted unexpected output')
+    report = dict(kind='native projection counterexample and live adapter regression; no new translated pairs',
                   input_source_sha256=hashlib.sha256(original.encode()).hexdigest(),
                   probe_source_sha256=hashlib.sha256(text.encode()).hexdigest(),
-                  native_cases=2, whole_pe_translation_pairs=0,
-                  finding='projected TryLevel writes do not reach suspended CRT byte storage')
+                  projection_cases=2, live_adapter_cases=24, whole_pe_translation_pairs=0,
+                  finding='detached projection still has no storage authority; checked live adapter writes through, including nested helper cleanup')
     (output/'report.json').write_text(json.dumps(report, indent=2)+'\n')
     print(json.dumps(report))
 

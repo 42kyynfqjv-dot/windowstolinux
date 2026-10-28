@@ -91,3 +91,45 @@ unchanged artifact. A supplied callback or a modified projected image cannot
 stand in for that entry-to-exit result. This scope should replace further small
 standalone receipt wrappers; it is a concrete complex integration beyond this
 Sol review. Keep the current PR draft and admission blocked while incomplete.
+
+## Live storage implementation after the projection experiment
+
+The pending-event path now has `CrtLiveFrame`, which borrows the actual CRT
+runtime, interrupted activation, normal-frame binding and delivery identity.
+Ordinary word reads/writes check the original frame's complete range and exclude
+record, saved-register, guard and saved-ESP words. Typed pointers remain typed;
+unknown scalar bits remain unknown. No mutable `FrameImage` is committed back.
+A decoded original `MOV [establisher+12], register` writes TryLevel immediately.
+The original instruction at VA 0x402355 is extracted from the same unchanged
+unwind PE by `check_normal_wrapper.py`; independent register permutations and
+malformed forms exercise the lowering separately.
+
+`execute_context_checked_live_handler` connects the existing decoded context
+check and owned captured objects to this storage view. Native helper nesting
+shares the same pending delivery and scope cursor, with distinct protected CALL
+identities, a 32-depth/4096-call cap and activation-local scratch bounds. It never
+revives the outer finished Machine or clears normal-call suspension. The actual
+original FILE cleanup graph now runs in that composition, reading its original
+frame argument and invoking the checked unlock effect. Success releases the
+lease; malformed cleanup arguments preserve the held lease and preceding stores.
+A failed nested call poisons delivery even if a callback tries to swallow it.
+Handler receipts also bind the resulting live scope value, rejecting a later
+alias change before result consumption.
+
+The native harness contains 24 live-adapter cases, including protected/partial/
+out-of-range accesses, unknown values, stale event/frame identity, expired
+captured storage, aliased call scratch, resource limits, nested cleanup failures
+and post-return scope mutation. Two earlier projection cases remain as a negative
+control: an ordinary detached FrameImage still has no live-storage authority.
+These are component regressions, not 26 Windows comparisons. The five existing
+original-Windows wrapper observations remain a separate prolog/epilog comparison
+with supplied body results. No new complete-PE translation is claimed.
+
+Remaining integration is concrete: the table-driven `dispatch_emit` path still
+uses owned FrameId/FrameImage and cannot be passed a NormalFrameId by coercion.
+Route its original search/local-unwind action sequence through this live adapter,
+then bind its selected landing to a proved normal-frame restoration operation.
+The current returned scalar/level receipt deliberately cannot resume the guest.
+Captured-state acquisition, borrowed-chain containment and a second exception
+raised during delivery also remain unproved; native nested helper calls do not
+establish those contracts. Keep full startup/rcedit admission rejected.

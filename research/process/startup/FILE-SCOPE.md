@@ -441,3 +441,20 @@ outlined in ENTRY-TO-EXIT.md. The new Linux architecture probe records two nativ
 cases and zero translation pairs; it protects against assuming FrameMemory
 writes already reach a suspended CRT frame. Existing14normal component tests
 passed (one artifact-only observation ignored). No production support expanded.
+
+### Pending-delivery live storage and cleanup composition
+
+The live pending-event harness now connects checked captured-object entry,
+original scope-store instruction lowering and the existing original FILE cleanup
+graph to the same CRT storage. It verifies read-back before callback completion,
+three-level helper calls, protected returns, cleanup lock effects and preservation
+of earlier stores on failure. Handler completion remains distinct from nonlocal
+restoration. The normal epoch stays suspended, and the finished outer Machine's
+saved context is unchanged. Twenty-four native cases plus two retained projection
+counterexamples are component evidence; they add no Windows/ELF whole-PE pairs.
+
+The first implementation's adversarial scratch-alias case failed: it allowed a
+nested helper stack at the interrupted CALL area. The checked implementation now
+requires the current handler activation identity and a stack no higher than its
+own entry, in the same checked stack capability. The regression remains mandatory.
+Historical original-Windows hangs remain unresolved.

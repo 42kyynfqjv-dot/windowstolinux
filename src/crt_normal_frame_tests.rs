@@ -285,6 +285,99 @@ fn file_scope_failure(){
  }
 }
 
+fn live_dispatch(){
+ for mode in 0..24 {
+  let(m,mut r,main,mut permit)=fixture_with_extra(&[(0x410000,0x420000)]);let mut rt=runtime(&r);let outer=m.owned_context;
+  let result=r.with_normal_calls(&m,&mut permit,&main,|e|{
+   let mut c=cpu(&mut rt,0xe000,71);let mut b=CrtNormalBinding::bind(&rt,&c,e,epilog_run_layout())?;start(&mut rt,&mut c,e,&mut b,99)?;
+   rt.store(b.at(&rt,b.layout.level)?,32,CrtValue::scalar(0))?;
+   let marker=b.at(&rt,-32)?;rt.store(marker,32,CrtValue::scalar(91))?;
+   for arg in [0,0,0,0xe0420042]{c.push(&mut rt,CrtValue::scalar(arg))?;}
+   let mut event=CrtNormalException::issue(&mut rt,&mut c,e,&b,raise_site())?;let saved=c.r;
+   let record=rt.map_region(0x50000,80,CrtRegionKind::Context,None)?;let context=rt.map_region(0x51000,716,CrtRegionKind::Context,None)?;
+   for(offset,value)in [(0,event.code),(4,0),(8,0),(16,0)]{rt.store(rt.offset(record,offset)?,32,CrtValue::scalar(value))?;}
+   rt.store(rt.offset(context,0xc4)?,32,CrtValue::scalar(0x9500))?;
+   let objects=CrtNormalObjects::bind(&event,&rt,e,record,context)?;
+   let mut d=cpu(&mut rt,0xc000,200);let sp=rt.resolve_absolute(0xbfc0,CrtRegionKind::Stack)?;d.r[4]=CrtValue::Pointer(sp);
+   for(i,v)in [CrtValue::Pointer(record),CrtValue::Pointer(b.at(&rt,b.layout.record)?),CrtValue::Pointer(context),CrtValue::scalar(0)].into_iter().enumerate(){rt.store(rt.offset(sp,i as i64*4)?,32,v)?;}
+   let file=rt.file();let mut lease=None;
+   if mode==18||mode==19{
+    lease=Some(rt.lock(rt.thread)?);let holder=rt.map_region(0x52000,4,CrtRegionKind::Result,None)?;
+    rt.store(holder,32,if mode==19{CrtValue::scalar(0)}else{CrtValue::Pointer(file)})?;
+    rt.store(b.at(&rt,12)?,32,CrtValue::Pointer(holder))?;
+   }
+   rt.map_region(0x415128,4,CrtRegionKind::Module,Some(&0u32.to_le_bytes()))?;
+   if mode==20{event.generation+=1;}
+   if mode==21{event.frame.generation+=1;}
+   if mode==22{rt.memory.release(context.cap,context.owner).map_err(|_|"test release")?;}
+   let result=event.execute_context_checked_live_handler(&objects,&mut rt,&c,e,&b,&mut d,0x401900,|view,h|{
+    assert!(!(20..=22).contains(&mode),"invalid event/object reached callback");
+    assert_eq!(view.read_u32(-28)?,91);view.write_u32(-28,92)?;
+    // A typed alias observes immediate bytes, before callback completion.
+    assert_eq!(view.rt.load(marker,32)?.known_scalar()?,92);
+    if mode==23{
+     assert!(view.call(h,0x401910,|child,_|{child.write_u32(-28,95)?;Err("nested failure cannot be swallowed")}).is_err());
+     return Ok(CrtValue::scalar(0));
+    }
+    if mode==1{return view.write_u32(-16,0).map(|_|CrtValue::scalar(0));} // predecessor
+    if mode==2{return view.write_u32(-32,0).map(|_|CrtValue::scalar(0));} // saved EBX
+    if mode==3{return view.write_u32(-27,0).map(|_|CrtValue::scalar(0));} // partial word
+    if mode==4{return view.write_u32(i32::MAX,0).map(|_|CrtValue::scalar(0));}
+    if mode==5{view.write(-28,CrtValue::Scalar{bits:0x42,known:255})?;return view.read_u32(-28).map(CrtValue::scalar);}
+    if mode==6{view.rt.store(b.at(view.rt,b.layout.level)?,32,CrtValue::scalar(7))?;return view.validate().map(|_|CrtValue::scalar(0));}
+    if mode==7{view.state.calls=4096;assert!(view.call(h,0x401910,|_,_|panic!("budget bypass")).is_err());h.r[0]=CrtValue::scalar(0);return h.finish(view.rt);}
+    if mode==8{view.state.depth=32;return view.call(h,0x401910,|_,_|panic!("depth bypass"));}
+    if mode==9{view.write_stack(-20,-28)?;assert_eq!(view.read(-20)?,CrtValue::Pointer(marker));return view.write_u32(-24,0).map(|_|CrtValue::scalar(0));} // saved ESP
+    if mode==10{h.r[4]=view.interrupted.r[4];return view.call(h,0x401910,|_,_|panic!("alias bypass"));}
+    if mode==11{return view.call(h,0x600000,|_,_|panic!("module bypass"));}
+    h.r[0]=CrtValue::Pointer(b.at(view.rt,b.layout.record)?);let ebx=h.r[3];h.r[3]=CrtValue::scalar((-2i32)as u32);
+    if mode==12{h.r[0]=CrtValue::Pointer(marker);}
+    if mode==13{h.r[3]=CrtValue::Scalar{bits:0,known:255};}
+    original_scope_store(view,h)?;h.r[3]=ebx;
+    assert_eq!(view.rt.load(b.at(view.rt,b.layout.level)?,32)?.known_scalar()?,(-2i32)as u32);
+    assert_eq!(view.event.dispatch_source(view.rt,view.interrupted,view.epoch,view.binding)?.try_level,-2);
+    if mode==14{return view.store_try_level(0,1).map(|_|CrtValue::scalar(0));}
+    view.call(h,0x401910,|child,n|{
+     assert_eq!(child.state.depth,2);assert_eq!(child.read_u32(-28)?,92);
+     n.r[1]=CrtValue::Pointer(b.at(child.rt,b.layout.record)?);n.r[2]=CrtValue::scalar(1);
+     permuted_scope_store(child,n)?;child.write_u32(-28,93)?;
+     // A deeper cleanup/helper sees both preceding original stores.
+     child.call(n,0x401920,|deep,k|{
+      assert_eq!(deep.state.depth,3);assert_eq!(deep.read_u32(-28)?,93);
+      deep.store_try_level(1,-2)?;deep.write_u32(-28,94)?;
+      if mode==15{return Err("independent nested cleanup failure");}
+      k.r[0]=CrtValue::scalar(1);k.finish(deep.rt)
+     })?;
+     n.r[0]=CrtValue::scalar(1);n.finish(child.rt)
+    })?;
+    assert_eq!(view.state.depth,1);assert_eq!(view.read_u32(-28)?,94);
+    if mode==18||mode==19{
+     let original_bp=h.r[5];h.r[5]=CrtValue::Pointer(b.at(view.rt,b.layout.bp)?);
+     view.call(h,0x404694,|cleanup,k|file_run_cleanup(cleanup.rt,k,file,&mut lease))?;
+     h.r[5]=original_bp;assert!(lease.is_none());
+    }
+    if mode==16{view.rt.store(b.at(view.rt,b.layout.scope_slot)?,32,CrtValue::scalar(0))?;}
+    h.r[0]=CrtValue::scalar(1);h.finish(view.rt)
+   });
+   assert_eq!(c.r,saved);
+   if mode==0||mode==17||mode==18{
+    let receipt=result?;
+    assert_eq!(rt.load(marker,32)?.known_scalar()?,94);assert_eq!(receipt.level,-2);
+    if mode==17{rt.store(b.at(&rt,b.layout.level)?,32,CrtValue::scalar(0))?;assert!(event.take_handler_result(receipt,&rt,&c,e,&b).is_err());}
+    else {assert_eq!(event.take_handler_result(receipt,&rt,&c,e,&b)?,1);assert!(e.state().is_err());}
+   }else if (20..=22).contains(&mode){
+    assert!(result.is_err());assert_eq!(event.delivery,CrtNormalDelivery::Pending);assert_eq!(rt.load(marker,32)?.known_scalar()?,91);
+   }else{
+    assert!(result.is_err(),"mode {mode}");assert_eq!(event.delivery,CrtNormalDelivery::Failed);
+    if mode!=5{assert_eq!(rt.load(marker,32)?.known_scalar()?,if mode==23{95}else if mode==15||mode==16||mode==19{94}else{92});}
+   }
+   if mode==19{rt.check_lock(lease.unwrap())?;}if mode==18{assert!(rt.locks.is_empty());}
+   Err::<(),_>("live handler effects still require containment/restoration proof")
+  });
+  assert!(result.is_err());assert_eq!(m.owned_context,outer);
+ }
+}
+
 fn pending_normal_exception(){
  for flags in [0u32,1]{
   let(m,mut r,main,mut permit)=fixture_with_extra(&[(0x410000,0x420000)]);let mut rt=runtime(&r);let original=m.owned_context;
@@ -360,9 +453,9 @@ fn pending_handler_activation(){
     assert!(pending.execute_handler(&mut rt,&c,e,&b,&mut dispatcher,0x401900,|_,_|panic!("replayed")).is_err());
     match mode{7=>receipt.generation+=1,8=>receipt.epoch+=1,9=>receipt.identity.owner+=1,
      12=>rt.store(b.at(&rt,b.layout.scope_slot)?,32,CrtValue::scalar(0))?,13=>receipt.frame.generation+=1,_=>{}}
-    let consumed=pending.take_handler_result(receipt,&rt,&c,e,&b);
+    let receipt_level=receipt.level;let consumed=pending.take_handler_result(receipt,&rt,&c,e,&b);
     if mode==0{assert_eq!(consumed?,1);assert_eq!(pending.delivery,CrtNormalDelivery::ResultTaken);
-     let replay=CrtNormalHandlerReturn{identity:pending.identity,epoch:pending.epoch,frame:pending.frame,generation:pending.generation,value:CrtValue::scalar(1)};
+     let replay=CrtNormalHandlerReturn{identity:pending.identity,epoch:pending.epoch,frame:pending.frame,generation:pending.generation,level:receipt_level,value:CrtValue::scalar(1)};
      assert!(pending.take_handler_result(replay,&rt,&c,e,&b).is_err());
     }else{assert!(consumed.is_err());assert_eq!(pending.delivery,CrtNormalDelivery::Failed);}
    }else{assert!(result.is_err());assert_eq!(pending.delivery,if mode==4||mode==6{CrtNormalDelivery::Pending}else{CrtNormalDelivery::Failed});}
@@ -429,7 +522,7 @@ fn reject_normal_exception(){
   }).unwrap();
  }
 }
-fn main(){match std::env::args().nth(1).unwrap().as_str(){"objects"=>captured_objects(),"handler"=>pending_handler_activation(),"pending"=>pending_normal_exception(),"pending-reject"=>reject_normal_exception(),"file"=>file_scope_normal(),"file-failure"=>file_scope_failure(),"nested"=>nested_actual(),"mutations"=>mutations(),"consumed"=>consumed_mutation(),"failure"=>body_failure(),"certificate"=>wrong_certificate(),"observed"=>observed(),_=>panic!("case")}}
+fn main(){match std::env::args().nth(1).unwrap().as_str(){"live"=>live_dispatch(),"objects"=>captured_objects(),"handler"=>pending_handler_activation(),"pending"=>pending_normal_exception(),"pending-reject"=>reject_normal_exception(),"file"=>file_scope_normal(),"file-failure"=>file_scope_failure(),"nested"=>nested_actual(),"mutations"=>mutations(),"consumed"=>consumed_mutation(),"failure"=>body_failure(),"certificate"=>wrong_certificate(),"observed"=>observed(),_=>panic!("case")}}
 "#;
 
 fn run(case: &str) {
@@ -451,9 +544,12 @@ fn run(case: &str) {
         let raise = super::normal_frame::NormalRaiseCallProof::prove(&[0xff,0x15,0,0x50,0x41,0],0x401800,0x415000).unwrap().emit_site();
         let context_code=bytes_hex("558bec813d28514100f91b4000741f648b0d180000008b45088b80c40000003b410872053b410476056a0d59cd295dc3");
         let context_proof=crate::handler_context::prove_context_check(&context_code,0x402877,0x415128).unwrap();
+        let scope_bytes=match std::env::var("W2L_EH4_CODE") { Ok(path)=>std::fs::read(std::path::Path::new(&path).join("handler-scope-store.bin")).unwrap(), Err(_)=>vec![0x89,0x58,0x0c] };
+        let scope_store=super::normal_frame::NormalScopeStoreProof::prove(&scope_bytes,0x402355).unwrap().emit("original_scope_store");
+        let permuted_store=super::normal_frame::NormalScopeStoreProof::prove(&[0x89,0x51,0x0c],0x402600).unwrap().emit("permuted_scope_store");
         let context_types=crate::handler_context::EMITTED_TYPES;
         let context_check=context_proof.normal_object_check();
-        let source = format!("#![allow(dead_code)]\nmod guest_memory{{{memory}}}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{fixture}\n{file_scope}\n{context_types}\n{context_check}\nfn raise_site()->CrtNormalRaiseSite{{{{{raise}}}}}\n{CASES}",
+        let source = format!("#![allow(dead_code)]\nmod guest_memory{{{memory}}}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{fixture}\n{file_scope}\n{context_types}\n{context_check}\n{scope_store}\n{permuted_store}\nfn raise_site()->CrtNormalRaiseSite{{{{{raise}}}}}\n{CASES}",
             include_str!("linker/unwind_runtime.rs").replace("//!", "//"),
             emitted_literal(include_str!("frame_proof.rs")),emitted_literal(include_str!("thread_registry.rs")),
             crate::crt_stream_runtime::EMITTED_TYPES,crate::crt_stream_cpu::EMITTED_TYPES,
@@ -671,4 +767,25 @@ fn suspended_handler_call_returns_owned_receipt_and_preserves_failures() {
 #[test]
 fn captured_objects_bind_live_handler_arguments_without_inventing_registers() {
     run("objects");
+}
+
+#[test]
+fn live_handler_storage_nested_calls_and_failure_effects_are_coherent() {
+    run("live");
+}
+#[test]
+fn scope_store_decoder_rejects_partial_prefixed_and_unbound_operands() {
+    use super::normal_frame::NormalScopeStoreProof as Proof;
+    for code in [
+        vec![0x66, 0x89, 0x58, 12],
+        vec![0x89, 0x58, 8],
+        vec![0x89, 0xd8],
+        vec![0x89, 0x58, 12, 0x90],
+        vec![0x89, 0x18],
+        vec![0x89, 0x60, 12],
+        vec![0x89, 0x58],
+    ] {
+        assert!(Proof::prove(&code, 0x402500).is_err());
+    }
+    assert!(Proof::prove(&[0x89, 0x58, 12], u32::MAX - 1).is_err());
 }

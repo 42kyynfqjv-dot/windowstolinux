@@ -37,6 +37,50 @@ impl NormalRaiseCallProof {
         )
     }
 }
+/// Lower one original MOV [establisher+12], register into the live frame.
+/// Scope-table/control-flow proof remains the caller's obligation. This proof
+/// establishes the memory/register operation, not which scope may be selected.
+pub(crate) struct NormalScopeStoreProof {
+    base: usize,
+    source: usize,
+}
+impl NormalScopeStoreProof {
+    pub(crate) fn prove(bytes: &[u8], origin: u32) -> Result<Self, String> {
+        use iced_x86::{Code, Decoder, DecoderOptions, OpKind, Register};
+        let mut decoder = Decoder::with_ip(32, bytes, u64::from(origin), DecoderOptions::NONE);
+        let i = decoder.decode();
+        let reg = |r| match r {
+            Register::EAX => Some(0),
+            Register::ECX => Some(1),
+            Register::EDX => Some(2),
+            Register::EBX => Some(3),
+            Register::EBP => Some(5),
+            Register::ESI => Some(6),
+            Register::EDI => Some(7),
+            _ => None,
+        };
+        if origin == 0
+            || origin.checked_add(bytes.len() as u32).is_none()
+            || i.code() != Code::Mov_rm32_r32
+            || i.op0_kind() != OpKind::Memory
+            || i.op1_kind() != OpKind::Register
+            || decoder.position() != bytes.len()
+            || bytes.len() != 3
+            || bytes[0] != 0x89
+            || i.memory_index() != Register::None
+            || i.memory_displacement32() != 12
+        {
+            return Err("normal scope store exact word instruction".into());
+        }
+        Ok(Self {
+            base: reg(i.memory_base()).ok_or("normal scope store base")?,
+            source: reg(i.op1_register()).ok_or("normal scope store source")?,
+        })
+    }
+    pub(crate) fn emit(&self, name: &str) -> String {
+        format!("fn {name}(frame:&mut CrtLiveFrame<'_,'_>,cpu:&CrtCpu)->RegistryResult<()>{{frame.store_level_operand(cpu.r[{}],cpu.r[{}])}}",self.base,self.source)
+    }
+}
 pub(crate) const EMITTED_TYPES: &str = r#"
 #[derive(Clone,Debug,PartialEq,Eq)]
 struct CrtNormalLayout {
@@ -211,7 +255,7 @@ impl CrtNormalBinding {
 struct CrtNormalRaiseSite { instruction:u32,continuation:u32,iat:u32 }
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 enum CrtNormalDelivery { Pending,Calling,Returned,ResultTaken,Failed }
-struct CrtNormalHandlerReturn { identity:RegistryIdentity,epoch:u64,frame:NormalFrameId,generation:u64,value:CrtValue }
+struct CrtNormalHandlerReturn { identity:RegistryIdentity,epoch:u64,frame:NormalFrameId,generation:u64,level:i32,value:CrtValue }
 /// Explicit captured-state input cut. Construction validates supplied objects;
 /// it never creates captured registers from guest CALL state.
 struct CrtNormalObjects {
@@ -305,13 +349,7 @@ impl CrtNormalException {
   if frame.next!=0{return Err("normal exception partial epilog source");}
   NormalCallEpoch::check_image(frame,&image)?;Ok(image)
  }
- /// Component boundary: arguments and callback code require an enclosing
- /// dispatch proof. This does not synthesize an OS captured CONTEXT, select a
- /// disposition or authorize resuming the interrupted guest CALL.
- fn execute_handler<F>(&mut self,rt:&mut CrtStreamRuntime,interrupted:&CrtCpu,epoch:&mut NormalCallEpoch<'_>,binding:&CrtNormalBinding,dispatcher:&mut CrtCpu,continuation:u32,body:F)->RegistryResult<CrtNormalHandlerReturn>
- where F:FnOnce(&mut CrtStreamRuntime,&mut CrtCpu)->RegistryResult<CrtValue>{
-  if self.delivery!=CrtNormalDelivery::Pending{return Err("normal exception handler replay/phase");}
-  let before=self.dispatch_source(rt,interrupted,epoch,binding)?;
+ fn check_handler_stack(&self,rt:&CrtStreamRuntime,interrupted:&CrtCpu,epoch:&NormalCallEpoch<'_>,dispatcher:&CrtCpu)->RegistryResult<()>{
   let sp=CrtCpu::pointer(dispatcher.r[4])?;let interrupted_sp=CrtCpu::pointer(interrupted.r[4])?;
   if sp.kind!=CrtRegionKind::Stack||sp.cap!=interrupted_sp.cap||sp.address()%4!=0
    ||sp.address().checked_add(16).is_none_or(|end|end>interrupted_sp.address()){
@@ -319,12 +357,22 @@ impl CrtNormalException {
   }
   let low=rt.offset(sp,-4)?;rt.valid(low,20)?;epoch.registry.range(low.address(),u64::from(sp.address())+16)?;
   for i in 0..4{let value=rt.load(rt.offset(sp,i*4)?,32)?;if matches!(value,CrtValue::ProtectedReturn(_)|CrtValue::ThreadHead(_)|CrtValue::OpaqueSaved(_)|CrtValue::Scalar{known:0,..}){return Err("normal exception unbound handler argument");}match value{CrtValue::Scalar{known,..}if known!=u32::MAX=>return Err("normal exception partial handler argument"),CrtValue::Pointer(p)=>rt.identity_range(p,0)?,_=>{}}}
+  Ok(())
+ }
+ /// Component boundary: arguments and callback code require an enclosing
+ /// dispatch proof. This does not synthesize an OS captured CONTEXT, select a
+ /// disposition or authorize resuming the interrupted guest CALL.
+ fn execute_handler<F>(&mut self,rt:&mut CrtStreamRuntime,interrupted:&CrtCpu,epoch:&mut NormalCallEpoch<'_>,binding:&CrtNormalBinding,dispatcher:&mut CrtCpu,continuation:u32,body:F)->RegistryResult<CrtNormalHandlerReturn>
+ where F:FnOnce(&mut CrtStreamRuntime,&mut CrtCpu)->RegistryResult<CrtValue>{
+  if self.delivery!=CrtNormalDelivery::Pending{return Err("normal exception handler replay/phase");}
+  let before=self.dispatch_source(rt,interrupted,epoch,binding)?;
+  self.check_handler_stack(rt,interrupted,epoch,dispatcher)?;
   self.delivery=CrtNormalDelivery::Calling;
   let result=(||{
    let value=dispatcher.call_activation(rt,continuation,0,body)?;
    let after=self.dispatch_source(rt,interrupted,epoch,binding)?;
    if after.try_level!=before.try_level{return Err("normal exception unproved scope transition");}
-   Ok(CrtNormalHandlerReturn{identity:self.identity,epoch:self.epoch,frame:self.frame,generation:self.generation,value})
+   Ok(CrtNormalHandlerReturn{identity:self.identity,epoch:self.epoch,frame:self.frame,generation:self.generation,level:after.try_level,value})
   })();
   match result{Ok(receipt)=>{self.delivery=CrtNormalDelivery::Returned;Ok(receipt)},Err(error)=>{self.delivery=CrtNormalDelivery::Failed;epoch.fail(error)}}
  }
@@ -343,7 +391,7 @@ impl CrtNormalException {
   let result=(||{
    if self.delivery!=CrtNormalDelivery::Returned||receipt.identity!=self.identity||receipt.epoch!=self.epoch
     ||receipt.frame!=self.frame||receipt.generation!=self.generation{return Err("normal exception foreign/stale handler receipt");}
-   self.dispatch_source(rt,interrupted,epoch,binding)?;receipt.value.known_scalar()
+   if self.dispatch_source(rt,interrupted,epoch,binding)?.try_level!=receipt.level{return Err("normal exception changed returned scope");}receipt.value.known_scalar()
   })();
   match result{Ok(value)=>{self.delivery=CrtNormalDelivery::ResultTaken;Ok(value)},Err(error)=>{self.delivery=CrtNormalDelivery::Failed;epoch.fail(error)}}
  }
@@ -359,4 +407,108 @@ impl CrtNormalException {
   if rt.load(rt.offset(sp,-4)?,32)?!=CrtValue::ProtectedReturn(self.return_id)||rt.tags.values().filter(|v|**v==CrtValue::ProtectedReturn(self.return_id)).count()!=1{return Err("normal exception lost/aliased CALL continuation");}Ok(())
  }
 }
+/// A delivery-local view of checked storage. It borrows the pending event and
+/// never changes the finished outer Machine or forges an OwnedFrameBinding.
+/// Scope cursor knowledge is shared across nested native calls; frame words are
+/// always loaded from CRT storage, never copied back from a FrameImage.
+struct CrtLiveDispatchState { level:i32,depth:u32,calls:u32,activation:u64,failed:bool }
+struct CrtLiveFrame<'a,'e> {
+ rt:&'a mut CrtStreamRuntime,event:&'a CrtNormalException,
+ interrupted:&'a CrtCpu,epoch:&'a NormalCallEpoch<'e>,binding:&'a CrtNormalBinding,
+ state:&'a mut CrtLiveDispatchState,
+}
+impl CrtLiveFrame<'_,'_> {
+ fn validate(&self)->RegistryResult<()>{
+  if self.state.failed||self.event.delivery!=CrtNormalDelivery::Calling||self.state.depth==0||self.state.depth>32 {
+   return Err("live dispatch failed/expired phase");
+  }
+  let image=self.event.dispatch_source(self.rt,self.interrupted,self.epoch,self.binding)?;
+  if image.try_level!=self.state.level{return Err("live dispatch unproved scope alias write");}Ok(())
+ }
+ /// Offsets are relative to the proved original EBP. Full words must fit in
+ /// this activation, and no ordinary alias grants access to record/save tags.
+ fn ordinary(&self,offset:i32)->RegistryResult<CrtPointer>{
+  self.validate()?;
+  let l=&self.binding.layout;let at=l.bp.checked_add(offset).ok_or("live frame offset overflow")?;
+  if at%4!=0||at<l.low||at.checked_add(4).is_none_or(|end|end>0)
+   ||(l.record..l.record+16).contains(&at)||at==l.guard||at==l.saved_sp
+   ||l.saved.iter().any(|&(p,_)|p==at){return Err("live frame protected/outside word");}
+  let p=self.binding.at(self.rt,at)?;self.rt.valid(p,4)?;Ok(p)
+ }
+ fn read(&self,offset:i32)->RegistryResult<CrtValue>{self.rt.load(self.ordinary(offset)?,32)}
+ fn write(&mut self,offset:i32,value:CrtValue)->RegistryResult<()>{
+  let p=self.ordinary(offset)?;
+  if !matches!(value,CrtValue::Scalar{..}|CrtValue::Pointer(_)){return Err("live frame protected value transport");}
+  self.rt.store(p,32,value)
+ }
+ fn read_u32(&self,offset:i32)->RegistryResult<u32>{self.read(offset)?.known_scalar()}
+ fn write_u32(&mut self,offset:i32,value:u32)->RegistryResult<()>{self.write(offset,CrtValue::scalar(value))}
+ fn write_stack(&mut self,offset:i32,address:i32)->RegistryResult<()>{
+  let p=self.ordinary(address)?;self.write(offset,CrtValue::Pointer(p))
+ }
+ /// Lowering of a proved original TryLevel store. The before value is a proof
+ /// obligation, not a saved projection that can overwrite intervening effects.
+ fn store_try_level(&mut self,before:i32,after:i32)->RegistryResult<()>{
+  self.validate()?;
+  if self.state.level!=before{return Err("live dispatch stale scope store");}
+  let p=self.binding.at(self.rt,self.binding.layout.level)?;
+  self.rt.store(p,32,CrtValue::scalar(after as u32))?;self.state.level=after;Ok(())
+ }
+ fn store_level_operand(&mut self,base:CrtValue,value:CrtValue)->RegistryResult<()>{
+  self.validate()?;
+  if base!=CrtValue::Pointer(self.binding.at(self.rt,self.binding.layout.record)?){return Err("live scope store establisher identity");}
+  let after=value.known_scalar()? as i32;self.store_try_level(self.state.level,after)
+ }
+ /// Nested helper execution retains the same event and normal-frame owner.
+ /// A second software exception still needs a separate delivery proof and is
+ /// rejected; a native helper CALL is not such a proof.
+ fn call<F>(&mut self,cpu:&mut CrtCpu,continuation:u32,body:F)->RegistryResult<CrtValue>
+ where F:FnOnce(&mut CrtLiveFrame<'_,'_>,&mut CrtCpu)->RegistryResult<CrtValue>{
+  let result=self.call_checked(cpu,continuation,body);
+  if result.is_err(){self.state.failed=true;}result
+ }
+ fn call_checked<F>(&mut self,cpu:&mut CrtCpu,continuation:u32,body:F)->RegistryResult<CrtValue>
+ where F:FnOnce(&mut CrtLiveFrame<'_,'_>,&mut CrtCpu)->RegistryResult<CrtValue>{
+  self.validate()?;
+  let sp=CrtCpu::pointer(cpu.r[4])?;let interrupted_sp=CrtCpu::pointer(self.interrupted.r[4])?;
+  if self.state.depth>=32||self.state.calls>=4096||sp.kind!=CrtRegionKind::Stack
+   ||sp.cap!=interrupted_sp.cap||sp.address()%4!=0||sp.address()>=interrupted_sp.address()
+   ||cpu.return_id!=self.state.activation||sp.address()>CrtCpu::pointer(cpu.entry[4])?.address()
+   ||!self.epoch.registry.module_contains_address(continuation){return Err("live dispatch call bounds/budget");}
+  self.epoch.registry.range(self.rt.offset(sp,-4)?.address(),u64::from(sp.address()))?;
+  let parent=self.state.activation;self.state.depth+=1;self.state.calls+=1;
+  let result=cpu.call_activation(self.rt,continuation,0,|rt,child|{
+   self.state.activation=child.return_id;
+   let mut view=CrtLiveFrame{rt,event:self.event,interrupted:self.interrupted,epoch:self.epoch,binding:self.binding,state:self.state};
+   let value=body(&mut view,child)?;view.validate()?;Ok(value)
+  });
+  self.state.depth-=1;self.state.activation=parent;
+  result
+ }
+}
+impl CrtNormalException {
+ /// This is a checked storage/call composition for an enclosing original
+ /// dispatcher proof, not a containment or resumption certificate. Objects
+ /// remain an explicit captured-state input. No projection is committed.
+ fn execute_live_handler<F>(&mut self,objects:&CrtNormalObjects,rt:&mut CrtStreamRuntime,interrupted:&CrtCpu,epoch:&mut NormalCallEpoch<'_>,binding:&CrtNormalBinding,dispatcher:&mut CrtCpu,continuation:u32,body:F)->RegistryResult<CrtNormalHandlerReturn>
+ where F:FnOnce(&mut CrtLiveFrame<'_,'_>,&mut CrtCpu)->RegistryResult<CrtValue>{
+  if self.delivery!=CrtNormalDelivery::Pending{return Err("normal exception handler replay/phase");}
+  objects.check_arguments(self,rt,epoch,binding,dispatcher)?;
+  let image=self.dispatch_source(rt,interrupted,epoch,binding)?;
+  self.check_handler_stack(rt,interrupted,epoch,dispatcher)?;
+  if !epoch.registry.module_contains_address(continuation){return Err("live dispatch unbound continuation");}
+  self.delivery=CrtNormalDelivery::Calling;
+  let mut state=CrtLiveDispatchState{level:image.try_level,depth:1,calls:1,activation:0,failed:false};
+  let result=dispatcher.call_activation(rt,continuation,0,|rt,handler|{
+   state.activation=handler.return_id;
+   let mut view=CrtLiveFrame{rt,event:self,interrupted,epoch,binding,state:&mut state};
+   let value=body(&mut view,handler)?;view.validate()?;objects.validate(view.event,view.rt,view.epoch)?;Ok(value)
+  });
+  match result {
+   Ok(value)=>{self.delivery=CrtNormalDelivery::Returned;Ok(CrtNormalHandlerReturn{identity:self.identity,epoch:self.epoch,frame:self.frame,generation:self.generation,level:state.level,value})},
+   Err(error)=>{self.delivery=CrtNormalDelivery::Failed;epoch.fail(error)},
+  }
+ }
+}
+
 "#;

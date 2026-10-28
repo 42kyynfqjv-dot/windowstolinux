@@ -58,6 +58,11 @@ impl CrtNormalException {{
   objects.check_original_context(self,rt,epoch)?;
   self.execute_bound_handler(objects,rt,interrupted,epoch,binding,dispatcher,continuation,body)
  }}
+ fn execute_context_checked_live_handler<F>(&mut self,objects:&CrtNormalObjects,rt:&mut CrtStreamRuntime,interrupted:&CrtCpu,epoch:&mut NormalCallEpoch<'_>,binding:&CrtNormalBinding,dispatcher:&mut CrtCpu,continuation:u32,body:F)->RegistryResult<CrtNormalHandlerReturn>
+ where F:FnOnce(&mut CrtLiveFrame<'_,'_>,&mut CrtCpu)->RegistryResult<CrtValue>{{
+  objects.check_original_context(self,rt,epoch)?;
+  self.execute_live_handler(objects,rt,interrupted,epoch,binding,dispatcher,continuation,body)
+ }}
 }}
 "#,
             body = self.body,
