@@ -1,5 +1,11 @@
 # Cohesive handler execution milestone — SUB-579 / same PR45
 
+Current fragment integration and evidence boundaries:
+[Original frame, filter and finally composition](FRAME-COMPOSITION.md). It records
+instruction-derived selection and complete cleanup effects, while retaining the
+Main/handler/landing cuts and zero new whole-PE admissions. Earlier checkpoints
+below describe the historical plan, not completion of those remaining gates.
+
 Current entry-boundary decision: [ENTRY-CONTRACT.md](ENTRY-CONTRACT.md). An
 original-entry observation establishes a nonempty borrowed ntdll-owned chain.
 For application-contained exception handling, prove that identity is preserved

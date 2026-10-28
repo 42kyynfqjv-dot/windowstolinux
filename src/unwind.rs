@@ -3,9 +3,19 @@
 mod cleanup;
 #[path = "dispatch.rs"]
 mod dispatch;
+#[path = "frame_proof.rs"]
+mod frame_proof;
+#[path = "frame_unwind.rs"]
+pub mod frame_unwind;
+#[path = "funclet.rs"]
+mod funclet;
 #[allow(dead_code)]
 #[path = "stream/graph.rs"]
 mod graph;
+#[path = "handler_bridge.rs"]
+mod handler_bridge;
+#[path = "selection.rs"]
+mod selection;
 use iced_x86::{Code, Decoder, DecoderOptions, Mnemonic, OpKind, Register};
 use std::collections::{BTreeMap, BTreeSet};
 

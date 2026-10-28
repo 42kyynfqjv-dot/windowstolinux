@@ -128,6 +128,13 @@ jobs:
           $vcvars = Join-Path $install 'VC\Auxiliary\Build\vcvarsall.bat'
           cmd /c "`"$vcvars`" x86 -vcvars_ver=14.44 && python research/process/startup/measure_unwind.py %RUNNER_TEMP%/unwind-slice"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --locked --example frame_unwind
+      - name: Check original frame fragments on Windows
+        shell: pwsh
+        run: |
+          python research/process/startup/check_frame.py "$env:RUNNER_TEMP/unwind-slice" target/debug/examples/frame_unwind.exe --output "$env:RUNNER_TEMP/unwind-slice/frame-native-windows"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -180,12 +187,15 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo test --locked --example unwind_slice
       - run: cargo build --locked --example unwind_slice
+      - run: cargo build --locked --example frame_unwind
       - uses: actions/download-artifact@v4
         with:
           name: startup-unwind-slice
           path: original-unwind
       - run: python3 research/process/startup/check_unwind.py original-unwind target/debug/examples/unwind_slice
       - run: python3 research/process/startup/coff_binding.py --test-artifact original-unwind
+      - run: python3 research/process/startup/frame_binding.py --test-artifact original-unwind
+      - run: python3 research/process/startup/check_frame.py original-unwind target/debug/examples/frame_unwind --output original-unwind/frame-native-linux
       - run: python3 research/process/startup/check_unwind_variants.py target/debug/examples/unwind_slice --output original-unwind/independent-vectors
       - run: python3 research/process/startup/check_dispatch_variants.py target/debug/examples/unwind_slice --output original-unwind/dispatch-vectors
       - uses: actions/upload-artifact@v4

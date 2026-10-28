@@ -1,0 +1,484 @@
+"""Bind original authored frame/filter fragments; this does not prove startup.
+
+COFF identifies complete original functions and EH4 tables. Retained dumpbin
+instruction records are accepted only when their bytes cover and match the PE;
+production independently decodes every admitted fragment. Unexecuted calls and
+registration effects remain explicit cuts, never silently removed from a path.
+"""
+import hashlib
+import json
+from pathlib import Path
+import re
+import struct
+
+from coff_binding import bind_function, coff, cut, import_at_iat, pe_sections, u32
+from inventory import mapped_bytes
+
+
+def sha(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+def instructions(text, image):
+    rows = []
+    for line in text.splitlines():
+        match = re.match(r'^\s*([0-9a-fA-F]{8}):\s+(.*)$',line)
+        if match:
+            tokens = match[2].split()
+            count = 0
+            while count < len(tokens) and re.fullmatch('[0-9a-fA-F]{2}',tokens[count]):
+                count += 1
+            if not count:
+                raise ValueError('missing original disassembly bytes')
+            rows.append(dict(va=int(match[1],16), raw=bytearray.fromhex(' '.join(tokens[:count])),
+                             text=' '.join(tokens[count:])))
+        elif rows and re.fullmatch(r'\s+(?:[0-9a-fA-F]{2}\s*)+',line):
+            rows[-1]['raw'].extend(bytes.fromhex(line.strip()))
+    if not rows or len(rows) > 200000:
+        raise ValueError('disassembly evidence budget')
+    base,_ = pe_sections(image)
+    result = {}
+    for row in rows:
+        code = bytes(row['raw'])
+        if not 1 <= len(code) <= 15 or mapped_bytes(image,row['va'],len(code)) != code:
+            raise ValueError('disassembly differs from retained original PE')
+        rva = row['va']-base
+        if rva in result:
+            raise ValueError('duplicate original instruction address')
+        result[rva] = dict(rva=rva,size=len(code),code_hex=code.hex(),text=row['text'])
+    return result
+
+
+def function_rows(function, index):
+    cursor = function['rva']
+    end = cursor+function['size']
+    rows = []
+    while cursor < end:
+        if cursor not in index:
+            raise ValueError('original function instruction coverage gap')
+        row = index[cursor]
+        if cursor+row['size'] > end:
+            raise ValueError('instruction crosses original COFF function boundary')
+        rows.append(row)
+        cursor += row['size']
+    return rows
+
+
+def fragment(function, rows, start, end, name, role):
+    boundaries = {row['rva'] for row in rows} | {function['rva']+function['size']}
+    if start not in boundaries or end not in boundaries or not start < end:
+        raise ValueError('fragment does not cover complete original instructions')
+    selected = [row for row in rows if start <= row['rva'] < end]
+    raw = b''.join(bytes.fromhex(row['code_hex']) for row in selected)
+    if len(raw) != end-start:
+        raise ValueError('fragment coverage is not contiguous')
+    return dict(name=name,rva=start,size=len(raw),code_hex=raw.hex(),sha256=sha(raw),
+                file=name+'.bin',role=role,instructions=selected)
+
+
+def symbol_in_section(symbols,name,section):
+    found = [s for s in symbols.values() if s['name'] == name and s['section'] == section]
+    if len(found) != 1:
+        raise ValueError('missing or ambiguous original local target symbol')
+    return found[0]
+
+
+def bind_eh4(obj,image,function,symbols,sections):
+    base,_ = pe_sections(image)
+    name = '__sehtable$'+function['symbol']
+    references = [r for r in function['relocations'] if r['symbol'] == name]
+    if len(references) != 1 or references[0]['kind'] != 6 or references[0]['addend'] != 0:
+        raise ValueError('original frame lacks unique EH4 table reference')
+    found = [s for s in symbols.values() if s['name'] == name]
+    if len(found) != 1 or found[0]['value'] != 0 or not 1 <= found[0]['section'] <= len(sections):
+        raise ValueError('unsupported original EH4 data symbol')
+    section = sections[found[0]['section']-1]
+    if section['flags'] & 0xa0000000 or not 28 <= section['size'] <= 16+12*32 or (section['size']-16)%12:
+        raise ValueError('EH4 table must be bounded read-only data')
+    raw = cut(obj,section['start'],section['size'])
+    va = references[0]['target_va']
+    linked = mapped_bytes(image,va,len(raw))
+    mask = bytearray(b'\1'*len(raw))
+    targets = []
+    for reloc in section['relocs']:
+        offset = reloc['offset']
+        if reloc['kind'] != 6 or offset < 20 or offset+4 > len(raw) or offset%12 not in (8,0) or mask[offset:offset+4] != b'\1'*4:
+            raise ValueError('unsupported EH4 target relocation')
+        local = symbol_in_section(symbols,reloc['symbol'],function['object_section'])
+        expected = base+function['rva']+local['value']+u32(raw,offset)
+        if expected > 0xffffffff or u32(linked,offset) != expected:
+            raise ValueError('EH4 target not bound to original local symbol')
+        targets.append(dict(offset=offset,symbol=reloc['symbol'],target_rva=expected-base))
+        mask[offset:offset+4] = b'\0'*4
+    if any(mask[i] and raw[i] != linked[i] for i in range(len(raw))):
+        raise ValueError('EH4 nonrelocated data differs from original object')
+    header = list(struct.unpack('<iiii',linked[:16]))
+    entries = []
+    for i in range((len(linked)-16)//12):
+        parent,filter_va,handler_va = struct.unpack_from('<iII',linked,16+i*12)
+        if parent < -2 or parent == -1 or parent >= i:
+            raise ValueError('unsupported EH4 scope-parent ordering')
+        for value,offset in ((filter_va,20+i*12),(handler_va,24+i*12)):
+            if value and not any(t['offset'] == offset and t['target_rva'] == value-base for t in targets):
+                raise ValueError('EH4 pointer lacks original relocation binding')
+        entries.append(dict(index=i,parent=parent,filter_rva=filter_va-base if filter_va else None,
+                            handler_rva=handler_va-base if handler_va else None))
+    return dict(symbol=name,rva=va-base,size=len(linked),code_hex=linked.hex(),sha256=sha(linked),
+                file=function['symbol'][1:]+'-eh4.bin',header=header,rows=entries,relocations=targets)
+
+
+def through_ret(function,rows,start,name,role):
+    tail = [r for r in rows if r['rva'] >= start]
+    if not tail or tail[0]['rva'] != start:
+        raise ValueError('EH4 target is not an original instruction boundary')
+    for row in tail:
+        if row['code_hex'] == 'c3':
+            return fragment(function,rows,start,row['rva']+1,name,role)
+    raise ValueError('bounded original funclet has no RET')
+
+
+def immediate_frame_stores(rows):
+    stores = []
+    for row in rows:
+        code = bytes.fromhex(row['code_hex'])
+        if len(code) == 7 and code[:2] == b'\xc7\x45':
+            offset = struct.unpack('<b',code[2:3])[0]
+            value = u32(code,3)
+        elif len(code) == 10 and code[:2] == b'\xc7\x85':
+            offset = struct.unpack('<i',code[2:6])[0]
+            value = u32(code,6)
+        else:
+            continue
+        stores.append(dict(instruction_rva=row['rva'],frame_offset=offset,value=value))
+    return stores
+
+
+def call_binding(image,function,row):
+    raw = bytes.fromhex(row['code_hex'])
+    if raw[:1] == b'\xe8' and len(raw) == 5:
+        operand,kind = 1,0x14
+    elif raw[:2] == b'\xff\x15' and len(raw) == 6:
+        operand,kind = 2,6
+    else:
+        raise ValueError('unsupported original call evidence')
+    offset = row['rva']-function['rva']+operand
+    bindings = [r for r in function['relocations'] if r['offset'] == offset and r['kind'] == kind and r['addend'] == 0]
+    if len(bindings) != 1:
+        raise ValueError('original call has no unique COFF provenance')
+    binding = bindings[0]
+    base,_ = pe_sections(image)
+    result = dict(rva=row['rva'],code_hex=row['code_hex'],symbol=binding['symbol'],
+                  target_rva=binding['target_va']-base)
+    if kind == 6:
+        result['import'] = list(import_at_iat(image,result['target_rva']))
+    return result
+
+
+def handler_fragments(image,index,bound):
+    """Retain a closed direct-helper CFG and explicit borrowed handler cuts."""
+    base,sections = pe_sections(image)
+    handlers = [r['target_va'] for f in bound.values() for r in f['relocations']
+                if r['symbol'] == '__except_handler4' and r['kind'] == 6 and r['addend'] == 0]
+    if len(handlers) != 3 or len(set(handlers)) != 1:
+        raise ValueError('original frames disagree about linked exception handler')
+    handler = handlers[0]-base
+    # Original linked handler's first direct call receives ExceptionCode. This
+    # binds a measured call edge, not a claim that other handler effects close.
+    leading = []
+    cursor = handler
+    for _ in range(64):
+        if cursor not in index:
+            raise ValueError('missing original handler instruction')
+        row = index[cursor]
+        leading.append(row)
+        code = bytes.fromhex(row['code_hex'])
+        if code[:1] == b'\xe8':
+            if len(code) != 5:
+                raise ValueError('invalid original helper call')
+            helper = cursor+5+struct.unpack('<i',code[1:])[0]
+            call_rva = cursor
+            break
+        if code[:1] in (b'\xc3',b'\xc2',b'\xe9',b'\xeb',b'\xff'):
+            # FF33 is a memory PUSH of the event code, not an indirect transfer.
+            if code != b'\xff\x33':
+                raise ValueError('unexpected control flow before original helper call')
+        cursor += row['size']
+    else:
+        raise ValueError('original handler prefix budget')
+    # Reachable instruction closure rather than first RET: this helper has five
+    # returns and an MXCSR-dependent branch that cannot be silently discarded.
+    pending = [helper]
+    visited = {}
+    while pending:
+        at = pending.pop()
+        if at in visited:
+            continue
+        if not helper <= at < helper+512 or at not in index or len(visited) >= 128:
+            raise ValueError('original event helper graph exceeds evidence bounds')
+        row = index[at]
+        visited[at] = row
+        raw = bytes.fromhex(row['code_hex'])
+        after = at+len(raw)
+        if raw == b'\xc3':
+            continue
+        if raw[0] in (0xe8,0xff,0xc2):
+            raise ValueError('event helper has unsupported call/indirect edge')
+        if raw[0] == 0xeb:
+            pending.append(after+struct.unpack('<b',raw[1:])[0])
+        elif raw[0] == 0xe9:
+            pending.append(after+struct.unpack('<i',raw[1:])[0])
+        elif 0x70 <= raw[0] <= 0x7f:
+            pending.extend([after,after+struct.unpack('<b',raw[1:])[0]])
+        elif raw[:1] == b'\x0f' and len(raw) >= 2 and 0x80 <= raw[1] <= 0x8f:
+            pending.extend([after,after+struct.unpack('<i',raw[2:])[0]])
+        else:
+            pending.append(after)
+    helper_end = max(r['rva']+r['size'] for r in visited.values())
+    helper_rows = sorted(visited.values(),key=lambda row:row['rva'])
+    pseudo = dict(rva=helper,size=helper_end-helper)
+    normalizer = fragment(pseudo,helper_rows,helper,helper_end,'event-normalizer',
+        'complete original direct-helper CFG; feature/MXCSR reads and all branch effects retained, not yet proved')
+    feature_loads = [r for r in helper_rows if len(bytes.fromhex(r['code_hex'])) == 7 and r['code_hex'].startswith('833d')]
+    if len(feature_loads) != 1:
+        raise ValueError('event normalizer feature-word load changed')
+    feature_word = u32(bytes.fromhex(feature_loads[0]['code_hex']),2)
+    owners = [s for s in sections if base+s['rva'] <= feature_word and feature_word+4 <= base+s['rva']+s['virtual']]
+    if len(owners) != 1 or not owners[0]['flags'] & 0x80000000 or owners[0]['flags'] & 0x20000000:
+        raise ValueError('event normalizer feature word is not unique module data')
+    # The original installer writes two pointer cells in the handler's live
+    # frame, then installs their address at establisher-4. Its preceding calls
+    # are separately recorded as unproved, not skipped by an execution proof.
+    installer_bytes = bytes.fromhex('8945e48b45108945e88d45e48943fc')
+    window = mapped_bytes(image,base+handler,256)
+    offset = window.find(installer_bytes)
+    if offset == -1 or window.find(installer_bytes,offset+1) != -1:
+        raise ValueError('original exception-pointer installer not unique')
+    installer_start = handler+offset
+    installer_end = installer_start+len(installer_bytes)
+    window_rows = []
+    cursor = handler
+    while cursor < installer_end:
+        if cursor not in index:
+            raise ValueError('handler prefix instruction gap')
+        row = index[cursor]
+        window_rows.append(row)
+        cursor += row['size']
+    pseudo = dict(rva=handler,size=installer_end-handler)
+    prefix = fragment(pseudo,window_rows,handler,installer_start,'handler-before-pair',
+        'NOT EXECUTED: event normalization, cookie validation, context helper, flag/record reads and branch')
+    installer = fragment(pseudo,window_rows,installer_start,installer_end,'exception-pair-installer',
+        'original pointer-cell writes at an explicit handler-entry cut; live ownership/preconditions still required')
+    calls = []
+    for row in window_rows:
+        raw = bytes.fromhex(row['code_hex'])
+        if raw[:1] == b'\xe8':
+            calls.append(dict(call_rva=row['rva'],target_rva=row['rva']+5+struct.unpack('<i',raw[1:])[0]))
+    return [normalizer,prefix,installer], dict(
+        handler_rva=handler,normalizer_call_rva=call_rva,normalizer_rva=helper,
+        feature_word_rva=feature_word-base,feature_word_value='unobserved runtime value; initialized ownership still required',
+        prefix_calls=calls,installer_rva=installer_start,
+        installer_fields=dict(handler_pair_record=-28,handler_pair_context=-24,
+            handler_context_argument=16,establisher_pair_pointer=-4,
+            owner_ebp_from_establisher=16,owner_pair_pointer=-20,exception_code_offset=0),
+        unresolved='Event-code transformation, cookie/context helper effects, exception flags, live pointer ownership and execution ordering require production proof')
+
+
+def frame_evidence(root):
+    obj = (root/'unwind.obj').read_bytes()
+    image = (root/'unwind.exe').read_bytes()
+    symbols,sections = coff(obj)
+    index = instructions((root/'disasm.txt').read_text(errors='strict'),image)
+    bound = {name:bind_function(obj,image,name) for name in ['_Inner','_Outer','_main']}
+    fragments = []
+    frames = []
+    for name in ['_Inner','_Outer','_main']:
+        function = bound[name]
+        rows = function_rows(function,index)
+        table = bind_eh4(obj,image,function,symbols,sections)
+        fs_stores = [r for r in rows if r['code_hex'] == '64a300000000']
+        if len(fs_stores) != 1:
+            raise ValueError('original registration store boundary is ambiguous')
+        after_registration = fs_stores[0]['rva']+fs_stores[0]['size']
+        prolog = fragment(function,rows,function['rva'],after_registration,name[1:]+'-prolog',
+                          'original bytes retained; FS/handler/cookie effects require separate proof')
+        fragments.append(prolog)
+        calls = [r for r in rows if r['rva'] >= after_registration and
+                 (r['code_hex'].startswith('e8') or r['code_hex'].startswith('ff15'))]
+        if not calls:
+            raise ValueError('missing original call boundary')
+        first_call = calls[0]
+        if name != '_main':
+            initializer = fragment(function,rows,after_registration,first_call['rva'],name[1:]+'-initialize',
+                'original contiguous initializer and argument setup; stops before effectful call')
+            fragments.append(initializer)
+            blocked = [call_binding(image,function,first_call)]
+            if name == '_Inner':
+                if blocked[0].get('import') != ['kernel32.dll','RaiseException']:
+                    raise ValueError('original event call identity changed')
+            elif blocked[0]['symbol'] != '_Inner' or blocked[0]['target_rva'] != bound['_Inner']['rva']:
+                raise ValueError('original nested call identity changed')
+        else:
+            # Stop before the first outgoing argument push. Main's memset and
+            # GetModuleHandle call gap remains explicit, not treated as no-op.
+            prefix = [r for r in rows if after_registration <= r['rva'] < first_call['rva']]
+            pushes = [r for r in prefix if r['code_hex'].startswith(('68','6a')) or r['code_hex'] in ['50','51','52','53','54','55','56','57']]
+            if not pushes:
+                raise ValueError('missing original main call argument boundary')
+            initializer = fragment(function,rows,after_registration,pushes[0]['rva'],
+                'main-initialize','isolated original stores; prior cookie/registration and subsequent external calls remain unproved')
+            fragments.append(initializer)
+            outer = [r for r in function['relocations'] if r['symbol'] == '_Outer' and r['kind'] == 0x14]
+            if len(outer) != 1:
+                raise ValueError('missing unique original Outer call')
+            base,_ = pe_sections(image)
+            if outer[0]['target_va'] != base+bound['_Outer']['rva']:
+                raise ValueError('original Outer call target changed')
+            outer_call = function['rva']+outer[0]['offset']-1
+            scope_stores = [r for r in rows if initializer['rva']+initializer['size'] <= r['rva'] < outer_call and
+                            len(bytes.fromhex(r['code_hex'])) == 7 and r['code_hex'].startswith('c745fc')]
+            if len(scope_stores) != 1 or scope_stores[0]['rva']+7 != outer_call:
+                raise ValueError('main scope activation cut is not the complete immediate predecessor')
+            activation = fragment(function,rows,scope_stores[0]['rva'],outer_call,
+                'main-activate','isolated scope store after an explicitly unproved external-effect gap')
+            fragments.append(activation)
+            gap_start = initializer['rva']+initializer['size']
+            gap = fragment(function,rows,gap_start,activation['rva'],'main-unproved-gap',
+                'NOT EXECUTED: outgoing arguments, memset, GetModuleHandleW, return values and output stores')
+            fragments.append(gap)
+            blocked = [call_binding(image,function,r)
+                       for r in rows if gap_start <= r['rva'] < activation['rva'] and r in calls]
+            if (len(blocked) != 2 or blocked[0]['symbol'] != '_memset'
+                    or blocked[1].get('import') != ['kernel32.dll','GetModuleHandleW']):
+                raise ValueError('main external effect gap changed')
+        cleanup_fragments = []
+        for entry in table['rows']:
+            if entry['filter_rva'] is None:
+                cleanup = through_ret(function,rows,entry['handler_rva'],
+                    name[1:]+'-finally-'+str(entry['index']), 'complete original finally funclet including all output stores')
+                fragments.append(cleanup)
+                cleanup_fragments.append(cleanup['name'])
+            else:
+                filt = through_ret(function,rows,entry['filter_rva'],
+                    name[1:]+'-filter-'+str(entry['index']), 'original code predicate and owned EXCEPTION_POINTERS reads')
+                fragments.append(filt)
+                # Handler continuation is not a RET function. The original
+                # direct jump just before the filter identifies its join.
+                predecessors = [r for r in rows if r['rva']+r['size'] == entry['filter_rva']]
+                if len(predecessors) != 1 or not predecessors[0]['code_hex'].startswith('eb'):
+                    raise ValueError('missing original handler continuation join')
+                jump = predecessors[0]
+                delta = struct.unpack('<b',bytes.fromhex(jump['code_hex'])[1:])[0]
+                join = jump['rva']+jump['size']+delta
+                handler = fragment(function,rows,entry['handler_rva'],join,
+                    name[1:]+'-selected-handler-'+str(entry['index']),
+                    'original saved-ESP load and handled/scope stores; stops at manual Restore setup')
+                fragments.append(handler)
+        frames.append(dict(symbol=name,rva=function['rva'],size=function['size'],sha256=function['sha256'],
+                           table=table,initializer=initializer['name'],
+                           initializer_stores=immediate_frame_stores(initializer['instructions']),
+                           cleanup_fragments=cleanup_fragments,blocked_calls=blocked,
+                           original_relocations=function['relocations']))
+    handler_blocks,handler = handler_fragments(image,index,bound)
+    fragments.extend(handler_blocks)
+    return dict(kind='original frame/filter fragment provenance; not whole startup or Windows dispatch equivalence',
+        pe_sha256=sha(image),object_sha256=sha(obj),disassembly_sha256=sha((root/'disasm.txt').read_bytes()),
+        frames=frames,fragments=fragments,handler=handler,
+        cuts=[
+            'Original FS registration/cookie/handler state is retained but is not initialized by a slice extraction.',
+            'Main initialization and activation are separate cuts; memset/GetModuleHandleW effects between them remain unproved.',
+            'Original RaiseException delivery, native Windows frame selection and initial thread/module invariants remain outside fragment provenance.',
+            'Finally funclets include output stores after Dispatch; trimming those effects would require a separate explicit boundary.',
+            'Selected-handler ESP recovery is original code, not evidence that all original context fields are restored.'])
+
+
+def write_evidence(root,out):
+    report = frame_evidence(root)
+    out.mkdir(parents=True,exist_ok=True)
+    for block in report['fragments']+[f['table'] for f in report['frames']]:
+        (out/block['file']).write_bytes(bytes.fromhex(block['code_hex']))
+    (out/'frame-evidence.json').write_text(json.dumps(report,indent=2)+'\n')
+    return report
+
+
+def artifact_tests(root):
+    """Independent fragment expectations and unexecuted evidence mutations."""
+    import tempfile
+    import unittest
+    original = {name:(root/name).read_bytes() for name in ['unwind.obj','unwind.exe','disasm.txt']}
+    baseline = frame_evidence(root)
+    base,mappings = pe_sections(original['unwind.exe'])
+    blocks = {b['name']:b for b in baseline['fragments']}
+    def file_at(rva):
+        matches = [s['start']+rva-s['rva'] for s in mappings if s['rva'] <= rva < s['rva']+min(s['virtual'],s['size'])]
+        if len(matches) != 1:
+            raise ValueError('test mutation needs unique original mapping')
+        return matches[0]
+    def replay(changes):
+        with tempfile.TemporaryDirectory(prefix='w2l-frame-evidence-') as temp:
+            directory = Path(temp)
+            for name,raw in original.items():
+                (directory/name).write_bytes(changes.get(name,raw))
+            return frame_evidence(directory)
+    def patch(raw,offset,replacement):
+        return raw[:offset]+replacement+raw[offset+len(replacement):]
+    class FrameEvidenceTests(unittest.TestCase):
+        def test_original_initialization_is_instruction_derived(self):
+            frames = {f['symbol']:f for f in baseline['frames']}
+            self.assertEqual([(s['frame_offset'],s['value']) for s in frames['_Inner']['initializer_stores']],
+                             [(-28,100),(-32,0),(-4,0),(-4,1)])
+            self.assertEqual([(s['frame_offset'],s['value']) for s in frames['_Outer']['initializer_stores']],
+                             [(-28,200),(-32,2),(-4,0)])
+            self.assertEqual([(s['frame_offset'],s['value']) for s in frames['_main']['initializer_stores']],
+                             [(-768,300),(-752,0)])
+        def test_effectful_main_gap_is_retained(self):
+            gap = blocks['main-unproved-gap']
+            calls = [r for r in gap['instructions'] if r['code_hex'].startswith(('e8','ff15'))]
+            self.assertEqual(len(calls),2)
+            self.assertLess(blocks['main-initialize']['rva'],gap['rva'])
+            self.assertEqual(gap['rva']+gap['size'],blocks['main-activate']['rva'])
+            self.assertNotIn(-4,[s['frame_offset'] for s in baseline['frames'][2]['initializer_stores']])
+        def test_complete_cleanup_and_normalizer_effects(self):
+            for name in ['Inner-finally-0','Outer-finally-0']:
+                self.assertEqual(sum(r['code_hex'].startswith('a3') for r in blocks[name]['instructions']),2)
+                self.assertEqual(blocks[name]['instructions'][-1]['code_hex'],'c3')
+            normalizer = blocks['event-normalizer']['instructions']
+            self.assertTrue(any(r['code_hex'].startswith('0fae') for r in normalizer))
+            self.assertEqual(sum(r['code_hex'] == 'c3' for r in normalizer),5)
+            self.assertEqual(blocks['main-filter-0']['instructions'][-1]['code_hex'],'c3')
+        def test_disassembly_is_not_an_unchecked_oracle(self):
+            text = original['disasm.txt'].decode()
+            needle = '004010C0: 55'
+            self.assertIn(needle,text)
+            changed = text.replace(needle,'004010C0: 54',1).encode()
+            with self.assertRaises(ValueError): replay({'disasm.txt':changed})
+        def test_eh4_handler_target_must_bind_original_local_symbol(self):
+            table = baseline['frames'][0]['table']
+            offset = file_at(table['rva'])+24
+            changed = patch(original['unwind.exe'],offset,struct.pack('<I',base+table['rows'][1]['handler_rva']))
+            with self.assertRaises(ValueError): replay({'unwind.exe':changed})
+        def test_self_parent_rejects_even_with_matching_object_bytes(self):
+            table = baseline['frames'][0]['table']
+            symbols,sections = coff(original['unwind.obj'])
+            symbol = next(s for s in symbols.values() if s['name'] == table['symbol'])
+            section = sections[symbol['section']-1]
+            obj = patch(original['unwind.obj'],section['start']+16,struct.pack('<i',0))
+            image = patch(original['unwind.exe'],file_at(table['rva'])+16,struct.pack('<i',0))
+            with self.assertRaises(ValueError): replay({'unwind.obj':obj,'unwind.exe':image})
+        def test_fragment_boundary_requires_original_instruction(self):
+            function = bind_function(original['unwind.obj'],original['unwind.exe'],'_Inner')
+            index = instructions(original['disasm.txt'].decode(),original['unwind.exe'])
+            rows = function_rows(function,index)
+            start = blocks['Inner-initialize']['rva']+1
+            with self.assertRaises(ValueError): fragment(function,rows,start,start+6,'bad','test')
+    result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(FrameEvidenceTests))
+    if not result.wasSuccessful():
+        raise SystemExit(1)
+
+
+if __name__ == '__main__':
+    import sys
+    if len(sys.argv) == 3 and sys.argv[1] == '--test-artifact':
+        artifact_tests(Path(sys.argv[2]).resolve())
+    else:
+        report = write_evidence(Path(sys.argv[1]).resolve(),Path(sys.argv[2]).resolve())
+        print(json.dumps(report,indent=2))
