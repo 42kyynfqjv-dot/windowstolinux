@@ -236,3 +236,37 @@ unwind/temporary registration effects and a normal-source selected restoration
 proof. The present scalar return grants no disposition/guest-resumption authority.
 Astra High is warranted for that combined prefix/temporary-registration/restoration
 proof; current shared storage and borrow machinery can be reviewed on Sol.
+
+## Sol implementation: live instruction-derived language filters
+
+FilterProof now emits a CRT backend from the same decoded MOV/XOR/CMP/SETE/RET
+instruction sequence as the existing abstract backend. Reads and stores use
+CrtLiveFrame and actual typed pointer dereferences, not a temporary snapshot
+copied back at callback completion. Volatile registers/partial SETE and flags
+are updated through CrtCpu; the containing protected call executes RET. The live
+exception-code load checks the proof's event boundary before subsequent stores.
+Changed/unknown live code therefore cannot reuse a selection proof silently.
+
+The owned-pair native success case now executes decoded matching and nonmatching
+filter bodies through two protected borrowed calls, checks independent 1/0
+expectations and observes the exception-code temporary in live frame storage.
+A changed-code case rejects at the load and retains a preceding marker store.
+These are independently specified authored x86 instruction fixtures using the
+shared filter semantics. They do not establish execution of the entire frozen
+compiler-produced handler/filter or new whole-PE Windows comparisons. The original
+prefix helper calls and actual filter-bridge register setup remain explicit cuts.
+
+The CRT suite imports seven inherited selection tests; its increased total is
+not seven newly authored tests or differential cases. Existing malformed pointer,
+unknown flag and protected-write rejection checks still run. Thirty native
+adapter cases and the five retained wrapper observations remain separate counts.
+
+Next useful Sol scope: connect the decoded prefix normalizer and readonly guard/
+context checks to the same activation and bind actual target filter bytes and
+owner-frame register setup. Table-driven LocalUnwindEffects still requires actual
+temporary registration ownership and exceptional/collided delivery, followed by
+normal-source restoration. The precise complex question is how those temporary
+registrations and cleanup effects bind to the suspended normal epoch while
+preserving its borrowed predecessor and captured-context authority. It cannot be
+resolved by clearing suspension or reusing the finished outer Machine. Escalate
+that bounded question only when the shared instruction/effect connections reach it.

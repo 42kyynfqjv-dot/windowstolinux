@@ -328,11 +328,16 @@ fn live_dispatch(){
        borrowed.write_u32(-28,95)?;
        if mode==27{borrowed.write_u32(-20,0)?;}
        if mode==28{borrowed.rt.store(borrowed.rt.offset(pair.low,4)?,32,CrtValue::scalar(0))?;}
-       if mode==29{return Err("independent filter failure");}
+       if mode==29{borrowed.rt.store(r,32,CrtValue::scalar(0))?;let result=decoded_filter(borrowed,k);assert_eq!(result,Err("live filter event proof boundary"));return result;}
       }
       assert!(pair.read(borrowed,k).is_err()); // child cannot impersonate owner
-      k.r[0]=CrtValue::scalar(1);k.finish(borrowed.rt)
+      if mode==0{assert_eq!(decoded_filter(borrowed,k)?,CrtValue::scalar(1));assert_eq!(borrowed.read_u32(-28)?,0xe0420042);borrowed.write_u32(-28,91)?;}
+      else{k.r[0]=CrtValue::scalar(1);}k.finish(borrowed.rt)
      })?;assert_eq!(filter,CrtValue::scalar(1));pair.read(view,h)?;
+     if mode==0{
+      let rejected=pair.call_filter(view,h,0x402310,|borrowed,k,_,_|{assert_eq!(decoded_false_filter(borrowed,k)?,CrtValue::scalar(0));k.finish(borrowed.rt)})?;
+      assert_eq!(rejected,CrtValue::scalar(0));assert_eq!(view.read_u32(-28)?,0xe0420042);view.write_u32(-28,91)?;
+     }
      assert!(live_install(&mut pair,view,h).is_err());
      let original_sp=h.r[4];let foreign=runtime(view.epoch.registry);h.r[4]=CrtValue::Pointer(foreign.resolve_absolute(pair.low.address(),CrtRegionKind::Stack)?);
      assert!(pair.read(view,h).is_err(),"foreign stack address accepted");h.r[4]=original_sp;
@@ -583,9 +588,13 @@ fn run(case: &str) {
         let handler_prolog=super::normal_frame::emit_handler_prolog(&handler_bytes("handler-prolog.bin","558bec83ec1c"),0x402210).unwrap();
         let installer=crate::handler_bridge::prove_installer(&handler_bytes("handler-installer.bin","8945e48b45108945e88d45e48943fc"),0x402263,&crate::handler_bridge::InstallerLayout{handler_start:-28,handler_end:0,owner_start:-48,owner_end:0,writable_handler_words:vec![-28,-24],writable_owner_words:vec![-20]}).unwrap();
         let install=format!("fn live_install(pair:&mut CrtHandlerPair,frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu)->RegistryResult<()>{{ {} }}",installer.live_body());
+        let filter=crate::selection::prove_filter(&bytes_hex("8b55ec8b028b08894de48b55e433c081fa420042e00f94c0c3"),0x1333,&crate::selection::FilterLayout{start:-32,end:0,exception_pointers_offset:-20,writable_words:vec![-28]},0xe0420042).unwrap();
+        let filter_source=format!("fn decoded_filter(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu)->RegistryResult<CrtValue>{{ {} }}",filter.live_body());
+        let false_filter=crate::selection::prove_filter(&bytes_hex("8b55ec8b028b08894de48b55e433c081fa430042e00f94c0c3"),0x1433,&crate::selection::FilterLayout{start:-32,end:0,exception_pointers_offset:-20,writable_words:vec![-28]},0xe0420042).unwrap();
+        let false_filter_source=format!("fn decoded_false_filter(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu)->RegistryResult<CrtValue>{{ {} }}",false_filter.live_body());
         let context_types=crate::handler_context::EMITTED_TYPES;
         let context_check=context_proof.normal_object_check();
-        let source = format!("#![allow(dead_code)]\nmod guest_memory{{{memory}}}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{fixture}\n{file_scope}\n{context_types}\n{context_check}\n{scope_store}\n{permuted_store}\n{install}\n{handler_prolog}\nfn raise_site()->CrtNormalRaiseSite{{{{{raise}}}}}\n{CASES}",
+        let source = format!("#![allow(dead_code)]\nmod guest_memory{{{memory}}}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{fixture}\n{file_scope}\n{context_types}\n{context_check}\n{scope_store}\n{permuted_store}\n{install}\n{handler_prolog}\n{filter_source}\n{false_filter_source}\nfn raise_site()->CrtNormalRaiseSite{{{{{raise}}}}}\n{CASES}",
             include_str!("linker/unwind_runtime.rs").replace("//!", "//"),
             emitted_literal(include_str!("frame_proof.rs")),emitted_literal(include_str!("thread_registry.rs")),
             crate::crt_stream_runtime::EMITTED_TYPES,crate::crt_stream_cpu::EMITTED_TYPES,

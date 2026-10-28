@@ -14,11 +14,17 @@ pub struct FilterLayout {
 pub struct FilterProof {
     body: String,
     result: i32,
+    #[allow(dead_code)] // The CRT backend is not linked into every slice example.
+    live: String,
 }
 impl FilterProof {
     /// Body for a private function `(code:u32, words:&mut[Option<u32>]) -> Result<i32,&str>`.
     pub fn body(&self) -> &str {
         &self.body
+    }
+    #[allow(dead_code)]
+    pub fn live_body(&self) -> &str {
+        &self.live
     }
     pub fn result(&self) -> i32 {
         self.result
@@ -112,6 +118,7 @@ pub fn prove_filter(
         "if code!={event_code}u32 || words.len()!={} {{return Err(\"filter entry boundary\");}}\n",
         words.len()
     );
+    let mut live = String::from("frame.validate()?;\n");
     while decoder.can_decode() {
         let i = decoder.decode();
         count += 1;
@@ -166,6 +173,26 @@ pub fn prove_filter(
                 if matches!(value, Value::Unknown) {
                     return Err("selection: unknown register read".into());
                 }
+                let source = if i.op1_kind() == OpKind::Register {
+                    format!("cpu.r[{}]", volatile(i.op1_register())?)
+                } else if i.memory_base() == Register::EBP {
+                    format!("frame.read({})?", i.memory_displacement32() as i32)
+                } else {
+                    format!(
+                        "frame.rt.load(CrtCpu::pointer(cpu.r[{}])?,32)?",
+                        volatile(i.memory_base())?
+                    )
+                };
+                live.push_str(&format!("cpu.r[{destination}]={source};\n"));
+                if i.op1_kind() == OpKind::Memory
+                    && i.memory_base() != Register::EBP
+                    && matches!(
+                        registers[volatile(i.memory_base())?],
+                        Value::ExceptionRecord
+                    )
+                {
+                    live.push_str(&format!("if cpu.r[{destination}].known_scalar()? != {event_code}u32{{return Err(\"live filter event proof boundary\");}}\n"));
+                }
                 registers[destination] = value;
             }
             Mnemonic::Mov if i.code() == Code::Mov_rm32_r32 && i.op0_kind() == OpKind::Memory => {
@@ -175,6 +202,11 @@ pub fn prove_filter(
                 let index = temporary(layout, i.memory_displacement32() as i32)?;
                 let (expression, known) = scalar(&registers[volatile(i.op1_register())?])?;
                 body.push_str(&format!("words[{index}]=Some({expression});\n"));
+                live.push_str(&format!(
+                    "frame.write_u32({},cpu.r[{}].known_scalar()?)?;\n",
+                    i.memory_displacement32() as i32,
+                    volatile(i.op1_register())?
+                ));
                 words[index] = Some(known);
             }
             Mnemonic::Xor
@@ -190,6 +222,7 @@ pub fn prove_filter(
                     expression: name,
                     known: 0,
                 };
+                live.push_str(&format!("cpu.r[{index}]=cpu.zero();\n"));
                 zero = Some((String::from("true"), true));
             }
             Mnemonic::Cmp if matches!(i.code(), Code::Cmp_rm32_imm32 | Code::Cmp_rm32_imm8) => {
@@ -216,6 +249,14 @@ pub fn prove_filter(
                     i.immediate32()
                 };
                 let (expression, known) = scalar(&left)?;
+                let operand = if i.op0_kind() == OpKind::Register {
+                    format!("cpu.r[{}]", volatile(i.op0_register())?)
+                } else {
+                    format!("frame.read({})?", i.memory_displacement32() as i32)
+                };
+                live.push_str(&format!(
+                    "cpu.binary(frame.rt,7,{operand},CrtValue::scalar({immediate}),32)?;\n"
+                ));
                 zero = Some((format!("{expression}=={immediate}u32"), known == immediate));
             }
             Mnemonic::Sete if i.op0_kind() == OpKind::Register => {
@@ -232,6 +273,7 @@ pub fn prove_filter(
                 body.push_str(&format!(
                     "let {name}=({old}&!255u32)|u32::from({condition});\n"
                 ));
+                live.push_str(&format!("cpu.set({index},8,0,CrtValue::scalar(u32::from(cpu.flags.zf.ok_or(\"filter unknown ZF\")?)))?;\n"));
                 registers[index] = Value::Scalar {
                     expression: name,
                     known: (known & !255) | u32::from(*value),
@@ -243,9 +285,11 @@ pub fn prove_filter(
                 }
                 let (expression, known) = scalar(&registers[0])?;
                 body.push_str(&format!("Ok({expression} as i32)\n"));
+                live.push_str("cpu.r[0].known_scalar()?;Ok(cpu.r[0])\n");
                 return Ok(FilterProof {
                     body,
                     result: known as i32,
+                    live,
                 });
             }
             _ => return Err("selection: unsupported original filter effect".into()),

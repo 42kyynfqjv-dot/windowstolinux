@@ -196,3 +196,7 @@ mod handler_context;
 #[allow(dead_code)]
 #[path = "../src/handler_bridge.rs"]
 mod handler_bridge;
+
+#[allow(dead_code)]
+#[path = "../src/selection.rs"]
+mod selection;
