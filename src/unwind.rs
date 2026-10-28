@@ -207,6 +207,7 @@ mod owned {{
 pub struct Outcome {{pub trace:u32,pub locals:Vec<Option<u32>>,pub live:Vec<bool>,pub restored:[Option<u32>;10]}}
 pub fn unwind(locals:&[u32],saved:[u32;10],current:[u32;10],trace:u32)->Result<Outcome,&'static str>{{
  if locals.len()!={frames}||saved[8]!={target} {{return Err("unwind slice input boundary");}}
+ if current[9] & !0x8d5 != 0x202 {{return Err("unsupported unwind entry flags");}}
  let specs=vec![{specs}];
  let inputs=locals.iter().enumerate().map(|(i,&local)|FrameInput{{cells:vec![Some(local)],context:if i=={selected}{{saved}}else{{current}}}}).collect();
  let mut machine=Machine::new(specs,inputs,{selected},Some(trace)).map_err(|_|"unwind ownership")?;

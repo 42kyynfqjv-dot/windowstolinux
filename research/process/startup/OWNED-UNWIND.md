@@ -85,3 +85,10 @@ variable `exception_code` to a CRT function name. The correction renames only
 that variable and records the prior source hash in the freeze history. Expected
 results, compiler flags and converter support are unchanged. No execution or
 translation evidence is counted from the failed build; no retry masks it.
+
+Entry current EFLAGS obeys `(flags & !0x8d5) == 0x202`, matching the earlier
+resume-slice domain. TF/RF and other unmodeled control/debug modes reject before
+cleanup; generated-code tests exercise those negatives. Cleanup's resulting
+status flags remain unknown in the returned observation, and the saved-context
+flags are not restored by the admitted original helper. This precondition closes
+an additional unmodeled debug/flag effect; it does not change fixture expectations.

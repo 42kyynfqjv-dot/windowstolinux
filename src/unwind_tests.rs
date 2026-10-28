@@ -74,6 +74,7 @@ fn original_cleanup_order_live_frame_state_and_restore_projection_execute_native
 fn main() {
  let saved=[77,601,602,603,32768,33024,606,607,28672,514];
  let current=[10,11,12,13,28672,28928,16,17,4369,582];
+ for flags in [0x302,0x10202,0x20202,0x4202,0] {let mut bad=current;bad[9]=flags;assert!(unwind(&[300,200,100],saved,bad,0).is_err());}
  let a=unwind(&[300,200,100],saved,current,0).unwrap();
  assert_eq!(a.trace,0x123);
  assert_eq!(a.locals,vec![Some(300),Some(213),Some(118)]);
