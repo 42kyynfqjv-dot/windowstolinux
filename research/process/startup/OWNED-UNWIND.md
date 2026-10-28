@@ -78,3 +78,10 @@ are local results; original Windows evidence remains pending the new workflow.
 The preceding 52079bfa push/PR full CI runs 40607191255 and 40607196851 both
 completed successfully. Logs show about eleven minutes of bounded LLVM/stateful/
 CRLF corpus work, not a diagnosed hang. No runs were cancelled or retried.
+
+First dedicated run 40609222739 at 45ffc7a failed before Windows execution:
+retained build.txt reports C2365, because Windows headers expand the authored
+variable `exception_code` to a CRT function name. The correction renames only
+that variable and records the prior source hash in the freeze history. Expected
+results, compiler flags and converter support are unchanged. No execution or
+translation evidence is counted from the failed build; no retry masks it.

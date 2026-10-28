@@ -1,7 +1,12 @@
 {
-  "source_sha256": "4edc8e73a3249b9a87e9afed2a91fc094f6b3e87c47a2449b2be62588728a943",
+  "source_sha256": "143932ec0de25e0e3269c4d7774d78f411efae331e8aa52dd3c97cae05ecaeb1",
   "configuration": "Official MSVC x86 14.44, /O2 /GS; ordinary Windows CRT entry and original SEH dispatch; authored scope-table format, not MSVC EH4",
-  "compiler_flags": ["/nologo", "/W4", "/O2", "/GS"],
+  "compiler_flags": [
+    "/nologo",
+    "/W4",
+    "/O2",
+    "/GS"
+  ],
   "exception_code": 3762438722,
   "expected_exit": 0,
   "expected_stderr_hex": "",
@@ -19,17 +24,51 @@
     "restore_frame_equal": 1
   },
   "scope_rows": [
-    {"index": 0, "parent": 1, "target": "CleanupA", "owner": "Inner", "trace_digit": 1, "local_delta": 7},
-    {"index": 1, "parent": -1, "target": "CleanupB", "owner": "Inner", "trace_digit": 2, "local_delta": 11},
-    {"index": 2, "parent": -1, "target": "CleanupC", "owner": "Outer", "trace_digit": 3, "local_delta": 13}
+    {
+      "index": 0,
+      "parent": 1,
+      "target": "CleanupA",
+      "owner": "Inner",
+      "trace_digit": 1,
+      "local_delta": 7
+    },
+    {
+      "index": 1,
+      "parent": -1,
+      "target": "CleanupB",
+      "owner": "Inner",
+      "trace_digit": 2,
+      "local_delta": 11
+    },
+    {
+      "index": 2,
+      "parent": -1,
+      "target": "CleanupC",
+      "owner": "Outer",
+      "trace_digit": 3,
+      "local_delta": 13
+    }
   ],
   "scope_row_bytes": 8,
-  "context_offsets": {"eax": 176, "ebp": 180, "eip": 184, "esp": 196},
+  "context_offsets": {
+    "eax": 176,
+    "ebp": 180,
+    "eip": 184,
+    "esp": 196
+  },
   "limits": [
     "Original Windows SEH unwinds two Inner scopes and one Outer scope to main's selected handler.",
     "The subsequent manual Restore is a separate four-field instruction experiment on the live main activation, not a claim to emulate Windows CRT unwinding.",
     "ECX is an opaque saved-context pointer clobber; complete general-register restoration and EFLAGS restoration are not claimed.",
     "The authored scope table is used by real finally dispatch but is not evidence of rcedit or MSVC EH4 table layout.",
     "These are original Windows observations and extracted helper bytes; no whole-PE translation is established by this measurement."
+  ],
+  "source_history": [
+    {
+      "source_sha256": "4edc8e73a3249b9a87e9afed2a91fc094f6b3e87c47a2449b2be62588728a943",
+      "commit": "45ffc7a72734daa96212e8daad1412608c7866d8",
+      "outcome": "MSVC compile error C2365: Windows header exception_code macro collides with fixture variable; no execution observed",
+      "correction": "Rename only to w2l_unwind_event_code; expected behavior and compiler flags unchanged"
+    }
   ]
 }

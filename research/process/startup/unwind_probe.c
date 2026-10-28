@@ -65,7 +65,7 @@ __declspec(naked) void __cdecl CleanupC(Cells *cells) {
 const Scope ScopeTable[3] = {{1, CleanupA}, {-1, CleanupB}, {-1, CleanupC}};
 static volatile DWORD trace_value, inner_result, outer_result, abandoned;
 static volatile LONG inner_cursor_result, outer_cursor_result;
-static const DWORD exception_code = 0xe0424242;
+static const DWORD w2l_unwind_event_code = 0xe0424242;
 
 __declspec(noinline) static void Dispatch(volatile LONG *cursor, volatile DWORD *local) {
     const volatile Scope *table = ScopeTable;
@@ -84,7 +84,7 @@ __declspec(noinline) static void Inner(void) {
     volatile LONG cursor = 0;
     __try {
         __try {
-            RaiseException(exception_code, 0, 0, NULL);
+            RaiseException(w2l_unwind_event_code, 0, 0, NULL);
             abandoned |= 1;
         } __finally {
             Dispatch(&cursor, &local);
@@ -127,7 +127,7 @@ int main(void) {
     __try {
         Outer();
         abandoned |= 32;
-    } __except (GetExceptionCode() == exception_code ? EXCEPTION_EXECUTE_HANDLER : EXCEPTION_CONTINUE_SEARCH) {
+    } __except (GetExceptionCode() == w2l_unwind_event_code ? EXCEPTION_EXECUTE_HANDLER : EXCEPTION_CONTINUE_SEARCH) {
         handled = 1;
     }
     /* Same live main activation; snapshot before pushing Restore's argument.

@@ -89,7 +89,7 @@ def main(out):
     build = subprocess.run(command, capture_output=True, timeout=60)
     (out / 'build.txt').write_bytes(build.stdout + build.stderr)
     if build.returncode:
-        raise RuntimeError('unwind probe compilation failed')
+        raise RuntimeError('unwind probe compilation failed: '+(build.stdout+build.stderr).decode(errors='replace'))
     if sha256(source.read_bytes()) != frozen['source_sha256']:
         raise ValueError('source changed during compilation')
     disasm = subprocess.run(['dumpbin', '/disasm', str(exe)], capture_output=True, timeout=60)
