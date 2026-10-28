@@ -323,3 +323,43 @@ does not prove that Windows would continue the software RaiseException call.
 The enclosing compiler still rejects absent that proof; full startup/rcedit and
 formatter C++ FuncInfo remain unsupported. The historical max and corpus23
 Windows timeouts remain unexplained, with artifacts retained.
+
+## Consuming callback results without authorizing resumption
+
+Review of e0b1fcd7 found no reproduced violation of protected callback return or
+interrupted-state preservation. The next result boundary now consumes the
+non-Clone callback receipt only for the same live Returned event, registry,
+epoch, source frame and generation, revalidating actual suspended storage again.
+Only a fully known scalar may be read as the returned result; pointer addresses
+and partially known bits cannot become an exception disposition by numeric cast.
+Successful consumption changes delivery to ResultTaken, while the normal epoch
+remains suspended. Failure poisons delivery and the registry without erasing
+prior callback effects. No method yet interprets that scalar as a Windows
+EXCEPTION_DISPOSITION or permits cleanup/guest resumption.
+
+The existing native regression function now executes14component scenarios:
+the prior7callback cases plus wrong generation, epoch, owner and frame; partial
+scalar and pointer results; changed source storage at consumption. Valid
+consumption also tests a fabricated duplicate receipt rejecting in ResultTaken.
+Suite totals remain175root/171frame/93CRT; these are not14newWindows comparisons.
+Formatting/Clippy pass. This closes result identity and knowledge validation,
+not original handler instruction/effect binding.
+
+The precise next original-code bridge involves handler_checks::PrefixProof:
+its ValidateContext call consumes the exception's Context pointer and requires
+zero incoming exception-record flags. NormalRaiseCallProof proves guest CALL
+state, not those captured-context bytes or exception-record flags. Arguments
+currently supplied to execute_handler are explicit component inputs. A complete
+composition must provide separately owned, initialized exception/context objects
+whose observable predicates satisfy the original helper proof, then execute the
+original prefix/selection/cleanup with those objects. It must retain unknown
+capture bits and model noncontinuable, nested and unwind outcomes; treating
+RaiseException argument flags as ExceptionRecord flags or copying guest CALL
+registers into captured CONTEXT would invent semantics. This is the bounded
+complex contract still needed before original-handler admission or restoration.
+
+The e0b1fcd7 push run40711469487 failed original imported-output `hello` at
+process.wait after15seconds, PE hash
+`30a0afa2dba23697256b96df129e62a9cc7c099edf68bfcb87eaf125fc3757e3`.
+Artifact12826063820 is retained. Dedicated/full PR results are tracked separately;
+no retry or timeout change turns this unresolved failure into a success claim.

@@ -330,7 +330,7 @@ fn pending_normal_exception(){
  }
 }
 fn pending_handler_activation(){
- for mode in 0..7{
+ for mode in 0..14{
   let(m,mut r,main,mut permit)=fixture_with_extra(&[(0x410000,0x420000)]);let mut rt=runtime(&r);let context=m.owned_context;
   let result=r.with_normal_calls(&m,&mut permit,&main,|e|{
    let mut c=cpu(&mut rt,0xe000,71);let mut b=CrtNormalBinding::bind(&rt,&c,e,epilog_run_layout())?;start(&mut rt,&mut c,e,&mut b,99)?;
@@ -349,15 +349,22 @@ fn pending_handler_activation(){
     if mode==1{return Err("authored handler failure");}
     if mode==2{h.r[3]=CrtValue::scalar(777);}
     if mode==3{rt.store(b.at(rt,b.layout.scope_slot)?,32,CrtValue::scalar(0))?;}
-    h.r[0]=CrtValue::scalar(1);if mode==5{Ok(h.r[0])}else{h.finish(rt)}
+    h.r[0]=if mode==10{CrtValue::Scalar{bits:1,known:0xffff}}else if mode==11{CrtValue::Pointer(marker)}else{CrtValue::scalar(1)};if mode==5{Ok(h.r[0])}else{h.finish(rt)}
    });
    assert_eq!(c.r,registers);assert_eq!((c.flags.cf,c.flags.zf,c.flags.sf,c.flags.of),flags);
    assert_eq!(rt.load(marker,32)?.known_scalar()?,if mode==4||mode==6{91}else{92});
-   if mode==0{
-    let receipt=result?;assert_eq!(receipt.value,CrtValue::scalar(1));assert_eq!(receipt.frame,pending.frame);
+   if mode==0||mode>=7{
+    let mut receipt=result?;if mode!=10&&mode!=11{assert_eq!(receipt.value,CrtValue::scalar(1));}assert_eq!(receipt.frame,pending.frame);
     assert_eq!((receipt.identity,receipt.epoch,receipt.generation),(pending.identity,pending.epoch,pending.generation));
     assert_eq!(pending.delivery,CrtNormalDelivery::Returned);pending.dispatch_source(&rt,&c,e,&b)?;
     assert!(pending.execute_handler(&mut rt,&c,e,&b,&mut dispatcher,0x401900,|_,_|panic!("replayed")).is_err());
+    match mode{7=>receipt.generation+=1,8=>receipt.epoch+=1,9=>receipt.identity.owner+=1,
+     12=>rt.store(b.at(&rt,b.layout.scope_slot)?,32,CrtValue::scalar(0))?,13=>receipt.frame.generation+=1,_=>{}}
+    let consumed=pending.take_handler_result(receipt,&rt,&c,e,&b);
+    if mode==0{assert_eq!(consumed?,1);assert_eq!(pending.delivery,CrtNormalDelivery::ResultTaken);
+     let replay=CrtNormalHandlerReturn{identity:pending.identity,epoch:pending.epoch,frame:pending.frame,generation:pending.generation,value:CrtValue::scalar(1)};
+     assert!(pending.take_handler_result(replay,&rt,&c,e,&b).is_err());
+    }else{assert!(consumed.is_err());assert_eq!(pending.delivery,CrtNormalDelivery::Failed);}
    }else{assert!(result.is_err());assert_eq!(pending.delivery,if mode==4||mode==6{CrtNormalDelivery::Pending}else{CrtNormalDelivery::Failed});}
    assert!(e.state().is_err());assert!(epilog_run(&mut rt,&mut c,e,&mut b).is_err());
    Err::<(),_>("component callback is not a disposition/restoration proof")

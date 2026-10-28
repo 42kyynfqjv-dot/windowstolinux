@@ -210,7 +210,7 @@ impl CrtNormalBinding {
 /// turning it into a Windows captured CONTEXT or a normal-return receipt.
 struct CrtNormalRaiseSite { instruction:u32,continuation:u32,iat:u32 }
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
-enum CrtNormalDelivery { Pending,Calling,Returned,Failed }
+enum CrtNormalDelivery { Pending,Calling,Returned,ResultTaken,Failed }
 struct CrtNormalHandlerReturn { identity:RegistryIdentity,epoch:u64,frame:NormalFrameId,generation:u64,value:CrtValue }
 struct CrtNormalException {
  anchor:guest_memory::Capability,identity:RegistryIdentity,epoch:u64,frame:NormalFrameId,
@@ -293,6 +293,17 @@ impl CrtNormalException {
    Ok(CrtNormalHandlerReturn{identity:self.identity,epoch:self.epoch,frame:self.frame,generation:self.generation,value})
   })();
   match result{Ok(receipt)=>{self.delivery=CrtNormalDelivery::Returned;Ok(receipt)},Err(error)=>{self.delivery=CrtNormalDelivery::Failed;epoch.fail(error)}}
+ }
+ /// Consume only an actually completed callback result for this live event.
+ /// The returned scalar is not an EXCEPTION_DISPOSITION authorization: the
+ /// enclosing original dispatcher must still prove its meaning and effects.
+ fn take_handler_result(&mut self,receipt:CrtNormalHandlerReturn,rt:&CrtStreamRuntime,interrupted:&CrtCpu,epoch:&mut NormalCallEpoch<'_>,binding:&CrtNormalBinding)->RegistryResult<u32>{
+  let result=(||{
+   if self.delivery!=CrtNormalDelivery::Returned||receipt.identity!=self.identity||receipt.epoch!=self.epoch
+    ||receipt.frame!=self.frame||receipt.generation!=self.generation{return Err("normal exception foreign/stale handler receipt");}
+   self.dispatch_source(rt,interrupted,epoch,binding)?;receipt.value.known_scalar()
+  })();
+  match result{Ok(value)=>{self.delivery=CrtNormalDelivery::ResultTaken;Ok(value)},Err(error)=>{self.delivery=CrtNormalDelivery::Failed;epoch.fail(error)}}
  }
  fn validate_pending(&self,rt:&CrtStreamRuntime,epoch:&NormalCallEpoch<'_>)->RegistryResult<()>{
   epoch.registry.available()?;
