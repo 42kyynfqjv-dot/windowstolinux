@@ -434,6 +434,122 @@ def connected_helper_evidence(image,index,bound,frames,blocks,handler,observatio
         memset_obligation='All scalar/REP/SIMD paths and CPU-dispatch feature values require proven effects or an explicit independently validated effect contract')
 
 
+def dispatch_cfg(image,index,entry,name):
+    """Bound complete local CFG bytes, retaining every call/indirect obligation.
+
+    This is evidence extraction, not admission: unknown callees/indirect targets
+    and trap paths remain explicitly unresolved. Production must decode again.
+    """
+    pending=[entry];visited={};calls=[];indirect=[];branches=[];returns=[];traps=[]
+    while pending:
+        at=pending.pop()
+        if at in visited:continue
+        if not entry<=at<entry+2048 or at not in index or len(visited)>=512:
+            raise ValueError('dispatch evidence graph leaves bounded original body')
+        row=index[at];visited[at]=row;raw=bytes.fromhex(row['code_hex']);after=at+len(raw)
+        if raw==b'\xc3' or (raw[0]==0xc2 and len(raw)==3):
+            returns.append(dict(rva=at,pop_bytes=0 if len(raw)==1 else struct.unpack('<H',raw[1:])[0]));continue
+        if raw==b'\xcc':
+            traps.append(dict(rva=at,kind='INT3 terminal failure edge; not successful continuation'));continue
+        if raw[0]==0xe8:
+            calls.append(dict(call_rva=at,target_rva=after+struct.unpack('<i',raw[1:])[0]));pending.append(after)
+        elif raw[0] in (0xe9,0xeb):
+            target=after+struct.unpack('<i' if raw[0]==0xe9 else '<b',raw[1:])[0]
+            branches.append(dict(rva=at,target_rva=target,conditional=False));pending.append(target)
+        elif 0x70<=raw[0]<=0x7f or (raw[0]==0x0f and len(raw)>1 and 0x80<=raw[1]<=0x8f):
+            target=after+(struct.unpack('<b',raw[1:])[0] if raw[0]!=0x0f else struct.unpack('<i',raw[2:])[0])
+            branches.append(dict(rva=at,target_rva=target,conditional=True));pending.extend([after,target])
+        elif raw[0]==0xff and (raw[1]>>3)&7 in (2,4):
+            call=(raw[1]>>3)&7==2
+            effect=dict(rva=at,kind='call' if call else 'jump',code_hex=raw.hex())
+            if raw[:2]==b'\xff\x15':
+                base,_=pe_sections(image);slot=u32(raw,2);effect['slot_rva']=slot-base
+                try:effect['import']=list(import_at_iat(image,slot-base))
+                except ValueError:effect['import']=None
+            indirect.append(effect)
+            if call:pending.append(after)
+        elif raw[0] in (0xe0,0xe1,0xe2,0xe3,0x9a,0xea,0xca,0xcb,0xcf,0xcd):
+            raise ValueError('dispatch evidence unsupported control encoding')
+        else:pending.append(after)
+    end=max(r['rva']+r['size'] for r in visited.values());cursor=entry;rows=[]
+    while cursor<end:
+        if cursor not in index:raise ValueError('dispatch original instruction coverage gap')
+        rows.append(index[cursor]);cursor+=index[cursor]['size']
+    block=fragment(dict(rva=entry,size=end-entry),rows,entry,end,name,
+        'complete bounded original instruction envelope; no proof of external calls, indirect effects or Windows dispatcher contract')
+    block.update(direct_calls=sorted(calls,key=lambda x:x['call_rva']),
+        indirect_effects=sorted(indirect,key=lambda x:x['rva']),branches=sorted(branches,key=lambda x:x['rva']),
+        return_sites=sorted(returns,key=lambda x:x['rva']),trap_sites=sorted(traps,key=lambda x:x['rva']))
+    return block
+
+
+def dispatch_evidence(image,index,bound,handler):
+    """Derive graph entry identities from the already COFF-bound handler path."""
+    base,_=pe_sections(image)
+    full=dispatch_cfg(image,index,handler['handler_rva'],'original-handler-complete')
+    known={c['target_rva'] for c in handler['prefix_calls']}
+    remaining=[c for c in full['direct_calls'] if c['target_rva'] not in known]
+    # Reviewed body roles are tied to original call order and repeated target
+    # identity. No RVA or hash selects behavior in the production compiler.
+    if len(remaining)!=6 or remaining[1]['target_rva']!=remaining[4]['target_rva']:
+        raise ValueError('original handler dependency order or shared local wrapper changed')
+    filter_bridge=dispatch_cfg(image,index,remaining[0]['target_rva'],'original-filter-bridge')
+    local_wrapper=dispatch_cfg(image,index,remaining[1]['target_rva'],'original-local-unwind-wrapper')
+    global_wrapper=dispatch_cfg(image,index,remaining[3]['target_rva'],'original-global-unwind-wrapper')
+    selected=dispatch_cfg(image,index,remaining[5]['target_rva'],'original-selected-transfer')
+    if len(local_wrapper['direct_calls'])!=1 or local_wrapper['return_sites'][-1]['pop_bytes']!=8:
+        raise ValueError('original local wrapper call/cleanup ABI changed')
+    local=dispatch_cfg(image,index,local_wrapper['direct_calls'][0]['target_rva'],'original-local-unwind')
+    if len(local['direct_calls'])!=2:
+        raise ValueError('original local unwind callback inventory changed')
+    notification=dispatch_cfg(image,index,local['direct_calls'][0]['target_rva'],'original-notification')
+    cleanup_bridge=dispatch_cfg(image,index,local['direct_calls'][1]['target_rva'],'original-cleanup-bridge')
+    if len(selected['direct_calls'])!=1 or selected['direct_calls'][0]['target_rva']!=notification['rva']:
+        raise ValueError('selected and cleanup paths use different notification effects')
+    nested_values=[]
+    for before,after in zip(local['instructions'],local['instructions'][1:]):
+        raw=bytes.fromhex(before['code_hex'])
+        if len(raw)==5 and raw[0]==0x68 and after['code_hex']=='64ff3500000000':nested_values.append(u32(raw,1))
+    if len(nested_values)!=1:raise ValueError('temporary FS handler address is not uniquely bound')
+    nested=dispatch_cfg(image,index,nested_values[0]-base,'original-nested-handler')
+    if len(nested['direct_calls'])!=2 or nested['direct_calls'][1]['target_rva']!=local['rva']:
+        raise ValueError('nested handler does not bind same original local-unwind loop')
+    imported=global_wrapper['indirect_effects']
+    if len(imported)!=1 or imported[0].get('import')!=['kernel32.dll','RtlUnwind']:
+        raise ValueError('original global wrapper import is not RtlUnwind')
+    call=index[imported[0]['rva']];resume=call['rva']+call['size']
+    resume_arguments=[r for r in global_wrapper['instructions'] if r['code_hex']==(b'\x68'+struct.pack('<I',base+resume)).hex()]
+    if len(resume_arguments)!=1 or resume not in {r['rva'] for r in global_wrapper['instructions']}:
+        raise ValueError('original RtlUnwind TargetIp is not bound wrapper continuation')
+    notification_bases=[u32(bytes.fromhex(r['code_hex']),1) for r in notification['instructions'] if r['size']==5 and r['code_hex'].startswith('bb')]
+    if len(notification_bases)!=1:raise ValueError('notification module pointer is not unique')
+    notification_base=notification_bases[0]
+    stores=[r for r in notification['instructions'] if r['code_hex'] in ['894b08','894304','896b0c']]
+    if [r['code_hex'] for r in stores]!=['894b08','894304','896b0c']:
+        raise ValueError('notification stores/order changed')
+    notification_words=[module_word(image,notification_base+offset,'NLG shared module word') for offset in [0,4,8,12]]
+    if any(w['section_flags']&0x20000000 or not w['section_flags']&0x80000000 for w in notification_words):
+        raise ValueError('notification record lacks writable nonexecutable module ownership')
+    epilogs=[]
+    for symbol in ['_Inner','_Outer','_main']:
+        function=bound[symbol];rows=function_rows(function,index)
+        positions=[i for i,r in enumerate(rows) if r['code_hex']=='64890d00000000']
+        if len(positions)!=1 or positions[0]==0 or rows[positions[0]-1]['code_hex']!='8b4df0':
+            raise ValueError('original normal FS teardown binding changed')
+        epilogs.append(through_ret(function,rows,rows[positions[0]-1]['rva'],symbol[1:]+'-normal-epilog',
+            'original normal-return epilog; not the exceptional cleanup path and not executed at current capture cut'))
+    blocks=[full,local,nested,filter_bridge,selected,global_wrapper,local_wrapper,notification,cleanup_bridge]+epilogs
+    metadata=dict(handler_rva=full['rva'],handler_direct_calls=full['direct_calls'],
+        unresolved_cpp_helper=remaining[2],rtl_unwind_iat_rva=imported[0]['slot_rva'],
+        rtl_unwind_call_rva=imported[0]['rva'],rtl_unwind_resume_rva=resume,
+        nested_handler_rva=nested['rva'],nested_security_check_rva=nested['direct_calls'][0]['target_rva'],
+        notification_record_rva=notification_base-base,notification_words=notification_words,
+        notification_store_order=[dict(rva=r['rva'],code_hex=r['code_hex']) for r in stores],
+        observed_runtime_fields='not measured here: callback flags, live FS chain, notification values and wrapper resume context',
+        admission='inventory only; complete bytes are not proof of RtlUnwind, unknown callbacks or thread-state equivalence')
+    return blocks,metadata
+
+
 def frame_evidence(root):
     obj = (root/'unwind.obj').read_bytes()
     image = (root/'unwind.exe').read_bytes()
@@ -534,9 +650,11 @@ def frame_evidence(root):
     observation=json.loads((root/'report.json').read_text())['observation']
     connected_blocks,connected=connected_helper_evidence(image,index,bound,frames,fragments,handler,observation)
     fragments.extend(connected_blocks)
+    dispatch_blocks,dispatch=dispatch_evidence(image,index,bound,handler)
+    fragments.extend(dispatch_blocks)
     return dict(kind='original frame/filter fragment provenance; not whole startup or Windows dispatch equivalence',
         pe_sha256=sha(image),object_sha256=sha(obj),disassembly_sha256=sha((root/'disasm.txt').read_bytes()),
-        frames=frames,fragments=fragments,handler=handler,connected=connected,
+        frames=frames,fragments=fragments,handler=handler,connected=connected,dispatch=dispatch,
         cuts=[
             'Original FS registration/cookie/handler state is retained but is not initialized by a slice extraction.',
             'Main initialization and activation are separate cuts; memset/GetModuleHandleW effects between them remain unproved.',
@@ -599,6 +717,22 @@ def artifact_tests(root):
             self.assertTrue(any(r['code_hex'].startswith('0fae') for r in normalizer))
             self.assertEqual(sum(r['code_hex'] == 'c3' for r in normalizer),5)
             self.assertEqual(blocks['main-filter-0']['instructions'][-1]['code_hex'],'c3')
+        def test_complete_dispatch_retains_unresolved_effects(self):
+            dispatch=baseline['dispatch']
+            self.assertEqual(blocks['original-handler-complete']['size'],350)
+            self.assertEqual(blocks['original-local-unwind']['size'],159)
+            self.assertEqual(blocks['original-nested-handler']['size'],70)
+            self.assertEqual(dispatch['rtl_unwind_resume_rva'],dispatch['rtl_unwind_call_rva']+6)
+            self.assertEqual([r['code_hex'] for r in dispatch['notification_store_order']],
+                             ['894b08','894304','896b0c'])
+            self.assertIn('not measured',dispatch['observed_runtime_fields'])
+            self.assertTrue(dispatch['unresolved_cpp_helper'])
+        def test_changed_runtime_import_cannot_reuse_dispatch_binding(self):
+            image=original['unwind.exe']
+            self.assertEqual(image.count(b'RtlUnwind\0'),1)
+            changed=image.replace(b'RtlUnwind\0',b'RtlUnwina\0')
+            with self.assertRaisesRegex(ValueError,'not RtlUnwind'):
+                replay({'unwind.exe':changed})
         def test_disassembly_is_not_an_unchecked_oracle(self):
             text = original['disasm.txt'].decode()
             needle = '004010C0: 55'
