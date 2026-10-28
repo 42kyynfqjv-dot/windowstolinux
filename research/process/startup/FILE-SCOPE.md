@@ -165,3 +165,38 @@ one observed thread, no detected wait-chain cycle. The measured PE hash is
 These observations do not establish a loader, runner or application cause. The
 failure remains unresolved; a concurrent pass is not a fix. No retry, raised
 timeout or removed check hides it. Historical timeout evidence remains separate.
+
+## Owned issuance while a normal call is active
+
+The shared native runtime now has a bounded pending software-exception transition.
+`CrtNormalException::issue` validates the actual live EH4 frame/epoch, module call
+boundary, initialized four-word RaiseException argument area, stack ownership,
+and fresh protected CALL slot before publishing suspension. Its initial domain
+has no exception parameters and admits only flags 0 or 1. It rejects a reserved
+code bit, unknown values, unsupported parameters and invalid continuation lengths.
+A separately proved original import binding remains mandatory before this hook
+can be used by a production compiler; numeric module membership alone is not one.
+
+Issuance performs the original CALL push and retains the guest call register/flag
+snapshot in a non-Clone owned token. The snapshot is not a Windows-captured
+CONTEXT. Prior writes, locks, active scope and selected outer event are retained.
+The normal registry's state/epilog operations reject while this event is pending,
+and normal epoch completion explicitly rejects an unconsumed pending event.
+Validation binds the token to its exact arena/thread/epoch/live source frame and
+unique continuation slot. There is no Boolean successful-return substitute and
+no implicit unlock, argument cleanup, register clobber or host exception recovery.
+
+Two new native test functions exercise continuable/noncontinuable issuance,
+unknown versus known flag preservation, foreign-arena and replay rejection, and
+six invalid argument/continuation/stack cases. Negatives check no issue effects;
+positive issuance checks retained writes/locks/protected frame and blocked epilog.
+These are component transitions, not original-Windows exception comparisons.
+The existing five original-boundary differential cases still exercise normal
+helper/epilog restoration and do not validate this newly pending delivery state.
+
+This closes issuance/suspension ownership only. No handler-selection, C++
+registration, captured-context restoration or termination outcome is minted.
+The pending token deliberately has no resume method until an instruction-derived
+containment/dispatch result can authorize that transition. Connecting the owned
+handler machine to the suspended normal-frame chain and the original formatter's
+C++ FuncInfo remains the next integration gate; full startup remains rejected.

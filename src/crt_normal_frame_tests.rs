@@ -284,7 +284,51 @@ fn file_scope_failure(){
   if mode==2{let level=rt.resolve_absolute(0xdff8,CrtRegionKind::Stack).unwrap();assert_eq!(rt.load(level,32).unwrap().known_scalar().unwrap(),0);}
  }
 }
-fn main(){match std::env::args().nth(1).unwrap().as_str(){"file"=>file_scope_normal(),"file-failure"=>file_scope_failure(),"nested"=>nested_actual(),"mutations"=>mutations(),"consumed"=>consumed_mutation(),"failure"=>body_failure(),"certificate"=>wrong_certificate(),"observed"=>observed(),_=>panic!("case")}}
+
+fn pending_normal_exception(){
+ for flags in [0u32,1]{
+  let(m,mut r,main,mut permit)=fixture_with_extra(&[(0x410000,0x420000)]);let mut rt=runtime(&r);let original=m.owned_context;
+  assert_eq!(r.with_normal_calls(&m,&mut permit,&main,|e|{
+   let mut c=cpu(&mut rt,0xe000,71);let mut b=CrtNormalBinding::bind(&rt,&c,e,epilog_run_layout())?;start(&mut rt,&mut c,e,&mut b,99)?;
+   let lease=rt.lock(rt.thread)?;rt.store(b.at(&rt,b.layout.level)?,32,CrtValue::scalar(0))?;
+   let marker=b.at(&rt,-32)?;rt.store(marker,32,CrtValue::scalar(91))?;
+   for arg in [0,0,flags,0xe0420042]{c.push(&mut rt,CrtValue::scalar(arg))?;}
+   if flags==0{c.flags=CrtFlags::unknown();}
+   let call_flags=(c.flags.cf,c.flags.zf,c.flags.sf,c.flags.of);
+   let registers=c.r;let before=CrtCpu::pointer(c.r[4])?;
+   let pending=CrtNormalException::issue(&mut rt,&mut c,e,&b,0x401800,0x401806)?;
+   pending.validate_pending(&rt,e)?;
+   let foreign=runtime(e.registry);assert!(pending.validate_pending(&foreign,e).is_err());
+   let issued_sp=c.r[4];assert!(CrtNormalException::issue(&mut rt,&mut c,e,&b,0x401800,0x401806).is_err());assert_eq!(c.r[4],issued_sp);
+   assert_eq!(pending.call_registers,registers);assert_eq!(pending.code,0xe0420042);assert_eq!(pending.noncontinuable,flags==1);
+   assert_eq!(pending.continuation,0x401806);assert_eq!(c.r[4],CrtValue::Pointer(rt.offset(before,-4)?));
+   for reg in [0,1,2,3,5,6,7]{assert_eq!(c.r[reg],registers[reg]);}
+   assert_eq!((pending.call_flags.cf,pending.call_flags.zf,pending.call_flags.sf,pending.call_flags.of),call_flags);assert_eq!(rt.load(marker,32)?.known_scalar()?,91);rt.check_lock(lease)?;
+   assert!(e.state().is_err());assert!(epilog_run(&mut rt,&mut c,e,&mut b).is_err());
+   assert_eq!(rt.locks.len(),1);assert!(e.registry.normal_epoch.as_ref().unwrap().frames[0].installed);
+   Err::<(),_>("pending delivery has no containment/dispatch certificate")
+  }),Err("normal call suspended for owned exception"));
+  assert_eq!(m.owned_context,original);assert!(r.normal_epoch.as_ref().unwrap().pending_exception.is_some());
+ }
+}
+fn reject_normal_exception(){
+ for mode in 0..6{
+  let(m,mut r,main,mut permit)=fixture_with_extra(&[(0x410000,0x420000)]);let mut rt=runtime(&r);
+  r.with_normal_calls(&m,&mut permit,&main,|e|{
+   let mut c=cpu(&mut rt,0xe000,71);let mut b=CrtNormalBinding::bind(&rt,&c,e,epilog_run_layout())?;start(&mut rt,&mut c,e,&mut b,99)?;
+   for arg in [0,0,0,0xe0420042]{c.push(&mut rt,CrtValue::scalar(arg))?;}
+   let sp=CrtCpu::pointer(c.r[4])?;
+   match mode{0=>rt.store(rt.offset(sp,4)?,32,CrtValue::scalar(2))?,1=>rt.store(rt.offset(sp,8)?,32,CrtValue::scalar(1))?,
+    2=>rt.store(sp,32,CrtValue::scalar(0xf0420042))?,3=>rt.store(sp,32,CrtValue::Scalar{bits:0,known:0})?,
+    4=>{c.r[4]=CrtValue::Pointer(b.at(&rt,b.layout.low)?);},_=>{}}
+   let before=c.r;let generation=rt.generation;
+   assert!(CrtNormalException::issue(&mut rt,&mut c,e,&b,0x401800,if mode==5{0x401805}else{0x401806}).is_err());
+   assert_eq!(c.r,before);assert_eq!(rt.generation,generation);assert!(e.state()?.pending_exception.is_none());
+   c.r[4]=CrtValue::Pointer(sp);c.discard(&mut rt,16)?;c.r[0]=CrtValue::scalar(0);epilog_run(&mut rt,&mut c,e,&mut b)?;Ok(())
+  }).unwrap();
+ }
+}
+fn main(){match std::env::args().nth(1).unwrap().as_str(){"pending"=>pending_normal_exception(),"pending-reject"=>reject_normal_exception(),"file"=>file_scope_normal(),"file-failure"=>file_scope_failure(),"nested"=>nested_actual(),"mutations"=>mutations(),"consumed"=>consumed_mutation(),"failure"=>body_failure(),"certificate"=>wrong_certificate(),"observed"=>observed(),_=>panic!("case")}}
 "#;
 
 fn run(case: &str) {
@@ -478,4 +522,13 @@ fn file_scope_certificate_rejects_effect_and_ownership_mutations() {
     let mut b = originals.clone();
     b[3].splice(0..0, [0x8b, 0x75, 0xe4]);
     assert!(prove(&b).is_err());
+}
+
+#[test]
+fn normal_exception_issue_preserves_guest_call_state_and_blocks_normal_cleanup() {
+    run("pending");
+}
+#[test]
+fn normal_exception_invalid_arguments_and_continuations_have_no_issue_effect() {
+    run("pending-reject");
 }

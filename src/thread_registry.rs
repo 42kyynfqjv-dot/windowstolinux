@@ -69,7 +69,7 @@ struct RegistryNormalFrame {
 }
 struct NormalEpochState {
  generation:u64,event:u64,selected:RegistrationId,previous:RegistryHead,next_unwind:usize,
- context:[Option<u32>;10],frames:Vec<RegistryNormalFrame>,issued:usize,
+ context:[Option<u32>;10],frames:Vec<RegistryNormalFrame>,issued:usize,pending_exception:Option<u64>,
 }
 struct NormalCallEpoch<'a>{registry:&'a mut ThreadRegistry,generation:u64}
 #[derive(Debug)]
@@ -321,13 +321,13 @@ impl ThreadRegistry {
   let next_stamp=match start{Ok(value)=>value,Err(e)=>return self.fail(e)};
   let generation=match self.next_id(){Ok(id)=>id.generation,Err(e)=>return self.fail(e)};
   self.normal_epoch=Some(NormalEpochState{generation,event:permit.event,selected:permit.selected,
-   previous:self.head,next_unwind:self.next_unwind,context:permit.context,frames:Vec::new(),issued:0});
+   previous:self.head,next_unwind:self.next_unwind,context:permit.context,frames:Vec::new(),issued:0,pending_exception:None});
   let result=body(&mut NormalCallEpoch{registry:self,generation});
   let value=match result{Ok(value)=>value,Err(e)=>return self.fail(e)};
   self.available()?;
   let state=self.normal_epoch.as_ref().ok_or("normal call missing epoch")?;
   if state.generation!=generation||state.event!=permit.event||state.selected!=permit.selected
-   ||state.context!=permit.context||!state.frames.is_empty()||self.head!=state.previous
+   ||state.pending_exception.is_some()||state.context!=permit.context||!state.frames.is_empty()||self.head!=state.previous
    ||self.next_unwind!=state.next_unwind||self.selected.as_ref().is_none_or(|p|p.target!=permit.selected)
    ||machine.owned_context!=Some(permit.context)||!matches!(machine.phase,Phase::Done|Phase::Returning) {
    return self.fail("normal call incomplete lifecycle or changed selected context");
@@ -342,7 +342,8 @@ impl NormalCallEpoch<'_> {
  fn state(&self)->RegistryResult<&NormalEpochState>{
   self.registry.available()?;
   let state=self.registry.normal_epoch.as_ref().ok_or("normal call expired epoch")?;
-  if state.generation!=self.generation{return Err("normal call stale epoch");}Ok(state)
+  if state.generation!=self.generation{return Err("normal call stale epoch");}
+  if state.pending_exception.is_some(){return Err("normal call suspended for owned exception");}Ok(state)
  }
  fn head(&self)->RegistryResult<RegistryHead>{self.state()?;self.registry.head()}
  fn fail<T>(&mut self,error:&'static str)->RegistryResult<T>{self.registry.fail(error)}

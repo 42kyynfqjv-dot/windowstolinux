@@ -159,4 +159,61 @@ impl CrtNormalBinding {
   self.done=true;Ok(value)
  }
 }
+
+/// An issued software exception is not a successful API return. This private
+/// token owns the interrupted guest CALL state. There is deliberately no API
+/// turning it into a Windows captured CONTEXT or a normal-return receipt.
+struct CrtNormalException {
+ anchor:guest_memory::Capability,identity:RegistryIdentity,epoch:u64,frame:NormalFrameId,
+ generation:u64,code:u32,noncontinuable:bool,continuation:u32,
+ call_registers:[CrtValue;8],call_flags:CrtFlags,return_id:u64,
+}
+impl CrtNormalException {
+ /// Called only at a separately proved FF /2 RaiseException import boundary.
+ /// Initial domain: no exception parameters. The opcode/IAT effect binding is
+ /// still a compiler prerequisite, never inferred from numeric address equality.
+ fn issue(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,epoch:&mut NormalCallEpoch<'_>,binding:&CrtNormalBinding,instruction:u32,continuation:u32)->RegistryResult<Self>{
+  binding.image(rt,cpu,epoch)?;
+  let frame=binding.id.ok_or("normal exception source not installed")?;
+  let f=epoch.top(frame)?;
+  if !f.installed||f.unlinked||epoch.head()!=Ok(RegistryHead::Normal(frame))
+   ||instruction.checked_add(6)!=Some(continuation)||instruction==0
+   ||!epoch.registry.module_contains_address(instruction)||!epoch.registry.module_contains_address(continuation)
+   ||!epoch.registry.bound.iter().any(|&(a,b)|instruction>=a&&continuation<b){
+   return Err("normal exception source/call boundary");
+  }
+  let sp=CrtCpu::pointer(cpu.r[4])?;
+  if sp.cap!=binding.caller.cap||sp.address()%4!=0
+   ||sp.address().checked_add(16).is_none_or(|end|end>binding.at(rt,binding.layout.low).map(|p|p.address()).unwrap_or(0)){
+   return Err("normal exception argument ownership/extent");
+  }
+  let mut args=[0;4];for(i,arg)in args.iter_mut().enumerate(){*arg=rt.load(rt.offset(sp,i as i64*4)?,32)?.known_scalar()?;}
+  if args[0]&0x10000000!=0||args[1]>1||args[2]!=0||args[3]!=0{return Err("normal exception unsupported code/flags/parameters");}
+  let slot=rt.offset(sp,-4)?;rt.valid(slot,4)?;
+  epoch.registry.range(slot.address(),u64::from(sp.address())+16)?;
+  if rt.overlapping_tags(slot.address(),4).iter().any(|(_,v)|matches!(v,CrtValue::ProtectedReturn(_)|CrtValue::OpaqueSaved(_)|CrtValue::ThreadHead(_))){return Err("normal exception protected CALL slot");}
+  let generation=rt.generation.checked_add(1).filter(|n|*n<1u64<<63).ok_or("normal exception identity budget")?;
+  let return_id=generation|(1u64<<63);
+  if rt.tags.values().any(|v|*v==CrtValue::ProtectedReturn(return_id)){return Err("normal exception return collision");}
+  let pending=Self{anchor:rt.anchor,identity:epoch.registry.identity,epoch:epoch.generation,frame,
+   generation,code:args[0],noncontinuable:args[1]!=0,continuation,
+   call_registers:cpu.r,call_flags:cpu.flags,return_id};
+  // Publish suspension only after the original CALL push succeeds. No argument
+  // cleanup, clobber, captured-register synthesis, unlock or frame retirement.
+  cpu.push(rt,CrtValue::ProtectedReturn(return_id))?;rt.generation=generation;
+  epoch.registry.normal_epoch.as_mut().ok_or("normal exception missing epoch")?.pending_exception=Some(generation);
+  Ok(pending)
+ }
+ fn validate_pending(&self,rt:&CrtStreamRuntime,epoch:&NormalCallEpoch<'_>)->RegistryResult<()>{
+  epoch.registry.available()?;
+  let state=epoch.registry.normal_epoch.as_ref().ok_or("normal exception expired epoch")?;
+  if rt.anchor!=self.anchor||rt.owner!=self.identity.owner||rt.thread!=self.identity.instance||rt.closed
+   ||rt.initialization.is_some()||rt.shutdown.is_some()
+   ||epoch.registry.identity!=self.identity||epoch.generation!=self.epoch||state.generation!=self.epoch
+   ||state.pending_exception!=Some(self.generation)||epoch.registry.head!=RegistryHead::Normal(self.frame)
+   ||state.frames.last().is_none_or(|f|f.id!=self.frame||!f.installed||f.unlinked){return Err("normal exception stale/foreign ownership");}
+  let sp=CrtCpu::pointer(self.call_registers[4])?;
+  if rt.load(rt.offset(sp,-4)?,32)?!=CrtValue::ProtectedReturn(self.return_id)||rt.tags.values().filter(|v|**v==CrtValue::ProtectedReturn(self.return_id)).count()!=1{return Err("normal exception lost/aliased CALL continuation");}Ok(())
+ }
+}
 "#;
