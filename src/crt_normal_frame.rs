@@ -1,5 +1,42 @@
 //! Binding between the live normal-call registry and actual checked CRT stack.
 //! This is a normal-path component boundary, not exception containment proof.
+/// Exact instruction proof for a separately established RaiseException import.
+/// Import identity must come from the enclosing image proof, never an address
+/// guessed from disassembly. This certificate proves only the CALL encoding.
+pub(crate) struct NormalRaiseCallProof {
+    instruction: u32,
+    continuation: u32,
+    iat: u32,
+}
+impl NormalRaiseCallProof {
+    pub(crate) fn prove(bytes: &[u8], instruction: u32, iat: u32) -> Result<Self, String> {
+        let continuation = instruction
+            .checked_add(6)
+            .ok_or("normal raise instruction overflow")?;
+        let iat_end = iat.checked_add(4).ok_or("normal raise IAT overflow")?;
+        if instruction == 0
+            || iat == 0
+            || !iat.is_multiple_of(4)
+            || bytes.len() != 6
+            || bytes[..2] != [0xff, 0x15]
+            || u32::from_le_bytes(bytes[2..6].try_into().unwrap()) != iat
+            || (instruction < iat_end && iat < continuation)
+        {
+            return Err("normal raise exact indirect call/IAT boundary".into());
+        }
+        Ok(Self {
+            instruction,
+            continuation,
+            iat,
+        })
+    }
+    pub(crate) fn emit_site(&self) -> String {
+        format!(
+            "CrtNormalRaiseSite{{instruction:{},continuation:{},iat:{}}}",
+            self.instruction, self.continuation, self.iat
+        )
+    }
+}
 pub(crate) const EMITTED_TYPES: &str = r#"
 #[derive(Clone,Debug,PartialEq,Eq)]
 struct CrtNormalLayout {
@@ -163,6 +200,7 @@ impl CrtNormalBinding {
 /// An issued software exception is not a successful API return. This private
 /// token owns the interrupted guest CALL state. There is deliberately no API
 /// turning it into a Windows captured CONTEXT or a normal-return receipt.
+struct CrtNormalRaiseSite { instruction:u32,continuation:u32,iat:u32 }
 struct CrtNormalException {
  anchor:guest_memory::Capability,identity:RegistryIdentity,epoch:u64,frame:NormalFrameId,
  generation:u64,code:u32,noncontinuable:bool,continuation:u32,
@@ -172,14 +210,17 @@ impl CrtNormalException {
  /// Called only at a separately proved FF /2 RaiseException import boundary.
  /// Initial domain: no exception parameters. The opcode/IAT effect binding is
  /// still a compiler prerequisite, never inferred from numeric address equality.
- fn issue(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,epoch:&mut NormalCallEpoch<'_>,binding:&CrtNormalBinding,instruction:u32,continuation:u32)->RegistryResult<Self>{
+ fn issue(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,epoch:&mut NormalCallEpoch<'_>,binding:&CrtNormalBinding,site:CrtNormalRaiseSite)->RegistryResult<Self>{
+  let CrtNormalRaiseSite{instruction,continuation,iat}=site;
   binding.image(rt,cpu,epoch)?;
   let frame=binding.id.ok_or("normal exception source not installed")?;
   let f=epoch.top(frame)?;
   if !f.installed||f.unlinked||epoch.head()!=Ok(RegistryHead::Normal(frame))
    ||instruction.checked_add(6)!=Some(continuation)||instruction==0
    ||!epoch.registry.module_contains_address(instruction)||!epoch.registry.module_contains_address(continuation)
-   ||!epoch.registry.bound.iter().any(|&(a,b)|instruction>=a&&continuation<b){
+   ||!epoch.registry.bound.iter().any(|&(a,b)|instruction>=a&&continuation<b)
+   ||iat==0||iat%4!=0||iat.checked_add(4).is_none_or(|end|
+    !epoch.registry.bound.iter().any(|&(a,b)|iat>=a&&end<=b)||instruction<end&&iat<continuation){
    return Err("normal exception source/call boundary");
   }
   let sp=CrtCpu::pointer(cpu.r[4])?;

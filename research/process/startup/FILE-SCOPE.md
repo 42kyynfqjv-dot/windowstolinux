@@ -188,7 +188,7 @@ no implicit unlock, argument cleanup, register clobber or host exception recover
 
 Two new native test functions exercise continuable/noncontinuable issuance,
 unknown versus known flag preservation, foreign-arena and replay rejection, and
-six invalid argument/continuation/stack cases. Negatives check no issue effects;
+ten invalid argument/continuation/stack/IAT cases. Negatives check no issue effects;
 positive issuance checks retained writes/locks/protected frame and blocked epilog.
 These are component transitions, not original-Windows exception comparisons.
 The existing five original-boundary differential cases still exercise normal
@@ -200,3 +200,41 @@ The pending token deliberately has no resume method until an instruction-derived
 containment/dispatch result can authorize that transition. Connecting the owned
 handler machine to the suspended normal-frame chain and the original formatter's
 C++ FuncInfo remains the next integration gate; full startup remains rejected.
+
+
+## Exact indirect-call certificate and review of suspension
+
+The suspension hook now consumes a `NormalRaiseCallProof`-emitted site instead
+of raw instruction/continuation integers. The proof checks all six original
+`FF 15 imm32` bytes, exact bound IAT displacement, checked instruction/IAT
+extents, alignment and code/IAT separation. The runtime additionally requires
+the full IAT word within a bound module range before publishing any CALL effect.
+This reuses the existing explicit import-identity boundary: the enclosing image
+proof must still establish that this IAT cell denotes RaiseException. The new
+certificate alone does not establish a DLL export, loader resolution or dispatch.
+The native suspension tests now consume the emitted certificate, with ten
+rejected argument/continuation/stack/IAT cases and an independent compile-time
+byte/truncation/prefix/overflow/alias mutation test. No Windows exception delivery
+or whole-program comparison has been added.
+
+Review of 64f8a765 found no confirmed loss of the interrupted call's typed
+registers, flags, locks or prior writes. Local verification of the connected
+certificate change: 175 root, 171 frame and 92 CRT tests pass (one artifact-only
+CRT observation test ignored by the ordinary suite); formatting and Clippy pass.
+Counts are inherited suite totals, not new independent Windows comparisons.
+
+The full PR run 40705066650 failed original-Windows launch diagnosis: sample13,
+`max`, fresh repetition1, PE SHA256
+`0610c518a55c36259f91be3c1d2f7c9f8eca153dcfb1970f42e6bdee53f0fe0b`.
+The program produced the expected 64 ASCII A bytes with empty stderr, but remained
+alive after 15 seconds and was killed. Artifact12823276868 retains the executable,
+launch record and process snapshot. The parallel push run's corresponding job
+passed. This is unresolved; neither an output match nor a parallel pass explains
+failure to terminate. No retry or timeout relaxation was introduced.
+
+The next connected implementation needs an image-bound API effect plus a handler
+result that can authorize retirement/restoration of this pending CALL. Existing
+OwnedExceptionEvent uses owned FrameId, while this source uses NormalFrameId in
+a leased normal epoch; bypassing that identity distinction or reconstructing a
+Windows CONTEXT from these guest CALL registers is invalid. C++ FuncInfo dispatch
+for the original formatter remains a separate unresolved part of that composition.

@@ -296,10 +296,10 @@ fn pending_normal_exception(){
    if flags==0{c.flags=CrtFlags::unknown();}
    let call_flags=(c.flags.cf,c.flags.zf,c.flags.sf,c.flags.of);
    let registers=c.r;let before=CrtCpu::pointer(c.r[4])?;
-   let pending=CrtNormalException::issue(&mut rt,&mut c,e,&b,0x401800,0x401806)?;
+   let pending=CrtNormalException::issue(&mut rt,&mut c,e,&b,raise_site())?;
    pending.validate_pending(&rt,e)?;
    let foreign=runtime(e.registry);assert!(pending.validate_pending(&foreign,e).is_err());
-   let issued_sp=c.r[4];assert!(CrtNormalException::issue(&mut rt,&mut c,e,&b,0x401800,0x401806).is_err());assert_eq!(c.r[4],issued_sp);
+   let issued_sp=c.r[4];assert!(CrtNormalException::issue(&mut rt,&mut c,e,&b,raise_site()).is_err());assert_eq!(c.r[4],issued_sp);
    assert_eq!(pending.call_registers,registers);assert_eq!(pending.code,0xe0420042);assert_eq!(pending.noncontinuable,flags==1);
    assert_eq!(pending.continuation,0x401806);assert_eq!(c.r[4],CrtValue::Pointer(rt.offset(before,-4)?));
    for reg in [0,1,2,3,5,6,7]{assert_eq!(c.r[reg],registers[reg]);}
@@ -312,7 +312,7 @@ fn pending_normal_exception(){
  }
 }
 fn reject_normal_exception(){
- for mode in 0..6{
+ for mode in 0..10{
   let(m,mut r,main,mut permit)=fixture_with_extra(&[(0x410000,0x420000)]);let mut rt=runtime(&r);
   r.with_normal_calls(&m,&mut permit,&main,|e|{
    let mut c=cpu(&mut rt,0xe000,71);let mut b=CrtNormalBinding::bind(&rt,&c,e,epilog_run_layout())?;start(&mut rt,&mut c,e,&mut b,99)?;
@@ -322,7 +322,9 @@ fn reject_normal_exception(){
     2=>rt.store(sp,32,CrtValue::scalar(0xf0420042))?,3=>rt.store(sp,32,CrtValue::Scalar{bits:0,known:0})?,
     4=>{c.r[4]=CrtValue::Pointer(b.at(&rt,b.layout.low)?);},_=>{}}
    let before=c.r;let generation=rt.generation;
-   assert!(CrtNormalException::issue(&mut rt,&mut c,e,&b,0x401800,if mode==5{0x401805}else{0x401806}).is_err());
+   let mut site=raise_site();
+   match mode{5=>site.continuation=0x401805,6=>site.iat=0x8000,7=>site.iat=0x401800,8=>site.iat=0x41ffff,9=>site.iat=0xffff_fffc,_=>{}}
+   assert!(CrtNormalException::issue(&mut rt,&mut c,e,&b,site).is_err());
    assert_eq!(c.r,before);assert_eq!(rt.generation,generation);assert!(e.state()?.pending_exception.is_none());
    c.r[4]=CrtValue::Pointer(sp);c.discard(&mut rt,16)?;c.r[0]=CrtValue::scalar(0);epilog_run(&mut rt,&mut c,e,&mut b)?;Ok(())
   }).unwrap();
@@ -347,7 +349,8 @@ fn run(case: &str) {
         // expected native result or frame projection under test.
         let fixture = emitted_literal(include_str!("thread_registry_normal_tests.rs"))
             .split("fn complete(").next().unwrap().replace("0x408000", "0x41c000");
-        let source = format!("#![allow(dead_code)]\nmod guest_memory{{{memory}}}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{fixture}\n{file_scope}\n{CASES}",
+        let raise = super::normal_frame::NormalRaiseCallProof::prove(&[0xff,0x15,0,0x50,0x41,0],0x401800,0x415000).unwrap().emit_site();
+        let source = format!("#![allow(dead_code)]\nmod guest_memory{{{memory}}}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{fixture}\n{file_scope}\nfn raise_site()->CrtNormalRaiseSite{{{{{raise}}}}}\n{CASES}",
             include_str!("linker/unwind_runtime.rs").replace("//!", "//"),
             emitted_literal(include_str!("frame_proof.rs")),emitted_literal(include_str!("thread_registry.rs")),
             crate::crt_stream_runtime::EMITTED_TYPES,crate::crt_stream_cpu::EMITTED_TYPES,
@@ -531,4 +534,28 @@ fn normal_exception_issue_preserves_guest_call_state_and_blocks_normal_cleanup()
 #[test]
 fn normal_exception_invalid_arguments_and_continuations_have_no_issue_effect() {
     run("pending-reject");
+}
+
+#[test]
+fn normal_raise_certificate_requires_exact_original_call_and_disjoint_iat() {
+    use super::normal_frame::NormalRaiseCallProof as Proof;
+    let bytes = [0xff, 0x15, 0, 0x50, 0x41, 0];
+    assert!(Proof::prove(&bytes, 0x401800, 0x415000).is_ok());
+    for cut in 0..6 {
+        assert!(Proof::prove(&bytes[..cut], 0x401800, 0x415000).is_err());
+    }
+    for offset in 0..6 {
+        let mut changed = bytes;
+        changed[offset] ^= 1;
+        assert!(Proof::prove(&changed, 0x401800, 0x415000).is_err());
+    }
+    for origin in [0, 0xfffffffc, 0x414ffd, 0x415000, 0x415003] {
+        assert!(Proof::prove(&bytes, origin, 0x415000).is_err());
+    }
+    for iat in [0, 0x415001, 0xfffffffc] {
+        assert!(Proof::prove(&bytes, 0x401800, iat).is_err());
+    }
+    let mut prefixed = vec![0x66];
+    prefixed.extend(bytes);
+    assert!(Proof::prove(&prefixed, 0x401800, 0x415000).is_err());
 }
