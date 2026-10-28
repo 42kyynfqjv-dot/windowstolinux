@@ -230,7 +230,7 @@ pub(crate) fn prove_prefix(code: &[u8], origin: u32, b: &Bindings) -> Result<Pre
              Code::Call_rel32_32 if i.near_branch32()==b.guard_va=>format!("guard_prefix_call(frame,cpu,{})?;",i.next_ip32()),
              Code::Call_rel32_32 if i.near_branch32()==b.context_va=>format!("context_prefix_call(frame,cpu,objects,{})?;",i.next_ip32()),
              Code::Lea_r32_m=>format!("cpu.r[{}]=CrtValue::Pointer({});",r(i.op0_register())?,addr()?),
-             Code::Xor_r32_rm32=>format!("let v=cpu.binary(frame.rt,3,cpu.r[{}],frame.rt.load({},32)?,32)?;if v.known_scalar()?!=frame.binding.layout.scope{{return Err(\"prefix table decode provenance\");}}cpu.r[{}]=CrtValue::Pointer(frame.rt.resolve_absolute(frame.binding.layout.scope,CrtRegionKind::Module)?);",r(i.op0_register())?,addr()?,r(i.op0_register())?),
+             Code::Xor_r32_rm32=>format!("let v=cpu.binary(frame.rt,3,cpu.r[{}],frame.rt.load({},32)?,32)?;if v.known_scalar()?!=frame.scope_address(){{return Err(\"prefix table decode provenance\");}}cpu.r[{}]=CrtValue::Pointer(frame.rt.resolve_absolute(frame.scope_address(),CrtRegionKind::Module)?);",r(i.op0_register())?,addr()?,r(i.op0_register())?),
              Code::Add_rm32_imm8 if i.op0_register()==Register::ESP=>format!("cpu.discard(frame.rt,{})?;cpu.flags=CrtFlags::unknown();",i.immediate8to32()),
              Code::Test_rm8_imm8=>format!("cpu.binary(frame.rt,8,frame.rt.load({},8)?,CrtValue::scalar({}),8)?;",addr()?,i.immediate8()),
              Code::Jne_rel8_32=>"if cpu.condition(1)?{return Err(\"prefix flags delivery outside search domain\");}".into(),

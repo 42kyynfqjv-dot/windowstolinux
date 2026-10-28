@@ -541,3 +541,57 @@ OS captured-state acquisition, table-driven selection/local unwind or validated
 restoration. Original startup and full rcedit remain rejected. The earlier
 de253f4f hello and corpus29 timeouts remain unresolved; successful later CI does
 not explain either failure.
+
+
+## Owned Main prefix helpers and original stack-pair installation
+
+The existing CodeIdentity, GuardProof and ContextCheckProof emitters now share
+call/argument/scratch/clobber lowering across normal and owned sources. Their
+source-specific identity checks remain distinct. The unchanged Main header
+[-28,0,-796,0] is extracted and hashed from its original PE range; its two guard
+checks use original frame roles and checked live bytes. No FILE-frame offset or
+event code is substituted. The normalizer retains its all-reachable-path
+readonly identity proof for the independently bound Main event code.
+
+The same decoded 98-byte original prefix now executes on the owned source through
+normalization/code writeback, scope decode, guard and context helpers, deferred
+16-byte argument cleanup, flags check and the original installer stores. Helper
+CALL/RET identities remain protected, volatile values and flags retain their
+conservative effects, and captured Windows state is separate from CALL registers.
+The entry remains supplied: this is not acquisition of OS captured objects.
+
+A captured-input binding can now exist without a preinstalled exception-pointer
+pair. Reads of the owner's pair slot reject until actual original installer
+stores have executed. Adoption checks the real handler EBP/ESP, three saved
+register slots, saved EBP, owner record and typed pair graph. It binds pair
+lifetime to the actual live callback return; replay, changed pointer tags and
+consumption of that return reject. The old supplied-pair scenarios are retained
+as explicitly different component entry cuts. No projected image writes back.
+
+Two positive cases, including relocated source/callback stacks, execute the
+prefix and then the unchanged Main filter through the protected bridge using
+that actual installed stack pair. Bridge target selection/caller setup is still
+an explicit cut, not original scope-table search. Independent negatives cover
+unknown normalizer global, changed Main header, unknown context selector,
+post-install pair corruption, expired callback, repeated adoption and changed
+guard. Earlier local stores and caller-owned arguments remain visible at each
+failed helper boundary, and a failed prefix cannot be resumed as a valid view.
+There are 33 owned native scenarios: 24 inherited and nine added. CRT test
+functions remain 130 passed/one ignored; frame tests remain 171 passed. These
+counts are not new Windows comparisons. Five recorded wrapper observations,
+37 normal adapter cases and two projection controls remain separate.
+
+Remaining entry-to-exit work: bind actual scope-table search/local-unwind
+selection and selected restoration to these live objects, then remove Main-body,
+captured-state acquisition, formatter and exit cuts together as justified.
+Full startup and rcedit remain unsupported; this PR remains draft.
+
+f7a0968e CI reconciliation: startup workflow40785293748 passed. PR full run
+40785300452's authored-windows-fixture failed the original corpus case10 after
+15seconds (job123156873330); hashd7893cc370c4ed69e3e70b9848560228c71adc36448978d74ee5e1fabce8619d,
+stdoutC10, empty stderr, poll_at_timeoutNone, exit_after_kill1. Artifact12859790274
+retains the launch diagnostics and executed PE; the archive is also saved locally.
+The independent host controls and18launch samples passed earlier on that runner.
+The same-head push's authored fixture passed; this neither explains the PR
+failure nor erases it. Both full runs' final Linux jobs were still running at
+inspection. No retry or timeout-threshold relaxation was performed.

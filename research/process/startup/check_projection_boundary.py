@@ -39,7 +39,7 @@ println!("projected=-2 live=0 suspended=true");'''
     report = dict(kind='native projection counterexample and live adapter regression; no new translated pairs',
                   input_source_sha256=hashlib.sha256(original.encode()).hexdigest(),
                   probe_source_sha256=hashlib.sha256(text.encode()).hexdigest(),
-                  projection_cases=2, live_adapter_cases=37, owned_frame_cases=24, whole_pe_translation_pairs=0,
+                  projection_cases=2, live_adapter_cases=37, owned_frame_cases=33, whole_pe_translation_pairs=0,
                   finding='detached projection still has no storage authority; checked live adapter writes through, including nested helper cleanup')
     (output/'report.json').write_text(json.dumps(report, indent=2)+'\n')
     print(json.dumps(report))

@@ -478,6 +478,8 @@ struct CrtLiveFrame<'a,'e> {
  state:&'a mut CrtLiveDispatchState,
 }
 impl CrtLiveFrame<'_,'_> {
+ fn scope_address(&self)->u32{self.binding.layout.scope}
+ fn cookie_address(&self)->u32{self.binding.layout.cookie_address}
  fn active_call(&self)->u64{self.state.activation}
  fn stack_range(&self,low:u32,high:u64)->RegistryResult<()>{self.epoch.registry.range(low,high)}
  fn preflight_bridge(&self,cpu:&CrtCpu,bytes:u32)->RegistryResult<()>{
@@ -655,6 +657,7 @@ impl CrtHandlerPair {
  }
 }
 
+impl CrtNormalObjects{fn validate_prefix_source(&self,frame:&CrtLiveFrame<'_,'_>)->RegistryResult<()>{self.validate(frame.event,frame.rt,frame.epoch)}}
 struct CrtGuardView<'a,'b,'e>{owner:u64,frame:&'a CrtLiveFrame<'b,'e>,bp:u32}
 impl CrtGuardView<'_,'_,'_>{
  fn frame_pointer(&self)->u32{self.bp}

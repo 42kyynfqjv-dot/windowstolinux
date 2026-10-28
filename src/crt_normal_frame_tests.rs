@@ -287,10 +287,10 @@ fn file_scope_failure(){
 
 fn bytes_for_native_filter()->Vec<u8>{vec![0x8b,0x55,0xec,0x8b,0x02,0x8b,0x08,0x89,0x4d,0xe4,0x8b,0x55,0xe4,0x33,0xc0,0x81,0xfa,0x42,0x00,0x42,0xe0,0x0f,0x94,0xc0,0xc3]}
 fn owned_main_cases(){
- for mode in 0..24{
+ for mode in 0..33{
   let mut m=Machine::new_dispatch_known(vec![FrameSpec{scopes:vec![]}],0,[None;10],Some(0)).unwrap();
   let mut r=ThreadRegistry::new(m.owner(),0x8000,0xf000,&[(0x400000,0x420000)],0x41c000).unwrap();let mut rt=runtime(&r);
-  let entry=rt.resolve_absolute(if mode==23{0xe800}else{0xe000},CrtRegionKind::Stack).unwrap();rt.store(entry,32,CrtValue::ProtectedReturn(71)).unwrap();let cpu=CrtCpu::new(entry,71).unwrap();
+  let entry=rt.resolve_absolute(if mode==23||mode==32{0xe800}else{0xe000},CrtRegionKind::Stack).unwrap();rt.store(entry,32,CrtValue::ProtectedReturn(71)).unwrap();let cpu=CrtCpu::new(entry,71).unwrap();
   let binding=m.owned_binding(0).unwrap();
   let mut storage=if mode==1{initialize_inner_owned(&mut rt,&mut r,&m,binding,&cpu)}else{initialize_main_owned(&mut rt,&mut r,&m,binding,&cpu)}.unwrap();
   let level=rt.resolve_absolute(storage.image.record+12,CrtRegionKind::Stack).unwrap();
@@ -302,8 +302,9 @@ fn owned_main_cases(){
 
   let record=rt.map_region(0x50000,80,CrtRegionKind::Context,None).unwrap();let context=rt.map_region(0x51000,716,CrtRegionKind::Context,None).unwrap();let pair=rt.map_region(0x52000,8,CrtRegionKind::Context,None).unwrap();
   rt.store(record,32,CrtValue::scalar(0xe0424242)).unwrap();rt.store(pair,32,CrtValue::Pointer(record)).unwrap();rt.store(rt.offset(pair,4).unwrap(),32,CrtValue::Pointer(context)).unwrap();
-  let bp=rt.resolve_absolute(storage.image.ebp,CrtRegionKind::Stack).unwrap();rt.store(rt.offset(bp,-20).unwrap(),32,CrtValue::Pointer(pair)).unwrap();
-  storage.bind_input(&rt,&r,&m,pair,record,context,0xe0424242).unwrap();
+  let bp=rt.resolve_absolute(storage.image.ebp,CrtRegionKind::Stack).unwrap();
+  if mode>=24{storage.bind_captured(&rt,&r,&m,record,context,0xe0424242).unwrap();assert!(rt.load(rt.offset(bp,-20).unwrap(),32).unwrap().known_scalar().is_err());}
+  else{rt.store(rt.offset(bp,-20).unwrap(),32,CrtValue::Pointer(pair)).unwrap();storage.bind_input(&rt,&r,&m,pair,record,context,0xe0424242).unwrap();}
   if mode==2||mode==3{let guard=rt.offset(bp,if mode==2{-28}else{-796}).unwrap();rt.store(guard,32,CrtValue::scalar(0)).unwrap();}
   if mode==4{storage.binding.frame.generation+=1;}
   if mode==5{r.frames[0].live=false;}
@@ -313,10 +314,10 @@ fn owned_main_cases(){
   if mode==11{let p=rt.offset(bp,-776).unwrap();rt.store(p,32,CrtValue::OpaqueSaved(3)).unwrap();}
   let mut foreign=runtime(&r);
   let runtime=if mode==9{&mut foreign}else{&mut rt};
-  let bridge_sp=if mode==12{entry}else{runtime.resolve_absolute(if mode==23{0xb000}else{0xc000},CrtRegionKind::Stack).unwrap()};let return_id=if mode==12{71}else{200};if mode!=12{runtime.store(bridge_sp,32,CrtValue::ProtectedReturn(return_id)).unwrap();}
+  let bridge_sp=if mode==12{entry}else{runtime.resolve_absolute(if mode==23||mode==32{0xb000}else{0xc000},CrtRegionKind::Stack).unwrap()};let return_id=if mode==12{71}else{200};if mode!=12{runtime.store(bridge_sp,32,CrtValue::ProtectedReturn(return_id)).unwrap();}
   let mut c=CrtCpu::new(bridge_sp,return_id).unwrap();let target_code=original_main_filter_bytes();let target=runtime.map_region(0x401333,target_code.len()as u32,CrtRegionKind::Module,Some(&target_code)).unwrap();
   c.r[1]=CrtValue::Pointer(target);c.r[2]=CrtValue::Pointer(bp);
-  let mut view=CrtOwnedFrameView{rt:runtime,registry:&r,machine:&m,storage:&storage,active:c.return_id,depth:0,calls:0,failed:false};
+  let mut view=CrtOwnedFrameView{rt:runtime,registry:&r,machine:&m,storage:&mut storage,active:c.return_id,depth:0,calls:0,failed:false};
   if mode>=14{
    let (record,context)=if mode==19{
     let other_record=view.rt.map_region(0x53000,80,CrtRegionKind::Context,None).unwrap();let other_context=view.rt.map_region(0x54000,716,CrtRegionKind::Context,None).unwrap();
@@ -328,12 +329,43 @@ fn owned_main_cases(){
    for(i,value)in [CrtValue::Pointer(record),if mode==16{CrtValue::Pointer(bp)}else{CrtValue::Pointer(establisher)},if mode==17{CrtValue::scalar(context.address())}else{CrtValue::Pointer(context)},CrtValue::scalar(0)].into_iter().enumerate(){view.rt.store(view.rt.offset(bridge_sp,4+i as i64*4).unwrap(),32,value).unwrap();}
    if mode==20{view.rt.store(view.rt.offset(record,4).unwrap(),32,CrtValue::scalar(0x10)).unwrap();}
    if mode==21{view.rt.store(view.rt.offset(bridge_sp,-8).unwrap(),32,CrtValue::ProtectedReturn(999)).unwrap();}
+   if mode>=24{c.entry=c.r;}
    let before=c.r;
    let input=CrtOwnedPrefixInput::bind(&view,&c,record,context,owned_prefix_handler(),owned_prefix_temporary());
    if mode==15||mode==16||mode==17||mode==19||mode==20||mode==21{assert!(input.is_err(),"owned prefix mode {mode}");assert_eq!(c.r,before);continue;}
    let input=input.unwrap();assert_ne!(input.captured_esp,bridge_sp.address());
    if mode==18{view.rt.store(view.rt.offset(context,0xc4).unwrap(),32,CrtValue::scalar(0x9600)).unwrap();assert!(input.validate(&view,&c).is_err());assert_eq!(c.r,before);continue;}
    if mode==22{view.rt.store(view.rt.offset(bp,-796).unwrap(),32,CrtValue::scalar(0)).unwrap();assert!(input.validate(&view,&c).is_err());assert_eq!(c.r,before);continue;}
+   if mode>=24{
+    let header=original_main_header();let raw=header.into_iter().flat_map(i32::to_le_bytes).collect::<Vec<_>>();
+    let table=view.rt.map_region(0x41b218,16,CrtRegionKind::Module,Some(&raw)).unwrap();
+    let feature=view.rt.map_region(0x41ccb8,4,CrtRegionKind::Module,if mode==25{None}else{Some(&[0,0,0,0])}).unwrap();
+    let _=feature;
+    view.rt.map_region(0x415128,4,CrtRegionKind::Module,if mode==27{None}else{Some(&[0,0,0,0])}).unwrap();
+    if mode==26{view.rt.store(table,32,CrtValue::scalar((-2i32)as u32)).unwrap();}
+    let result=owned_prefix_helpers::execute(&mut view,&mut c,&input);
+    let hbp=view.rt.offset(bridge_sp,-4).unwrap();
+    if mode==25||mode==26||mode==27{
+     assert!(result.is_err(),"owned helper failure mode {mode}");assert!(view.failed);
+     assert_eq!(view.rt.load(view.rt.offset(hbp,-12).unwrap(),32).unwrap(),CrtValue::scalar(1));
+     assert_eq!(c.r[4],CrtValue::Pointer(view.rt.offset(hbp,if mode==25{-44}else if mode==26{-52}else{-56}).unwrap()));
+     assert!(view.storage.input.unwrap().0.is_none());continue;
+    }
+    result.unwrap();input.validate(&view,&c).unwrap();assert_eq!(view.calls,3);
+    let actual_pair=view.rt.offset(hbp,-28).unwrap();
+    assert_eq!(view.storage.input.unwrap().0,Some(actual_pair));assert_eq!(view.rt.load(view.rt.offset(bp,-20).unwrap(),32).unwrap(),CrtValue::Pointer(actual_pair));
+    assert_ne!(actual_pair,pair);assert_eq!(view.rt.load(actual_pair,32).unwrap(),CrtValue::Pointer(record));
+    assert_eq!(c.r[4],CrtValue::Pointer(view.rt.offset(hbp,-40).unwrap()));assert_eq!(c.r[7],CrtValue::scalar(0));
+    if mode==28{view.rt.store(view.rt.offset(actual_pair,4).unwrap(),32,CrtValue::scalar(context.address())).unwrap();assert!(view.validate().is_err());continue;}
+    if mode==29{view.rt.consume_stack(bridge_sp,CrtValue::ProtectedReturn(return_id)).unwrap();assert!(view.validate().is_err());continue;}
+    if mode==30{assert!(input.installed(&mut view,&c).is_err());continue;}
+    if mode==31{view.rt.store(view.rt.offset(bp,-28).unwrap(),32,CrtValue::scalar(0)).unwrap();assert!(view.validate().is_err());continue;}
+    // Target-selection/caller-setup is still an explicit cut, not original table dispatch.
+    c.r[1]=CrtValue::Pointer(target);c.r[2]=CrtValue::Pointer(bp);
+    let value=view.call(&mut c,0x402400,|f,child|owned_filter_bridge(f,child,target,&target_code,|g,k|{owned_main_filter(g,k)?;k.finish(g.rt)})).unwrap();
+    assert_eq!(value,CrtValue::scalar(1));for offset in [-776,-780]{assert_eq!(view.read(offset).unwrap(),CrtValue::scalar(0xe0424242));}
+    input.validate(&view,&c).unwrap();assert_eq!(view.rt.load(bridge_sp,32).unwrap(),CrtValue::ProtectedReturn(return_id));continue;
+   }
    owned_handler_prolog(&mut view,&mut c).unwrap();input.validate(&view,&c).unwrap();
    assert_eq!(c.r[5],CrtValue::Pointer(view.rt.offset(bridge_sp,-4).unwrap()));assert_eq!(c.r[4],CrtValue::Pointer(view.rt.offset(bridge_sp,-32).unwrap()));
    assert_eq!(view.rt.load(view.rt.offset(bridge_sp,-4).unwrap(),32).unwrap(),before[5]);continue;
@@ -755,10 +787,28 @@ fn run(case: &str) {
         let activation=crate::crt_owned_frame::emit_activation(&main,&activation_bytes,0x40130f,"activate_main_owned").unwrap();
         assert!(crate::crt_owned_frame::emit_activation(&main,&[0x90],0x40130f,"bad").is_err());
         let owned_prolog=super::normal_frame::emit_handler_prolog_for(&handler_bytes("handler-prolog.bin","558bec83ec1c"),0x402210,"owned_handler_prolog","CrtOwnedFrameView<'_>").unwrap();
+        let main_header_bytes=handler_bytes("Main-scope-header.bin","e4ffffff00000000e4fcffff00000000");
+        let main_header:[i32;4]=main_header_bytes.chunks_exact(4).map(|c|i32::from_le_bytes(c.try_into().unwrap())).collect::<Vec<_>>().try_into().unwrap();
+        let owned_normalizer=crate::selection::prove_code_identity(&normalizer,0x414a1b,&std::collections::BTreeSet::from([0x41ccb8]),0xe0424242).unwrap().owned_prefix_call("normalizer_prefix_call");
+        let owned_guard=crate::handler_guard::prove_guard(&guard,0x4021d0,&security,0x40154c,0x41c000,main_header,&main).unwrap().owned_prefix_call("guard_prefix_call");
+        let owned_context=context_proof.owned_prefix_call("context_prefix_call");
+        let owned_prefix=format!(r#"mod owned_prefix_helpers{{use super::*;
+{owned_normalizer}
+{owned_guard}
+{owned_context}
+pub(super) fn execute(frame:&mut CrtOwnedFrameView<'_>,cpu:&mut CrtCpu,objects:&CrtOwnedPrefixInput)->RegistryResult<()>{{
+ let result=(||{{objects.validate(frame,cpu)?;
+  if cpu.r!=cpu.entry||frame.storage.input.is_none_or(|(pair,_,_,_)|pair.is_some()){{return Err("owned prefix original entry/already installed");}}
+  {body}
+  objects.installed(frame,cpu)
+ }})();if result.is_err(){{frame.failed=true;}}result
+}}
+}}"#,body=prefix.caller_body());
+        let owned_header=format!("fn original_main_header()->[i32;4]{{{:?}}}",main_header);
         let prefix_metadata=format!("fn owned_prefix_handler()->u32{{{}}}fn owned_prefix_temporary()->u32{{{}}}",prefix.entry,prefix.temporary_bytes);
         let context_types=crate::handler_context::EMITTED_TYPES;
         let context_check=context_proof.normal_object_check();
-        let source = format!("#![allow(dead_code)]\nmod guest_memory{{{memory}}}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{fixture}\n{file_scope}\n{context_types}\n{context_check}\n{scope_store}\n{permuted_store}\n{install}\n{handler_prolog}\n{filter_source}\n{false_filter_source}\n{normalizer_source}\n{guard_source}\n{header_source}\n{prefix_normalizer}\n{prefix_front}\n{guard_prefix}\n{prefix_caller}\n{bridge_native}\n{owned_types}\n{main_init}\n{inner_init}\n{owned_filter}\n{owned_bridge}\n{main_filter_bytes}\n{activation}\n{owned_prolog}\n{prefix_metadata}\nfn raise_site()->CrtNormalRaiseSite{{{{{raise}}}}}\n{CASES}",
+        let source = format!("#![allow(dead_code)]\nmod guest_memory{{{memory}}}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{fixture}\n{file_scope}\n{context_types}\n{context_check}\n{scope_store}\n{permuted_store}\n{install}\n{handler_prolog}\n{filter_source}\n{false_filter_source}\n{normalizer_source}\n{guard_source}\n{header_source}\n{prefix_normalizer}\n{prefix_front}\n{guard_prefix}\n{prefix_caller}\n{bridge_native}\n{owned_types}\n{main_init}\n{inner_init}\n{owned_filter}\n{owned_bridge}\n{main_filter_bytes}\n{activation}\n{owned_prolog}\n{owned_prefix}\n{owned_header}\n{prefix_metadata}\nfn raise_site()->CrtNormalRaiseSite{{{{{raise}}}}}\n{CASES}",
             include_str!("linker/unwind_runtime.rs").replace("//!", "//"),
             emitted_literal(include_str!("frame_proof.rs")),emitted_literal(include_str!("thread_registry.rs")),
             crate::crt_stream_runtime::EMITTED_TYPES,crate::crt_stream_cpu::EMITTED_TYPES,

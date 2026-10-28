@@ -17,17 +17,26 @@ pub(crate) struct GuardProof {
 impl GuardProof {
     #[allow(dead_code)] // CRT backend is not used by all slice examples.
     pub fn normal_call(&self, name: &str) -> String {
-        self.emit_call(name, false)
+        self.emit_call(name, false, false)
     }
     #[allow(dead_code)]
     pub fn prefix_call(&self, name: &str) -> String {
-        self.emit_call(name, true)
+        self.emit_call(name, true, false)
     }
-    fn emit_call(&self, name: &str, deferred: bool) -> String {
-        let arguments = if deferred {
-            "if frame.rt.load(CrtCpu::pointer(cpu.r[4])?,32)?!=CrtValue::Pointer(table)||frame.rt.load(frame.rt.offset(CrtCpu::pointer(cpu.r[4])?,4)?,32)?!=CrtValue::Pointer(frame.binding.at(frame.rt,frame.binding.layout.bp)?){return Err(\"guard prefix arguments\");}"
+    #[allow(dead_code)] // Owned CRT backend, not every standalone slice.
+    pub fn owned_prefix_call(&self, name: &str) -> String {
+        self.emit_call(name, true, true)
+    }
+    fn emit_call(&self, name: &str, deferred: bool, owned: bool) -> String {
+        let (frame_type, guard_type) = if owned {
+            ("CrtOwnedFrameView<'_>", "CrtOwnedGuardView")
         } else {
-            "cpu.push(frame.rt,CrtValue::Pointer(frame.binding.at(frame.rt,frame.binding.layout.bp)?))?;cpu.push(frame.rt,CrtValue::Pointer(table))?;"
+            ("CrtLiveFrame<'_,'_>", "CrtGuardView")
+        };
+        let arguments = if deferred {
+            "if frame.rt.load(CrtCpu::pointer(cpu.r[4])?,32)?!=CrtValue::Pointer(table)||frame.rt.load(frame.rt.offset(CrtCpu::pointer(cpu.r[4])?,4)?,32)?!=CrtValue::Pointer(frame.owner_frame()?){return Err(\"guard prefix arguments\");}"
+        } else {
+            "cpu.push(frame.rt,CrtValue::Pointer(frame.owner_frame()?))?;cpu.push(frame.rt,CrtValue::Pointer(table))?;"
         };
         let cleanup = if deferred {
             ""
@@ -37,15 +46,15 @@ impl GuardProof {
         let header = self.header;
         let checks=header.iter().enumerate().map(|(i,n)|format!("if frame.rt.load(frame.rt.offset(table,{})?,32)?.known_scalar()? != {}u32{{return Err(\"live guard header changed\");}}",i*4,*n as u32)).collect::<String>();
         format!(
-            r#"fn {name}(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,continuation:u32)->RegistryResult<()>{{
- frame.validate()?;let table=frame.rt.resolve_absolute(frame.binding.layout.scope,CrtRegionKind::Module)?;
+            r#"fn {name}(frame:&mut {frame_type},cpu:&mut CrtCpu,continuation:u32)->RegistryResult<()>{{
+ frame.validate()?;let table=frame.rt.resolve_absolute(frame.scope_address(),CrtRegionKind::Module)?;
  frame.rt.valid(table,16)?;{checks}
- let cookie=frame.rt.load(frame.rt.resolve_absolute(frame.binding.layout.cookie_address,CrtRegionKind::Module)?,32)?.known_scalar()?;
+ let cookie=frame.rt.load(frame.rt.resolve_absolute(frame.cookie_address(),CrtRegionKind::Module)?,32)?.known_scalar()?;
  let sp=CrtCpu::pointer(cpu.r[4])?;let low=frame.rt.offset(sp,-{depth})?;frame.rt.valid(low,{depth})?;
- frame.epoch.registry.range(low.address(),u64::from(sp.address()))?;
+ frame.stack_range(low.address(),u64::from(sp.address()))?;
  if frame.rt.overlapping_tags(low.address(),{depth}).iter().any(|(_,v)|matches!(v,CrtValue::ProtectedReturn(_)|CrtValue::ThreadHead(_)|CrtValue::OpaqueSaved(_))){{return Err("guard temporary protected overlap");}}
  {arguments}
- frame.call(cpu,continuation,|f,child|{{let bp=f.binding.at(f.rt,f.binding.layout.bp)?.address();let memory=&CrtGuardView{{owner:f.rt.owner,frame:f,bp}};(||{{{body}}})()?;child.clobber(CrtValue::Scalar{{bits:0,known:0}});child.finish(f.rt)}})?;
+ frame.call(cpu,continuation,|f,child|{{let bp=f.owner_frame()?.address();let memory=&{guard_type}{{owner:f.rt.owner,frame:f,bp}};(||{{{body}}})()?;child.clobber(CrtValue::Scalar{{bits:0,known:0}});child.finish(f.rt)}})?;
  {cleanup}Ok(())
 }}"#,
             depth = self.temporary_bytes + 12,

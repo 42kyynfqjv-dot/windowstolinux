@@ -45,6 +45,7 @@ impl ContextCheckProof {
             r#"
 impl ThreadContext {{fn original_check(&self,owner:u64,selector:u32)->Result<(),&'static str>{{{body}}}}}
 impl CrtNormalObjects {{
+ fn check_prefix_context(&self,frame:&CrtLiveFrame<'_,'_>)->RegistryResult<()>{{self.check_original_context(frame.event,frame.rt,frame.epoch)}}
  fn check_original_context(&self,event:&CrtNormalException,rt:&CrtStreamRuntime,epoch:&NormalCallEpoch<'_>)->RegistryResult<()>{{
   self.validate(event,rt,epoch)?;
   let selector=rt.load(rt.resolve_absolute({selector},CrtRegionKind::Module)?,32)?.known_scalar()?;
@@ -52,14 +53,7 @@ impl CrtNormalObjects {{
   captured.original_check(self.identity.owner,selector)
  }}
 }}
-fn context_prefix_call(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,objects:&CrtNormalObjects,continuation:u32)->RegistryResult<()>{{
- frame.validate()?;objects.check_original_context(frame.event,frame.rt,frame.epoch)?;
- if frame.rt.load(CrtCpu::pointer(cpu.r[4])?,32)?!=CrtValue::Pointer(objects.context){{return Err("context prefix argument");}}
- let sp=CrtCpu::pointer(cpu.r[4])?;let low=frame.rt.offset(sp,-{depth})?;frame.rt.valid(low,{depth})?;
- frame.epoch.registry.range(low.address(),u64::from(sp.address()))?;
- if frame.rt.overlapping_tags(low.address(),{depth}).iter().any(|(_,v)|matches!(v,CrtValue::ProtectedReturn(_)|CrtValue::OpaqueSaved(_)|CrtValue::ThreadHead(_))){{return Err("context temporary protected overlap");}}
- frame.call(cpu,continuation,|f,child|{{objects.check_original_context(f.event,f.rt,f.epoch)?;child.clobber(CrtValue::Scalar{{bits:0,known:0}});child.finish(f.rt)}})?;Ok(())
-}}
+{prefix}
 impl CrtNormalException {{
  fn execute_context_checked_handler<F>(&mut self,objects:&CrtNormalObjects,rt:&mut CrtStreamRuntime,interrupted:&CrtCpu,epoch:&mut NormalCallEpoch<'_>,binding:&CrtNormalBinding,dispatcher:&mut CrtCpu,continuation:u32,body:F)->RegistryResult<CrtNormalHandlerReturn>
  where F:FnOnce(&mut CrtStreamRuntime,&mut CrtCpu)->RegistryResult<CrtValue>{{
@@ -75,6 +69,40 @@ impl CrtNormalException {{
 "#,
             body = self.body,
             selector = self.selector_va,
+            prefix = self.emit_prefix_call("context_prefix_call", false)
+        )
+    }
+    #[allow(dead_code)] // Owned source retains its separate captured-object authority.
+    pub(crate) fn owned_prefix_call(&self, name: &str) -> String {
+        let helper = self.emit_prefix_call(name, true);
+        format!(
+            r#"impl CrtOwnedPrefixInput{{
+ fn check_prefix_context(&self,frame:&CrtOwnedFrameView<'_>)->RegistryResult<()>{{
+  self.validate_prefix_source(frame)?;
+  let selector=frame.rt.load(frame.rt.resolve_absolute({selector},CrtRegionKind::Module)?,32)?.known_scalar()?;
+  let captured=ThreadContext::new(self.identity.owner,frame.registry.limit,frame.registry.base,self.captured_esp)?;
+  captured.original_check(self.identity.owner,selector)
+ }}
+}}
+{helper}"#,
+            selector = self.selector_va
+        )
+    }
+    fn emit_prefix_call(&self, name: &str, owned: bool) -> String {
+        let (frame_type, object_type) = if owned {
+            ("CrtOwnedFrameView<'_>", "CrtOwnedPrefixInput")
+        } else {
+            ("CrtLiveFrame<'_,'_>", "CrtNormalObjects")
+        };
+        format!(
+            r#"fn {name}(frame:&mut {frame_type},cpu:&mut CrtCpu,objects:&{object_type},continuation:u32)->RegistryResult<()>{{
+ frame.validate()?;objects.check_prefix_context(frame)?;
+ if frame.rt.load(CrtCpu::pointer(cpu.r[4])?,32)?!=CrtValue::Pointer(objects.context){{return Err("context prefix argument");}}
+ let sp=CrtCpu::pointer(cpu.r[4])?;let low=frame.rt.offset(sp,-{depth})?;frame.rt.valid(low,{depth})?;
+ frame.stack_range(low.address(),u64::from(sp.address()))?;
+ if frame.rt.overlapping_tags(low.address(),{depth}).iter().any(|(_,v)|matches!(v,CrtValue::ProtectedReturn(_)|CrtValue::OpaqueSaved(_)|CrtValue::ThreadHead(_))){{return Err("context temporary protected overlap");}}
+ frame.call(cpu,continuation,|f,child|{{objects.check_prefix_context(f)?;child.clobber(CrtValue::Scalar{{bits:0,known:0}});child.finish(f.rt)}})?;Ok(())
+}}"#,
             depth = self.temporary_bytes + 4
         )
     }

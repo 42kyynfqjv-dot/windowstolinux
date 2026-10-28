@@ -314,13 +314,22 @@ impl CodeIdentity {
     /// return this same code without observable writes.
     #[allow(dead_code)] // CRT integration, not every standalone slice.
     pub fn normal_call(&self, name: &str) -> String {
-        self.emit_normal_call(name, false)
+        self.emit_normal_call(name, false, false)
     }
     #[allow(dead_code)]
     pub fn prefix_call(&self, name: &str) -> String {
-        self.emit_normal_call(name, true)
+        self.emit_normal_call(name, true, false)
     }
-    fn emit_normal_call(&self, name: &str, caller_arguments: bool) -> String {
+    #[allow(dead_code)] // Shared owned CRT backend, not every slice emitter.
+    pub fn owned_prefix_call(&self, name: &str) -> String {
+        self.emit_normal_call(name, true, true)
+    }
+    fn emit_normal_call(&self, name: &str, caller_arguments: bool, owned: bool) -> String {
+        let (frame_type, object_type) = if owned {
+            ("CrtOwnedFrameView<'_>", "CrtOwnedPrefixInput")
+        } else {
+            ("CrtLiveFrame<'_,'_>", "CrtNormalObjects")
+        };
         let arguments = if caller_arguments {
             "if frame.rt.load(CrtCpu::pointer(cpu.r[4])?,32)?.known_scalar()?!=code{return Err(\"normalizer prefix argument\");}"
         } else {
@@ -333,13 +342,13 @@ impl CodeIdentity {
         };
         let globals=self.globals.iter().map(|at|format!("frame.rt.load(frame.rt.resolve_absolute({at},CrtRegionKind::Module)?,32)?.known_scalar()?;\n")).collect::<String>();
         format!(
-            r#"fn {name}(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,objects:&CrtNormalObjects,continuation:u32)->RegistryResult<CrtValue>{{
- frame.validate()?;objects.validate(frame.event,frame.rt,frame.epoch)?;
+            r#"fn {name}(frame:&mut {frame_type},cpu:&mut CrtCpu,objects:&{object_type},continuation:u32)->RegistryResult<CrtValue>{{
+ frame.validate()?;objects.validate_prefix_source(frame)?;
  {globals}
  let code=frame.rt.load(objects.record,32)?.known_scalar()?;
  let value=(||{{ {body} }})()?;
  let sp=CrtCpu::pointer(cpu.r[4])?;let low=frame.rt.offset(sp,-{depth})?;frame.rt.valid(low,{depth})?;
- frame.epoch.registry.range(low.address(),u64::from(sp.address()))?;
+ frame.stack_range(low.address(),u64::from(sp.address()))?;
  if frame.rt.overlapping_tags(low.address(),{depth}).iter().any(|(_,v)|matches!(v,CrtValue::ProtectedReturn(_)|CrtValue::ThreadHead(_)|CrtValue::OpaqueSaved(_))){{return Err("normalizer temporary stack aliases protected storage");}}
  {arguments}
  let returned=frame.call(cpu,continuation,|f,child|{{
