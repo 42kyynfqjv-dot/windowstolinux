@@ -181,6 +181,110 @@ impl State {
 }
 
 impl PrologProof {
+    /// Lower only the original helper. The caller supplies its separately
+    /// minted CALL token and a registry installation callback; this is not a
+    /// certificate for an enclosing formatter or exception delivery. The
+    /// callback must validate and perform the actual registry installation;
+    /// its successful return alone supplies no registry or exception proof.
+    pub fn emit(&self, name: &str) -> Result<String, String> {
+        if name.is_empty() || !name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_') {
+            return Err("EH4 native helper name".into());
+        }
+        let l = &self.layout;
+        let mut check = format!(
+            r#"
+if cpu.entry!=outer_entry||cpu.return_id!=outer_return||cpu.returned!=outer_returned{{return Err("EH4 outer activation changed");}}
+if cpu.r[4]!=CrtValue::Pointer(relocated)||cpu.r[5]!=CrtValue::Pointer(frame){{return Err("EH4 native frame/continuation stack");}}
+if rt.load(caller,32)?!=CrtValue::ProtectedReturn(outer_return){{return Err("EH4 native caller return changed");}}
+if rt.load(record,32)?!=CrtValue::ThreadHead(predecessor)
+ ||rt.load(rt.offset(record,4)?,32)?.known_scalar()? != {handler}
+ ||rt.load(rt.offset(record,8)?,32)?.known_scalar()? != ({scope}u32^cookie)
+ ||rt.load(rt.offset(record,12)?,32)?.known_scalar()? != (-2i32)as u32
+ ||rt.load(rt.offset(caller,{guard})?,32)?.known_scalar()? != (cookie^frame.address())
+ ||rt.load(rt.offset(caller,{saved_sp})?,32)? != CrtValue::Pointer(final_sp){{return Err("EH4 native record/guard changed");}}
+"#,
+            handler = self.handler,
+            scope = self.scope,
+            guard = l.guard,
+            saved_sp = l.saved_sp
+        );
+        for (offset, register) in &l.saved {
+            check.push_str(&format!("if rt.load(rt.offset(caller,{offset})?,32)?!=saved[{register}]{{return Err(\"EH4 native saved identity\");}}"));
+        }
+        let check_return = check.clone();
+        let relocation = self.relocation_pc;
+        let install_pc = self.install_pc;
+        let return_pc = self.return_pc;
+        let body = super::crt_stream_emit::emit_body_with_hooks(
+            &self.graph,
+            |_, _| Err("EH4 helper unexpected call".into()),
+            &BTreeMap::from([(self.cookie_address, "CrtRegionKind::Module".into())]),
+            self.graph.nodes.len() as u32,
+            |pc, op| {
+                Ok(match op {
+                Op::FsPush => "cpu.push(rt,CrtValue::ThreadHead(predecessor))?;".into(),
+                Op::FsRead(r) => format!("cpu.set({},32,0,CrtValue::ThreadHead(predecessor))?;",r.index),
+                Op::FsWrite(r) if pc == install_pc => format!("{check}if cpu.r[{}]!=CrtValue::Pointer(record){{return Err(\"EH4 native installation pointer\");}}install(rt,record,predecessor)?;installed=true;",r.index),
+                _ => return Err("EH4 native unbound FS effect".into()),
+            })
+            },
+            |pc, _| {
+                Ok(if pc == relocation {
+                    r#"if rt.load(helper,32)?!=token||rt.load(relocated,32)?!=token||cpu.r[4]!=CrtValue::Pointer(relocated)
+ ||rt.tags.values().filter(|v|**v==token).count()!=2{return Err("EH4 native continuation relocation identity");}
+rt.consume_stack(helper,token)?;"#.into()
+                } else {
+                    String::new()
+                })
+            },
+            |pc, pop| {
+                if pc != return_pc || pop != 0 {
+                    return Err("EH4 native unproved return".into());
+                }
+                Ok(Some(format!(
+                    r#"{check_return}
+if !installed||rt.load(relocated,32)?!=token||rt.tags.values().filter(|v|**v==token).count()!=1{{return Err("EH4 native relocated RET identity");}}
+if cpu.pop(rt)?!=token||cpu.r[4]!=CrtValue::Pointer(final_sp){{return Err("EH4 native relocated RET stack");}}
+return Ok(());"#
+                )))
+            },
+        )?;
+        Ok(format!(
+            r#"
+fn {name}(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,helper_id:u64,predecessor:CrtThreadHead,
+ mut install:impl FnMut(&mut CrtStreamRuntime,CrtPointer,CrtThreadHead)->Result<(),&'static str>)->Result<(),&'static str>{{
+if cpu.returned||helper_id==0||helper_id==cpu.return_id{{return Err("EH4 native helper activation");}}
+rt.validate_thread_head(predecessor)?;
+let outer_entry=cpu.entry;let outer_return=cpu.return_id;let outer_returned=cpu.returned;
+let saved=cpu.r.map(|v|match v{{CrtValue::Scalar{{bits,known}}=>CrtValue::Scalar{{bits:bits&known,known}},other=>other}});
+let helper=CrtCpu::pointer(cpu.r[4])?;
+if helper.kind!=CrtRegionKind::Stack||helper.address()%4!=0{{return Err("EH4 native helper stack");}}
+let caller=rt.offset(helper,12)?;
+if cpu.entry[4]!=CrtValue::Pointer(caller){{return Err("EH4 native enclosing activation");}}
+let token=CrtValue::ProtectedReturn(helper_id);
+if rt.load(helper,32)?!=token||rt.tags.values().filter(|v|**v==token).count()!=1
+ ||rt.load(caller,32)?!=CrtValue::ProtectedReturn(outer_return)
+ ||rt.load(rt.offset(helper,4)?,32)?.known_scalar()? != {scope}
+ ||rt.load(rt.offset(helper,8)?,32)?.known_scalar()? != {allocation}{{return Err("EH4 native entry words");}}
+let scratch=rt.offset(caller,-{temporary})?;rt.valid(scratch,{temporary}-12)?;
+if rt.overlapping_tags(scratch.address(),{temporary}-12).iter().any(|(_,v)|matches!(v,CrtValue::OpaqueSaved(_)|CrtValue::ProtectedReturn(_)|CrtValue::ThreadHead(_))){{return Err("EH4 native occupied scratch");}}
+let frame=rt.offset(caller,{bp})?;let record=rt.offset(caller,{record})?;
+let final_sp=rt.offset(caller,{low})?;let relocated=rt.offset(final_sp,-4)?;
+let cookie=rt.load(rt.resolve_absolute({cookie_address},CrtRegionKind::Module)?,32)?.known_scalar()?;
+let mut installed=false;
+{body}
+}}
+"#,
+            scope = self.scope,
+            allocation = l.allocation,
+            temporary = self.temporary_bytes,
+            bp = l.frame_pointer,
+            record = l.record,
+            low = l.low,
+            cookie_address = self.cookie_address
+        ))
+    }
+
     /// Allocation and scope come from the independently proved original
     /// wrapper PUSH arguments. No function name or artifact identity is used.
     pub fn prove(
@@ -371,7 +475,7 @@ impl PrologProof {
 mod tests {
     use super::*;
 
-    fn bytes() -> Vec<u8> {
+    pub(super) fn bytes() -> Vec<u8> {
         // Retained authored compiler output; addresses are passed as bound
         // roles, not used as application identity or a result selection key.
         [
@@ -434,3 +538,7 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "crt_exception_wrapper_native_tests.rs"]
+mod native_tests;

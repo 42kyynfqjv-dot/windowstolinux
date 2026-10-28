@@ -24,8 +24,11 @@ not application identities used by the converter.
 
 Normal calls use a one-shot finished-event permit and distinct registration
 identities. The original EH4 prolog proof records its protected continuation
-relocation. Native execution of that relocation on the same checked stack is
-still open; an ordinary call cannot substitute for it. The integer dispatcher's
+relocation. Native execution now lowers the actual helper instructions on the
+same checked stack, with the outer activation preserved and a separately owned
+helper continuation. The mandatory installation callback still requires real
+registry integration; callback success alone is not a registry certificate.
+An ordinary call cannot substitute for this helper ABI. The integer dispatcher's
 C++ record and state are distinct from an EH4 record.
 
 The Main-return receipt now captures the complete returned register projection.
@@ -64,8 +67,9 @@ local tests in this checkpoint are not fresh Windows observations.
 
 ## Connected implementation still required
 
-1. Execute the original EH4 prolog and FILE/descriptor wrapper effects on one
-   authoritative checked stack, validating the protected continuation move.
+1. Bind the native EH4 prolog installation callback to the live registry and
+   execute the enclosing FILE/descriptor wrapper effects on that same stack.
+   Protected continuation relocation itself is now mechanically executed.
 2. Compose the original integer dispatcher and distinct C++ registration with
    actual parser/output/buffer calls. Any no-escape domain requires proof over
    every reachable instruction and effect; sampled success cannot supply it.
@@ -80,3 +84,26 @@ These are connected proof/emitter architecture tasks suitable for a bounded
 Astra reasoning pass. Routine tests, review and CI stay on Sol. Ultra is not
 authorized by the current user direction. Historical Windows timeout causes,
 ordinary CRT/application coverage and XP/7 validation remain unresolved.
+
+
+## Native prolog integration review
+
+The native helper preserves the enclosing CPU entry/return identity and does not
+mark the outer wrapper returned. It requires distinct, unique helper and caller
+continuations, complete scratch capacity, original scope/allocation words and a
+valid typed predecessor. At the proved relocation instruction it consumes only
+the old helper token after verifying both copies; the original MOV then writes
+the encoded scope. Before the special RET, it rechecks the actual record, guard,
+saved slots and installation result and consumes the sole relocated token.
+
+Three allocation layouts execute in native regression tests. Wrong/duplicate
+returns, occupied scratch, foreign predecessors, callback record corruption,
+unknown saved bits and ordinary-ABI misuse are checked. A callback's write before
+failure remains observable; failure leaves the reached helper state intact.
+These are local component tests, not fresh Windows differential observations.
+
+Independent review reproduced ordinary overwrite and storage retirement of a
+live thread-chain token. Both now reject, while the explicitly checked POP
+consumes the token. Full formatter exception/registry and exit composition stay
+open. Dedicated CI40686009789 passed for the preceding b94e90ef checkpoint; its
+broader regression runs were still progressing at review time.

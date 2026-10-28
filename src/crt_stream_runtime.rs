@@ -180,7 +180,7 @@ impl CrtStreamRuntime {
   let size=match width{8=>1,16=>2,32=>4,_=>return Err("CRT store width")};self.valid(p,size)?;
   if matches!(p.kind,CrtRegionKind::Input){return Err("CRT immutable source write");}
   let old=self.overlapping_tags(p.address,size);
-  if old.iter().any(|(_,v)|matches!(v,CrtValue::OpaqueSaved(_)|CrtValue::ProtectedReturn(_))){return Err("CRT protected saved/return overwrite");}
+  if old.iter().any(|(_,v)|matches!(v,CrtValue::OpaqueSaved(_)|CrtValue::ProtectedReturn(_)|CrtValue::ThreadHead(_))){return Err("CRT protected saved/return overwrite");}
   if !old.is_empty()&&(width!=32||old.len()!=1||old[0].0!=p.address){return Err("CRT partial pointer/handle overwrite");}
   if p.kind==CrtRegionKind::File{
    let base=self.regions.iter().find(|r|r.pointer.cap==p.cap).ok_or("CRT FILE identity")?.pointer.base;
@@ -252,7 +252,7 @@ impl CrtStreamRuntime {
  fn retire_region(&mut self,p:CrtPointer)->Result<(),&'static str>{
   self.valid(p,0)?;let index=self.regions.iter().position(|r|r.pointer.cap==p.cap).ok_or("CRT region identity")?;let root=self.regions[index].pointer;
   if !matches!(p.kind,CrtRegionKind::Stack|CrtRegionKind::Context|CrtRegionKind::Input|CrtRegionKind::Result)||p.address!=root.base||p.base!=root.base||p.size!=root.size{return Err("CRT complete temporary region required");}
-  if self.overlapping_tags(p.base,p.size).iter().any(|(_,v)|matches!(v,CrtValue::OpaqueSaved(_)|CrtValue::ProtectedReturn(_))){return Err("CRT retirement before protected restoration");}
+  if self.overlapping_tags(p.base,p.size).iter().any(|(_,v)|matches!(v,CrtValue::OpaqueSaved(_)|CrtValue::ProtectedReturn(_)|CrtValue::ThreadHead(_))){return Err("CRT retirement before protected restoration");}
   self.reserve_retirement()?;self.memory.release(p.cap,p.owner).map_err(|_|"CRT region release")?;self.regions.remove(index);self.retired.push(root);self.tags.retain(|&a,_|a<p.base||u64::from(a)>=u64::from(p.base)+u64::from(p.size));self.partial.retain(|&a,_|a<p.base||u64::from(a)>=u64::from(p.base)+u64::from(p.size));Ok(())
  }
  fn bind_descriptor(&mut self,number:u32,handle:u32)->Result<CrtDescriptorId,&'static str>{
