@@ -54,8 +54,16 @@ pub(crate) struct BridgeProof {
     pub registers: [Symbol; 8],
     pub temporary_bytes: u32,
     body: String,
+    #[allow(dead_code)]
+    filter_native: Option<String>,
 }
 impl BridgeProof {
+    #[allow(dead_code)]
+    pub fn filter_native(&self) -> Result<&str, String> {
+        self.filter_native
+            .as_deref()
+            .ok_or("bridge has no supported native filter lowering".into())
+    }
     pub fn body(&self) -> &str {
         &self.body
     }
@@ -523,6 +531,41 @@ fn prove(code: &[u8], origin: u32, mode: Mode) -> Result<BridgeProof, String> {
         Exit::Jump(_) => "Ok(BridgeExit::Jump{registers:r,target:bridge_target})\n",
         _ => unreachable!(),
     });
+    let filter_native = if matches!(mode, Mode::Filter) {
+        (|| -> Result<String,String>{
+        let mut out=String::from("frame.validate()?;if expected.is_empty()||expected.len()>512||target.kind!=CrtRegionKind::Module||cpu.r[1]!=CrtValue::Pointer(target)||cpu.r[2]!=CrtValue::Pointer(frame.binding.at(frame.rt,frame.binding.layout.bp)?){return Err(\"filter bridge target/frame binding\");}frame.rt.valid(target,expected.len() as u32)?;for(i,&byte)in expected.iter().enumerate(){if frame.rt.load(frame.rt.offset(target,i as i64)?,8)?.known_scalar()?!=u32::from(byte){return Err(\"filter bridge target bytes changed\");}}\n");
+        let mut d = Decoder::with_ip(32, code, u64::from(origin), DecoderOptions::NONE);
+        while d.can_decode() {
+            let i = d.decode();
+            let at = (i.ip32() - origin) as usize;
+            match graph::normalized(&i, &code[at..at + i.len()])? {
+                Operation::Push(Operand::Reg(r)) => {
+                    out.push_str(&format!("cpu.push(frame.rt,cpu.r[{}])?;", full(r)?))
+                }
+                Operation::Pop(r) => {
+                    out.push_str(&format!("cpu.r[{}]=cpu.pop(frame.rt)?;", full(r)?))
+                }
+                Operation::Binary(Binary::Move, Operand::Reg(dst), Operand::Reg(src)) => {
+                    out.push_str(&format!("cpu.r[{}]=cpu.r[{}];", full(dst)?, full(src)?))
+                }
+                Operation::Binary(Binary::Xor, Operand::Reg(dst), Operand::Reg(src))
+                    if dst == src =>
+                {
+                    out.push_str(&format!("cpu.r[{}]=cpu.zero();", full(dst)?))
+                }
+                Operation::Call(Operand::Reg(r)) if full(r)? == 1 => out.push_str(&format!(
+                    "frame.call(cpu,{},|f,callee|invoke(f,callee))?;",
+                    i.next_ip32()
+                )),
+                Operation::Return => out.push_str("return cpu.finish(frame.rt);"),
+                _ => return Err("native filter bridge unproved instruction".into()),
+            }
+        }
+        Ok(out)
+       })().ok() // Abstract proofs remain valid when this backend lacks a form.
+    } else {
+        None
+    };
     Ok(BridgeProof {
         calls: state.calls,
         stores: state.stores,
@@ -531,6 +574,7 @@ fn prove(code: &[u8], origin: u32, mode: Mode) -> Result<BridgeProof, String> {
         registers: state.registers,
         temporary_bytes: state.depth,
         body: state.source,
+        filter_native,
     })
 }
 

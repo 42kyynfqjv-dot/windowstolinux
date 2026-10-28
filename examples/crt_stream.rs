@@ -214,3 +214,7 @@ mod handler_guard;
 #[allow(dead_code)]
 #[path = "../src/handler_checks.rs"]
 mod handler_checks;
+
+#[allow(dead_code)]
+#[path = "../src/unwind_bridges.rs"]
+mod unwind_bridges;

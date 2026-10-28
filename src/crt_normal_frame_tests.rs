@@ -285,8 +285,9 @@ fn file_scope_failure(){
  }
 }
 
+fn bytes_for_native_filter()->Vec<u8>{vec![0x8b,0x55,0xec,0x8b,0x02,0x8b,0x08,0x89,0x4d,0xe4,0x8b,0x55,0xe4,0x33,0xc0,0x81,0xfa,0x42,0x00,0x42,0xe0,0x0f,0x94,0xc0,0xc3]}
 fn live_dispatch(){
- for mode in 0..34 {
+ for mode in 0..37 {
   let(m,mut r,main,mut permit)=fixture_with_extra(&[(0x410000,0x420000)]);let mut rt=runtime(&r);let outer=m.owned_context;
   let result=r.with_normal_calls(&m,&mut permit,&main,|e|{
    let mut c=cpu(&mut rt,0xe000,71);let mut b=CrtNormalBinding::bind(&rt,&c,e,epilog_run_layout())?;start(&mut rt,&mut c,e,&mut b,99)?;
@@ -320,14 +321,26 @@ fn live_dispatch(){
      if mode==32{let table_word=view.rt.resolve_absolute(0x41b408,CrtRegionKind::Module)?;view.rt.store(table_word,32,CrtValue::scalar(0))?;}
      if mode==33{let selector=view.rt.resolve_absolute(0x415128,CrtRegionKind::Module)?;view.rt.store(selector,32,CrtValue::Scalar{bits:0,known:0})?;}
      let front=if mode!=31{original_prefix_caller(view,h,&objects)}else{original_prefix_front(view,h,&objects)};
-     if mode==30{front?;}else{assert!(front.is_err());}
+     if mode==30||mode>=34{front?;}else{assert!(front.is_err());}
 
      let bp=CrtCpu::pointer(h.r[5])?;
-     assert_eq!(h.r[4],CrtValue::Pointer(view.rt.offset(bp,match mode{30=>-40,31=>-44,32=>-52,_=>-56})?));
+     assert_eq!(h.r[4],CrtValue::Pointer(view.rt.offset(bp,match mode{30|34..=36=>-40,31=>-44,32=>-52,_=>-56})?));
      if mode==31{assert_eq!(view.rt.load(CrtCpu::pointer(h.r[4])?,32)?.known_scalar()?,0xe0420042);}
-     if mode==30{
+     if mode==30||mode>=34{
       let pair=CrtHandlerPair::from_installed(view,h,&objects)?;assert_eq!(pair.read(view,h)?,(record,context));
-      let filter=pair.call_filter(view,h,0x402300,|f,k,_,_|{decoded_filter(f,k)?;k.finish(f.rt)})?;assert_eq!(filter,CrtValue::scalar(1));view.write_u32(-28,91)?;
+      let expected=bytes_for_native_filter();
+      let target=view.rt.map_region(0x413333,expected.len()as u32,CrtRegionKind::Module,Some(&expected))?;
+      let before=[h.r[3],h.r[5],h.r[6],h.r[7]];
+      h.r[1]=CrtValue::Pointer(target);h.r[2]=CrtValue::Pointer(b.at(view.rt,b.layout.bp)?);
+      if mode==34{h.r[1]=CrtValue::scalar(target.address());}
+      if mode==35{view.rt.store(target,8,CrtValue::scalar(0x90))?;}
+      let filter=pair.call_filter(view,h,0x402300,|f,k,_,_|original_filter_bridge(f,k,target,&expected,|f,k|{
+       assert_eq!(k.r[5],CrtValue::Pointer(b.at(f.rt,b.layout.bp)?));for r in [0,2,3,6,7]{assert_eq!(k.r[r],CrtValue::scalar(0));}
+       if mode==36{f.write_u32(-28,95)?;return Err("independent actual bridge callee failure");}
+       decoded_filter(f,k)?;k.finish(f.rt)
+      }));
+      if mode>=34{assert!(filter.is_err());assert_eq!(view.rt.load(marker,32)?.known_scalar()?,if mode==36{95}else{91});return Err("rejected original filter bridge binding/callback");}
+      let filter=filter?;assert_eq!(filter,CrtValue::scalar(1));assert_eq!([h.r[3],h.r[5],h.r[6],h.r[7]],before);view.write_u32(-28,91)?;
       assert_eq!(view.rt.load(view.rt.offset(bp,-8)?,32)?,CrtValue::Pointer(view.rt.resolve_absolute(0x41b400,CrtRegionKind::Module)?));
       assert_eq!(view.rt.load(view.rt.offset(bp,-16)?,32)?,CrtValue::Pointer(b.at(view.rt,b.layout.bp)?));
       assert_eq!(h.r[6],CrtValue::Pointer(b.at(view.rt,b.layout.bp)?));assert_eq!(h.r[7].known_scalar()?,0);
@@ -451,7 +464,7 @@ fn live_dispatch(){
     assert!(result.is_err());assert_eq!(event.delivery,CrtNormalDelivery::Pending);assert_eq!(rt.load(marker,32)?.known_scalar()?,91);
    }else{
     assert!(result.is_err(),"mode {mode}");assert_eq!(event.delivery,CrtNormalDelivery::Failed);
-    if mode!=5{assert_eq!(rt.load(marker,32)?.known_scalar()?,if mode>=30{91}else if mode==23||mode>=27{95}else if mode==15||mode==16||mode==19{94}else{92});}
+    if mode!=5{assert_eq!(rt.load(marker,32)?.known_scalar()?,if mode==36{95}else if mode>=30{91}else if mode==23||mode>=27{95}else if mode==15||mode==16||mode==19{94}else{92});}
    }
    if mode==19{rt.check_lock(lease.unwrap())?;}if mode==18{assert!(rt.locks.is_empty());}
    Err::<(),_>("live handler effects still require containment/restoration proof")
@@ -658,9 +671,16 @@ fn run(case: &str) {
         let prefix_front=format!("fn original_prefix_front(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,objects:&CrtNormalObjects)->RegistryResult<()>{{frame.validate()?;objects.validate(frame.event,frame.rt,frame.epoch)?;let sp=CrtCpu::pointer(cpu.r[4])?;frame.rt.valid(frame.rt.offset(sp,-{})?,{})?;{} Ok(())}}",prefix.temporary_bytes,prefix.temporary_bytes,prefix.normalizer_front());
         let guard_prefix=p.guard_proof(&guard,0x4021d0,&security,0x40154c,header).unwrap().prefix_call("guard_prefix_call");
         let prefix_caller=format!("fn original_prefix_caller(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,objects:&CrtNormalObjects)->RegistryResult<()>{{frame.validate()?;objects.validate(frame.event,frame.rt,frame.epoch)?;if frame.rt.load(frame.rt.offset(objects.record,4)?,32)?.known_scalar()?!=0{{return Err(\"prefix full search flags\");}}let sp=CrtCpu::pointer(cpu.r[4])?;frame.rt.valid(frame.rt.offset(sp,-{})?,{})?;{}Ok(())}}",prefix.temporary_bytes,prefix.temporary_bytes,prefix.caller_body());
+        let bridge_bytes=handler_bytes("original-filter-bridge.bin","555657538bea33c033db33d233f633ffffd15b5f5e5dc3");
+        let bridge=crate::unwind_bridges::prove_filter(&bridge_bytes,0x402800).unwrap();
+        let bridge_native=format!("fn original_filter_bridge<F>(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,target:CrtPointer,expected:&[u8],mut invoke:F)->RegistryResult<CrtValue> where F:FnMut(&mut CrtLiveFrame<'_,'_>,&mut CrtCpu)->RegistryResult<CrtValue>{{ {} }}",bridge.filter_native().unwrap());
+        let target_filter=handler_bytes("main-filter-0.bin","8b55ec8b028b08898df8fcffff8b95f8fcffff8995f4fcffff33c081bdf4fcffff424242e00f94c0c3");
+        let target_failure=crate::selection::prove_filter(&target_filter,0x401333,&crate::selection::FilterLayout{start:-32,end:0,exception_pointers_offset:-20,writable_words:vec![-28]},0xe0420042).err().unwrap();
+        assert_eq!(target_failure,"selection: unowned frame word");
+        let mut bad_bridge=bridge_bytes.clone();bad_bridge[17]=0xd0;assert!(crate::unwind_bridges::prove_filter(&bad_bridge,0x402800).is_err());
         let context_types=crate::handler_context::EMITTED_TYPES;
         let context_check=context_proof.normal_object_check();
-        let source = format!("#![allow(dead_code)]\nmod guest_memory{{{memory}}}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{fixture}\n{file_scope}\n{context_types}\n{context_check}\n{scope_store}\n{permuted_store}\n{install}\n{handler_prolog}\n{filter_source}\n{false_filter_source}\n{normalizer_source}\n{guard_source}\n{header_source}\n{prefix_normalizer}\n{prefix_front}\n{guard_prefix}\n{prefix_caller}\nfn raise_site()->CrtNormalRaiseSite{{{{{raise}}}}}\n{CASES}",
+        let source = format!("#![allow(dead_code)]\nmod guest_memory{{{memory}}}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{fixture}\n{file_scope}\n{context_types}\n{context_check}\n{scope_store}\n{permuted_store}\n{install}\n{handler_prolog}\n{filter_source}\n{false_filter_source}\n{normalizer_source}\n{guard_source}\n{header_source}\n{prefix_normalizer}\n{prefix_front}\n{guard_prefix}\n{prefix_caller}\n{bridge_native}\nfn raise_site()->CrtNormalRaiseSite{{{{{raise}}}}}\n{CASES}",
             include_str!("linker/unwind_runtime.rs").replace("//!", "//"),
             emitted_literal(include_str!("frame_proof.rs")),emitted_literal(include_str!("thread_registry.rs")),
             crate::crt_stream_runtime::EMITTED_TYPES,crate::crt_stream_cpu::EMITTED_TYPES,

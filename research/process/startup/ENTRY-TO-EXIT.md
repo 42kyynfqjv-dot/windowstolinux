@@ -397,3 +397,47 @@ normal-source restoration remain unproved. Current native filter code is an
 independently authored instruction fixture. Full startup/rcedit remains rejected.
 Next useful Sol work is the actual filter bridge and target binding before any
 normal-frame retirement or resumption is admitted.
+
+## Sol original filter bridge and measured target-frame boundary
+
+The original23byte bridge atVA0x402800 now has a CRT backend derived from the
+existing BridgeProof instruction decoder. It executes real saves, owner EBP
+setup, zeroing of EAX/EBX/EDX/ESI/EDI, nested protected filter CALL and original
+POPs/RET. The containing binding validates a Module pointer and complete expected
+target bytes; a scalar target, changed bytes or callee failure reject and preserve
+preceding effects. Existing abstract proofs remain available for any original
+forms the new native backend cannot lower; requesting an unavailable native
+lowering rejects rather than weakening the old proof or fabricating execution.
+
+The full-prefix native success case now executes that actual bridge with the
+independently authored bounded filter, checks original filter-entry registers
+and restoration of all four saved nonvolatile registers. Three failure scenarios
+increase adapter cases to37. Three inherited unwind_bridges tests newly imported
+explain the CRT suite count increase, not three new Windows comparisons.
+
+The unchanged actual Main target atVA0x401333/41bytes is extracted/hashed alongside
+the bridge. It is deliberately tested against the current FILE-wrapper layout
+and rejects with `selection: unowned frame word`: the original filter writes
+EBP-776/-780, whereas this wrapper owns only its small prolog-derived locals.
+Main's original scope header is [-28,0,-796,0], distinct from the FILE header
+[-2,0,-44,0]. Retargeting or enlarging this fixture without original Main frame
+proof would be false support. No source/PE edits or offset substitutions are made.
+
+Next coherent gate: connect the already-proved original Main frame initialization
+and two-cookie layout to CRT live-frame ownership, then bind its actual table row,
+filter bridge and unchanged filter target. The independent wide Main frame and
+small FILE frame must remain distinct and both keep ownership/lifetime negatives.
+After that, perform original table-driven scope search/local unwind and selected
+normal-source restoration. Current work executes the actual bridge but does not
+translate that Main target in this FILE frame, full startup or rcedit.
+
+The code-level Main integration gap is also an authority distinction:
+CrtNormalLayout/storage_image currently represent one guard and NormalFrameId,
+whereas the existing Main frame proof has distinct GS/EH guards and an owned
+registration. It cannot be installed as a fabricated normal child or reuse the
+finished outer event's resumption authority. A shared live-source adapter must
+preserve each source identity, actual original Main initialization and both guard
+words before accepting its full filter-local range. The original Main event code
+is0xe0424242; the independent small adapter fixture uses0xe0420042. Keep those
+input/provenance domains explicit. Substituting offsets, event codes or frame
+kinds to obtain a matching result would invalidate the evidence.
