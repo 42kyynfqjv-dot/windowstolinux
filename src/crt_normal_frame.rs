@@ -212,6 +212,40 @@ struct CrtNormalRaiseSite { instruction:u32,continuation:u32,iat:u32 }
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 enum CrtNormalDelivery { Pending,Calling,Returned,ResultTaken,Failed }
 struct CrtNormalHandlerReturn { identity:RegistryIdentity,epoch:u64,frame:NormalFrameId,generation:u64,value:CrtValue }
+/// Explicit captured-state input cut. Construction validates supplied objects;
+/// it never creates captured registers from guest CALL state.
+struct CrtNormalObjects {
+ anchor:guest_memory::Capability,identity:RegistryIdentity,epoch:u64,generation:u64,
+ record:CrtPointer,context:CrtPointer,captured_esp:u32,
+}
+impl CrtNormalObjects {
+ fn bind(event:&CrtNormalException,rt:&CrtStreamRuntime,epoch:&NormalCallEpoch<'_>,record:CrtPointer,context:CrtPointer)->RegistryResult<Self>{
+  event.validate_pending(rt,epoch)?;
+  if record.kind!=CrtRegionKind::Context||context.kind!=CrtRegionKind::Context
+   ||record.address()%4!=0||context.address()%4!=0
+   ||(u64::from(record.address())<u64::from(context.address())+716&&u64::from(context.address())<u64::from(record.address())+80){return Err("normal exception object roles/alias");}
+  rt.valid(record,80)?;rt.valid(context,716)?;
+  let captured_esp=rt.load(rt.offset(context,0xc4)?,32)?.known_scalar()?;
+  let objects=Self{anchor:rt.anchor,identity:event.identity,epoch:event.epoch,generation:event.generation,record,context,captured_esp};
+  objects.validate(event,rt,epoch)?;Ok(objects)
+ }
+ fn validate(&self,event:&CrtNormalException,rt:&CrtStreamRuntime,epoch:&NormalCallEpoch<'_>)->RegistryResult<()>{
+  event.validate_pending(rt,epoch)?;
+  if rt.anchor!=self.anchor||event.identity!=self.identity||event.epoch!=self.epoch||event.generation!=self.generation
+   ||self.captured_esp<epoch.registry.limit||self.captured_esp>epoch.registry.base{return Err("normal exception captured object identity/bounds");}
+  rt.valid(self.record,80)?;rt.valid(self.context,716)?;
+  for (offset,value) in [(0,event.code),(4,u32::from(event.noncontinuable)),(8,0),(16,0)]{
+   if rt.load(rt.offset(self.record,offset)?,32)?.known_scalar()?!=value{return Err("normal exception record input mismatch");}
+  }
+  if rt.load(rt.offset(self.context,0xc4)?,32)?.known_scalar()?!=self.captured_esp{return Err("normal exception captured ESP input changed");}Ok(())
+ }
+ fn check_arguments(&self,event:&CrtNormalException,rt:&CrtStreamRuntime,epoch:&NormalCallEpoch<'_>,binding:&CrtNormalBinding,dispatcher:&CrtCpu)->RegistryResult<()>{
+  self.validate(event,rt,epoch)?;let sp=CrtCpu::pointer(dispatcher.r[4])?;
+  for(i,pointer)in [self.record,binding.at(rt,binding.layout.record)?,self.context].into_iter().enumerate(){
+   if rt.load(rt.offset(sp,i as i64*4)?,32)?!=CrtValue::Pointer(pointer){return Err("normal exception handler argument provenance");}
+  }Ok(())
+ }
+}
 struct CrtNormalException {
  anchor:guest_memory::Capability,identity:RegistryIdentity,epoch:u64,frame:NormalFrameId,
  generation:u64,code:u32,noncontinuable:bool,continuation:u32,
@@ -293,6 +327,14 @@ impl CrtNormalException {
    Ok(CrtNormalHandlerReturn{identity:self.identity,epoch:self.epoch,frame:self.frame,generation:self.generation,value})
   })();
   match result{Ok(receipt)=>{self.delivery=CrtNormalDelivery::Returned;Ok(receipt)},Err(error)=>{self.delivery=CrtNormalDelivery::Failed;epoch.fail(error)}}
+ }
+ /// Original handler binding must use the owned object boundary. The fourth
+ /// dispatcher argument remains separately proved; no host pointer is inferred.
+ fn execute_bound_handler<F>(&mut self,objects:&CrtNormalObjects,rt:&mut CrtStreamRuntime,interrupted:&CrtCpu,epoch:&mut NormalCallEpoch<'_>,binding:&CrtNormalBinding,dispatcher:&mut CrtCpu,continuation:u32,body:F)->RegistryResult<CrtNormalHandlerReturn>
+ where F:FnOnce(&mut CrtStreamRuntime,&mut CrtCpu)->RegistryResult<CrtValue>{
+  objects.check_arguments(self,rt,epoch,binding,dispatcher)?;
+  let receipt=self.execute_handler(rt,interrupted,epoch,binding,dispatcher,continuation,body)?;
+  if let Err(error)=objects.validate(self,rt,epoch){self.delivery=CrtNormalDelivery::Failed;return epoch.fail(error);}Ok(receipt)
  }
  /// Consume only an actually completed callback result for this live event.
  /// The returned scalar is not an EXCEPTION_DISPOSITION authorization: the

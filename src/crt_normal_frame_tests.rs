@@ -371,6 +371,35 @@ fn pending_handler_activation(){
   });assert!(result.is_err());assert_eq!(m.owned_context,context);
  }
 }
+fn captured_objects(){
+ for mode in 0..6{
+  let(m,mut r,main,mut permit)=fixture_with_extra(&[(0x410000,0x420000)]);let mut rt=runtime(&r);
+  assert!(r.with_normal_calls(&m,&mut permit,&main,|e|{
+   let mut c=cpu(&mut rt,0xe000,71);let mut b=CrtNormalBinding::bind(&rt,&c,e,epilog_run_layout())?;start(&mut rt,&mut c,e,&mut b,99)?;
+   for arg in [0,0,0,0xe0420042]{c.push(&mut rt,CrtValue::scalar(arg))?;}
+   let mut event=CrtNormalException::issue(&mut rt,&mut c,e,&b,raise_site())?;
+   rt.map_region(0x50000,80,CrtRegionKind::Context,None)?;rt.map_region(0x51000,716,CrtRegionKind::Context,None)?;
+   let record=rt.resolve_absolute(0x50000,CrtRegionKind::Context)?;let context=rt.resolve_absolute(0x51000,CrtRegionKind::Context)?;
+   for(offset,value)in [(0,0xe0420042),(4,0),(8,0),(16,0)]{rt.store(rt.offset(record,offset)?,32,CrtValue::scalar(value))?;}
+   if mode!=1{rt.store(rt.offset(context,0xc4)?,32,CrtValue::scalar(if mode==2{0}else{0x9500}))?;}
+   // Captured ESP is deliberately different from the interrupted CALL ESP;
+   // all other context bytes remain unknown.
+   let objects=CrtNormalObjects::bind(&event,&rt,e,record,if mode==3{record}else{context});
+   if (1..=3).contains(&mode){assert!(objects.is_err());return Err("rejected captured input");}
+   let objects=objects?;assert_ne!(objects.captured_esp,CrtCpu::pointer(c.r[4])?.address());
+   assert_eq!(rt.load(context,32)?,CrtValue::Scalar{bits:0,known:0});
+   let mut d=cpu(&mut rt,0xc000,200);let sp=rt.resolve_absolute(0xbfc0,CrtRegionKind::Stack)?;d.r[4]=CrtValue::Pointer(sp);
+   for(i,value)in [CrtValue::Pointer(record),CrtValue::Pointer(b.at(&rt,b.layout.record)?),CrtValue::Pointer(context),CrtValue::scalar(0)].into_iter().enumerate(){rt.store(rt.offset(sp,i as i64*4)?,32,value)?;}
+   if mode==4{rt.store(sp,32,CrtValue::Pointer(context))?;}
+   let result=event.execute_bound_handler(&objects,&mut rt,&c,e,&b,&mut d,0x401900,|rt,h|{
+    if mode==5{rt.store(rt.offset(context,0xc4)?,32,CrtValue::scalar(0x9600))?;}
+    h.r[0]=CrtValue::scalar(1);h.finish(rt)
+   });
+   if mode==0{let receipt=result?;assert_eq!(event.take_handler_result(receipt,&rt,&c,e,&b)?,1);}else{assert!(result.is_err());}
+   assert!(e.state().is_err());Err::<(),_>("captured inputs do not prove OS delivery/resumption")
+  }).is_err());
+ }
+}
 fn reject_normal_exception(){
  for mode in 0..10{
   let(m,mut r,main,mut permit)=fixture_with_extra(&[(0x410000,0x420000)]);let mut rt=runtime(&r);
@@ -390,7 +419,7 @@ fn reject_normal_exception(){
   }).unwrap();
  }
 }
-fn main(){match std::env::args().nth(1).unwrap().as_str(){"handler"=>pending_handler_activation(),"pending"=>pending_normal_exception(),"pending-reject"=>reject_normal_exception(),"file"=>file_scope_normal(),"file-failure"=>file_scope_failure(),"nested"=>nested_actual(),"mutations"=>mutations(),"consumed"=>consumed_mutation(),"failure"=>body_failure(),"certificate"=>wrong_certificate(),"observed"=>observed(),_=>panic!("case")}}
+fn main(){match std::env::args().nth(1).unwrap().as_str(){"objects"=>captured_objects(),"handler"=>pending_handler_activation(),"pending"=>pending_normal_exception(),"pending-reject"=>reject_normal_exception(),"file"=>file_scope_normal(),"file-failure"=>file_scope_failure(),"nested"=>nested_actual(),"mutations"=>mutations(),"consumed"=>consumed_mutation(),"failure"=>body_failure(),"certificate"=>wrong_certificate(),"observed"=>observed(),_=>panic!("case")}}
 "#;
 
 fn run(case: &str) {
@@ -623,4 +652,9 @@ fn normal_raise_certificate_requires_exact_original_call_and_disjoint_iat() {
 #[test]
 fn suspended_handler_call_returns_owned_receipt_and_preserves_failures() {
     run("handler");
+}
+
+#[test]
+fn captured_objects_bind_live_handler_arguments_without_inventing_registers() {
+    run("objects");
 }

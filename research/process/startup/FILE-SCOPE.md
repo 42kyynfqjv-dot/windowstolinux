@@ -363,3 +363,53 @@ process.wait after15seconds, PE hash
 `30a0afa2dba23697256b96df129e62a9cc7c099edf68bfcb87eaf125fc3757e3`.
 Artifact12826063820 is retained. Dedicated/full PR results are tracked separately;
 no retry or timeout change turns this unresolved failure into a success claim.
+
+## Exception/context object binding
+
+`CrtNormalObjects` connects supplied captured-state objects to the pending event.
+It requires distinct checked Context-role ranges for an x86 EXCEPTION_RECORD
+(80bytes) and CONTEXT(716bytes), aligned addresses, exact live arena/thread/epoch
+and event identity. The zero-parameter record must match event code/continuability,
+null nested record and zero parameter count. Only fields read by this contract
+are required initialized; untouched context registers are not zero-filled.
+Captured ESP at0xc4 is a separate initialized input within the registered stack
+bounds, not copied from the guest CALL snapshot. Primary layout contracts are
+Microsoft x86 CONTEXT and EXCEPTION_RECORD (winnt/ns-winnt-context-r2 and
+winnt/ns-winnt-exception_record); delivery acquisition remains an explicit cut.
+
+`execute_bound_handler` requires the actual first three callback arguments to
+point to this record, the live source registration and this context. The fourth
+argument and original callback code remain separately proved inputs. It executes
+the existing protected callback and rechecks object contents/lifetime afterward
+before releasing the receipt. This bounded component rejects changes to captured
+ESP or record identity fields; it does not claim general context mutation support.
+The existing receipt-consumption checks still apply. No captured CONTEXT, OS
+exception delivery, original handler selection or guest restoration is invented.
+
+One new native regression function has six independently specified cases:
+valid captured ESP unequal to CALL ESP with other context fields unknown;
+uninitialized captured ESP; out-of-stack ESP; overlapping objects; substituted
+callback object pointer; and captured ESP changed by the callback. Local tests:
+175root/171frame/94CRT pass (one artifact-only observation separately replayed),
+formatting and Clippy pass. The retained five original helper/epilog comparisons
+remain separate from these component cases. No new Windows exception/fullPE pairs.
+
+The next connected scope is original handler prefix/helper execution over these
+owned objects, including its selector/exception flags contract, followed by proven
+selection and cleanup/restoration. Acquisition of captured-state inputs and
+nonzero exception/unwind paths still need proof. Full startup/rcedit remains
+rejected; callback completion cannot bypass those gates.
+
+## Independent host exit controls
+
+The mandatory18original Windows launch samples are retained. Before them, the
+same harness now runs two independent host-Python controls: os.write of Hello
+followed by normal runtime exit, or immediate os._exit(0). Both use unchanged15s
+limits, file output and retained process diagnostics; no retry occurs. Controls
+have their own report and are mandatory independently of fixture outcomes.
+Interpreter binary hash/version are recorded by the harness. They are host
+runtime controls (typically64bit), not the fixtures'32bit CRT, and cannot prove
+fixture cleanup correctness. Both local Linux controls pass; fresh Windows
+results require CI. A passing control alongside a fixture timeout would narrow
+that observation but would not establish a root cause. All earlier timeout
+artifacts and output-present/process-alive findings remain unresolved.
