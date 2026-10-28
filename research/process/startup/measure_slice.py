@@ -17,8 +17,8 @@ data=exe.read_bytes();digest=hashlib.sha256(data).hexdigest()
 p=execute([str(exe)],out/'stdout',out/'stderr',out/'launch',{'pe_sha256':digest},frozen,timeout=10)
 if p.returncode or (out/'stderr').read_bytes():raise ValueError('Windows outcome')
 r=json.loads((out/'stdout').read_text())
-expected=[42,11,12,13,32768,33024,16,17,r['fault_rva']+2,514]
-if r['actual_result']!=42 or r['disposition']!=0 or r['context']!=expected:raise ValueError('independent expected state')
+expected=[frozen['expected_result'],11,12,13,32768,33024,16,17,r['fault_rva']+frozen['ip_delta'],frozen['flags']]
+if r['actual_result']!=frozen['expected_result'] or r['disposition']!=frozen['disposition'] or r['context']!=expected:raise ValueError('independent expected state')
 pe=struct.unpack_from('<I',data,60)[0];base=struct.unpack_from('<I',data,pe+52)[0]
 if mapped_bytes(data,base+r['fault_rva'],2)!=b'\x0f\x0b':raise ValueError('fault instruction')
 code=mapped_bytes(data,base+r['handler_rva'],24)

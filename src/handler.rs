@@ -43,6 +43,11 @@ mod tests {
     }
     #[test]
     fn unknown_owner_protected_context_and_root_search_reject() {
+        for opcode in [0xbb, 0xbd, 0xbe, 0xbf] {
+            let mut clobber = vec![opcode, 1, 0, 0, 0];
+            clobber.extend(code());
+            assert!(prove(&clobber, 0x2000, 0x1000, 0x1002, true).is_err());
+        }
         for (index, value) in [(3, 8), (13, 0xc4), (13, 0xc0), (13, 0xb4), (2, 0x20)] {
             let mut b = code();
             b[index] = value;
@@ -90,7 +95,10 @@ pub fn prove(
     r[4] = Value::Stack;
     let mut fields = [None; 10];
     fields[8] = Some(fault);
-    let mut source=String::from("// Integer CONTEXT slice; requires the documented raw-handler ABI.\n#[allow(unused_assignments,unused_variables)]\npub fn handler(c:&mut [u32;10])->u32 { let mut r=[0u32;8];\n");
+    let mut source=String::from("// Integer CONTEXT slice; requires the documented raw-handler ABI.\n#[allow(unused_assignments,unused_variables)]\npub fn handler(c:&mut [u32;10])->Result<u32, &'static str> { let mut r=[0u32;8];\n");
+    source.push_str(&format!(
+        "if c[8]!={fault} {{ return Err(\"handler slice context precondition\"); }}\n"
+    ));
     let mut pc = origin;
     let mut visited = 0;
     loop {
@@ -107,7 +115,7 @@ pub fn prove(
                 if visited != g.nodes.len() {
                     return Err("handler: unvisited instruction".into());
                 }
-                source.push_str("r[0] }\n");
+                source.push_str("Ok(r[0]) }\n");
                 return Ok(Proven { source });
             }
             Operation::Binary(op, dst, src) => {
@@ -135,7 +143,7 @@ pub fn prove(
                     _ => return Err("handler: operand form".into()),
                 };
                 let (old, place, register) = match dst {
-                    Operand::Reg(reg) if reg.width == 32 && reg.shift == 0 && reg.index != 4 => (
+                    Operand::Reg(reg) if reg.width == 32 && reg.shift == 0 && reg.index <= 2 => (
                         r[reg.index as usize],
                         format!("r[{}]", reg.index),
                         Some(reg.index as usize),
