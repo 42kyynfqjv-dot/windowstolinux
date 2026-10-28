@@ -133,3 +133,48 @@ The current returned scalar/level receipt deliberately cannot resume the guest.
 Captured-state acquisition, borrowed-chain containment and a second exception
 raised during delivery also remain unproved; native nested helper calls do not
 establish those contracts. Keep full startup/rcedit admission rejected.
+
+## Sol review of ed4d843a: exact next code connection
+
+The existing dispatch adapter is not interchangeable with the live normal source.
+`frame_unwind.rs` creates an abstract `BridgeMemory` and executes the decoded
+installer into `BridgeWord` maps before invoking filter proofs. The original
+installer puts record/context at handler EBP-28/-24 and stores their pair address
+at establisher+16-20. In the live runtime the handler CPU currently has only a
+protected CALL boundary; it has not executed and owned the original full handler
+prolog. Installing a numeric pair into that supplied scratch frame would grant
+unproved storage and lifetime authority. Similarly, `dispatch_emit.rs` retires
+OwnedFrameBinding values, whereas this source is a suspended NormalFrameId.
+Changing the identifier or clearing suspension cannot establish the missing proof.
+
+The next cohesive implementation should:
+
+1. Lower the actual original handler prolog/installer to CrtCpu and checked CRT
+   memory. Keep its stack allocation, saved registers and pair locals live across
+   original filter calls. Reuse InstallerProof's decoded operation sequence with
+   a storage backend, rather than copying BridgeWord maps into memory. Bind its
+   record/context pointers to the same event's CrtNormalObjects, and its owner
+   slot to CrtLiveFrame's ordinary word checks. Reads must retain pointer tags.
+2. Lower the existing table-driven search/local-unwind actions through that same
+   live source. Reuse the original LocalUnwindEffects instruction schedule;
+   temporary registration and notification callbacks need concrete owned storage
+   and effect bindings. Check each TryLevel update against live storage. Keep
+   finally effects on failure and reject any unproved nested exception delivery.
+3. Connect the original selected landing to a normal-source restoration proof,
+   validating saved context, surviving stack extent, completed cleanup and live
+   object lifetimes before consuming suspension. A handler result scalar or
+   matching TryLevel supplies neither a captured CONTEXT nor resumption authority.
+
+Acceptance includes real installer writes/read-back, live pair dereference by
+original filter instructions, nested/shared frames, failure after each store or
+cleanup, stale owner/event/pair pointers, expired handler locals, unknown context
+and invalid landing rejection. Then compare the unchanged target from actual
+entry through exit. This remains complex proof/emitter composition suited to a
+bounded Astra High pass; current Sol review did not relax admission to cross it.
+
+The review adds three independent native cases (27 total live-adapter cases): a
+foreign callback activation, a same-address pointer from another runtime and a
+scalar with establisher address bits. All reject. The ed4d843a CI artifact retained
+24 cases per host and matching PE/Rust hashes; that evidence predates the three
+new cases. Full-CI Linux completion is reported independently of the successful
+startup workflow. Historical original-process timeouts remain unresolved.

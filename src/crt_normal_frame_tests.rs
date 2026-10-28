@@ -286,7 +286,7 @@ fn file_scope_failure(){
 }
 
 fn live_dispatch(){
- for mode in 0..24 {
+ for mode in 0..27 {
   let(m,mut r,main,mut permit)=fixture_with_extra(&[(0x410000,0x420000)]);let mut rt=runtime(&r);let outer=m.owned_context;
   let result=r.with_normal_calls(&m,&mut permit,&main,|e|{
    let mut c=cpu(&mut rt,0xe000,71);let mut b=CrtNormalBinding::bind(&rt,&c,e,epilog_run_layout())?;start(&mut rt,&mut c,e,&mut b,99)?;
@@ -319,6 +319,8 @@ fn live_dispatch(){
      assert!(view.call(h,0x401910,|child,_|{child.write_u32(-28,95)?;Err("nested failure cannot be swallowed")}).is_err());
      return Ok(CrtValue::scalar(0));
     }
+    if mode==24{h.return_id+=1;return view.call(h,0x401910,|_,_|panic!("foreign activation accepted"));}
+    if mode==25{let foreign=runtime(view.epoch.registry);let p=foreign.resolve_absolute(marker.address(),CrtRegionKind::Stack)?;return view.write(-28,CrtValue::Pointer(p)).map(|_|CrtValue::scalar(0));}
     if mode==1{return view.write_u32(-16,0).map(|_|CrtValue::scalar(0));} // predecessor
     if mode==2{return view.write_u32(-32,0).map(|_|CrtValue::scalar(0));} // saved EBX
     if mode==3{return view.write_u32(-27,0).map(|_|CrtValue::scalar(0));} // partial word
@@ -332,6 +334,7 @@ fn live_dispatch(){
     if mode==11{return view.call(h,0x600000,|_,_|panic!("module bypass"));}
     h.r[0]=CrtValue::Pointer(b.at(view.rt,b.layout.record)?);let ebx=h.r[3];h.r[3]=CrtValue::scalar((-2i32)as u32);
     if mode==12{h.r[0]=CrtValue::Pointer(marker);}
+    if mode==26{h.r[0]=CrtValue::scalar(b.at(view.rt,b.layout.record)?.address());}
     if mode==13{h.r[3]=CrtValue::Scalar{bits:0,known:255};}
     original_scope_store(view,h)?;h.r[3]=ebx;
     assert_eq!(view.rt.load(b.at(view.rt,b.layout.level)?,32)?.known_scalar()?,(-2i32)as u32);

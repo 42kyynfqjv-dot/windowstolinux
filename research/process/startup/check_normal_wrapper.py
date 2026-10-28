@@ -114,7 +114,7 @@ def check(original, observation, out, compare=None):
                   comparisons=5, whole_pe_translation_pairs=0,
                   file_scope_code_sha256=file_regions, file_scope_imports=file_imports,
                   file_scope_native_test_functions=3,
-                  live_dispatch_native_cases=24, live_dispatch_windows_original_pairs=0,
+                  live_dispatch_native_cases=27, live_dispatch_windows_original_pairs=0,
                   file_scope_evidence="Native component cases with explicit driver cut; no new Windows differential pairs",
                   scope='Live registry fixture; body EAX/flags inputs; original stack/FS/saved-state restoration only')
     if compare:

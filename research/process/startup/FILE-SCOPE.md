@@ -458,3 +458,5 @@ nested helper stack at the interrupted CALL area. The checked implementation now
 requires the current handler activation identity and a stack no higher than its
 own entry, in the same checked stack capability. The regression remains mandatory.
 Historical original-Windows hangs remain unresolved.
+
+Sol review extended live-adapter regressions to 27 cases: foreign callback identity, cross-arena same-address pointer and scalar establisher bits all reject. Earlier 24-case CI reports remain historical evidence. No production admission changed.
