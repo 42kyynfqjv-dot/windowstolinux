@@ -23,7 +23,7 @@ sys.path.insert(0,str(HERE.parents[2]/'corpus'))
 from launch import execute
 
 SITE_NAMES={1:'handler-entry',2:'handler-return',3:'rtl-call',4:'rtl-resume',
-    5:'before-temporary-fs-install',6:'after-temporary-fs-install',7:'before-temporary-fs-pop',
+    5:'before-temporary-fs-install',6:'local-loop-head-after-fs-install',7:'before-temporary-fs-pop',
     8:'after-temporary-fs-pop',9:'notification-code-stored',10:'notification-target-stored',
     11:'notification-frame-stored',12:'cleanup-bridge-call',13:'selected-landing',
     14:'after-manual-restoration-capture',15:'after-main-normal-fs-restore',
@@ -90,7 +90,9 @@ def parse_events(raw,expected_success,plan=None):
             or summary.get('child_exited') is not True
             or type(summary.get('events')) is not int or not 0<summary['events']<=2048
             or type(summary.get('hits')) is not int or not 0<summary['hits']<=256
-            or summary.get('child_exit')!=(0 if expected_success else 125)):
+            or summary.get('child_exit')!=(0 if expected_success else 125)
+            or summary.get('interval_complete') is not expected_success
+            or summary.get('breakpoints_restored') is not True):
         raise ValueError('observer failed owned-child cleanup/completion contract')
     sites=[r for r in rows if r.get('kind')=='site']
     if expected_success:
@@ -98,7 +100,21 @@ def parse_events(raw,expected_success,plan=None):
             raise ValueError('observer site sequence/count differs')
         required=set(SITE_NAMES)-{16}
         if not required.issubset({r.get('site') for r in sites}):raise ValueError('observer did not reach all required original sites')
-    allowed={'module','site','exception','summary'}
+    intervals=[(i,row) for i,row in enumerate(rows) if row.get('kind')=='interval-complete']
+    if expected_success:
+        if len(intervals)!=1:raise ValueError('observer interval completion missing or duplicated')
+        at,marker=intervals[0]
+        if (marker.get('last_site')!=15 or marker.get('hits')!=len(sites)
+                or marker.get('breakpoints_restored') is not True
+                or marker.get('trap_flag_cleared') is not True
+                or not sites or sites[-1]['site']!=15
+                or any(row.get('kind')=='site' for row in rows[at+1:])):
+            raise ValueError('observer interval did not restore all instrumentation')
+    elif intervals:raise ValueError('injected first-hit failure cannot complete interval')
+    for i,row in enumerate(rows):
+        if row.get('kind')=='teardown-thread' and (not intervals or i<=intervals[0][0]):
+            raise ValueError('unobserved thread arrived before completed interval')
+    allowed={'module','site','exception','summary','interval-complete','teardown-thread'}
     if any(not isinstance(row,dict) or row.get('kind') not in allowed for row in rows):
         raise ValueError('unknown observer event')
     expected={site['id']:site for site in plan['sites']} if plan else None
@@ -219,6 +235,8 @@ def run(original,out):
         caveats=['INT3 and temporary TF can perturb debugger/exception behavior; ordinary baseline is retained separately.',
             'Only this pinned Windows/module build and application-contained no-secondary-exception path are observed.',
             'Unknown original exceptions are passed to Windows; observer does not implement or suppress application handlers.',
+            'Instrumentation ends after Main normal FS restoration; later CRT teardown threads are logged but not instrumented.',
+            'Site6 is also a loop head: repeated hits do not imply repeated temporary FS installs.',
             'No general nested/collided unwind correctness or full CRT startup translation follows from these observations.'])
     (out/'report.json').write_text(json.dumps(report,indent=2)+'\n')
     print(json.dumps(dict(pe_sha256=digest,site_hits=records[0]['summary']['hits'],cleanup_failure_test=True,whole_pe_translation_pairs=0)))

@@ -107,7 +107,7 @@ int main(int argc,char **argv) {
     SECURITY_ATTRIBUTES sa={sizeof(sa),NULL,TRUE};
     HANDLE out=INVALID_HANDLE_VALUE,err=INVALID_HANDLE_VALUE,in=INVALID_HANDLE_VALUE;
     DWORD result=125,base=0,child_exit=0xffffffff,last_error=0;unsigned failure_line=0,events=0,hits=0,module_count=0;
-    BOOL armed=FALSE,pending=FALSE,exited=FALSE,cleanup_ok=TRUE,success=FALSE;
+    BOOL armed=FALSE,pending=FALSE,exited=FALSE,cleanup_ok=TRUE,success=FALSE,interval_complete=FALSE;
     BOOL injected=argc==6 && strcmp(argv[5],"fail-after-first-hit")==0;int stepping=-1;
     ULONGLONG deadline=GetTickCount64()+20000;
     if(sizeof(void *)!=4 || (argc!=5 && !injected) || !manifest(argv[2]))return 125;
@@ -133,16 +133,20 @@ int main(int argc,char **argv) {
             if(!valid)FAIL();
         }else if(ev.dwDebugEventCode==CREATE_THREAD_DEBUG_EVENT) {
             /* Debug-event thread handles are system-owned until continued EXIT_THREAD. */
-            FAIL(); /* only frozen single-thread domain */
+            if(!interval_complete)FAIL(); /* single-thread observed interval */
+            printf("{\"kind\":\"teardown-thread\",\"thread_id\":%lu}\n",ev.dwThreadId);fflush(stdout);
         }else if(ev.dwDebugEventCode==EXIT_PROCESS_DEBUG_EVENT) {
             child_exit=ev.u.ExitProcess.dwExitCode;exited=TRUE;
             if(!ContinueDebugEvent(ev.dwProcessId,ev.dwThreadId,DBG_CONTINUE))FAIL();
-            pending=FALSE;success=armed && hits>0 && stepping==-1 && child_exit==0;break;
+            pending=FALSE;success=armed && interval_complete && hits>0 && stepping==-1 && child_exit==0;break;
         }else if(ev.dwDebugEventCode==EXCEPTION_DEBUG_EVENT) {
             DWORD code=ev.u.Exception.ExceptionRecord.ExceptionCode;DWORD at=(DWORD)(uintptr_t)ev.u.Exception.ExceptionRecord.ExceptionAddress;
             action=DBG_EXCEPTION_NOT_HANDLED;
-            if(ev.dwThreadId!=pi.dwThreadId)FAIL();
-            if(code==EXCEPTION_BREAKPOINT && !armed) {
+            if(!interval_complete && ev.dwThreadId!=pi.dwThreadId)FAIL();
+            if(interval_complete) {
+                printf("{\"kind\":\"exception\",\"code\":%lu,\"address\":%lu,\"first_chance\":%lu}\n",code,at,ev.u.Exception.dwFirstChance);fflush(stdout);
+                /* Instrumentation is over: no other thread/context is touched. */
+            }else if(code==EXCEPTION_BREAKPOINT && !armed) {
                 if(!base)FAIL();
                 for(unsigned i=0;i<site_count;i++) {
                     BYTE actual=0;sites[i].address=base+sites[i].rva;
@@ -169,9 +173,21 @@ int main(int argc,char **argv) {
             }else if(code==EXCEPTION_SINGLE_STEP && stepping>=0) {
                 CONTEXT c={0};c.ContextFlags=CONTEXT_FULL;
                 if(!GetThreadContext(pi.hThread,&c))FAIL();
-                sites[stepping].patched=TRUE;
-                if(!write_byte(pi.hProcess,sites[stepping].address,0xcc))FAIL();c.EFlags&=~0x100u;
+                BOOL last=sites[stepping].id==15;
+                if(!last) {
+                    sites[stepping].patched=TRUE;
+                    if(!write_byte(pi.hProcess,sites[stepping].address,0xcc))FAIL();
+                }
+                c.EFlags&=~0x100u;
                 if(!SetThreadContext(pi.hThread,&c))FAIL();
+                if(last) {
+                    for(unsigned i=0;i<site_count;i++)if(sites[i].patched) {
+                        if(!write_byte(pi.hProcess,sites[i].address,sites[i].byte))FAIL();
+                        sites[i].patched=FALSE;
+                    }
+                    interval_complete=TRUE;
+                    printf("{\"kind\":\"interval-complete\",\"last_site\":15,\"hits\":%u,\"breakpoints_restored\":true,\"trap_flag_cleared\":true}\n",hits);fflush(stdout);
+                }
                 stepping=-1;action=DBG_CONTINUE;
             }else {
                 printf("{\"kind\":\"exception\",\"code\":%lu,\"address\":%lu,\"first_chance\":%lu}\n",code,at,ev.u.Exception.dwFirstChance);fflush(stdout);
@@ -182,7 +198,10 @@ int main(int argc,char **argv) {
     }
 cleanup:
     if(pi.hProcess && !exited) {
-        for(unsigned i=0;i<site_count;i++)if(sites[i].patched && !write_byte(pi.hProcess,sites[i].address,sites[i].byte))cleanup_ok=FALSE;
+        for(unsigned i=0;i<site_count;i++)if(sites[i].patched) {
+            if(!write_byte(pi.hProcess,sites[i].address,sites[i].byte))cleanup_ok=FALSE;
+            else sites[i].patched=FALSE;
+        }
         if(!TerminateProcess(pi.hProcess,125) && GetLastError()!=ERROR_ACCESS_DENIED)cleanup_ok=FALSE;
         if(pending) {if(!ContinueDebugEvent(ev.dwProcessId,ev.dwThreadId,DBG_CONTINUE))cleanup_ok=FALSE;pending=FALSE;}
         ULONGLONG drain=GetTickCount64()+2000;
@@ -198,8 +217,9 @@ cleanup:
     if(pi.hProcess && WaitForSingleObject(pi.hProcess,1000)!=WAIT_OBJECT_0)cleanup_ok=FALSE;
     if(pi.hThread)CloseHandle(pi.hThread);if(pi.hProcess)CloseHandle(pi.hProcess);
     if(out!=INVALID_HANDLE_VALUE)CloseHandle(out);if(err!=INVALID_HANDLE_VALUE)CloseHandle(err);if(in!=INVALID_HANDLE_VALUE)CloseHandle(in);
-    if(success && cleanup_ok && exited)result=0;
-    printf("{\"kind\":\"summary\",\"success\":%s,\"cleanup_ok\":%s,\"child_exited\":%s,\"child_exit\":%lu,\"events\":%u,\"hits\":%u,\"failure_line\":%u,\"last_error\":%lu,\"instrumentation\":\"own-child INT3 and temporary TF; separate from baseline\"}\n",
-        result==0?"true":"false",cleanup_ok?"true":"false",exited?"true":"false",child_exit,events,hits,failure_line,last_error);
+    BOOL restored=TRUE;for(unsigned i=0;i<site_count;i++)if(sites[i].patched)restored=FALSE;
+    if(success && cleanup_ok && exited && restored)result=0;
+    printf("{\"kind\":\"summary\",\"success\":%s,\"cleanup_ok\":%s,\"child_exited\":%s,\"child_exit\":%lu,\"events\":%u,\"hits\":%u,\"failure_line\":%u,\"last_error\":%lu,\"interval_complete\":%s,\"breakpoints_restored\":%s,\"instrumentation\":\"own-child INT3 and temporary TF; separate from baseline\"}\n",
+        result==0?"true":"false",cleanup_ok?"true":"false",exited?"true":"false",child_exit,events,hits,failure_line,last_error,interval_complete?"true":"false",restored?"true":"false");
     return (int)result;
 }

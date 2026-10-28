@@ -7,7 +7,7 @@ from observe_unwind import SITE_NAMES,parse_events,summarize
 
 def sample():
     rows=[]
-    for sequence,site in enumerate(sorted(set(SITE_NAMES)-{16}),1):
+    for sequence,site in enumerate(sorted(set(SITE_NAMES)-{15,16})+[15],1):
         row=dict(kind='site',sequence=sequence,site=site,rva=site*16,image_base=0x400000,
             teb=0x700000,stack_limit=0x1000,stack_base=0x9000,fs_head=0x8000,
             eax=0,ecx=0,edx=0,ebx=17,esp=0x7000,ebp=0x7800,esi=19,edi=23,
@@ -17,8 +17,10 @@ def sample():
             record_prefix=[0xe0424242,0,0,0] if site in (1,2) else [])
         if site==3:row['stack_words']=[0x8000,0x400040,0x7100,0]
         rows.append(row)
+    count=len(rows)
+    rows.append(dict(kind='interval-complete',last_site=15,hits=count,breakpoints_restored=True,trap_flag_cleared=True))
     rows.append(dict(kind='summary',success=True,cleanup_ok=True,child_exited=True,
-        child_exit=0,events=100,hits=len(rows)))
+        child_exit=0,events=100,hits=count,interval_complete=True,breakpoints_restored=True))
     return rows,dict(sites=[dict(id=i,rva=i*16) for i in SITE_NAMES])
 
 
@@ -39,7 +41,7 @@ class ObserverEvidence(unittest.TestCase):
 
     def test_cleanup_failure_control_requires_reaped_child(self):
         rows=[dict(kind='summary',success=False,cleanup_ok=True,child_exited=True,
-            child_exit=125,events=4,hits=1)]
+            child_exit=125,events=4,hits=1,interval_complete=False,breakpoints_restored=True)]
         parse_events(encode(rows),False)
         for key,value in [('cleanup_ok',False),('child_exited',False),('child_exit',0),('success',True)]:
             bad=copy.deepcopy(rows);bad[0][key]=value
@@ -56,6 +58,18 @@ class ObserverEvidence(unittest.TestCase):
         for i,mutate in enumerate(mutations):
             bad=copy.deepcopy(rows);mutate(bad)
             with self.subTest(mutation=i),self.assertRaises(ValueError):parse_events(encode(bad),True,plan)
+
+    def test_missing_interval_or_unrestored_instrumentation_rejects(self):
+        rows,plan=sample()
+        mutations=[lambda r:r.pop(-2),lambda r:r[-2].update(breakpoints_restored=False),
+            lambda r:r[-2].update(trap_flag_cleared=False),lambda r:r[-1].update(interval_complete=False),
+            lambda r:r[-1].update(breakpoints_restored=False),
+            lambda r:r.insert(0,dict(kind='teardown-thread',thread_id=7))]
+        for index,mutate in enumerate(mutations):
+            bad=copy.deepcopy(rows);mutate(bad)
+            with self.subTest(index=index),self.assertRaises(ValueError):parse_events(encode(bad),True,plan)
+        rows.insert(-1,dict(kind='teardown-thread',thread_id=7))
+        parse_events(encode(rows),True,plan)
 
     def test_false_completion_and_changed_target_reject(self):
         rows,plan=sample()
