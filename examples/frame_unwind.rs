@@ -46,6 +46,8 @@ fn run() -> Result<(), String> {
     let manifest = String::from_utf8(bytes(root, "frame.manifest")?).map_err(|e| e.to_string())?;
     let (mut cookie, mut handler, mut trace, mut feature, mut event) =
         (None, None, None, None, None);
+    let mut raise_exception_iat = None;
+    let mut calls = Vec::new();
     let (
         mut dispatcher,
         mut dispatch_table,
@@ -74,6 +76,7 @@ fn run() -> Result<(), String> {
             ["trace", value] => set(&mut trace, number(value)?)?,
             ["feature", value] => set(&mut feature, number(value)?)?,
             ["event", value] => set(&mut event, number(value)?)?,
+            ["raise-iat", value] => set(&mut raise_exception_iat, number(value)?)?,
             ["global", value] => globals.push(number(value)?),
             ["frame", prefix_va, prefix, table_va, table, activation_va, activation] => {
                 let activation = match (*activation_va, *activation) {
@@ -91,6 +94,7 @@ fn run() -> Result<(), String> {
                 let item = region(root, va, file)?;
                 match *kind {
                     "filter" => filters.push(item),
+                    "call" => calls.push(item),
                     "landing" => landings.push(item),
                     "funclet" => funclets.push(item),
                     "cleanup" => cleanups.push(item),
@@ -124,6 +128,8 @@ fn run() -> Result<(), String> {
         restore: restore.ok_or("missing restore")?,
         target: target.ok_or("missing target")?,
         event_code: event.ok_or("missing event")?,
+        calls,
+        raise_exception_iat: raise_exception_iat.ok_or("missing RaiseException IAT")?,
     };
     let proof = unwind::frame_unwind::prove_fragments(&input)?;
     std::fs::write(&args[2], proof.emit()).map_err(|e| e.to_string())

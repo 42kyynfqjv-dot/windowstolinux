@@ -24,6 +24,14 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0,str(HERE.parents[2]/'corpus'))
 from launch import execute
 
+EXPECTED_REJECTION_NAMES = (
+    'malformed-frame-prefix', 'truncated-event-argument', 'guard-overwrite',
+    'self-parent-eh4', 'filter-owner-slot', 'aliased-funclet-arguments',
+    'cookie-identity', 'feature-identity', 'installer-protected-slot',
+    'invalid-activation-level', 'truncated-restore', 'incomplete-target-instruction',
+    'event-call-disagreement', 'wrong-direct-call-target', 'wrong-frame-order',
+)
+
 
 def sha(data):
     return hashlib.sha256(data).hexdigest()
@@ -88,6 +96,32 @@ def prepare(original,out):
             raise ValueError('region identity differs from original binding')
         (out/filename).write_bytes(code)
         lines.append(f"{kind} {base+block['rva']} {filename}")
+    calls=[]
+    for name in ['main','Outer','Inner']:
+        if name=='main':
+            activation=blocks['main-activate']
+            call_rva=activation['rva']+activation['size']
+            raw=mapped_bytes(pe,base+call_rva,5)
+            targets=[r for r in frames['_main']['original_relocations']
+                     if r['symbol']=='_Outer' and r['kind']==0x14 and r['addend']==0
+                     and frames['_main']['rva']+r['offset']==call_rva+1]
+            if (len(targets)!=1 or raw[0]!=0xe8
+                    or base+call_rva+5+struct.unpack('<i',raw[1:])[0]!=targets[0]['target_va']
+                    or targets[0]['target_va']!=base+frames['_Outer']['rva']):
+                raise ValueError('main-to-Outer call not bound to original contiguous instructions')
+        else:
+            call=frames['_'+name]['blocked_calls'][0]
+            call_rva=call['rva'];raw=bytes.fromhex(call['code_hex'])
+            prefix=blocks[name+'-initialize']
+            if prefix['rva']+prefix['size']!=call_rva or mapped_bytes(pe,base+call_rva,len(raw))!=raw:
+                raise ValueError('original nested/event call is not contiguous with prefix')
+        block=dict(file=name+'-call.bin',rva=call_rva,size=len(raw),code_hex=raw.hex(),sha256=sha(raw))
+        region('call',block)
+        calls.append(block)
+    raise_call=frames['_Inner']['blocked_calls'][0]
+    if raise_call.get('import')!=['kernel32.dll','RaiseException']:
+        raise ValueError('original event IAT binding changed')
+    lines.append(f"raise-iat {base+raise_call['target_rva']}")
     for block in evidence['fragments']:
         if '-filter-' in block['name']:
             region('filter',block)
@@ -151,6 +185,7 @@ def prepare(original,out):
     info = dict(pe_sha256=observed['pe_sha256'],source_sha256=observed['source_sha256'],
         object_sha256=evidence['object_sha256'],image_base=base,
         event_code_from_instructions=event,globals=ordered_globals,
+        original_calls=calls,raise_exception_iat_va=base+raise_call['target_rva'],
         owner_offsets=owner_offsets,selected_local_offset=selected[0]['frame_offset'],
         restore_target_va=base+target_rva,
         selection_target_va=base+frames['_main']['table']['rows'][0]['handler_rva'],
@@ -196,6 +231,17 @@ def rejection_checks(compiler,out):
         path=directory/name;path.write_bytes(path.read_bytes()[:-1])
     def bad_target(directory):
         path=directory/'target.bin';path.write_bytes(path.read_bytes()[:1])
+    def wrong_call(directory):
+        path=directory/'main-call.bin';data=path.read_bytes()
+        if len(data)!=5 or data[0]!=0xe8:raise ValueError('negative call binding')
+        displacement=(struct.unpack('<I',data[1:])[0]+1)&0xffffffff
+        path.write_bytes(data[:1]+struct.pack('<I',displacement))
+    def wrong_frame_order(directory):
+        path=directory/'frame.manifest';lines=path.read_text().splitlines()
+        frames=[i for i,line in enumerate(lines) if line.startswith('frame ')]
+        if len(frames)!=3:raise ValueError('negative frame count')
+        lines[frames[1]],lines[frames[2]]=lines[frames[2]],lines[frames[1]]
+        path.write_text('\n'.join(lines)+'\n')
     cases=[
         ('malformed-frame-prefix',lambda d:replace_bytes(d,'main-prefix.bin',bytes.fromhex('558bec'),bytes.fromhex('0f0bec'))),
         ('truncated-event-argument',lambda d:truncate(d,'Inner-prefix.bin')),
@@ -210,7 +256,11 @@ def rejection_checks(compiler,out):
         ('truncated-restore',lambda d:truncate(d,'Restore.bin')),
         ('incomplete-target-instruction',bad_target),
         ('event-call-disagreement',lambda d:set_manifest_number(d,'event',1)),
+        ('wrong-direct-call-target',wrong_call),
+        ('wrong-frame-order',wrong_frame_order),
     ]
+    if tuple(name for name,_ in cases)!=EXPECTED_REJECTION_NAMES:
+        raise ValueError('rejection contract differs from implemented checks')
     results=[]
     negatives=out/'rejections';negatives.mkdir()
     for name,mutate in cases:
@@ -226,9 +276,69 @@ def rejection_checks(compiler,out):
     return results
 
 
-def check(original,compiler,out):
+def windows_reference(original,out,required):
+    windows=original/'frame-native-windows'
+    if windows.resolve()==out.resolve():
+        if required:
+            raise ValueError('required Windows component cannot be its own current output')
+        return None
+    if not (windows/'native-frame-report.json').is_file():
+        if required:
+            raise ValueError('required retained Windows component report is missing')
+        return None
+    return windows
+
+
+def verify_windows_files(windows,info):
+    prior=json.loads((windows/'native-frame-report.json').read_text())
+    for key in ['pe_sha256','source_sha256','object_sha256']:
+        if prior.get(key)!=info[key]:
+            raise ValueError('native Windows component used a different original '+key)
+    original_rust=(windows/'frame.rs').read_bytes()
+    if sha(original_rust)!=prior.get('rust_sha256'):
+        raise ValueError('native Windows generated Rust lacks actual file provenance')
+    if sha((windows/'native-frame.rs').read_bytes())!=prior.get('harness_sha256'):
+        raise ValueError('native Windows harness differs from retained provenance')
+    launch=json.loads((windows/'native-launch/launch.json').read_text())
+    if (prior.get('native_os')!='nt'
+            or launch.get('stage')!='finished' or launch.get('timeout') is not False
+            or launch.get('exit')!=0 or 'failure' in launch
+            or launch.get('stdout_hex')!='' or launch.get('stderr_hex')!=''
+            or sha((windows/'native-launch/program.bin').read_bytes())!=prior.get('native_sha256')
+            or launch.get('executed_sha256')!=prior.get('native_sha256')):
+        raise ValueError('native Windows component completion evidence is incomplete')
+    return prior,original_rust
+
+
+def verify_windows_component(windows,info,local_rust=None):
+    prior,original_rust=verify_windows_files(windows,info)
+    if (prior.get('native_feature_cases')!=6 or prior.get('native_initial_trace_cases')!=3
+            or prior.get('native_runtime_rejections')!=5
+            or tuple(row.get('case') for row in prior.get('rejection_cases',[]))!=EXPECTED_REJECTION_NAMES
+            or any(type(row.get('exit')) is not int or row['exit']==0 or not row.get('diagnostic')
+                   or 'panicked' in row['diagnostic'] for row in prior.get('rejection_cases',[]))):
+        raise ValueError('native Windows component conformance contract differs')
+    if local_rust is not None and original_rust!=local_rust:
+        raise ValueError('cross-host generated Rust differs')
+    if local_rust is None:
+        return None  # Preflight establishes retained evidence, not cross-host equality.
+    return dict(native_windows_component_cases=9,
+        cross_host_rust_identical=True,cross_host_same_original_pe=True,
+        native_windows_report_sha256=sha((windows/'native-frame-report.json').read_bytes()))
+
+
+def require_cross_host_result(report,required):
+    if required and (report.get('cross_host_rust_identical') is not True
+                     or report.get('cross_host_same_original_pe') is not True):
+        raise ValueError('required Windows cross-host verification did not complete')
+
+
+def check(original,compiler,out,require_windows_component=False):
+    windows=windows_reference(original,out,require_windows_component)
     out.mkdir(parents=True,exist_ok=False)
     info = prepare(original,out)
+    if windows is not None:
+        verify_windows_component(windows,info)
     source = out/'frame.rs'
     command([compiler,out,source],'conversion',out)
     second = out/'frame-repeat.rs'
@@ -304,32 +414,11 @@ fn main() {{
             'Main initializer and activation are separated by unproved memset/GetModuleHandleW effects; their composition is conditional on explicit frame preservation.',
             'Original filter selection target and later manual Restore target are different; this slice does not execute the selected landing or prove transfer between those targets.',
             'Exception delivery, borrowed predecessor lifetime, original handler-prefix external effects, FS teardown and whole startup remain unproved.'])
-    windows=original/'frame-native-windows'
-    if windows.resolve()!=out.resolve() and (windows/'native-frame-report.json').exists():
-        prior=json.loads((windows/'native-frame-report.json').read_text())
-        for key in ['pe_sha256','source_sha256','object_sha256']:
-            if prior.get(key)!=info[key]:
-                raise ValueError('native Windows component used a different original '+key)
-        original_rust=(windows/'frame.rs').read_bytes()
-        if sha(original_rust)!=prior.get('rust_sha256') or original_rust!=source.read_bytes():
-            raise ValueError('cross-host generated Rust differs or lacks actual file provenance')
-        if sha((windows/'native-frame.rs').read_bytes())!=prior.get('harness_sha256'):
-            raise ValueError('native Windows harness differs from retained provenance')
-        launch=json.loads((windows/'native-launch/launch.json').read_text())
-        if (prior.get('native_os')!='nt' or prior.get('native_feature_cases')!=6
-                or prior.get('native_initial_trace_cases')!=3 or prior.get('native_runtime_rejections')!=5
-                or len(prior.get('rejection_cases',[]))!=13
-                or launch.get('stage')!='finished' or launch.get('timeout') is not False
-                or launch.get('exit')!=0 or 'failure' in launch
-                or launch.get('stdout_hex')!='' or launch.get('stderr_hex')!=''
-                or sha((windows/'native-launch/program.bin').read_bytes())!=prior.get('native_sha256')
-                or launch.get('executed_sha256')!=prior.get('native_sha256')):
-            raise ValueError('native Windows component completion evidence is incomplete')
-        report.update(native_windows_component_cases=9,
-            cross_host_rust_identical=True,cross_host_same_original_pe=True,
-            native_windows_report_sha256=sha((windows/'native-frame-report.json').read_bytes()))
+    if windows is not None:
+        report.update(verify_windows_component(windows,info,source.read_bytes()))
     else:
         report['cross_host_rust_identical']=None
+    require_cross_host_result(report,require_windows_component)
     (out/'native-frame-report.json').write_text(json.dumps(report,indent=2)+'\n')
     print(json.dumps(report,indent=2))
 
@@ -340,9 +429,12 @@ if __name__ == '__main__':
     parser.add_argument('compiler',type=Path)
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--prepare-only',action='store_true')
+    parser.add_argument('--require-windows-component',action='store_true')
     args = parser.parse_args()
     if args.prepare_only:
+        if args.require_windows_component:
+            parser.error('--prepare-only cannot establish required cross-host verification')
         args.output.mkdir(parents=True,exist_ok=False)
         print(json.dumps(prepare(args.original.resolve(),args.output.resolve()),indent=2))
     else:
-        check(args.original.resolve(),args.compiler.resolve(),args.output.resolve())
+        check(args.original.resolve(),args.compiler.resolve(),args.output.resolve(),args.require_windows_component)

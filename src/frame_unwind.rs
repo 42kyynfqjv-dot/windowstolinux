@@ -4,7 +4,7 @@
 use super::{
     cleanup, dispatch, frame_proof, funclet, handler_bridge, restore_body, selection, Proven,
 };
-use iced_x86::{Decoder, DecoderOptions, Register};
+use iced_x86::{Code, Decoder, DecoderOptions, Register};
 use std::collections::{BTreeMap, BTreeSet};
 
 pub struct Region {
@@ -20,6 +20,8 @@ pub struct Input {
     pub cookie_va: u32,
     pub handler_va: u32,
     pub frames: Vec<Frame>,
+    pub calls: Vec<Region>,
+    pub raise_exception_iat: u32,
     pub filters: Vec<Region>,
     pub landings: Vec<Region>,
     pub funclets: Vec<Region>,
@@ -59,6 +61,7 @@ fn ranges(input: &Input) -> Result<(), String> {
         .filters
         .iter()
         .chain(&input.landings)
+        .chain(&input.calls)
         .chain(&input.funclets)
         .chain(&input.cleanups)
         .chain([
@@ -76,6 +79,7 @@ fn ranges(input: &Input) -> Result<(), String> {
         .globals
         .iter()
         .chain([&input.cookie_va, &input.trace_va, &input.feature_va])
+        .chain([&input.raise_exception_iat])
     {
         if va % 4 != 0 {
             return Err("fragment unaligned scalar binding".into());
@@ -92,6 +96,7 @@ fn ranges(input: &Input) -> Result<(), String> {
 pub fn prove_fragments(input: &Input) -> Result<Proven, String> {
     if input.frames.is_empty()
         || input.frames.len() > 8
+        || input.calls.len() != input.frames.len()
         || input.cleanups.is_empty()
         || input.cleanups.len() > 32
         || input.funclets.len() > 32
@@ -231,6 +236,38 @@ pub fn prove_fragments(input: &Input) -> Result<Proven, String> {
     let args = frames.last().unwrap().pending_arguments();
     if args != [input.event_code, 0, 0, 0] {
         return Err("fragment event arguments not instruction-derived RaiseException cut".into());
+    }
+    // Bind original direct calls, not a caller-asserted nesting order. The
+    // separate Main activation cut still cannot certify its preceding gap.
+    for (index, call) in input.calls.iter().enumerate() {
+        let end = activations[index]
+            .as_ref()
+            .map_or(frames[index].end(), |a| a.end());
+        if call.va != end {
+            return Err("fragment call is not contiguous with proved frame cut".into());
+        }
+        let mut decoder =
+            Decoder::with_ip(32, &call.bytes, u64::from(call.va), DecoderOptions::NONE);
+        let instruction = decoder.decode();
+        if instruction.is_invalid() || decoder.can_decode() {
+            return Err("fragment incomplete call boundary".into());
+        }
+        if index + 1 < frames.len() {
+            if instruction.code() != Code::Call_rel32_32
+                || call.bytes.len() != 5
+                || call.bytes[0] != 0xe8
+                || instruction.near_branch32() != input.frames[index + 1].prefix.va
+                || !frames[index].pending_arguments().is_empty()
+            {
+                return Err("fragment original direct-call/frame order".into());
+            }
+        } else if call.bytes.len() != 6
+            || call.bytes[..2] != [0xff, 0x15]
+            || instruction.memory_displacement32() != input.raise_exception_iat
+        {
+            return Err("fragment original RaiseException IAT call binding".into());
+        }
+        evidence.push(format!("// Original call at {:#x} binds frame step {index}; OS exception delivery itself remains an external cut.",call.va));
     }
     let selection_inputs: Vec<_> = frames
         .iter()

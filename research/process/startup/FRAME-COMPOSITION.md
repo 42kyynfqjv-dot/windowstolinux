@@ -14,6 +14,7 @@ regions rather than a caller-selected frame or a list of invented cleanup result
 | State or effect | Established source and boundary |
 | --- | --- |
 | Parent frame layout, scalar initialization, registration and guards | Original prolog and initializer instructions construct typed frame images. Protected return, saved-register, guard and record words remain separate from ordinary scalar storage. Numeric entry SP and cookie are explicit harness inputs. |
+| Nested frame order | Each original direct CALL must immediately follow its proved prefix or separate activation fragment and target the next original frame prefix. The final original indirect CALL must bind the retained RaiseException IAT entry. Reordering manifest frames, changing a target or omitting intervening bytes rejects; this does not prove effects inside Main's earlier gap or OS exception delivery. |
 | EH4 scope activity and selected frame | Original TryLevel stores, validated EH4 rows and original filter instructions determine the selected frame and handler landing. The authored cleanup table is a different format and is never treated as EH4 metadata. |
 | Event code | The innermost original argument pushes establish the bounded RaiseException call inputs. Actual Windows exception delivery is outside the cut. |
 | Pre-filter event normalization | Original normalizer instructions prove the admitted event code is unchanged across the supported paths over an unknown initialized feature word. Feature ownership/initialization is still an entry premise. |
@@ -62,8 +63,9 @@ observations while retaining the following distinctions:
 | Original Windows experiment | One retained unchanged-PE baseline; this is not a newly admitted program. |
 | Native feature-word cases | Six independent values: `i32::MIN`, `-1`, `0`, `1`, `2`, `i32::MAX`. The actual Windows feature value was not observed. |
 | Additional native trace cases | Three nonzero initial traces, including wraparound. These are independent native cases, not three additional Windows observations. |
-| Compiler rejection mutations | Thirteen: malformed frame/event boundaries, protected state, cyclic metadata, aliasing, wrong bindings, activation levels, restoration/target bounds and disagreement with original event arguments. |
+| Compiler rejection mutations | Fifteen: malformed frame/event boundaries, protected state, cyclic metadata, aliasing, wrong bindings, activation levels, restoration/target bounds, disagreement with original event arguments, wrong direct-call targets and reordered frames. |
 | Artifact-binding tests | Seven tests against the retained object/PE/disassembly inputs. |
+| Mandatory comparison evidence | Nine tests: missing/self-supplied Windows evidence and non-true verification reject, and five retained-file/hash/failed-launch cases. These do not execute mutated binaries. |
 | `frame_unwind` example tests | 51 test functions: 30 inherited from existing modules and 21 new for this integration. Do not add the inherited tests again to a project-wide total. |
 | Root suite | 175 existing tests; this checkpoint does not present those as newly added tests. |
 
@@ -74,6 +76,9 @@ checks, not implementations of those Windows failure behaviors.
 At this documentation checkpoint, local evidence has been reviewed; **fresh final
 commit cross-host CI is not yet claimed**. The workflow runs the generated
 component on Windows and Linux and checks retained hashes and byte-identical Rust.
+The Linux CI invocation requires the Windows component artifact; local optional
+mode cannot silently substitute for that gate. Missing, stale or failed Windows
+evidence rejects before comparison success is reported.
 When available, those results must be reported for their exact commit. Native
 Windows component runs remain separate from execution of the original PE.
 
@@ -124,6 +129,7 @@ cargo test --locked
 cargo test --locked --example frame_unwind
 cargo build --locked --example frame_unwind
 python3 research/process/startup/frame_binding.py --test-artifact original-unwind
+python3 research/process/startup/test_frame_gate.py --artifact original-unwind -v
 python3 research/process/startup/check_frame.py original-unwind target/debug/examples/frame_unwind --output frame-check
 ```
 

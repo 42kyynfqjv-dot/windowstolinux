@@ -62,9 +62,14 @@ fn fixture() -> Input {
         custom.extend((-1i32).to_le_bytes());
         custom.extend(0x2600u32.to_le_bytes());
     }
+    let call_va = 0x1000 + prefix.len() as u32;
+    let mut call = vec![0xff, 0x15];
+    call.extend(0x6020u32.to_le_bytes());
     Input {
         cookie_va: COOKIE,
         handler_va: 0x7000,
+        calls: vec![region(call_va, call)],
+        raise_exception_iat: 0x6020,
         frames: vec![Frame {
             prefix: region(0x1000, prefix),
             table: region(0x4000, table),
@@ -133,6 +138,12 @@ fn landing_and_event_provenance_are_not_self_authorized_by_metadata() {
     assert!(prove_fragments(&bad).is_err());
     let mut bad = fixture();
     bad.event_code ^= 1;
+    assert!(prove_fragments(&bad).is_err());
+    let mut bad = fixture();
+    bad.calls[0].va += 1;
+    assert!(prove_fragments(&bad).is_err());
+    let mut bad = fixture();
+    bad.raise_exception_iat += 4;
     assert!(prove_fragments(&bad).is_err());
 }
 
