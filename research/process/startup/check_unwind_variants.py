@@ -69,6 +69,14 @@ def cases():
                    locals=[300, 0, 4294967295], trace=4294967295,
                    expected_trace=4294964089, expected_locals=[300, 4294967295, 255])
     items.append(("independent_trace_and_local_wraparound", changed))
+    # Independent composition: retain the cell owner in EDX, read local into EAX,
+    # SUB imm8(-1), store trace, overwrite ECX from that trace, ADD imm8(-128),
+    # then store local through still-owned EDX. With local128: trace129, local1.
+    changed = baseline()
+    changed.update(blocks=[(0x1000, bytes.fromhex("8b4c240489ca8b410483e8ff89028b0a83c180894a04c3"))],
+                   rows=[(-1, BASE + 0x1000)], active=[0], locals=[128], trace=999,
+                   expected_trace=129, expected_locals=[1], expected_live=[True])
+    items.append(("signed_immediate_and_owner_alias_overwrite", changed))
     return items
 
 
@@ -112,6 +120,12 @@ def negatives():
     items.append(("restore_trailing_effect", changed))
     changed = baseline(); changed["target_bytes"] = b"\x0f"
     items.append(("malformed_target_instruction", changed))
+    changed = baseline(); changed["blocks"][0] = (0x1000, b"\x64" + changed["blocks"][0][1])
+    items.append(("cleanup_segment_override", changed))
+    changed = baseline(); changed["blocks"][0] = (0x1000, bytes.fromhex("8b4c240431d28b0411c3"))
+    items.append(("cleanup_known_zero_index_has_no_authority", changed))
+    changed = baseline(); changed["blocks"][0] = (0x1000, bytes.fromhex("8b4c24048b098b01c3"))
+    items.append(("cleanup_scalar_overwrite_invalidates_owner", changed))
     return items
 
 

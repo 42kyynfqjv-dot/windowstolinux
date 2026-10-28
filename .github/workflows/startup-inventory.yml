@@ -12,6 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: python3 -m unittest discover -s research/process/startup -v
+      - run: python3 research/process/startup/check_unwind.py --self-test
       - uses: actions/download-artifact@v4
         with:
           name: rcedit-windows
@@ -33,6 +34,8 @@ jobs:
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
+      - name: Check bounded owned-process diagnostics
+        run: python -m unittest discover -s corpus -p test_windows_wait_observer.py -v
       - uses: actions/download-artifact@v4
         with:
           name: rcedit-windows
@@ -182,7 +185,9 @@ jobs:
           name: startup-unwind-slice
           path: original-unwind
       - run: python3 research/process/startup/check_unwind.py original-unwind target/debug/examples/unwind_slice
+      - run: python3 research/process/startup/coff_binding.py --test-artifact original-unwind
       - run: python3 research/process/startup/check_unwind_variants.py target/debug/examples/unwind_slice --output original-unwind/independent-vectors
+      - run: python3 research/process/startup/check_dispatch_variants.py target/debug/examples/unwind_slice --output original-unwind/dispatch-vectors
       - uses: actions/upload-artifact@v4
         if: always()
         with:

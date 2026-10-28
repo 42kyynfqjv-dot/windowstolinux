@@ -157,7 +157,7 @@ fn width(o: &Operand) -> Option<u8> {
 fn writable(o: &Operand) -> bool {
     matches!(o, Operand::Reg(_) | Operand::Memory(_, _))
 }
-fn normalized(i: &Instruction, b: &[u8]) -> Result<Operation, String> {
+pub(crate) fn normalized(i: &Instruction, b: &[u8]) -> Result<Operation, String> {
     use Mnemonic::*;
     // Architecturally inert compiler alignment NOPs: optional operand-size
     // repetitions and CS override on 0F1F /0 only. No prefix is erased on an

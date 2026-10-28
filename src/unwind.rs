@@ -1,6 +1,8 @@
 //! Experimental original cleanup/restore slices under an explicit orchestration cut.
 #[path = "cleanup.rs"]
 mod cleanup;
+#[path = "dispatch.rs"]
+mod dispatch;
 #[allow(dead_code)]
 #[path = "stream/graph.rs"]
 mod graph;
@@ -14,6 +16,13 @@ impl Proven {
     pub fn emit(self) -> String {
         self.source
     }
+}
+/// Original authored dispatcher code and its separately owned trace cell.
+/// These are image RVAs; no application identity selects emitted behavior.
+pub struct Dispatcher<'a> {
+    pub code: &'a [u8],
+    pub rva: u32,
+    pub trace_rva: u32,
 }
 fn restore_body(code: &[u8], origin: u32) -> Result<String, String> {
     let mut decoder = Decoder::with_ip(32, code, u64::from(origin), DecoderOptions::NONE);
@@ -92,6 +101,35 @@ pub fn prove(
     active: &[i32],
     selected: usize,
 ) -> Result<Proven, String> {
+    prove_with_dispatch(
+        table,
+        base,
+        table_rva,
+        blocks,
+        restore,
+        restore_rva,
+        target,
+        target_bytes,
+        active,
+        selected,
+        None,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn prove_with_dispatch(
+    table: &[u8],
+    base: u32,
+    table_rva: u32,
+    blocks: &[(u32, Vec<u8>)],
+    restore: &[u8],
+    restore_rva: u32,
+    target: u32,
+    target_bytes: &[u8],
+    active: &[i32],
+    selected: usize,
+    dispatcher: Option<Dispatcher<'_>>,
+) -> Result<Proven, String> {
     if blocks.is_empty()
         || blocks.len() > 32
         || table.is_empty()
@@ -119,6 +157,10 @@ pub fn prove(
     add_range(table_rva, table.len())?;
     add_range(restore_rva, restore.len())?;
     add_range(target, target_bytes.len())?;
+    if let Some(d) = &dispatcher {
+        add_range(d.rva, d.code.len())?;
+        add_range(d.trace_rva, 4)?;
+    }
     let mut decoder = Decoder::with_ip(32, target_bytes, u64::from(target), DecoderOptions::NONE);
     if !decoder.can_decode() || decoder.decode().is_invalid() {
         return Err("unwind: target instruction boundary".into());
@@ -154,6 +196,29 @@ pub fn prove(
             return Err("unwind: unbound scope metadata".into());
         }
     }
+    if let Some(d) = &dispatcher {
+        let bindings = bound
+            .iter()
+            .map(|(&rva, &index)| (base + rva, index))
+            .collect();
+        for (index, &(parent, target_va)) in rows.iter().enumerate() {
+            let body = dispatch::prove_dispatch(
+                d.code,
+                base + d.rva,
+                base + table_rva,
+                &rows,
+                base + d.trace_rva,
+                &bindings,
+                index as i32,
+            )?;
+            if body.parent != parent || body.action != bindings[&target_va] {
+                return Err("unwind: dispatcher disagrees with bound scope effects".into());
+            }
+            functions.push_str(&format!(
+                "fn dispatch_{index}(cells:&mut[u32;2],cursor:&mut i32)->Result<(),Error>{{\n{}\n}}\n",
+                body.source));
+        }
+    }
     let chain = |start: i32| -> Result<Vec<usize>, String> {
         let mut chain = Vec::new();
         let mut seen = BTreeSet::new();
@@ -183,17 +248,27 @@ pub fn prove(
             if !owned.insert(i) {
                 return Err("unwind: aliased active scopes".into());
             }
-            let action = bound[&(rows[i].1 - base)];
+            let action = if dispatcher.is_some() {
+                i
+            } else {
+                bound[&(rows[i].1 - base)]
+            };
             scopes.push(format!("Scope{{scope:{i},action:{action}}}"));
         }
         specs.push(format!("FrameSpec{{scopes:vec![{}]}}", scopes.join(",")));
     }
     let restore = restore_body(restore, restore_rva)?;
-    let arms = blocks
-        .iter()
-        .enumerate()
-        .map(|(i, _)| format!("{i}=>cleanup_{i}(&mut cells)?,"))
-        .collect::<String>();
+    let arms = if dispatcher.is_some() {
+        rows.iter().enumerate().map(|(i, &(parent, _))|
+            format!("{i}=>{{let mut cursor={i}i32;dispatch_{i}(&mut cells,&mut cursor)?;if cursor!={parent}i32{{return Err(Error::Order)}}}},"))
+            .collect::<String>()
+    } else {
+        blocks
+            .iter()
+            .enumerate()
+            .map(|(i, _)| format!("{i}=>cleanup_{i}(&mut cells)?,"))
+            .collect::<String>()
+    };
     let runtime = include_str!("linker/unwind_runtime.rs");
     let frames = active.len();
     let specs = specs.join(",");

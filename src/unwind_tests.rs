@@ -36,6 +36,24 @@ fn restore() -> Vec<u8> {
         0xb4, 0, 0, 0, 0xff, 0xa1, 0xb8, 0, 0, 0,
     ]
 }
+fn restore_ordered(owner: u8, order: [u8; 3]) -> Vec<u8> {
+    // Independent encodings: MOV ECX/EDX,[ESP+4], three disjoint saved
+    // register loads in any order, and JMP [owner+184]. No graph helper used.
+    let mut code = vec![0x8b, 0x44 | (owner << 3), 0x24, 4];
+    for register in order {
+        let offset: u32 = match register {
+            0 => 176,
+            4 => 196,
+            5 => 180,
+            _ => panic!("independent test register"),
+        };
+        code.extend([0x8b, 0x80 | (register << 3) | owner]);
+        code.extend(offset.to_le_bytes());
+    }
+    code.extend([0xff, 0xa0 | owner]);
+    code.extend(184u32.to_le_bytes());
+    code
+}
 fn compile(
     table: &[u8],
     blocks: &[(u32, Vec<u8>)],
@@ -70,6 +88,53 @@ fn original_cleanup_order_live_frame_state_and_restore_projection_execute_native
     let single = compile(&table(), &blocks(), &restore(), &[-1])
         .unwrap()
         .emit();
+    let middle = prove(
+        &table(),
+        BASE,
+        0x2000,
+        &blocks(),
+        &restore(),
+        0x5000,
+        TARGET,
+        &[0x90],
+        &[-1, 2, 0],
+        1,
+    )
+    .unwrap()
+    .emit();
+    let mut shared_table = table();
+    shared_table[12..16].copy_from_slice(&(BASE + 0x3000).to_le_bytes());
+    let shared = compile(&shared_table, &blocks(), &restore(), &[-1, 2, 0])
+        .unwrap()
+        .emit();
+    let mut modules = format!(
+        "\nmod one {{\n{single}\n}}\nmod middle {{\n{middle}\n}}\nmod shared {{\n{shared}\n}}\n"
+    );
+    let mut variant_checks = String::from("\nfn check_variants(){let saved=[77,601,602,603,32768,33024,606,607,28672,514];let current=[10,11,12,13,28672,28928,16,17,4369,582];\n");
+    let mut variant = 0;
+    for owner in [1, 2] {
+        for order in [
+            [0, 4, 5],
+            [0, 5, 4],
+            [4, 0, 5],
+            [4, 5, 0],
+            [5, 0, 4],
+            [5, 4, 0],
+        ] {
+            let body = compile(
+                &table(),
+                &blocks(),
+                &restore_ordered(owner, order),
+                &[-1, 2, 0],
+            )
+            .unwrap()
+            .emit();
+            modules.push_str(&format!("\nmod permutation_{variant} {{\n{body}\n}}\n"));
+            variant_checks.push_str(&format!("let o=permutation_{variant}::unwind(&[300,200,100],saved,current,0).unwrap();assert_eq!(o.trace,0x123);assert_eq!(o.locals,vec![Some(300),Some(213),Some(118)]);assert_eq!(o.live,vec![true,false,false]);assert_eq!(o.restored,[Some(77),None,None,Some(13),Some(32768),Some(33024),Some(16),Some(17),Some(28672),None]);\n"));
+            variant += 1;
+        }
+    }
+    variant_checks.push_str("}\n");
     let suffix = r#"
 fn main() {
  let saved=[77,601,602,603,32768,33024,606,607,28672,514];
@@ -97,6 +162,18 @@ fn main() {
  let single=one::unwind(&[300],saved,current,0x89).unwrap();
  assert_eq!(single.trace,0x89);assert_eq!(single.locals,vec![Some(300)]);assert_eq!(single.live,vec![true]);
  assert_eq!(single.restored,[Some(77),None,None,Some(13),Some(32768),Some(33024),Some(16),Some(17),Some(28672),None]);
+ // The selected middle frame executes its own required scopes but stays live,
+ // as does the older frame below it. Only the abandoned inner frame retires.
+ let middle=middle::unwind(&[300,200,100],saved,current,0).unwrap();
+ assert_eq!(middle.trace,0x123);assert_eq!(middle.locals,vec![Some(300),Some(213),Some(118)]);
+ assert_eq!(middle.live,vec![true,true,false]);
+ assert_eq!(middle.restored,[Some(77),None,None,Some(13),Some(32768),Some(33024),Some(16),Some(17),Some(28672),None]);
+ // Two different required scopes can call the same original cleanup target;
+ // each must run once. Function identity cannot collapse scope identity.
+ let shared=shared::unwind(&[300,200,100],saved,current,0).unwrap();
+ assert_eq!(shared.trace,0x113);assert_eq!(shared.locals,vec![Some(300),Some(213),Some(114)]);
+ assert_eq!(shared.live,vec![true,false,false]);
+ check_variants();
 }
 "#;
     let nonce = std::time::SystemTime::now()
@@ -112,7 +189,7 @@ fn main() {
     } else {
         "program"
     });
-    std::fs::write(&path, source + "\nmod one {\n" + &single + "\n}\n" + suffix).unwrap();
+    std::fs::write(&path, source + &modules + suffix + &variant_checks).unwrap();
     let compiler = std::process::Command::new("rustc")
         .arg("--edition=2021")
         .arg(&path)

@@ -14,6 +14,7 @@ import subprocess
 import sys
 
 from inventory import mapped_bytes
+from coff_binding import dispatcher_evidence
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[2] / 'corpus'))
@@ -160,6 +161,9 @@ def main(out):
                   scope_table_size=len(table), scope_table_sha256=sha256(table),
                   cleanups=cleanups, restore=restore, restore_target_rva=target_rva,
                   restore_target_first_byte=target_prefix.hex())
+    dispatcher = dispatcher_evidence((out/'unwind.obj').read_bytes(), data, table_rva)
+    (out/dispatcher['file']).write_bytes(bytes.fromhex(dispatcher['code_hex']))
+    report['dispatcher'] = dispatcher
     report_path.write_text(json.dumps(report, indent=2)+'\n')
     print(json.dumps(report, indent=2))
 

@@ -67,6 +67,9 @@ enum Phase {
 }
 struct Machine {
     owner: u64,
+    // One event per Machine. A second event must obtain a fresh global owner;
+    // neither Done nor Blocked can transition back to Cleanup. This is not a
+    // persistent Windows thread identity or a reusable thread event counter.
     event: u64,
     frames: Vec<Frame>,
     selected: usize,
@@ -621,5 +624,85 @@ mod tests {
             Machine::new(vec![huge], vec![input()], 0, None),
             Err(Error::Budget)
         ));
+    }
+
+    #[test]
+    fn later_scope_failure_keeps_completed_and_partial_effects_without_retirement() {
+        let mut m = machine();
+        let first = m.next_cleanup().unwrap().unwrap();
+        m.execute_cleanup(first, |view| {
+            view.write_trace(9)?;
+            view.write_word(0, 42)
+        })
+        .unwrap();
+        assert_eq!(m.frames[2].cursor, 1);
+        assert_eq!(m.trace, Some(9));
+        let second = m.next_cleanup().unwrap().unwrap();
+        assert_eq!(
+            m.execute_cleanup(second, |view| {
+                assert_eq!(view.read_trace()?, 9);
+                assert_eq!(view.read_word(0)?, 42);
+                view.write_trace(10)?;
+                let _ = view.read_word(4); // Unknown second cell faults mid-scope.
+                assert_eq!(view.write_word(0, 99), Err(Error::Uninitialized));
+                Ok(())
+            }),
+            Err(Error::Uninitialized)
+        );
+        assert_eq!(m.trace, Some(10));
+        assert_eq!(m.frames[2].cells, vec![Some(42), None]);
+        assert_eq!(m.frames[2].cursor, 1); // Scope B has no completion receipt.
+        assert!(m.frames.iter().all(|frame| frame.live));
+        assert_eq!(m.restore(0x9000, restore), Err(Error::Phase));
+        assert_eq!(
+            m.execute_cleanup(second, |_| panic!("failed scope retried")),
+            Err(Error::Phase)
+        );
+        assert_eq!(m.trace, Some(10));
+    }
+
+    #[test]
+    fn empty_abandoned_frames_retire_after_inner_cleanup_and_stale_requests_cannot_reenter() {
+        let specs = vec![
+            FrameSpec {
+                scopes: vec![Scope {
+                    scope: 7,
+                    action: 1,
+                }],
+            },
+            FrameSpec { scopes: vec![] },
+            FrameSpec {
+                scopes: vec![Scope {
+                    scope: 8,
+                    action: 2,
+                }],
+            },
+        ];
+        let inputs = (0..3)
+            .map(|i| FrameInput {
+                cells: vec![Some(i)],
+                context: [0; 10],
+            })
+            .collect();
+        let mut m = Machine::new(specs, inputs, 0, Some(0)).unwrap();
+        assert!(m.frames.iter().all(|frame| frame.live));
+        let abandoned = m.next_cleanup().unwrap().unwrap();
+        m.execute_cleanup(abandoned, |view| view.write_trace(12))
+            .unwrap();
+        assert!(m.frames[0].live);
+        assert!(!m.frames[1].live);
+        assert!(!m.frames[2].live);
+        let selected = m.next_cleanup().unwrap().unwrap();
+        assert_eq!(selected.scope, 7);
+        assert_eq!(selected.frame, m.frames[0].id);
+        assert_eq!(m.frames[0].cursor, 0);
+        assert_eq!(
+            m.execute_cleanup(abandoned, |_| panic!("retired frame reentered")),
+            Err(Error::Identity)
+        );
+        assert_eq!(m.frames[0].cursor, 0);
+        assert_eq!(m.frames[0].cells, vec![Some(0)]);
+        assert_eq!(m.trace, Some(12));
+        assert_eq!(m.restore(0, restore), Err(Error::Phase));
     }
 }

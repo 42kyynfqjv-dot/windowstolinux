@@ -30,6 +30,10 @@ fn cell(address: &Address, registers: &[Value; 8]) -> Result<usize, String> {
 /// The complete proof runs before any source is returned. Initial working
 /// registers are unknown; context cells are fully initialized, exclusively owned
 /// for this invocation, and cannot escape or alias protected return metadata.
+/// The adapter observes only these cells: EAX/ECX/EDX and working arithmetic
+/// flags are clobbered/unknown on return. This is not a scalar-return callback
+/// certificate. Its enclosing entry contract must also exclude unmodeled
+/// debug/control-flag effects and establish valid stack/segment access.
 pub(crate) fn prove_cleanup(code: &[u8], origin: u32) -> Result<String, String> {
     let graph = graph::decode(code, origin, origin)?;
     let end = origin
@@ -190,5 +194,38 @@ mod tests {
         let mut too_many = [0x31, 0xc0].repeat(128);
         too_many.push(0xc3);
         assert!(prove_cleanup(&too_many, 0).is_err());
+    }
+
+    #[test]
+    fn prefixes_indexed_addresses_and_alias_ownership_remain_explicit() {
+        for prefix in [
+            0xf0, 0xf2, 0xf3, 0x26, 0x2e, 0x36, 0x3e, 0x64, 0x65, 0x66, 0x67,
+        ] {
+            let mut prefixed = vec![prefix];
+            prefixed.extend(body());
+            assert!(prove_cleanup(&prefixed, 0).is_err(), "prefix {prefix:02x}");
+        }
+        // An owned base plus even a known-zero index is outside the exact cell
+        // form. An absolute scalar address cannot acquire ownership either.
+        for code in [
+            &[0x8b, 0x4c, 0x24, 4, 0x31, 0xd2, 0x8b, 4, 0x11, 0xc3][..],
+            &[0xa1, 0, 0, 0, 0, 0xc3],
+            &[0x8b, 0x4c, 0x24, 4, 0x8b, 9, 0x8b, 1, 0xc3],
+        ] {
+            assert!(prove_cleanup(code, 0).is_err(), "accepted {code:02x?}");
+        }
+        // EDX retains ownership when ECX is overwritten by a cell read. The
+        // memory source must be resolved before the destination loses its tag.
+        let source = prove_cleanup(
+            &[
+                0x8b, 0x4c, 0x24, 4, 0x89, 0xca, 0x8b, 0x41, 4, 0x83, 0xe8, 0xff, 0x89, 2, 0x8b,
+                0x0a, 0x83, 0xc1, 0x80, 0x89, 0x4a, 4, 0xc3,
+            ],
+            0,
+        )
+        .unwrap();
+        assert!(source.contains("r[0]=r[0].wrapping_sub(4294967295u32)"));
+        assert!(source.contains("r[1]=r[1].wrapping_add(4294967168u32)"));
+        assert!(source.contains("cells[1]=r[1]"));
     }
 }

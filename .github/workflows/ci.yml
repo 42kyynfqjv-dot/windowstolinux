@@ -15,6 +15,7 @@ jobs:
       - run: cargo clippy --all-targets --locked -- -D warnings
       - run: cargo test --locked
       - run: python3 -m unittest discover -s corpus -p test_launch.py -v
+      - run: python3 -m unittest discover -s corpus -p test_windows_wait_observer.py -v
       - run: python3 -m unittest discover -s research/process -v
       - run: python3 research/process/check_memory.py
       - run: python3 research/process/heap/check_guards.py
