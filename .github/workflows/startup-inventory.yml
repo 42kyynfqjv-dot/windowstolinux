@@ -104,6 +104,19 @@ jobs:
         with:
           name: startup-handler-slice
           path: ${{ runner.temp }}/handler-slice
+      - name: Measure frozen v2 event and resumed continuation
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $install = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $vcvars = Join-Path $install 'VC\Auxiliary\Build\vcvarsall.bat'
+          cmd /c "`"$vcvars`" x86 -vcvars_ver=14.44 && python research/process/startup/measure_event.py %RUNNER_TEMP%/handler-event"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: startup-handler-event
+          path: ${{ runner.temp }}/handler-event
   native-handler-slice:
     needs: original-user-mode-probes
     runs-on: ubuntu-latest
@@ -122,3 +135,22 @@ jobs:
         with:
           name: startup-handler-native
           path: original-handler
+
+  native-handler-event:
+    needs: original-user-mode-probes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test --locked --example handler_event
+      - run: cargo build --locked --example handler_event
+      - uses: actions/download-artifact@v4
+        with:
+          name: startup-handler-event
+          path: original-event
+      - run: python3 research/process/startup/check_event.py original-event target/debug/examples/handler_event
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: startup-handler-event-native
+          path: original-event

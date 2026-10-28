@@ -210,3 +210,138 @@ pub fn prove(
         pc = next;
     }
 }
+
+#[path = "handler_continuation.rs"]
+mod continuation;
+
+/// A contained resume instruction slice, not a whole-image startup certificate.
+/// The harness supplies a complete integer context at the decoded UD2 entry.
+/// Original FS registration, guest stack return, and unwind are outside this cut.
+pub fn prove_event(
+    handler_code: &[u8],
+    handler_origin: u32,
+    event_code: &[u8],
+    event_origin: u32,
+) -> Result<Proven, String> {
+    if !event_code.starts_with(&[0x0f, 0x0b]) {
+        return Err("handler event: expected decoded UD2".into());
+    }
+    let resume = event_origin
+        .checked_add(2)
+        .ok_or("handler event: IP overflow")?;
+    let end = event_origin
+        .checked_add(u32::try_from(event_code.len()).map_err(|_| "handler event: extent")?)
+        .ok_or("handler event: extent overflow")?;
+    let handler_end = handler_origin
+        .checked_add(
+            u32::try_from(handler_code.len()).map_err(|_| "handler event: handler extent")?,
+        )
+        .ok_or("handler event: handler overflow")?;
+    if event_origin < handler_end && handler_origin < end {
+        return Err("handler event: overlapping code ownership".into());
+    }
+    let handler = prove(handler_code, handler_origin, event_origin, resume, true)?.emit();
+    let continuation = continuation::prove_to_return_boundary(&event_code[2..], resume)?;
+    let storage = include_str!("linker/activation.rs");
+    let source = format!(
+        r#"
+// Contained UD2 resume slice. Stops before guest RET; no whole-PE admission.
+#[allow(dead_code)]
+mod owned {{
+{storage}
+{handler}
+fn continuation(mut c:[u32;10])->Result<[u32;10], &'static str> {{
+{continuation}
+}}
+fn context(c:[u32;10])->Context {{ Context {{registers: std::array::from_fn(|i|Some(c[i])),ip:Some(c[8]),flags:Some(c[9])}} }}
+fn words(c:&Context)->Result<[u32;10], &'static str> {{
+ let mut out=[0;10];
+ for (i,v) in c.registers.iter().enumerate() {{ out[i]=v.ok_or("incomplete context")?; }}
+ out[8]=c.ip.ok_or("incomplete IP")?; out[9]=c.flags.ok_or("incomplete flags")?; Ok(out)
+}}
+pub fn event(c:[u32;10])->Result<[u32;10], &'static str> {{
+ if c[8]!={event_origin} {{return Err("event IP precondition");}}
+ if c[9] & !0x8d5 != 0x202 {{return Err("unsupported event flags");}}
+ let captured=context(c);
+ let mut stack=Stack::new(1).map_err(|_|"activation allocation")?;
+ let frame=stack.push(0,0,captured.clone()).map_err(|_|"activation frame")?;
+ // Continuability is derived from the admitted UD2 event, not a runtime caller flag.
+ stack.begin_search(captured,true).map_err(|_|"event capture")?;
+ let ticket=stack.capture_contained_resume().map_err(|_|"event ownership")?;
+ let mut edited=words(stack.event_context().map_err(|_|"event context")?)?;
+ if handler(&mut edited)?!=0 {{return Err("disposition proof mismatch");}}
+ let restored=stack.commit_contained_resume(ticket,context(edited),{resume}).map_err(|_|"restoration invariant")?;
+ if stack.top().map(|f|f.id)!=Some(frame) {{return Err("activation identity changed");}}
+ continuation(words(&restored)?)
+}}
+}}
+pub use owned::event;
+"#
+    );
+    Ok(Proven { source })
+}
+
+#[cfg(test)]
+#[allow(dead_code)]
+#[path = "linker/activation.rs"]
+mod activation_tests;
+
+#[cfg(test)]
+mod event_tests {
+    use super::*;
+    fn handler() -> Vec<u8> {
+        vec![
+            0x8b, 0x4c, 0x24, 0x0c, 0x83, 0x81, 0xb8, 0, 0, 0, 2, 0xc7, 0x81, 0xb0, 0, 0, 0, 42, 0,
+            0, 0, 0x31, 0xc0, 0xc3,
+        ]
+    }
+    #[test]
+    fn event_certificate_rejects_missing_fault_boundaries_overlap_and_root_search() {
+        let h = handler();
+        for event in [
+            &[0x90, 0x90, 0x89, 0xc2, 0xc3][..],
+            &[0x0f, 0x0b, 0x8b],
+            &[0x0f, 0x0b, 0xeb, 0, 0xc3],
+            &[0x0f, 0x0b, 0x89, 0xc2, 0xc3, 0x90],
+        ] {
+            assert!(prove_event(&h, 0x2000, event, 0x1000).is_err());
+        }
+        let e = [0x0f, 0x0b, 0x89, 0xc2, 0xc3];
+        assert!(prove_event(&h, 0x1000, &e, 0x1000).is_err());
+        assert!(prove_event(&h, 0x2000, &e, u32::MAX - 1).is_err());
+        let mut wrong = h.clone();
+        wrong[10] = 1;
+        assert!(prove_event(&wrong, 0x2000, &e, 0x1000).is_err());
+        let mut search = h.clone();
+        search.splice(21..23, [0xb8, 1, 0, 0, 0]);
+        assert!(prove_event(&search, 0x2000, &e, 0x1000).is_err());
+    }
+    #[test]
+    fn emitted_owned_event_executes_original_continuation_without_cleanup() {
+        let e = [0x0f, 0x0b, 0x89, 0xc2, 0xc3];
+        let source = prove_event(&handler(), 0x2000, &e, 0x1000).unwrap().emit();
+        assert_eq!(
+            source,
+            prove_event(&handler(), 0x2000, &e, 0x1000).unwrap().emit()
+        );
+        let dir = std::env::temp_dir().join(format!("w2l-event-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("event.rs");
+        let exe = dir.join(if cfg!(windows) { "event.exe" } else { "event" });
+        std::fs::write(&path,source+"\nfn main(){let c=[10,11,12,13,32768,33024,16,17,4096,514];let mut bad=c;bad[8]=4097;assert!(event(bad).is_err());for flags in [0x302,0x10202,0x20202,0x4202,0x3202,0x602,0] {bad=c;bad[9]=flags;assert!(event(bad).is_err());}assert_eq!(event(c).unwrap(),[42,11,42,13,32768,33024,16,17,4100,514]);}").unwrap();
+        let compile = std::process::Command::new("rustc")
+            .arg("--edition=2021")
+            .arg(&path)
+            .arg("-o")
+            .arg(&exe)
+            .output()
+            .unwrap();
+        assert!(
+            compile.status.success(),
+            "{}",
+            String::from_utf8_lossy(&compile.stderr)
+        );
+        assert!(std::process::Command::new(&exe).status().unwrap().success());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+}
