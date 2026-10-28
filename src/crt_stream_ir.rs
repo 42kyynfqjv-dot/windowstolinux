@@ -23,6 +23,23 @@ pub(crate) enum SignedCondition {
 pub(crate) enum Op {
     Ordinary(Operation),
     Call(Target),
+    ReturnPop(u16),
+    FsRead(Reg),
+    FsWrite(Reg),
+    FsPush,
+    SignDividend,
+    AddCarry {
+        destination: Operand,
+        source: Operand,
+    },
+    DivideUnsigned(Operand),
+    /// Structural source binding only. Module ownership and table immutability
+    /// remain proof obligations before execution admission.
+    TableJump {
+        index: Reg,
+        address: u32,
+        targets: Vec<u32>,
+    },
     ArithmeticShift {
         dst: Reg,
         count: u8,
@@ -33,6 +50,7 @@ pub(crate) enum Op {
         factor: u32,
     },
     IncrementMemory(Operand),
+    DecrementMemory(Operand),
     StoreString {
         width: u8,
     },
@@ -107,9 +125,36 @@ fn operand_from_move(i: &Instruction, n: u32) -> Result<Operand, String> {
     };
     Ok(source)
 }
-fn extended(i: &Instruction, raw: &[u8]) -> Result<Op, String> {
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct JumpTable<'a> {
+    pub address: u32,
+    pub bytes: &'a [u8],
+}
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct ByteTable<'a> {
+    pub address: u32,
+    pub bytes: &'a [u8],
+}
+fn extended(i: &Instruction, raw: &[u8], tables: &[JumpTable<'_>]) -> Result<Op, String> {
     if i.has_rep_prefix() || i.has_repne_prefix() {
         return Err("CRT IR: repeated instruction outside domain".into());
+    }
+    if i.segment_prefix() == Register::FS && raw.first() == Some(&0x64) {
+        if i.memory_base() != Register::None
+            || i.memory_index() != Register::None
+            || i.memory_displacement32() != 0
+            || i.has_lock_prefix()
+        {
+            return Err("CRT IR: FS head-only effect".into());
+        }
+        return Ok(match i.code() {
+            Code::Mov_r32_rm32 if raw.len() == 7 => Op::FsRead(full(i.op0_register())?),
+            Code::Mov_EAX_moffs32 if raw.len() == 6 => Op::FsRead(full(Register::EAX)?),
+            Code::Mov_rm32_r32 if raw.len() == 7 => Op::FsWrite(full(i.op1_register())?),
+            Code::Mov_moffs32_EAX if raw.len() == 6 => Op::FsWrite(full(Register::EAX)?),
+            Code::Push_rm32 if raw == [0x64, 0xff, 0x35, 0, 0, 0, 0] => Op::FsPush,
+            _ => return Err("CRT IR: FS head effect form".into()),
+        });
     }
     if i.has_lock_prefix() {
         if raw.first() != Some(&0xf0)
@@ -141,6 +186,81 @@ fn extended(i: &Instruction, raw: &[u8]) -> Result<Op, String> {
         return Err("CRT IR: instruction prefix".into());
     }
     Ok(match i.mnemonic() {
+        Mnemonic::Inc if i.code() == Code::Inc_rm8 && i.op0_kind() == OpKind::Register => {
+            let mut copy = *i;
+            copy.set_code(Code::Setne_rm8);
+            let Operation::Set(_, dst) = graph::normalized(&copy, &[0x0f, 0x95])? else {
+                return Err("CRT IR: INC byte register".into());
+            };
+            Op::Ordinary(Operation::Increment(dst))
+        }
+        Mnemonic::Sete if i.code() == Code::Sete_rm8 && i.op0_kind() == OpKind::Register => {
+            let mut copy = *i;
+            copy.set_code(Code::Setne_rm8);
+            let Operation::Set(_, dst) = graph::normalized(&copy, &[0x0f, 0x95])? else {
+                return Err("CRT IR: SETE byte register".into());
+            };
+            Op::Ordinary(Operation::Set(graph::Condition::Equal, dst))
+        }
+        Mnemonic::Ret if i.code() == Code::Retnd_imm16 && raw.len() == 3 && raw[0] == 0xc2 => {
+            let bytes = i.immediate16();
+            if bytes > 256 || !bytes.is_multiple_of(4) {
+                return Err("CRT IR: bounded word RET cleanup".into());
+            }
+            Op::ReturnPop(bytes)
+        }
+        Mnemonic::Cdq if raw == [0x99] => Op::SignDividend,
+        Mnemonic::Adc => {
+            let mut copy = *i;
+            copy.set_code(match i.code() {
+                Code::Adc_rm32_r32 => Code::Add_rm32_r32,
+                Code::Adc_r32_rm32 => Code::Add_r32_rm32,
+                Code::Adc_EAX_imm32 => Code::Add_EAX_imm32,
+                Code::Adc_rm32_imm32 => Code::Add_rm32_imm32,
+                Code::Adc_rm32_imm8 => Code::Add_rm32_imm8,
+                _ => return Err("CRT IR: ADC32 form".into()),
+            });
+            let Operation::Binary(Binary::Add, destination, source) =
+                graph::normalized(&copy, &[0x01])?
+            else {
+                return Err("CRT IR: ADC operands".into());
+            };
+            Op::AddCarry {
+                destination,
+                source,
+            }
+        }
+        Mnemonic::Div if i.code() == Code::Div_rm32 && i.op_count() == 1 => {
+            Op::DivideUnsigned(operand_from_move(i, 0)?)
+        }
+        Mnemonic::Jmp if i.code() == Code::Jmp_rm32 => {
+            if raw.len() != 7
+                || raw[..2] != [0xff, 0x24]
+                || i.memory_base() != Register::None
+                || i.memory_index_scale() != 4
+                || i.op0_kind() != OpKind::Memory
+            {
+                return Err("CRT IR: bounded indexed JMP form".into());
+            }
+            let index = full(i.memory_index())?;
+            let address = i.memory_displacement32();
+            let table = tables
+                .iter()
+                .find(|t| t.address == address)
+                .ok_or("CRT IR: indirect JMP lacks source table")?;
+            let targets = table
+                .bytes
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .map(|b| u32::from_le_bytes(*b))
+                .collect();
+            Op::TableJump {
+                index,
+                address,
+                targets,
+            }
+        }
         Mnemonic::Call => {
             if i.code() == Code::Call_rel32_32 && raw.len() == 5 && raw[0] == 0xe8 {
                 Op::Call(Target::Direct(i.near_branch32()))
@@ -177,6 +297,30 @@ fn extended(i: &Instruction, raw: &[u8]) -> Result<Op, String> {
         {
             Op::IncrementMemory(operand_from_move(i, 0)?)
         }
+        Mnemonic::Dec
+            if i.op0_kind() == OpKind::Memory
+                && i.memory_size() == iced_x86::MemorySize::UInt32 =>
+        {
+            Op::DecrementMemory(operand_from_move(i, 0)?)
+        }
+        Mnemonic::Movzx if i.code() == Code::Movzx_r32_rm16 && i.op1_kind() == OpKind::Memory => {
+            let Operand::Memory(a, _) = operand_from_move(i, 1)? else {
+                return Err("CRT IR: word zero extension source".into());
+            };
+            Op::Ordinary(Operation::ZeroExtend(
+                full(i.op0_register())?,
+                Operand::Memory(a, 16),
+            ))
+        }
+        Mnemonic::Movsx if i.code() == Code::Movsx_r32_rm16 && i.op1_kind() == OpKind::Memory => {
+            let Operand::Memory(a, _) = operand_from_move(i, 1)? else {
+                return Err("CRT IR: word sign extension source".into());
+            };
+            Op::SignExtend {
+                dst: full(i.op0_register())?,
+                source: Operand::Memory(a, 16),
+            }
+        }
         Mnemonic::Stosd if raw == [0xab] => Op::StoreString { width: 32 },
         Mnemonic::Movsd if raw == [0xa5] => Op::CopyString { width: 32 },
         Mnemonic::Jl
@@ -204,6 +348,15 @@ fn extended(i: &Instruction, raw: &[u8]) -> Result<Op, String> {
             dst: full(i.op0_register())?,
             source: operand_from_move(i, 1)?,
         },
+        Mnemonic::Movsx if i.code() == Code::Movsx_r32_rm8 && i.op1_kind() == OpKind::Register => {
+            let mut copy = *i;
+            copy.set_code(Code::Movzx_r32_rm8);
+            let Operation::ZeroExtend(dst, source) = graph::normalized(&copy, &[0x0f, 0xb6])?
+            else {
+                return Err("CRT IR: signed byte register source".into());
+            };
+            Op::SignExtend { dst, source }
+        }
         Mnemonic::Movsx
             if i.op0_kind() == OpKind::Register
                 && i.op1_kind() == OpKind::Memory
@@ -223,31 +376,147 @@ fn extended(i: &Instruction, raw: &[u8]) -> Result<Op, String> {
         _ => Op::Ordinary(graph::normalized(i, raw)?),
     })
 }
+/// Structural normalization of an instruction decoded from the supplied bytes.
+/// This does not admit control effects or close any external-call contract.
+pub(crate) fn normalize(i: &Instruction, raw: &[u8]) -> Result<Op, String> {
+    extended(i, raw, &[])
+}
 impl Graph {
     pub fn decode(code: &[u8], origin: u32) -> Result<Self, String> {
+        Self::decode_with_tables(code, origin, &[])
+    }
+    /// Bind an original indexed branch to exact source words. Embedded table
+    /// bytes are excluded from instruction decoding, never treated as code.
+    /// This proves bounds/control closure, not module permissions or no-write.
+    pub fn decode_with_tables(
+        code: &[u8],
+        origin: u32,
+        tables: &[JumpTable<'_>],
+    ) -> Result<Self, String> {
+        Self::decode_with_table_maps(code, origin, tables, &[])
+    }
+    pub fn decode_with_table_maps(
+        code: &[u8],
+        origin: u32,
+        tables: &[JumpTable<'_>],
+        maps: &[ByteTable<'_>],
+    ) -> Result<Self, String> {
+        Self::decode_complete(code, origin, tables, maps, &[])
+    }
+    /// Inventory exact original external tail edges, without granting emission.
+    /// A later proof must eliminate or independently bind every such edge.
+    pub fn decode_with_exits(code: &[u8], origin: u32, exits: &[u32]) -> Result<Self, String> {
+        Self::decode_complete(code, origin, &[], &[], exits)
+    }
+    fn decode_complete(
+        code: &[u8],
+        origin: u32,
+        tables: &[JumpTable<'_>],
+        maps: &[ByteTable<'_>],
+        exits: &[u32],
+    ) -> Result<Self, String> {
         let end = origin
             .checked_add(u32::try_from(code.len()).map_err(|_| "CRT IR: code size")?)
             .ok_or("CRT IR: code overflow")?;
-        if origin == 0 || code.is_empty() || code.len() > 16384 {
-            return Err("CRT IR: code budget".into());
+        if origin == 0
+            || code.is_empty()
+            || code.len() > 16384
+            || tables.len() > 8
+            || maps.len() > 8
+        {
+            return Err("CRT IR: code/table budget".into());
         }
-        let mut d = Decoder::with_ip(32, code, origin as u64, DecoderOptions::NONE);
-        let mut nodes = BTreeMap::new();
-        while d.can_decode() {
-            let i = d.decode();
-            if i.is_invalid() || nodes.len() >= 2048 {
-                return Err("CRT IR: malformed/node budget".into());
+        if exits.len() > 16
+            || exits.iter().any(|&t| t == 0 || (origin..end).contains(&t))
+            || exits.iter().copied().collect::<BTreeSet<_>>().len() != exits.len()
+        {
+            return Err("CRT IR: external edge inventory".into());
+        }
+        let mut used_exits = BTreeSet::new();
+        let mut data_ranges = Vec::new();
+        for table in tables {
+            if table.address == 0
+                || !table.address.is_multiple_of(4)
+                || table.bytes.is_empty()
+                || !table.bytes.len().is_multiple_of(4)
+                || table.bytes.len() > 1024
+            {
+                return Err("CRT IR: jump table full-word bound".into());
             }
-            let pc = i.ip32();
-            let at = (pc - origin) as usize;
-            let raw = &code[at..at + i.len()];
-            let op = extended(&i, raw)?;
+            let table_end = table
+                .address
+                .checked_add(table.bytes.len() as u32)
+                .ok_or("CRT IR: jump table overflow")?;
+            if data_ranges
+                .iter()
+                .any(|&(a, b)| table.address < b && a < table_end)
+            {
+                return Err("CRT IR: overlapping jump tables".into());
+            }
+            if table.address < end
+                && origin < table_end
+                && (table.address < origin
+                    || table_end > end
+                    || code[(table.address - origin) as usize..(table_end - origin) as usize]
+                        != *table.bytes)
+            {
+                return Err("CRT IR: embedded table source mismatch".into());
+            }
+            data_ranges.push((table.address, table_end));
+        }
+        for table in maps {
+            if table.address == 0 || table.bytes.is_empty() || table.bytes.len() > 256 {
+                return Err("CRT IR: class table bound".into());
+            }
+            let table_end = table
+                .address
+                .checked_add(table.bytes.len() as u32)
+                .ok_or("CRT IR: class table overflow")?;
+            if data_ranges
+                .iter()
+                .any(|&(a, b)| table.address < b && a < table_end)
+            {
+                return Err("CRT IR: overlapping class table".into());
+            }
+            if table.address < end
+                && origin < table_end
+                && (table.address < origin
+                    || table_end > end
+                    || code[(table.address - origin) as usize..(table_end - origin) as usize]
+                        != *table.bytes)
+            {
+                return Err("CRT IR: embedded class table mismatch".into());
+            }
+            data_ranges.push((table.address, table_end));
+        }
+        let mut used_maps = BTreeSet::new();
+        let mut nodes = BTreeMap::new();
+        let mut offset = 0usize;
+        while offset < code.len() {
+            let pc = origin + offset as u32;
+            if let Some(&(_, data_end)) = data_ranges.iter().find(|&&(a, _)| a == pc) {
+                offset = (data_end - origin) as usize;
+                continue;
+            }
+            let mut d = Decoder::with_ip(32, &code[offset..], u64::from(pc), DecoderOptions::NONE);
+            let i = d.decode();
+            if i.is_invalid()
+                || nodes.len() >= 2048
+                || data_ranges
+                    .iter()
+                    .any(|&(a, b)| pc < b && a < i.next_ip32())
+            {
+                return Err("CRT IR: malformed/instruction-data overlap/node budget".into());
+            }
+            let raw = &code[offset..offset + i.len()];
+            let op = extended(&i, raw, tables)?;
             let successors = match &op {
-                Op::Ordinary(Operation::Return) => vec![],
+                Op::Ordinary(Operation::Return) | Op::ReturnPop(_) => vec![],
                 Op::Ordinary(Operation::Jump(t)) => vec![*t],
                 Op::Ordinary(Operation::Branch(_, t)) | Op::SignedBranch { target: t, .. } => {
                     vec![i.next_ip32(), *t]
                 }
+                Op::TableJump { targets, .. } => targets.clone(),
                 _ => vec![i.next_ip32()],
             };
             nodes.insert(
@@ -258,17 +527,116 @@ impl Graph {
                     successors,
                 },
             );
+            offset += i.len();
         }
-        if nodes
+        for node in nodes.values() {
+            for target in &node.successors {
+                if !nodes.contains_key(target) {
+                    if matches!(node.op,Op::Ordinary(Operation::Jump(t)) if t==*target)
+                        && exits.contains(target)
+                    {
+                        used_exits.insert(*target);
+                    } else {
+                        return Err(
+                            "CRT IR: branch/fallthrough outside instruction boundaries".into()
+                        );
+                    }
+                }
+            }
+        }
+        if used_exits.len() != exits.len() {
+            return Err("CRT IR: unused external edge inventory".into());
+        }
+        let used: BTreeSet<_> = nodes
             .values()
-            .flat_map(|n| &n.successors)
-            .any(|t| !nodes.contains_key(t))
-        {
-            return Err("CRT IR: branch/fallthrough outside instruction boundaries".into());
+            .filter_map(|n| {
+                if let Op::TableJump { address, .. } = n.op {
+                    Some(address)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        if used.len() != tables.len() {
+            return Err("CRT IR: unused source table".into());
+        }
+        for (&pc, node) in &nodes {
+            if let Op::TableJump { index, targets, .. } = &node.op {
+                let (&previous_pc, previous) = nodes
+                    .range(..pc)
+                    .next_back()
+                    .ok_or("CRT IR: missing table guard")?;
+                let (guard_end, bound) =
+                    if let Op::Ordinary(Operation::ZeroExtend(dst, Operand::Memory(a, 8))) =
+                        &previous.op
+                    {
+                        if dst != index
+                            || a.base != Some(index.index)
+                            || a.index.is_some()
+                            || a.scale != 1
+                            || previous_pc + previous.length != pc
+                        {
+                            return Err("CRT IR: table class map form".into());
+                        }
+                        let map = maps
+                            .iter()
+                            .find(|m| m.address == a.displacement)
+                            .ok_or("CRT IR: class map lacks original bytes")?;
+                        if map.bytes.iter().any(|&v| usize::from(v) >= targets.len()) {
+                            return Err("CRT IR: class map exceeds target table".into());
+                        }
+                        used_maps.insert(map.address);
+                        if nodes
+                            .iter()
+                            .any(|(&from, n)| n.successors.contains(&pc) && from != previous_pc)
+                            || origin == pc
+                        {
+                            return Err("CRT IR: alternate entry bypasses class map".into());
+                        }
+                        (previous_pc, map.bytes.len() as u32 - 1)
+                    } else {
+                        (pc, targets.len() as u32 - 1)
+                    };
+                let (&branch_pc, branch) = nodes
+                    .range(..guard_end)
+                    .next_back()
+                    .ok_or("CRT IR: missing table range branch")?;
+                let (&compare_pc, compare) = nodes
+                    .range(..branch_pc)
+                    .next_back()
+                    .ok_or("CRT IR: missing table compare")?;
+                if branch_pc + branch.length != guard_end
+                    || compare_pc + compare.length != branch_pc
+                    || !matches!(branch.op,Op::Ordinary(Operation::Branch(graph::Condition::Above,t)) if t!=guard_end)
+                    || compare.op
+                        != Op::Ordinary(Operation::Binary(
+                            Binary::Compare,
+                            Operand::Reg(*index),
+                            Operand::Immediate(bound),
+                        ))
+                    || nodes.iter().any(|(&from, n)| {
+                        n.successors.contains(&guard_end) && from != branch_pc
+                            || n.successors.contains(&branch_pc) && from != compare_pc
+                    })
+                    || origin == branch_pc
+                    || origin == guard_end
+                {
+                    return Err("CRT IR: indexed JMP lacks dominating unsigned bound".into());
+                }
+            }
+        }
+        if used_maps.len() != maps.len() {
+            return Err("CRT IR: unused class table".into());
         }
         let mut reached = BTreeSet::new();
         let mut todo = vec![origin];
         while let Some(pc) = todo.pop() {
+            if used_exits.contains(&pc) {
+                continue;
+            }
+            if !nodes.contains_key(&pc) {
+                return Err("CRT IR: entry is table data".into());
+            }
             if reached.insert(pc) {
                 todo.extend(nodes[&pc].successors.iter().copied());
             }

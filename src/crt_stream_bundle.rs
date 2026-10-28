@@ -159,6 +159,7 @@ fn run_crt_text(data:&[u8],backend:&mut impl CrtBackend)->Result<[u32;3],&'stati
  let result=rt.map_region(0x40000,12,CrtRegionKind::Result,None)?;
  let descriptor=rt.map_region(0x50000,56,CrtRegionKind::Descriptor,None)?;
  let handle=rt.bind_descriptor(0,7)?;
+ let descriptor_lease=rt.claim_descriptor_record(1,handle,descriptor)?;
  rt.store(rt.offset(descriptor,24)?,32,CrtValue::Handle(handle))?;
  rt.store(rt.offset(descriptor,40)?,8,CrtValue::scalar(0x81))?;
  rt.store(rt.offset(descriptor,41)?,8,CrtValue::scalar(0))?;
@@ -175,7 +176,7 @@ fn run_crt_text(data:&[u8],backend:&mut impl CrtBackend)->Result<[u32;3],&'stati
  let returned=original_text(&mut rt,&mut cpu,lease,backend)?;
  if returned!=CrtValue::Pointer(result){{return Err("CRT original result object");}}
  let values=std::array::from_fn(|i|rt.load(rt.offset(result,i as i64*4).unwrap(),32).and_then(CrtValue::known_scalar));
- let [a,b,c]=values;let triple=[a?,b?,c?];rt.unlock(lease)?;Ok(triple)
+ let [a,b,c]=values;let triple=[a?,b?,c?];rt.unlock_descriptor(descriptor_lease)?;rt.unlock(lease)?;Ok(triple)
 }}
 "#,
         runtime = super::crt_stream_runtime::EMITTED_TYPES,

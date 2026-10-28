@@ -36,6 +36,7 @@ struct OwnedExceptionEvent {
  identity:OwnedEventId,code:u32,guest:GuestRaiseCall,
  scratch_low:u32,scratch_high:u32,handler_sp:u32,
  captured:CapturedContext,
+ normal_permit:std::cell::RefCell<Option<FinishedEventPermit>>,
 }
 impl OwnedExceptionEvent {
  fn from_raise(machine:&mut Machine,registry:&ThreadRegistry,binding:OwnedFrameBinding,image:&FrameImage<RegistryHead>,site:RaiseSite,scratch_bytes:u32)->Result<Self,&'static str>{
@@ -86,7 +87,7 @@ impl OwnedExceptionEvent {
   let identity=OwnedEventId{owner,event,registry:registry.identity,source:binding.frame};
   let lifetime=std::rc::Rc::new(std::cell::Cell::new(EventLifetime::Live));
   Ok(Self{identity,code:site.code,guest:GuestRaiseCall{caller_sp,callee_sp,return_ip:site.return_ip},scratch_low:low,scratch_high:high,handler_sp,
-   captured:CapturedContext{identity,limit:registry.limit,base:registry.base,lifetime}})
+   captured:CapturedContext{identity,limit:registry.limit,base:registry.base,lifetime},normal_permit:std::cell::RefCell::new(None)})
  }
  fn owner(&self)->u64{self.identity.owner}
  fn code(&self)->u32{self.code}
@@ -113,7 +114,14 @@ impl OwnedExceptionEvent {
   if machine.owned_context.is_none_or(|c|c[0].is_none()||c[4].is_none()||c[5].is_none()||c[8].is_none()){
    return Err("raise event missing original restored projection");
   }
+  let binding=machine.owned_binding(machine.selected).map_err(|_|"finished event selected binding")?;
+  let permit=registry.mint_finished_event(machine,binding)?;
+  *self.normal_permit.borrow_mut()=Some(permit);
   self.captured.lifetime.set(EventLifetime::Finished);Ok(())
+ }
+ fn take_normal_permit(&self)->Result<FinishedEventPermit,&'static str>{
+  if self.captured.lifetime.get()!=EventLifetime::Finished{return Err("normal calls require finished owned event");}
+  self.normal_permit.borrow_mut().take().ok_or("finished event normal-call permit already consumed")
  }
 }
 impl Drop for OwnedExceptionEvent {

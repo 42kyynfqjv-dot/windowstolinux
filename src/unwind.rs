@@ -1,6 +1,12 @@
 //! Experimental original cleanup/restore slices under an explicit orchestration cut.
 #[path = "cleanup.rs"]
 mod cleanup;
+#[allow(dead_code)]
+#[path = "crt_shutdown.rs"]
+mod crt_shutdown;
+#[cfg(test)]
+#[path = "crt_shutdown_tests.rs"]
+mod crt_shutdown_tests;
 #[path = "dispatch.rs"]
 mod dispatch;
 #[allow(dead_code)]

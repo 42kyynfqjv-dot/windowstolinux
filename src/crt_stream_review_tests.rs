@@ -50,7 +50,7 @@ fn unknown_bytes_foreign_capabilities_and_dead_aliases_never_reach_backend() {
 struct Backend{calls:usize}impl CrtBackend for Backend{
  fn write_once(&mut self,_:CrtDescriptorId,bytes:&[u8])->Result<CrtWriteResult,&'static str>{self.calls+=1;assert_eq!(bytes,b"ABCD");Ok(CrtWriteResult{success:true,written:4,last_error:None})}
 }
-let mut a=CrtStreamRuntime::new(31,41,0x8000,32768).unwrap();let lease=a.lock(41).unwrap();let fd=a.bind_descriptor(1,93).unwrap();let data=a.alloc_buffer(lease,4,true).unwrap().unwrap();let mut backend=Backend{calls:0};
+let mut a=CrtStreamRuntime::new(31,41,0x8000,32768).unwrap();let lease=a.lock(41).unwrap();let fd=a.bind_descriptor(1,93).unwrap();let descriptor_lease=a.lock_descriptor(41,fd).unwrap();let data=a.alloc_buffer(lease,4,true).unwrap().unwrap();let mut backend=Backend{calls:0};
 // Stored bits are not evidence of initialization. The missing bit cannot be
 // silently zeroed, nor can a failed write attempt consume the owned buffer.
 a.store(data,32,CrtValue::Scalar{bits:0x44434241,known:0xffff7fff}).unwrap();
@@ -59,7 +59,7 @@ a.store(a.offset(data,1).unwrap(),8,CrtValue::scalar(b'B' as u32)).unwrap();
 assert_eq!(a.load(data,32).unwrap().known_scalar().unwrap(),0x44434241);
 assert!(a.write_once(fd,a.offset(data,1).unwrap(),4,&mut backend).is_err());assert_eq!(backend.calls,0);
 let end=a.offset(data,4).unwrap();assert!(a.load(end,8).is_err());
-let mut b=CrtStreamRuntime::new(31,41,0x8000,32768).unwrap();let foreign_lock=b.lock(41).unwrap();let foreign_fd=b.bind_descriptor(1,93).unwrap();
+let mut b=CrtStreamRuntime::new(31,41,0x8000,32768).unwrap();let foreign_lock=b.lock(41).unwrap();let foreign_fd=b.bind_descriptor(1,93).unwrap();let _foreign_descriptor_lease=b.lock_descriptor(41,foreign_fd).unwrap();
 assert!(b.load(data,8).is_err());assert!(b.store(b.file(),32,CrtValue::Pointer(data)).is_err());assert!(b.write_once(fd,data,4,&mut backend).is_err());assert!(a.write_once(foreign_fd,data,4,&mut backend).is_err());assert!(a.free_buffer(foreign_lock,data).is_err());assert_eq!(backend.calls,0);
 let pointer_field=a.file();a.store(pointer_field,32,CrtValue::Pointer(data)).unwrap();
 assert!(a.store(a.offset(pointer_field,1).unwrap(),16,CrtValue::scalar(0)).is_err());assert!(a.load(a.offset(pointer_field,1).unwrap(),16).is_err());assert_eq!(a.load(pointer_field,32).unwrap(),CrtValue::Pointer(data));
@@ -68,7 +68,7 @@ a.free_buffer(lease,data).unwrap();assert_eq!(a.load(pointer_field,32).unwrap(),
 // Copying an unchanged dangling word grants no access authority. Numeric
 // address reuse in another mapped region cannot revive its old capability.
 let replacement=a.map_region(data.base,4,CrtRegionKind::Input,Some(b"ABCD")).unwrap();assert!(a.load(data,8).is_err());assert_eq!(a.load(pointer_field,32).unwrap(),CrtValue::Pointer(data));assert_eq!(a.write_once(fd,replacement,4,&mut backend).unwrap().written,4);assert_eq!(backend.calls,2);
-a.unlock(lease).unwrap();assert!(a.write_once(fd,replacement,4,&mut backend).is_err());assert_eq!(backend.calls,2);
+a.unlock_descriptor(descriptor_lease).unwrap();a.unlock(lease).unwrap();assert!(a.write_once(fd,replacement,4,&mut backend).is_err());assert_eq!(backend.calls,2);
 "#,
         "byte-identity",
     );
@@ -82,7 +82,7 @@ struct Backend{calls:usize,physical:Vec<u8>,success:bool,count:u32}impl CrtBacke
  fn write_once(&mut self,_:CrtDescriptorId,bytes:&[u8])->Result<CrtWriteResult,&'static str>{self.calls+=1;assert_eq!(bytes,b"A\r\nB");self.physical.push(bytes[0]);Ok(CrtWriteResult{success:self.success,written:self.count,last_error:if self.success{None}else{Some(5)}})}
 }
 
-let mut r=CrtStreamRuntime::new(13,17,0x8000,32768).unwrap();let lease=r.lock(17).unwrap();let fd=r.bind_descriptor(1,93).unwrap();let data=r.map_region(0x9000,4,CrtRegionKind::Input,Some(b"A\r\nB")).unwrap();r.set_errors(lease,Some(19),Some(23)).unwrap();
+let mut r=CrtStreamRuntime::new(13,17,0x8000,32768).unwrap();let lease=r.lock(17).unwrap();let fd=r.bind_descriptor(1,93).unwrap();let _descriptor_lease=r.lock_descriptor(17,fd).unwrap();let data=r.map_region(0x9000,4,CrtRegionKind::Input,Some(b"A\r\nB")).unwrap();r.set_errors(lease,Some(19),Some(23)).unwrap();
 // The original FALSE edge reads GetLastError, not the output-count cell. A
 // backend error can have effects; rejecting/continuing must not undo them.
 let mut failed=Backend{calls:0,physical:vec![],success:false,count:u32::MAX};let outcome=r.write_once(fd,data,4,&mut failed).unwrap();assert!(!outcome.success);assert_eq!(outcome.last_error,Some(5));assert_eq!(failed.calls,1);assert_eq!(failed.physical,b"A");assert_eq!((r.errno,r.doserrno),(Some(19),Some(23)));

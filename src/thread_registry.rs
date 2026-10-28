@@ -13,6 +13,7 @@ enum RegistryHead {
  BorrowedRoot(RegistryIdentity),
  BorrowedDispatcher{identity:RegistryIdentity,generation:u64},
  Owned(RegistrationId),
+ Normal(NormalFrameId),
 }
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 enum RegistryWord {
@@ -40,8 +41,39 @@ struct ThreadRegistry {
  head:RegistryHead,frames:Vec<RegistryFrame>,temporary:Vec<RegistryTemporary>,
  generation:u64,selected:Option<Containment>,next_unwind:usize,
  handlers:Vec<RegistrationId>,borrowed_depth:usize,failure:Option<&'static str>,
+ normal_authority:std::cell::Cell<Option<u64>>,normal_epoch:Option<NormalEpochState>,
 }
 struct LocalRecord<'a>{registry:&'a mut ThreadRegistry,id:RegistrationId}
+// Minted only by the enclosing owned-event finish path. The registry verifies
+// the same state again at use; no externally supplied success Boolean grants
+// normal-call authority. Unknown saved register bits remain unknown.
+struct FinishedEventPermit {
+ identity:RegistryIdentity,event:u64,binding:OwnedFrameBinding,selected:RegistrationId,
+ context:[Option<u32>;10],stamp:u64,
+}
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+struct NormalFrameId {identity:RegistryIdentity,epoch:u64,generation:u64}
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+enum NormalRegistrationKind {Eh4,Cxx{metadata:u32}}
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+enum NormalFrameStep {
+ RestorePredecessor,PopSaved{offset:i32,register:u8},
+ DiscardGuard{offset:i32,register:u8},CheckGuard{offset:i32,target:u32},
+}
+struct NormalFramePlan {steps:Vec<NormalFrameStep>,callee_pop:u32}
+struct RegistryNormalFrame {
+ id:NormalFrameId,kind:NormalRegistrationKind,previous:RegistryHead,
+ low:u32,high:u64,entry_sp:u32,ebp:u32,record:u32,handler:u32,scope:u32,cookie:u32,
+ protected:std::collections::BTreeMap<i32,FrameWord<RegistryHead>>,
+ plan:NormalFramePlan,next:usize,saved:[Option<u32>;8],installed:bool,unlinked:bool,
+}
+struct NormalEpochState {
+ generation:u64,event:u64,selected:RegistrationId,previous:RegistryHead,next_unwind:usize,
+ context:[Option<u32>;10],frames:Vec<RegistryNormalFrame>,issued:usize,
+}
+struct NormalCallEpoch<'a>{registry:&'a mut ThreadRegistry,generation:u64}
+#[derive(Debug)]
+struct NormalFrameReceipt {frame:NormalFrameId,caller_sp:u32,saved:[Option<u32>;8]}
 impl ThreadRegistry {
  fn new(owner:u64,limit:u32,base:u32,bound:&[(u32,u32)],cookie_address:u32)->RegistryResult<Self>{
   if owner==0||limit==0||limit>=base||bound.len()>256||bound.iter().any(|&(a,b)|a==0||a>=b)
@@ -50,7 +82,7 @@ impl ThreadRegistry {
   }
   let instance=NEXT_THREAD_REGISTRY.fetch_update(std::sync::atomic::Ordering::Relaxed,std::sync::atomic::Ordering::Relaxed,|n|n.checked_add(1)).map_err(|_|"registry identity exhaustion")?;
   let identity=RegistryIdentity{owner,instance};
-  Ok(Self{identity,limit,base,bound:bound.to_vec(),cookie_address,head:RegistryHead::BorrowedRoot(identity),frames:Vec::new(),temporary:Vec::new(),generation:0,selected:None,next_unwind:0,handlers:Vec::new(),borrowed_depth:0,failure:None})
+  Ok(Self{identity,limit,base,bound:bound.to_vec(),cookie_address,head:RegistryHead::BorrowedRoot(identity),frames:Vec::new(),temporary:Vec::new(),generation:0,selected:None,next_unwind:0,handlers:Vec::new(),borrowed_depth:0,failure:None,normal_authority:std::cell::Cell::new(None),normal_epoch:None})
  }
  fn available(&self)->RegistryResult<()>{if let Some(e)=self.failure{Err(e)}else{Ok(())}}
  fn fail<T>(&mut self,error:&'static str)->RegistryResult<T>{let error=*self.failure.get_or_insert(error);Err(error)}
@@ -135,6 +167,7 @@ impl ThreadRegistry {
   })();match result{Ok(plan)=>Ok(plan),Err(e)=>self.fail(e)}
  }
  fn expected_callback(&self,id:RegistrationId)->RegistryResult<()>{
+  if self.normal_epoch.is_some(){return Err("registry exception callback during normal call epoch");}
   self.frame_index(id)?;
   let plan=self.selected.as_ref().ok_or("registry missing containment")?;
   if plan.identity!=self.identity{return Err("registry containment identity");}
@@ -185,7 +218,7 @@ impl ThreadRegistry {
  }
  fn target_ready(&self)->RegistryResult<RegistrationId>{
   self.available()?;let plan=self.selected.as_ref().ok_or("registry missing containment")?;
-  if self.next_unwind!=plan.younger.len()||!self.handlers.is_empty()||!self.temporary.is_empty()||self.borrowed_depth!=0
+  if self.normal_epoch.is_some()||self.next_unwind!=plan.younger.len()||!self.handlers.is_empty()||!self.temporary.is_empty()||self.borrowed_depth!=0
    ||self.head!=RegistryHead::Owned(plan.target){return Err("registry target not ready");}
   self.frame_index(plan.target)?;Ok(plan.target)
  }
@@ -194,7 +227,7 @@ impl ThreadRegistry {
  /// lifetime and restoration; this method alone supplies no OS effect proof.
  fn with_borrowed_dispatcher<T>(&mut self,body:impl FnOnce(&mut Self)->RegistryResult<T>)->RegistryResult<T>{
   self.available()?;
-  if self.selected.is_none()||self.borrowed_depth>=16{return self.fail("registry borrowed dispatcher phase/budget");}
+  if self.normal_epoch.is_some()||self.selected.is_none()||self.borrowed_depth>=16{return self.fail("registry borrowed dispatcher phase/budget");}
   let previous=self.head;let depth=self.temporary.len();let id=match self.next_id(){Ok(id)=>id,Err(e)=>return self.fail(e)};
   let borrowed=RegistryHead::BorrowedDispatcher{identity:self.identity,generation:id.generation};
   self.head=borrowed;self.borrowed_depth+=1;
@@ -230,6 +263,209 @@ impl ThreadRegistry {
    if let Err(e)=self.validate_frame(id,image){return self.fail(e);}
    self.temporary.pop();Ok(value)
   }}
+ }
+}
+impl ThreadRegistry {
+ /// Validate the already consumed original Main return. The receipt issuer,
+ /// CRT runtime anchor and shutdown effects are separate obligations.
+ fn validate_returned_event(&self,machine:&Machine,owner:u64,event:u64,selected:FrameId)->RegistryResult<()>{
+  self.available()?;
+  if owner==0||owner!=self.identity.owner||owner!=machine.owner()||event!=machine.event
+   ||!machine.event_issued||machine.phase!=Phase::Returned||!machine.owned_storage||!machine.explicit_dispatch
+   ||self.normal_epoch.is_some()||!self.handlers.is_empty()||!self.temporary.is_empty()||self.borrowed_depth!=0 {
+   return Err("returned event unfinished or foreign lifecycle");
+  }
+  let plan=self.selected.as_ref().ok_or("returned event missing containment")?;
+  let target=self.frames.iter().find(|f|f.id==plan.target).ok_or("returned event selected registration")?;
+  let frame=machine.frames.get(machine.selected).ok_or("returned event selected activation")?;
+  if plan.identity!=self.identity||self.next_unwind!=plan.younger.len()||target.binding.frame!=selected
+   ||target.binding.index!=machine.selected||target.binding.owner!=owner||frame.id!=selected||frame.live
+   ||target.live||target.linked||self.head!=target.previous||self.normal_authority.get().is_none()
+   ||plan.younger.iter().any(|id|self.frames.iter().find(|f|f.id==*id).is_none_or(|f|f.live||f.linked)) {
+   return Err("returned event incomplete retirement or changed containment");
+  }Ok(())
+ }
+ fn mint_finished_event(&self,machine:&Machine,binding:OwnedFrameBinding)->RegistryResult<FinishedEventPermit>{
+  self.available()?;
+  if self.normal_authority.get().is_some()||machine.phase!=Phase::Done||!machine.event_issued
+   ||!machine.owned_storage||!machine.explicit_dispatch||machine.owner()!=self.identity.owner
+   ||machine.owned_binding(machine.selected).map_err(|_|"normal event selected binding")?!=binding {
+   return Err("normal event unfinished, foreign or repeated permit");
+  }
+  let selected=self.registration(binding)?;
+  if self.target_ready()?!=selected{return Err("normal event selected registration");}
+  let context=machine.owned_context.ok_or("normal event missing owned context")?;
+  if [0,4,5,8].iter().any(|&i|context[i].is_none())||[1,2,9].iter().any(|&i|context[i].is_some()) {
+   return Err("normal event incomplete restored projection");
+  }
+  self.normal_authority.set(Some(1));
+  Ok(FinishedEventPermit{identity:self.identity,event:machine.event,binding,selected,context,stamp:1})
+ }
+ fn with_normal_calls<T>(&mut self,machine:&Machine,permit:&mut FinishedEventPermit,image:&FrameImage<RegistryHead>,body:impl FnOnce(&mut NormalCallEpoch<'_>)->RegistryResult<T>)->RegistryResult<T>{
+  self.available()?;
+  let start=(||{
+   if self.normal_epoch.is_some()||self.normal_authority.get()!=Some(permit.stamp)||permit.identity!=self.identity
+    ||permit.event!=machine.event||machine.owner()!=self.identity.owner||!machine.event_issued
+    ||!machine.owned_storage||!machine.explicit_dispatch||!matches!(machine.phase,Phase::Done|Phase::Returning)
+    ||machine.owned_context!=Some(permit.context)
+    ||machine.owned_binding(machine.selected).map_err(|_|"normal call selected binding")?!=permit.binding
+    ||self.registration(permit.binding)?!=permit.selected||self.target_ready()?!=permit.selected {
+    return Err("normal call foreign, stale or active event");
+   }
+   self.validate_frame(permit.selected,image)?;
+   if image.try_level!= -2{return Err("normal call selected scopes incomplete");}
+   let selected=&self.frames[self.frame_index(permit.selected)?];
+   if !selected.linked{return Err("normal call selected frame unlinked");}
+   permit.stamp.checked_add(1).ok_or("normal call permit exhaustion")
+  })();
+  let next_stamp=match start{Ok(value)=>value,Err(e)=>return self.fail(e)};
+  let generation=match self.next_id(){Ok(id)=>id.generation,Err(e)=>return self.fail(e)};
+  self.normal_epoch=Some(NormalEpochState{generation,event:permit.event,selected:permit.selected,
+   previous:self.head,next_unwind:self.next_unwind,context:permit.context,frames:Vec::new(),issued:0});
+  let result=body(&mut NormalCallEpoch{registry:self,generation});
+  let value=match result{Ok(value)=>value,Err(e)=>return self.fail(e)};
+  self.available()?;
+  let state=self.normal_epoch.as_ref().ok_or("normal call missing epoch")?;
+  if state.generation!=generation||state.event!=permit.event||state.selected!=permit.selected
+   ||state.context!=permit.context||!state.frames.is_empty()||self.head!=state.previous
+   ||self.next_unwind!=state.next_unwind||self.selected.as_ref().is_none_or(|p|p.target!=permit.selected)
+   ||machine.owned_context!=Some(permit.context)||!matches!(machine.phase,Phase::Done|Phase::Returning) {
+   return self.fail("normal call incomplete lifecycle or changed selected context");
+  }
+  if let Err(e)=self.validate_frame(permit.selected,image){return self.fail(e);}
+  if !self.frames[self.frame_index(permit.selected)?].linked{return self.fail("normal call changed selected lifetime");}
+  self.normal_epoch=None;
+  self.normal_authority.set(Some(next_stamp));permit.stamp=next_stamp;Ok(value)
+ }
+}
+impl NormalCallEpoch<'_> {
+ fn state(&self)->RegistryResult<&NormalEpochState>{
+  self.registry.available()?;
+  let state=self.registry.normal_epoch.as_ref().ok_or("normal call expired epoch")?;
+  if state.generation!=self.generation{return Err("normal call stale epoch");}Ok(state)
+ }
+ fn head(&self)->RegistryResult<RegistryHead>{self.state()?;self.registry.head()}
+ fn fail<T>(&mut self,error:&'static str)->RegistryResult<T>{self.registry.fail(error)}
+ fn top(&self,id:NormalFrameId)->RegistryResult<&RegistryNormalFrame>{
+  let state=self.state()?;
+  let frame=state.frames.last().ok_or("normal call no live frame")?;
+  if id.identity!=self.registry.identity||id.epoch!=self.generation||frame.id!=id{return Err("normal call stale, foreign or non-LIFO frame");}Ok(frame)
+ }
+ fn validate_image(&self,id:NormalFrameId,image:&FrameImage<RegistryHead>)->RegistryResult<()>{
+  let frame=self.top(id)?;
+  if frame.kind!=NormalRegistrationKind::Eh4{return Err("normal call registration kind mismatch");}
+  let(previous,handler,scope,cookie,_)=ThreadRegistry::image_record(image)?;
+  if frame.entry_sp!=image.entry_sp||frame.ebp!=image.ebp||frame.record!=image.record
+   ||image.esp<frame.low||image.esp>image.entry_sp||previous!=frame.previous||handler!=frame.handler
+   ||scope!=frame.scope||cookie!=frame.cookie||frame.protected.iter().any(|(key,value)|image.words.get(key)!=Some(value)) {
+   return Err("normal call changed protected frame identity");
+  }Ok(())
+ }
+ /// The compiler supplies this plan from the original EH4 prolog/epilog.
+ /// C++ three-word registrations are a distinct representation, never inferred
+ /// from these four-word EH4 records or granted handler behavior by this API.
+ fn reserve_eh4(&mut self,image:&FrameImage<RegistryHead>,plan:NormalFramePlan)->RegistryResult<NormalFrameId>{
+  let result=(||{
+   let state=self.state()?;
+   if state.frames.len()>=32||state.issued>=4096||plan.steps.is_empty()||plan.steps.len()>32
+    ||plan.callee_pop%4!=0||plan.callee_pop>4096{return Err("normal call frame/plan budget");}
+   if let Some(parent)=state.frames.last(){if !parent.installed||parent.unlinked||self.registry.head!=RegistryHead::Normal(parent.id){return Err("normal call parent not installed");}}
+   let low=image.esp;let high=u64::from(image.entry_sp)+4;
+   // RET n consumes the caller's argument words as well as the protected
+   // return. Their complete extent must remain in the same owned thread
+   // range and outside module storage even though the frame does not own
+   // their contents or gain dereference authority here.
+   let consumed_high=high+u64::from(plan.callee_pop);self.registry.range(low,consumed_high)?;
+   let parent_low=state.frames.last().map(|f|f.low).unwrap_or(self.registry.frames[self.registry.frame_index(state.selected)?].low);
+   if consumed_high>u64::from(parent_low){return Err("normal call stack grows outside caller activation");}
+   if low%4!=0||image.entry_sp%4!=0||image.record<low||image.ebp<low||u64::from(image.ebp)+4>high
+    ||self.registry.frames.iter().any(|f|f.live&&u64::from(low)<f.high&&u64::from(f.low)<consumed_high)
+    ||state.frames.iter().any(|f|u64::from(low)<f.high&&u64::from(f.low)<consumed_high) {
+    return Err("normal call frame overlap/alignment");
+   }
+   let(previous,handler,scope,cookie,_)=ThreadRegistry::image_record(image)?;
+   if previous!=self.registry.head||!self.registry.module_contains_address(handler)||!self.registry.module_contains_address(scope)
+    ||!matches!(image.words.get(&0),Some(FrameWord::Return)){return Err("normal call original predecessor/return/metadata");}
+   if image.words.keys().any(|&key|{let at=i64::from(image.entry_sp)+i64::from(key);key%4!=0||at<i64::from(low)||at+4>high as i64}){return Err("normal call word outside owned frame");}
+   let mut seen=std::collections::BTreeSet::new();let mut registers=std::collections::BTreeSet::new();let mut restored=false;let mut saw_ebp=false;
+   for step in &plan.steps {
+    match *step {
+     NormalFrameStep::RestorePredecessor=>{if restored||!seen.is_empty(){return Err("normal call predecessor plan order");}restored=true;},
+     NormalFrameStep::PopSaved{offset,register}=>{
+      if !restored||saw_ebp||!matches!(register,3|5|6|7)||offset%4!=0||!seen.insert(offset)||!registers.insert(register)
+       ||(register==5&&i64::from(image.entry_sp)+i64::from(offset)!=i64::from(image.ebp))
+       ||!matches!(image.words.get(&offset),Some(FrameWord::Saved(r,_))if *r==register){return Err("normal call saved-slot plan");}
+      saw_ebp=register==5;
+     },
+     NormalFrameStep::DiscardGuard{offset,register}=>{
+      if !restored||saw_ebp||register!=1||offset%4!=0||!seen.insert(offset)
+       ||!matches!(image.words.get(&offset),Some(FrameWord::Guard{frame,..})if *frame==image.ebp){return Err("normal call guard-discard plan");}
+     },
+     NormalFrameStep::CheckGuard{offset,target}=>{
+      if !restored||saw_ebp||offset%4!=0||!self.registry.module_contains_address(target)
+       ||!matches!(image.words.get(&offset),Some(FrameWord::Guard{frame,..})if *frame==image.ebp){return Err("normal call guard-check plan");}
+     },
+    }
+   }
+   if !restored||!saw_ebp||image.words.iter().any(|(offset,word)|matches!(word,FrameWord::Saved(..))&&!seen.contains(offset)) {
+    return Err("normal call missing saved-register restoration");
+   }
+   let protected=image.words.iter().filter(|(_,word)|matches!(word,FrameWord::Saved(..)|FrameWord::Return|FrameWord::Guard{..}|FrameWord::Borrowed(_)|FrameWord::EncodedScope{..}|FrameWord::Cookie(_))).map(|(&key,value)|(key,value.clone())).collect();
+   Ok((low,high,previous,handler,scope,cookie,protected))
+  })();
+  let(low,high,previous,handler,scope,cookie,protected)=match result{Ok(v)=>v,Err(e)=>return self.fail(e)};
+  let generation=match self.registry.next_id(){Ok(id)=>id.generation,Err(e)=>return self.fail(e)};
+  let id=NormalFrameId{identity:self.registry.identity,epoch:self.generation,generation};
+  let state=self.registry.normal_epoch.as_mut().unwrap();state.issued+=1;
+  state.frames.push(RegistryNormalFrame{id,kind:NormalRegistrationKind::Eh4,previous,low,high,entry_sp:image.entry_sp,ebp:image.ebp,record:image.record,
+   handler,scope,cookie,protected,plan,next:0,saved:[None;8],installed:false,unlinked:false});Ok(id)
+ }
+ fn install_head(&mut self,id:NormalFrameId,image:&FrameImage<RegistryHead>)->RegistryResult<()>{
+  let result=(||{
+   self.validate_image(id,image)?;let frame=self.top(id)?;
+   if frame.installed||frame.unlinked||self.registry.head!=frame.previous{return Err("normal call original FS install phase");}Ok(())
+  })();if let Err(e)=result{return self.fail(e);}
+  self.registry.normal_epoch.as_mut().unwrap().frames.last_mut().unwrap().installed=true;
+  self.registry.head=RegistryHead::Normal(id);Ok(())
+ }
+ fn step(&mut self,id:NormalFrameId,image:&FrameImage<RegistryHead>,effect:NormalFrameStep)->RegistryResult<Option<u32>>{
+  let result=(||{
+   self.validate_image(id,image)?;let frame=self.top(id)?;
+   if !frame.installed||frame.plan.steps.get(frame.next)!=Some(&effect){return Err("normal call original epilog order");}
+   match effect {
+    NormalFrameStep::RestorePredecessor=>{
+     if frame.unlinked||self.registry.head!=RegistryHead::Normal(id)||image.try_level!= -2{return Err("normal call unlink active scope/head");}Ok(None)
+    },
+    NormalFrameStep::PopSaved{offset,register}=>{
+     if !frame.unlinked||self.registry.head!=frame.previous{return Err("normal call saved pop before unlink");}
+     match image.words.get(&offset){Some(FrameWord::Saved(r,value))if *r==register=>Ok(*value),_=>Err("normal call saved pop identity")}
+    },
+    NormalFrameStep::DiscardGuard{..}=>{
+     if !frame.unlinked||self.registry.head!=frame.previous{return Err("normal call guard discard before unlink");}Ok(None)
+    },
+    NormalFrameStep::CheckGuard{offset,..}=>{
+     if !frame.unlinked||self.registry.head!=frame.previous{return Err("normal call guard check before unlink");}
+     match image.words.get(&offset){Some(FrameWord::Guard{frame:ebp,cookie,bits})if *ebp==frame.ebp&&*cookie==frame.cookie&&*bits^*ebp==*cookie=>Ok(None),_=>Err("normal call original cookie failure")}
+    },
+   }
+  })();let value=match result{Ok(value)=>value,Err(e)=>return self.fail(e)};
+  let frame=self.registry.normal_epoch.as_mut().unwrap().frames.last_mut().unwrap();
+  match effect {NormalFrameStep::RestorePredecessor=>{frame.unlinked=true;self.registry.head=frame.previous;},NormalFrameStep::PopSaved{register,..}=>frame.saved[register as usize]=value,_=>{}}
+  frame.next+=1;Ok(value)
+ }
+ fn restore_previous_head(&mut self,id:NormalFrameId,image:&FrameImage<RegistryHead>)->RegistryResult<()>{self.step(id,image,NormalFrameStep::RestorePredecessor).map(|_|())}
+ fn restore_saved(&mut self,id:NormalFrameId,image:&FrameImage<RegistryHead>,offset:i32,register:u8)->RegistryResult<Option<u32>>{self.step(id,image,NormalFrameStep::PopSaved{offset,register})}
+ fn discard_guard(&mut self,id:NormalFrameId,image:&FrameImage<RegistryHead>,offset:i32,register:u8)->RegistryResult<()>{self.step(id,image,NormalFrameStep::DiscardGuard{offset,register}).map(|_|())}
+ fn check_guard(&mut self,id:NormalFrameId,image:&FrameImage<RegistryHead>,offset:i32,target:u32)->RegistryResult<()>{self.step(id,image,NormalFrameStep::CheckGuard{offset,target}).map(|_|())}
+ fn return_to_caller(&mut self,id:NormalFrameId,image:&FrameImage<RegistryHead>,caller_sp:u32)->RegistryResult<NormalFrameReceipt>{
+  let result=(||{
+   self.validate_image(id,image)?;let frame=self.top(id)?;
+   if !frame.installed||!frame.unlinked||frame.next!=frame.plan.steps.len()||self.registry.head!=frame.previous
+    ||frame.entry_sp.checked_add(4).and_then(|sp|sp.checked_add(frame.plan.callee_pop))!=Some(caller_sp) {
+    return Err("normal call protected return/stack/epilog incomplete");
+   }Ok(frame.saved)
+  })();let saved=match result{Ok(saved)=>saved,Err(e)=>return self.fail(e)};
+  self.registry.normal_epoch.as_mut().unwrap().frames.pop();Ok(NormalFrameReceipt{frame:id,caller_sp,saved})
  }
 }
 impl LocalRecord<'_> {
@@ -526,3 +762,7 @@ fn main(){match std::env::args().nth(1).unwrap().as_str(){"normal"=>normal(),"ne
         run("borrowed");
     }
 }
+
+#[cfg(test)]
+#[path = "thread_registry_normal_tests.rs"]
+mod normal_tests;

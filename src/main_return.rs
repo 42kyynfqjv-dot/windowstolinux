@@ -7,12 +7,13 @@ pub(crate) const EMITTED_TYPES: &str = r#"
 enum NormalReturnPhase {Linked,Unlinked,GuardChecked,CallerFrame,Returned,Failed}
 struct NormalReturnPlan {pops:Vec<(i32,u8,bool)>,cookie_offset:i32,security_target:u32,return_offset:i32}
 #[derive(Debug)]
-struct NormalReturnReceipt {owner:u64,event:u64,registry:RegistryIdentity,frame:FrameId,caller_sp:u32,value:u32}
+struct NormalReturnReceipt {owner:u64,event:u64,registry:RegistryIdentity,frame:FrameId,caller_sp:u32,value:u32,context:[Option<u32>;10]}
 struct NormalReturnSession<'a> {
  machine:&'a mut Machine,registry:&'a mut ThreadRegistry,binding:OwnedFrameBinding,
  registration:RegistrationId,event:OwnedEventId,previous:RegistryHead,entry_sp:u32,ebp:u32,
  plan:NormalReturnPlan,pop_values:Vec<Option<u32>>,guard:(u32,u32,u32),
  next_pop:usize,saved:[Option<u32>;8],phase:NormalReturnPhase,receipt:Option<NormalReturnReceipt>,
+ normal_permit:FinishedEventPermit,
 }
 impl<'a> NormalReturnSession<'a> {
  fn new(machine:&'a mut Machine,registry:&'a mut ThreadRegistry,binding:OwnedFrameBinding,image:&FrameImage<RegistryHead>,event:&OwnedExceptionEvent,plan:NormalReturnPlan)->Result<Self,&'static str>{
@@ -42,11 +43,19 @@ impl<'a> NormalReturnSession<'a> {
   let key=i32::try_from(i64::from(image.ebp)+i64::from(plan.cookie_offset)-i64::from(image.entry_sp)).map_err(|_|"normal return guard offset")?;
   let guard=match image.words.get(&key){Some(FrameWord::Guard{frame,cookie,bits})if *frame==image.ebp=>(*frame,*cookie,*bits),_=>return Err("normal return guard ownership")};
   if !matches!(image.words.get(&0),Some(FrameWord::Return)){return Err("normal return caller continuation");}
+  let normal_permit=event.take_normal_permit()?;
   let entry_sp=image.entry_sp;let ebp=image.ebp;machine.phase=Phase::Returning;
-  Ok(Self{machine,registry,binding,registration,event:event.identity,previous,entry_sp,ebp,plan,pop_values,guard,next_pop:0,saved:[None;8],phase:NormalReturnPhase::Linked,receipt:None})
+  Ok(Self{machine,registry,binding,registration,event:event.identity,previous,entry_sp,ebp,plan,pop_values,guard,next_pop:0,saved:[None;8],phase:NormalReturnPhase::Linked,receipt:None,normal_permit})
  }
  fn fail<T>(&mut self,error:&'static str)->Result<T,&'static str>{
   self.phase=NormalReturnPhase::Failed;self.machine.phase=Phase::Blocked;self.registry.block(error);Err(error)
+ }
+ /// A real ordinary call may temporarily extend the original thread chain
+ /// only before Main's original FS unlink. Its completed event/containment
+ /// receipt stays owned by this session throughout the nested call epoch.
+ fn with_normal_calls<T>(&mut self,image:&FrameImage<RegistryHead>,body:impl FnOnce(&mut NormalCallEpoch<'_>)->RegistryResult<T>)->Result<T,&'static str>{
+  if self.phase!=NormalReturnPhase::Linked||self.machine.phase!=Phase::Returning{return self.fail("normal call after Main unlink/return");}
+  match self.registry.with_normal_calls(self.machine,&mut self.normal_permit,image,body){Ok(value)=>Ok(value),Err(error)=>self.fail(error)}
  }
  fn apply(&mut self,effect:CompletionEffect<'_,RegistryHead>)->Result<(),&'static str>{
   if self.machine.phase!=Phase::Returning||self.registry.available().is_err(){return self.fail("normal return phase/lifetime");}
@@ -77,7 +86,7 @@ impl<'a> NormalReturnSession<'a> {
     self.registry.frames[index].live=false;self.machine.frames[self.binding.index].live=false;
     let mut context=[None;10];context[0]=Some(value);context[4]=Some(caller_sp);for r in [3,5,6,7]{context[r]=saved[r];}
     self.machine.owned_context=Some(context);self.machine.phase=Phase::Returned;self.phase=NormalReturnPhase::Returned;
-    self.receipt=Some(NormalReturnReceipt{owner:self.binding.owner,event:self.event.event,registry:self.registry.identity,frame:self.binding.frame,caller_sp,value});Ok(())
+    self.receipt=Some(NormalReturnReceipt{owner:self.binding.owner,event:self.event.event,registry:self.registry.identity,frame:self.binding.frame,caller_sp,value,context});Ok(())
    },
   })();if let Err(e)=result{return self.fail(e);}Ok(())
  }
@@ -85,7 +94,7 @@ impl<'a> NormalReturnSession<'a> {
   if self.phase!=NormalReturnPhase::Returned||self.machine.phase!=Phase::Returned||outcome.predecessor!=self.previous||outcome.saved!=self.saved{return self.fail("normal return missing completion");}
   let receipt=self.receipt.take().ok_or("normal return replay")?;
   if receipt.owner!=self.binding.owner||receipt.frame!=self.binding.frame||receipt.event!=self.event.event||receipt.registry!=self.registry.identity
-   ||receipt.value!=outcome.value||receipt.caller_sp!=outcome.caller_sp{return self.fail("normal return completion mismatch");}Ok(receipt)
+   ||receipt.value!=outcome.value||receipt.caller_sp!=outcome.caller_sp||self.machine.owned_context!=Some(receipt.context){return self.fail("normal return completion mismatch");}Ok(receipt)
  }
 }
 impl Drop for NormalReturnSession<'_>{fn drop(&mut self){if self.phase!=NormalReturnPhase::Returned{self.machine.phase=Phase::Blocked;self.registry.block("incomplete original normal return");}}}

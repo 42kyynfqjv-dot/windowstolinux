@@ -14,13 +14,10 @@ fn condition(c: Condition) -> u8 {
     }
 }
 fn address(a: &Address, roles: &BTreeMap<u32, String>) -> Result<String, String> {
-    let role = if a.base.is_none() {
-        format!(
-            "Some({})",
-            roles
-                .get(&a.displacement)
-                .ok_or("CRT emit unbound absolute address role")?
-        )
+    let role = if let Some(role) = roles.get(&a.displacement) {
+        format!("Some({role})")
+    } else if a.base.is_none() {
+        return Err("CRT emit unbound absolute address role".into());
     } else {
         "None".into()
     };
@@ -31,6 +28,23 @@ fn address(a: &Address, roles: &BTreeMap<u32, String>) -> Result<String, String>
         a.scale,
         a.displacement
     ))
+}
+fn lea_address(a: &Address, roles: &BTreeMap<u32, String>) -> String {
+    let role = if a.base.is_none() {
+        roles
+            .get(&a.displacement)
+            .map(|r| format!("Some({r})"))
+            .unwrap_or_else(|| "None".into())
+    } else {
+        "None".into()
+    };
+    format!(
+        "cpu.lea(rt,{:?},{:?},{},{},{role})?",
+        a.base.map(usize::from),
+        a.index.map(usize::from),
+        a.scale,
+        a.displacement
+    )
 }
 fn read(o: &Operand, roles: &BTreeMap<u32, String>) -> Result<String, String> {
     Ok(match o {
@@ -95,19 +109,70 @@ pub(crate) fn emit_graph(
 /// Atomic effects still require an actual `lease`; no dummy lock is introduced.
 pub(crate) fn emit_body(
     graph: &Graph,
-    mut call: impl FnMut(u32, Target) -> Result<String, String>,
+    call: impl FnMut(u32, Target) -> Result<String, String>,
     roles: &BTreeMap<u32, String>,
     step_budget: u32,
 ) -> Result<String, String> {
+    emit_body_with_thread(graph, call, roles, step_budget, |_, _| {
+        Err("CRT emit unbound thread-head effect".into())
+    })
+}
+/// Only a wrapper with a proved typed registry projection may supply this hook.
+/// Original FS effects are never lowered as host pointers or ignored prefixes.
+pub(crate) fn emit_body_with_thread(
+    graph: &Graph,
+    call: impl FnMut(u32, Target) -> Result<String, String>,
+    roles: &BTreeMap<u32, String>,
+    step_budget: u32,
+    thread: impl FnMut(u32, &Op) -> Result<String, String>,
+) -> Result<String, String> {
+    emit_body_with_hooks(
+        graph,
+        call,
+        roles,
+        step_budget,
+        thread,
+        |_, _| Ok(String::new()),
+        |_, _| Ok(None),
+    )
+}
+/// Proof-bound bookkeeping precedes the original instruction; it cannot replace
+/// arbitrary instructions. Only an independently validated special return ABI
+/// may override RET. Ordinary callers retain exact protected-return checks.
+pub(crate) fn emit_body_with_hooks(
+    graph: &Graph,
+    mut call: impl FnMut(u32, Target) -> Result<String, String>,
+    roles: &BTreeMap<u32, String>,
+    step_budget: u32,
+    mut thread: impl FnMut(u32, &Op) -> Result<String, String>,
+    mut before: impl FnMut(u32, &Op) -> Result<String, String>,
+    mut return_hook: impl FnMut(u32, u16) -> Result<Option<String>, String>,
+) -> Result<String, String> {
+    if graph
+        .nodes
+        .values()
+        .flat_map(|n| &n.successors)
+        .any(|target| !graph.nodes.contains_key(target))
+    {
+        return Err("CRT emit unresolved external control edge".into());
+    }
     if step_budget == 0 || step_budget > 4_000_000 {
         return Err("CRT emit instruction bound".into());
     }
     let mut source=format!("let mut pc={}u32;let mut local_steps=0u32;loop{{if local_steps>={step_budget}{{return Err(\"CRT original graph instruction bound\");}}local_steps+=1;cpu.tick(u32::MAX)?;match pc{{",graph.origin);
     for (&pc, node) in &graph.nodes {
-        let mut out = String::new();
+        let mut out = before(pc, &node.op)?;
         let mut controlled = false;
         match &node.op{
  Op::Call(target)=>out.push_str(&call(pc,*target)?),
+ Op::FsRead(_)|Op::FsWrite(_)|Op::FsPush=>out.push_str(&thread(pc,&node.op)?),
+ Op::ReturnPop(bytes)=>{out.push_str(&return_hook(pc,*bytes)?.unwrap_or_else(||format!("return cpu.finish_pop(rt,{bytes});")));controlled=true;},
+ Op::SignDividend=>out.push_str("cpu.sign_dividend()?;"),
+ Op::AddCarry{destination,source:operand}=>out.push_str(&format!("let a={};let b={};let v=cpu.add_carry(a,b)?;{}",read(destination,roles)?,read(operand,roles)?,write(destination,"v",roles)?)),
+ Op::DivideUnsigned(operand)=>out.push_str(&format!("let divisor={};cpu.divide_unsigned(divisor)?;",read(operand,roles)?)),
+ Op::TableJump{index,address:table,targets}=>{
+  out.push_str(&format!("let index=cpu.get({},32,0)?.known_scalar()?;let targets:&[u32]=&{:?};let expected=*targets.get(index as usize).ok_or(\"CRT unproved table index\")?;let table=rt.resolve_absolute({table},CrtRegionKind::Module)?;let word=rt.load(rt.offset(table,i64::from(index)*4)?,32)?.known_scalar()?;if word!=expected{{return Err(\"CRT original jump table changed\");}}pc=word;continue;",index.index,targets));controlled=true;
+ },
  Op::Ordinary(Operation::Binary(op,dst,src))=>{
  let value=if *op==Binary::Move{read(src,roles)?}else if *op==Binary::Xor&&dst==src&&matches!(dst,Operand::Reg(_)){"cpu.zero()".into()}else{out.push_str(&format!("let a={};let b={};",read(dst,roles)?,read(src,roles)?));format!("cpu.binary(rt,{},a,b,{})?",binary(*op),width(dst))};
  out.push_str(&format!("let {}={value};", if matches!(op,Binary::Compare|Binary::Test){"_"}else{"v"}));
@@ -115,17 +180,18 @@ pub(crate) fn emit_body(
  if matches!(dst,Operand::Reg(Reg{index:4,width:32,shift:0}))&&*op==Binary::Add{if let Operand::Immediate(n)=src{out.push_str(&format!("cpu.discard(rt,{n})?;"));}else{return Err("CRT emit dynamic ESP cleanup outside admission".into());}}
  out.push_str(&write(dst,"v",roles)?);}
  },
- Op::Ordinary(Operation::Address(dst,a))=>out.push_str(&format!("let p={};{}",address(a,roles)?,write(&register(*dst),"CrtValue::Pointer(p)",roles)?)),
+ Op::Ordinary(Operation::Address(dst,a))=>out.push_str(&format!("let v={};{}",lea_address(a,roles),write(&register(*dst),"v",roles)?)),
  Op::Ordinary(Operation::Push(o))=>out.push_str(&format!("let v={};cpu.push(rt,v)?;",read(o,roles)?)),
  Op::Ordinary(Operation::Pop(dst))=>out.push_str(&format!("let v=cpu.pop(rt)?;{}",write(&register(*dst),"v",roles)?)),
  Op::Ordinary(Operation::Leave)=>out.push_str("cpu.leave(rt)?;"),
- Op::Ordinary(Operation::Return)=>{out.push_str("return cpu.finish(rt);");controlled=true;},
+ Op::Ordinary(Operation::Return)=>{out.push_str(&return_hook(pc,0)?.unwrap_or_else(||"return cpu.finish(rt);".into()));controlled=true;},
  Op::Ordinary(Operation::Jump(target))=>{out.push_str(&format!("pc={target};continue;"));controlled=true;},
  Op::Ordinary(Operation::Branch(c,target))=>{let next=pc+node.length;out.push_str(&format!("pc=if cpu.condition({})?{{{target}}}else{{{next}}};continue;",condition(*c)));controlled=true;},
  Op::SignedBranch{condition:c,target}=>{let next=pc+node.length;let kind=match c{SignedCondition::Less=>6,SignedCondition::LessEqual=>7,SignedCondition::Greater=>8,SignedCondition::GreaterEqual=>9,SignedCondition::Sign=>10,SignedCondition::NotSign=>11};out.push_str(&format!("pc=if cpu.condition({kind})?{{{target}}}else{{{next}}};continue;"));controlled=true;},
  Op::Ordinary(Operation::Nop)=>{},
  Op::Ordinary(Operation::Increment(r)|Operation::Decrement(r))=>{let kind=if matches!(node.op,Op::Ordinary(Operation::Increment(_))){1}else{2};let o=register(*r);out.push_str(&format!("let carry=cpu.flags.cf;let a={};let v=cpu.binary(rt,{kind},a,CrtValue::scalar(1),{})?;cpu.flags.cf=carry;{}",read(&o,roles)?,r.width,write(&o,"v",roles)?));},
  Op::IncrementMemory(o)=>out.push_str(&format!("let carry=cpu.flags.cf;let a={};let v=cpu.binary(rt,1,a,CrtValue::scalar(1),32)?;cpu.flags.cf=carry;{}",read(o,roles)?,write(o,"v",roles)?)),
+ Op::DecrementMemory(o)=>out.push_str(&format!("let carry=cpu.flags.cf;let a={};let v=cpu.binary(rt,2,a,CrtValue::scalar(1),32)?;cpu.flags.cf=carry;{}",read(o,roles)?,write(o,"v",roles)?)),
  Op::Ordinary(Operation::Negate(r))=>{let o=register(*r);out.push_str(&format!("let a={};let v=cpu.binary(rt,2,CrtValue::scalar(0),a,{})?;{}",read(&o,roles)?,r.width,write(&o,"v",roles)?));},
  Op::Ordinary(Operation::Not(r))=>{let o=register(*r);out.push_str(&format!("let v=CrtValue::scalar(!CrtCpu::number({})?);{}",read(&o,roles)?,write(&o,"v",roles)?));},
  Op::Ordinary(Operation::Shift{left,dst,count})=>{let o=register(*dst);out.push_str(&format!("let a={};let v=cpu.shift(a,{count},{},{})?;{}",read(&o,roles)?,if *left{0}else{1},dst.width,write(&o,"v",roles)?));},

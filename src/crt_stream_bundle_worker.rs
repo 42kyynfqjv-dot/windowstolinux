@@ -195,6 +195,7 @@ fn run_crt_write(data:&[u8],backend:&mut impl CrtBackend)->Result<CrtWriteOutcom
  rt.validate_error_context(context)?;
  let descriptor=rt.map_region(0x50000,56,CrtRegionKind::Descriptor,None)?;
  let handle=rt.bind_descriptor(0,7)?;
+ let descriptor_lease=rt.claim_descriptor_record(1,handle,descriptor)?;
  rt.store(rt.offset(descriptor,24)?,32,CrtValue::Handle(handle))?;
  rt.store(rt.offset(descriptor,40)?,8,CrtValue::scalar(0x81))?;
  rt.store(rt.offset(descriptor,41)?,8,CrtValue::scalar(0))?;
@@ -211,7 +212,7 @@ fn run_crt_write(data:&[u8],backend:&mut impl CrtBackend)->Result<CrtWriteOutcom
  let logical=CrtCpu::number(original_worker_selector(&mut rt,&mut cpu,lease,backend)?)?;
  let fields=[(0x18,32),(0x1c,8),(0x20,32),(0x24,8)];let mut values=[0u32;4];
  for (i,(offset,width)) in fields.into_iter().enumerate(){{values[i]=CrtCpu::number(rt.load(rt.offset(context,offset)?,width)?)?;}}
- rt.unlock(lease)?;Ok(CrtWriteOutcome{{logical,context:values}})
+ rt.unlock_descriptor(descriptor_lease)?;rt.unlock(lease)?;Ok(CrtWriteOutcome{{logical,context:values}})
 }}
 "#,
         max_input = input.max_input,

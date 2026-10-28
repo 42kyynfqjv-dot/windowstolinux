@@ -934,7 +934,7 @@ fn one(which:u8){
  let stack=rt.map_region(0x10000,65536,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,0xf000).unwrap();
  let input=rt.map_region(0x30000,4,CrtRegionKind::Input,if which==1{None}else{Some(b"A\nZ\0")}).unwrap();
  let result=rt.map_region(0x40000,12,CrtRegionKind::Result,None).unwrap();
- let descriptor=rt.map_region(0x50000,56,CrtRegionKind::Descriptor,None).unwrap();let id=rt.bind_descriptor(0,7).unwrap();
+ let descriptor=rt.map_region(0x50000,56,CrtRegionKind::Descriptor,None).unwrap();let id=rt.bind_descriptor(0,7).unwrap();let descriptor_lease=rt.claim_descriptor_record(2,id,descriptor).unwrap();
  rt.store(rt.offset(descriptor,24).unwrap(),32,CrtValue::Handle(id)).unwrap();rt.store(rt.offset(descriptor,40).unwrap(),8,CrtValue::scalar(0x81)).unwrap();rt.store(rt.offset(descriptor,41).unwrap(),8,CrtValue::scalar(0)).unwrap();rt.bind_descriptor_record(lease,id,descriptor).unwrap();
  let table=rt.map_region(0x6000,4,CrtRegionKind::Module,None).unwrap();rt.store(table,32,CrtValue::Pointer(descriptor)).unwrap();
  rt.map_region(0x5000,4,CrtRegionKind::Module,if which==4{None}else{Some(&[1,2,3,4])}).unwrap();
@@ -943,7 +943,7 @@ fn one(which:u8){
  for (i,arg) in [CrtValue::Pointer(resultarg),CrtValue::scalar(0),CrtValue::Pointer(input),CrtValue::scalar(if which==3{258}else{4})].into_iter().enumerate(){rt.store(rt.offset(sp,4+i as i64*4).unwrap(),32,arg).unwrap();}
  if which==5{rt.descriptors[0].live=false;}
  let mut cpu=CrtCpu::new(sp,17).unwrap();let initial=cpu.r;let tags=rt.tags.clone();let outcome=check(&mut rt,&mut cpu,lease);
- assert_eq!(outcome.is_ok(),which==0,"case{which}: {outcome:?}");assert_eq!(cpu.r,initial);assert_eq!(rt.tags,tags);assert_eq!(rt.load(result,32).unwrap(),CrtValue::Scalar{bits:0,known:0});
+ assert_eq!(outcome.is_ok(),which==0,"case{which}: {outcome:?}");assert_eq!(cpu.r,initial);assert_eq!(rt.tags,tags);assert_eq!(rt.load(result,32).unwrap(),CrtValue::Scalar{bits:0,known:0});rt.unlock_descriptor(descriptor_lease).unwrap();rt.unlock(lease).unwrap();
 }
 fn main(){for which in 0..=5{one(which);}}
 "#.replace("PREFLIGHT",&proof.entry_source());
@@ -997,9 +997,9 @@ fn main(){for mode in 0..3{
  let mut rt=CrtStreamRuntime::new(1,2,0x2000,1048576).unwrap();let lease=rt.lock(2).unwrap();let file=rt.file();
  let buffer=rt.alloc_buffer(lease,16,true).unwrap().unwrap();for(i,b)in b"A\nZ".iter().enumerate(){rt.store(rt.offset(buffer,i as i64).unwrap(),8,CrtValue::scalar(u32::from(*b))).unwrap();}
  rt.store(file,32,CrtValue::Pointer(rt.offset(buffer,3).unwrap())).unwrap();rt.store(rt.offset(file,4).unwrap(),32,CrtValue::Pointer(buffer)).unwrap();rt.store(rt.offset(file,8).unwrap(),32,CrtValue::scalar(13)).unwrap();rt.store(rt.offset(file,12).unwrap(),32,CrtValue::scalar(0x46)).unwrap();rt.store(rt.offset(file,16).unwrap(),32,CrtValue::scalar(0)).unwrap();
- let record=rt.map_region(0x50000,56,CrtRegionKind::Descriptor,None).unwrap();let id=rt.bind_descriptor(0,7).unwrap();rt.store(rt.offset(record,24).unwrap(),32,CrtValue::Handle(id)).unwrap();rt.store(rt.offset(record,40).unwrap(),8,CrtValue::scalar(0x81)).unwrap();rt.store(rt.offset(record,41).unwrap(),8,CrtValue::scalar(0)).unwrap();rt.bind_descriptor_record(lease,id,record).unwrap();
+ let record=rt.map_region(0x50000,56,CrtRegionKind::Descriptor,None).unwrap();let id=rt.bind_descriptor(0,7).unwrap();let descriptor_lease=rt.claim_descriptor_record(2,id,record).unwrap();rt.store(rt.offset(record,24).unwrap(),32,CrtValue::Handle(id)).unwrap();rt.store(rt.offset(record,40).unwrap(),8,CrtValue::scalar(0x81)).unwrap();rt.store(rt.offset(record,41).unwrap(),8,CrtValue::scalar(0)).unwrap();rt.bind_descriptor_record(lease,id,record).unwrap();
  let context=rt.map_region(0x60000,40,CrtRegionKind::Context,Some(&[0;40])).unwrap();let stack=rt.map_region(0x10000,4096,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,2048).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(17)).unwrap();rt.store(rt.offset(sp,4).unwrap(),32,CrtValue::Pointer(file)).unwrap();rt.store(rt.offset(sp,8).unwrap(),32,CrtValue::Pointer(context)).unwrap();
- let mut cpu=CrtCpu::new(sp,17).unwrap();let mut backend=Backend{mode,calls:0};let result=original_flush(&mut rt,&mut cpu,lease,&mut backend).unwrap();assert_eq!(result,CrtValue::scalar(if mode==0{0}else{u32::MAX}));assert_eq!(rt.load(rt.offset(file,12).unwrap(),32).unwrap(),CrtValue::scalar(if mode==0{0x44}else{0x56}));assert_eq!(backend.calls,1);assert!(cpu.returned);
+ let mut cpu=CrtCpu::new(sp,17).unwrap();let mut backend=Backend{mode,calls:0};let result=original_flush(&mut rt,&mut cpu,lease,&mut backend).unwrap();assert_eq!(result,CrtValue::scalar(if mode==0{0}else{u32::MAX}));assert_eq!(rt.load(rt.offset(file,12).unwrap(),32).unwrap(),CrtValue::scalar(if mode==0{0x44}else{0x56}));assert_eq!(backend.calls,1);assert!(cpu.returned);rt.unlock_descriptor(descriptor_lease).unwrap();rt.unlock(lease).unwrap();
 }}
 "#;
         let memory = include_str!("guest_memory.rs")

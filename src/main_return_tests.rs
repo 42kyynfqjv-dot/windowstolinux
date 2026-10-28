@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
-fn original_completion() -> main_completion::ProvenCompletion {
+pub(super) fn original_completion() -> main_completion::ProvenCompletion {
     let origin = 0x411000u32;
     let mut code = vec![0xff, 0x75, 0xd0, 0x68]; // PUSH [EBP-48]; PUSH format
     code.extend(0x415000u32.to_le_bytes());
@@ -43,7 +43,7 @@ fn original_completion() -> main_completion::ProvenCompletion {
     .unwrap()
 }
 
-const CASES: &str = r#"
+pub(super) const CASES: &str = r#"
 fn fixture(value:u32)->(Machine,ThreadRegistry,FrameImage<RegistryHead>,OwnedExceptionEvent){
  let mut machine=Machine::new_dispatch_known(vec![FrameSpec{scopes:vec![]}],0,[None;10],Some(23)).unwrap();
  let owner=machine.owner();let binding=machine.binding(0).unwrap();

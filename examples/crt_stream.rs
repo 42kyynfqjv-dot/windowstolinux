@@ -1,8 +1,20 @@
 //! Original CRT instruction components. This is not a whole-PE entry point.
 //! Structural inventory grants no effect, ownership, or emission authority.
 #[allow(dead_code)]
+#[path = "../src/crt_buffer.rs"]
+mod crt_buffer;
+#[allow(dead_code)]
 #[path = "../src/crt_error_map.rs"]
 mod crt_error_map;
+#[allow(dead_code)]
+#[path = "../src/crt_exception_wrapper.rs"]
+mod crt_exception_wrapper;
+#[allow(dead_code)]
+#[path = "../src/crt_formatter.rs"]
+mod crt_formatter;
+#[cfg(test)]
+#[path = "../src/crt_formatter_ir_tests.rs"]
+mod crt_formatter_ir_tests;
 #[allow(dead_code)]
 #[path = "../src/crt_stream_bundle.rs"]
 mod crt_stream_bundle;
