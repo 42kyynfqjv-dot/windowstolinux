@@ -1,0 +1,48 @@
+"""Reproduce the unresolved projection/live-storage boundary; no PE translation."""
+import argparse
+import hashlib
+import json
+from pathlib import Path
+import subprocess
+
+
+def check(source, output):
+    source, output = Path(source), Path(output)
+    output.mkdir(parents=True, exist_ok=True)
+    original = source.read_text()
+    root = Path(__file__).resolve().parents[3]
+    support = (root/'src/frame_memory.rs').read_text().split('r#"', 1)[1].split('"#;', 1)[0]
+    anchor = 'fn runtime(r:&ThreadRegistry)'
+    cut = 'let source=pending.dispatch_source(&rt,&c,e,&b)?;'
+    if original.count(anchor) != 1 or original.count(cut) != 1:
+        raise ValueError('normal native harness boundary changed; review reproduction')
+    probe = '''let mut projection=pending.dispatch_source(&rt,&c,e,&b)?;
+FrameMemory::new(&mut projection,rt.owner,&[])?.write_try_level(-2)?;
+assert_eq!(projection.try_level,-2);
+assert_eq!(rt.load(b.at(&rt,b.layout.level)?,32)?.known_scalar()?,0);
+assert_eq!(pending.dispatch_source(&rt,&c,e,&b)?.try_level,0);
+assert!(e.state().is_err());
+println!("projected=-2 live=0 suspended=true");'''
+    text = original.replace(anchor, support+'\n'+anchor, 1).replace(cut, probe+'\n'+cut, 1)
+    file = output/'projection-probe.rs'
+    file.write_text(text)
+    binary = output/'projection-probe'
+    subprocess.run(['rustc', '--edition=2021', '-Awarnings', str(file), '-o', str(binary)], check=True)
+    result = subprocess.run([str(binary.resolve()), 'pending'], capture_output=True, check=True, timeout=15)
+    if result.stdout.splitlines() != [b'projected=-2 live=0 suspended=true']*2 or result.stderr:
+        raise ValueError('projection boundary expectations differ')
+    report = dict(kind='native unresolved-boundary reproduction; no new translated pairs',
+                  input_source_sha256=hashlib.sha256(original.encode()).hexdigest(),
+                  probe_source_sha256=hashlib.sha256(text.encode()).hexdigest(),
+                  native_cases=2, whole_pe_translation_pairs=0,
+                  finding='projected TryLevel writes do not reach suspended CRT byte storage')
+    (output/'report.json').write_text(json.dumps(report, indent=2)+'\n')
+    print(json.dumps(report))
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('source', type=Path)
+    parser.add_argument('output', type=Path)
+    args = parser.parse_args()
+    check(args.source, args.output)

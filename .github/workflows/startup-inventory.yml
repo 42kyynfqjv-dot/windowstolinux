@@ -255,6 +255,7 @@ jobs:
           path: original-stdio-observation
       - run: cargo test --locked --example crt_stream
       - run: python3 research/process/startup/check_normal_wrapper.py original-unwind original-stdio-observation original-unwind/normal-wrapper-linux --compare original-unwind/normal-wrapper-windows/report.json
+      - run: python3 research/process/startup/check_projection_boundary.py original-unwind/normal-wrapper-linux/normal-wrapper.rs original-unwind/projection-boundary
       - run: python3 research/process/startup/check_stdio.py original-unwind original-stdio-observation original-unwind/stdio-native-linux --compare original-unwind/stdio-native-windows/report.json
       - run: python3 research/process/startup/check_unwind.py original-unwind target/debug/examples/unwind_slice
       - run: python3 research/process/startup/coff_binding.py --test-artifact original-unwind

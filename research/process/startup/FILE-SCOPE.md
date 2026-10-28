@@ -435,3 +435,9 @@ Artifact12828416598 from b245fdf8 PR run40715398388 records both host exit contr
 and all18original launch samples passing. This confirms diagnostic wiring, not a
 root cause or fix for prior intermittent timeouts. Historical artifacts remain
 preserved; no retries, timeout changes or failing samples removed.
+
+Sol review of9c96396a reproduced the projection-versus-live-byte storage gap
+outlined in ENTRY-TO-EXIT.md. The new Linux architecture probe records two native
+cases and zero translation pairs; it protects against assuming FrameMemory
+writes already reach a suspended CRT frame. Existing14normal component tests
+passed (one artifact-only observation ignored). No production support expanded.

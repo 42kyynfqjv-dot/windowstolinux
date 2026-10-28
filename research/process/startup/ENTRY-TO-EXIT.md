@@ -49,3 +49,45 @@ branching into another isolated probe chain. This needs a bounded Astra High
 architecture pass; routine regression and evidence review belongs on Sol.
 
 No current whole-startup, rcedit, ordinary-app or XP/7 support claim follows.
+
+## Concrete storage/ownership bridge found in Sol review
+
+Source review of 9c96396a found that dispatch_emit::emit_control emits writes
+through FrameMemory<FrameImage>; FrameMemory::write_try_level changes only that
+image's map and cursor. CrtNormalException::dispatch_source instead rebuilds a
+fresh image from checked CRT bytes. The two storage paths cannot be directly
+joined and treated as one execution. ThreadRegistry::expected_callback also
+rejects a normal epoch, and Machine::check_raise_binding requires a fresh owned
+event with unknown context, not the finished outer event currently lending the
+epoch. These are concrete adapter obligations, not permission to skip guards.
+
+`check_projection_boundary.py` reproduces the storage mismatch from the emitted
+normal harness, executing two native cases. A projected TryLevel write of -2
+leaves checked live TryLevel0 and suspension intact. This is an architecture
+experiment, not a defect in a currently admitted translation or new Windows pair.
+The existing startup Linux workflow retains its report. Reproduce locally by
+emitting the normal harness with W2L_EH4_EVIDENCE, then passing normal-wrapper.rs
+and an output directory to that script. No foreign PE is executed by this probe.
+
+The next bounded Astra implementation should close these obligations together:
+
+- Add a shared write-through frame interface for original handler/installer/
+  TryLevel/cleanup stores, backed by actual typed CRT storage. Reuse decoded
+  operations and validate exact ordinary/protected ownership and every word
+  range. Read-back must observe each write; callback failures preserve prior writes.
+- Give nested delivery its own event/source/phase and scope cursor, preserving
+  the finished outer event/context and borrowed predecessor. Keep source types
+  distinct; never revive FrameId or clear the epoch guard to impersonate it.
+- Run original prefix/helpers and actual table-driven selection through that
+  interface; bind callback/result/cleanup/restoration authority to the new event.
+  Retain captured-state acquisition as an explicit blocker unless its observable
+  contract is independently closed. Reuse pending token and scalar result checks.
+
+Acceptance must include a real instruction-derived scope store observed in live
+bytes, original callback/cleanup ordering and failure effects, nested/shared
+frames, stale/wrong event aliases, protected-slot and unknown-data rejection,
+and proof/native-emitter agreement. Then connect the same state to the chosen
+unchanged artifact. A supplied callback or a modified projected image cannot
+stand in for that entry-to-exit result. This scope should replace further small
+standalone receipt wrappers; it is a concrete complex integration beyond this
+Sol review. Keep the current PR draft and admission blocked while incomplete.
