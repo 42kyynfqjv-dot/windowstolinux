@@ -94,8 +94,10 @@ impl CrtStreamRuntime {
  /// renew its lifetime. Retired roots remain only as bounded provenance, never
  /// as mappings. Foreign and fabricated tokens cannot enter typed storage.
  fn thread_head(&self,registry:u64,epoch:u64,head:[u64;3])->Result<CrtThreadHead,&'static str>{let token=CrtThreadHead{anchor:self.anchor,thread:self.thread,registry,epoch,head};self.thread_head_transport(token)?;Ok(token)}
+ /// Arena/thread transport check only; the installation binding must also
+ /// validate the actual live registry epoch and head identity.
  fn validate_thread_head(&self,head:CrtThreadHead)->Result<(),&'static str>{self.thread_head_transport(head)}
- fn thread_head_transport(&self,head:CrtThreadHead)->Result<(),&'static str>{if head.anchor!=self.anchor||head.thread!=self.thread||head.registry==0||head.epoch==0{return Err("CRT foreign thread registration token");}Ok(())}
+ fn thread_head_transport(&self,head:CrtThreadHead)->Result<(),&'static str>{if self.closed||head.anchor!=self.anchor||head.thread!=self.thread||head.registry==0||head.epoch==0{return Err("CRT foreign thread registration token");}Ok(())}
  fn pointer_transport(&self,p:CrtPointer)->Result<(),&'static str>{
   let root=self.regions.iter().map(|r|r.pointer).chain(self.retired.iter().copied()).find(|r|r.cap==p.cap).ok_or("CRT foreign/unissued pointer value")?;
   if p.owner!=root.owner||p.kind!=root.kind||p.base<root.base||u64::from(p.base)+u64::from(p.size)>u64::from(root.base)+u64::from(root.size)||p.address<p.base||u64::from(p.address)>u64::from(p.base)+u64::from(p.size){return Err("CRT pointer value provenance");}Ok(())

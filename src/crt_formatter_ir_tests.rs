@@ -299,6 +299,7 @@ let head=rt.thread_head(17,23,[1,2,3]).unwrap();let value=CrtValue::ThreadHead(h
 assert!(CrtCpu::number(value).is_err());assert!(CrtCpu::bits(value).is_err());
 cpu.push(&mut rt,value).unwrap();let before=cpu.r[4];let slot=CrtCpu::pointer(before).unwrap();assert!(rt.store(slot,32,CrtValue::scalar(0)).is_err());assert_eq!(rt.load(slot,32).unwrap(),value);assert!(rt.retire_region(stack).is_err());assert!(cpu.discard(&mut rt,4).is_err());assert_eq!(cpu.r[4],before);assert_eq!(cpu.pop(&mut rt).unwrap(),value);
 let mut other=CrtStreamRuntime::new(1,2,0x4000,65536).unwrap();assert!(other.validate_thread_head(head).is_err());
+rt.unlock(lease).unwrap();let shutdown=rt.begin_shutdown(CrtShutdownReceipt{{anchor:rt.anchor,thread:rt.thread,event:1}}).unwrap();rt.destroy_lock_shutdown(shutdown,rt.file()).unwrap();rt.end_shutdown(shutdown).unwrap();assert!(rt.validate_thread_head(head).is_err());assert!(rt.thread_head(17,23,[1,2,3]).is_err());
 "#
         ),
         "fs-authority",

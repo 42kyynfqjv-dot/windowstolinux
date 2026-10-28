@@ -107,3 +107,28 @@ live thread-chain token. Both now reject, while the explicitly checked POP
 consumes the token. Full formatter exception/registry and exit composition stay
 open. Dedicated CI40686009789 passed for the preceding b94e90ef checkpoint; its
 broader regression runs were still progressing at review time.
+
+## Sol review: transport lifetime and remaining composition
+
+The independent review reproduced acceptance of `validate_thread_head` and
+`thread_head` after the owning CRT runtime's completed shutdown. Both now reject
+closed runtimes; the regression first failed on the published helper checkpoint
+and passes with the correction. This is arena/thread transport lifetime only.
+A matching numeric registry/epoch value still cannot establish a live registry
+registration. The mandatory installation binding must check actual registry
+state. Local CRT80/frame171 tests and all-target Clippy pass after the fix.
+
+The next cohesive implementation should derive the enclosing wrapper's epilog
+plan from original instructions and project the real `CrtStreamRuntime` record
+into `NormalCallEpoch::reserve_eh4`/`install_head`. The bridge must bind the exact
+memory arena, registry identity, epoch, predecessor variant/generation and stack
+capability; compare saved typed values directly before each transition; preserve
+partial unknown scalar bits; and read fresh actual storage rather than accepting
+a fabricated parallel `FrameImage`. Registry snapshots alone lose partial-bit
+information and cannot replace the checked CPU/storage authority. Tests must
+execute original prolog through the installation and original epilog, with stale
+head/epoch, alias, wrong saved slot, bad guard, nested calls and failed-body
+cases. C++ records retain their separate layout/state rules. This connected
+proof/emitter decision warrants bounded Astra High; Sol can handle its subsequent
+regression review and CI verification. Neither callback `Ok` nor the existing
+helper tests provide full wrapper, formatter or startup eligibility.
