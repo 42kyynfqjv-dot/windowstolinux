@@ -441,3 +441,59 @@ words before accepting its full filter-local range. The original Main event code
 is0xe0424242; the independent small adapter fixture uses0xe0420042. Keep those
 input/provenance domains explicit. Substituting offsets, event codes or frame
 kinds to obtain a matching result would invalidate the evidence.
+
+## Sol owned Main storage and unchanged filter execution
+
+CrtOwnedStorage now connects a ProvenFrame's original prolog memory effects to
+checked CRT storage and an actual OwnedFrameBinding/RegistrationId. Initialization
+uses the decoded prolog's final private-store summary with full-range/role checks
+before writes and registry installation at the endpoint; supplied caller CPU/RET
+and initial thread/module state remain component entry premises. Unknown words
+are not zero-initialized. Saved values retain actual typed entry values/known masks.
+No NormalFrameId, normal epoch or finished event is substituted for this owner.
+
+Every view access revalidates Machine event/phase, live registration, complete
+stack lifetime, both immutable guard words, original saved/control words, module
+cookie and unique return. Unexpected protected tags in ordinary storage reject.
+Only prolog-derived ordinary full words are writable. The supplied installed pair
+is a checked input cut: Context roles, full ranges, pointer graph, event code and
+actual owner slot are rechecked; it is not an implementation of OS capture or the
+original Main handler prefix. Selected callback/containment input is also explicit;
+this single-frame component does not prove the original multi-frame search/unwind.
+
+The original Main prolog and actual41byte filter now execute their proved memory/
+filter semantics with actual Main-owned EBP-776/-780 storage and both cookies.
+The unchanged23byte bridge sets owner EBP, executes that filter and returns1 for
+its original0xe0424242 domain. Both temporary writes are read back from live bytes;
+the immutable FrameImage cache remains unknown there and grants no writeback
+permission. The independently sized original Inner frame rejects those offsets.
+Thirteen owned-frame scenarios also cover each guard, stale binding/registration,
+pair corruption, module cookie, foreign arena, ended event, protected-slot writes,
+hidden control aliases and bridge/source-stack overlap. Bridge preflight now
+checks the full original private scratch extent before its first push, for both
+normal and owned sources.
+
+These13native scenarios are separate from the37normal adapter cases, two projection
+controls and five original wrapper comparisons. One new test function is added;
+no new whole-PE Windows/ELF pair is claimed. Next: share the already-connected
+prefix/captured-object interface with this owned source, then actual table-driven
+selection/local-unwind scheduling and validated restoration. Original Main body
+initialization/external effects and full entry-to-exit execution remain open.
+
+CI40737854599(de253f4f PR) failed imported-output Windows hello while all other jobs
+passed. Artifact12837907867 retains PEhash30a0afa2..., stdoutHello, empty stderr,
+process alive at15seconds and killed/reaped afterward. Earlier controls and18launch
+samples passed on that run. No retry, threshold change or solved-cause claim.
+
+The original Main prolog's TryLevel sentinel(-2) is retained in this binding.
+The native filter invocation is an explicit supplied callback entry, not a claim
+that current scope-table dispatch selected an active Main scope. The next path
+must execute the original Main-body activation store and give that specific store
+write-through scope authority before table-driven selection is accepted. It must
+also replace the installed-pair input cut with original owned-source prefix/
+captured-object effects. The cached image cannot grant either transition.
+
+The same de253f4f push run40737845011 also failed original Windows corpus29
+(PEhashd782a279...) after15seconds; all other jobs passed. Artifact12837473505 is
+retained separately from PR hello artifact12837907867. These are two preserved
+failures, not a passing retry or proof of a shared cause.

@@ -462,6 +462,13 @@ struct CrtLiveFrame<'a,'e> {
  state:&'a mut CrtLiveDispatchState,
 }
 impl CrtLiveFrame<'_,'_> {
+ fn preflight_bridge(&self,cpu:&CrtCpu,bytes:u32)->RegistryResult<()>{
+  self.validate()?;let sp=CrtCpu::pointer(cpu.r[4])?;let source=CrtCpu::pointer(self.interrupted.r[4])?;
+  if bytes==0||bytes>256||cpu.returned||cpu.return_id!=self.state.activation||cpu.r[4]!=cpu.entry[4]||sp.cap!=source.cap||sp.address()>=source.address()||self.rt.load(sp,32)?!=CrtValue::ProtectedReturn(cpu.return_id){return Err("normal bridge entry/scratch alias");}
+  let low=self.rt.offset(sp,-i64::from(bytes))?;self.rt.valid(low,bytes)?;self.epoch.registry.range(low.address(),u64::from(sp.address()))?;
+  if self.rt.overlapping_tags(low.address(),bytes).iter().any(|(_,v)|matches!(v,CrtValue::ProtectedReturn(_)|CrtValue::OpaqueSaved(_)|CrtValue::ThreadHead(_))){return Err("normal bridge protected scratch");}Ok(())
+ }
+ fn owner_frame(&self)->RegistryResult<CrtPointer>{self.validate()?;self.binding.at(self.rt,self.binding.layout.bp)}
  fn validate(&self)->RegistryResult<()>{
   if self.state.failed||self.event.delivery!=CrtNormalDelivery::Calling||self.state.depth==0||self.state.depth>32 {
    return Err("live dispatch failed/expired phase");

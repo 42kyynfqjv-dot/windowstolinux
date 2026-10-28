@@ -533,7 +533,7 @@ fn prove(code: &[u8], origin: u32, mode: Mode) -> Result<BridgeProof, String> {
     });
     let filter_native = if matches!(mode, Mode::Filter) {
         (|| -> Result<String,String>{
-        let mut out=String::from("frame.validate()?;if expected.is_empty()||expected.len()>512||target.kind!=CrtRegionKind::Module||cpu.r[1]!=CrtValue::Pointer(target)||cpu.r[2]!=CrtValue::Pointer(frame.binding.at(frame.rt,frame.binding.layout.bp)?){return Err(\"filter bridge target/frame binding\");}frame.rt.valid(target,expected.len() as u32)?;for(i,&byte)in expected.iter().enumerate(){if frame.rt.load(frame.rt.offset(target,i as i64)?,8)?.known_scalar()?!=u32::from(byte){return Err(\"filter bridge target bytes changed\");}}\n");
+        let mut out=String::from("frame.validate()?;if expected.is_empty()||expected.len()>512||target.kind!=CrtRegionKind::Module||cpu.r[1]!=CrtValue::Pointer(target)||cpu.r[2]!=CrtValue::Pointer(frame.owner_frame()?){return Err(\"filter bridge target/frame binding\");}frame.rt.valid(target,expected.len() as u32)?;for(i,&byte)in expected.iter().enumerate(){if frame.rt.load(frame.rt.offset(target,i as i64)?,8)?.known_scalar()?!=u32::from(byte){return Err(\"filter bridge target bytes changed\");}}\n");
         let mut d = Decoder::with_ip(32, code, u64::from(origin), DecoderOptions::NONE);
         while d.can_decode() {
             let i = d.decode();
@@ -561,7 +561,7 @@ fn prove(code: &[u8], origin: u32, mode: Mode) -> Result<BridgeProof, String> {
                 _ => return Err("native filter bridge unproved instruction".into()),
             }
         }
-        Ok(out)
+        Ok(format!("frame.preflight_bridge(cpu,{})?;{out}",state.depth))
        })().ok() // Abstract proofs remain valid when this backend lacks a form.
     } else {
         None

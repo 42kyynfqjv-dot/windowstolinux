@@ -218,3 +218,7 @@ mod handler_checks;
 #[allow(dead_code)]
 #[path = "../src/unwind_bridges.rs"]
 mod unwind_bridges;
+
+#[allow(dead_code)]
+#[path = "../src/crt_owned_frame.rs"]
+mod crt_owned_frame;

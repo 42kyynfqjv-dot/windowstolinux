@@ -34,10 +34,12 @@ println!("projected=-2 live=0 suspended=true");'''
     live = subprocess.run([str(binary.resolve()), 'live'], capture_output=True, check=True, timeout=15)
     if live.stdout or live.stderr:
         raise ValueError('live adapter regression emitted unexpected output')
+    owned=subprocess.run([str(binary.resolve()), 'owned'],capture_output=True,check=True,timeout=15)
+    if owned.stdout or owned.stderr: raise ValueError('owned frame regression unexpected output')
     report = dict(kind='native projection counterexample and live adapter regression; no new translated pairs',
                   input_source_sha256=hashlib.sha256(original.encode()).hexdigest(),
                   probe_source_sha256=hashlib.sha256(text.encode()).hexdigest(),
-                  projection_cases=2, live_adapter_cases=37, whole_pe_translation_pairs=0,
+                  projection_cases=2, live_adapter_cases=37, owned_frame_cases=13, whole_pe_translation_pairs=0,
                   finding='detached projection still has no storage authority; checked live adapter writes through, including nested helper cleanup')
     (output/'report.json').write_text(json.dumps(report, indent=2)+'\n')
     print(json.dumps(report))
