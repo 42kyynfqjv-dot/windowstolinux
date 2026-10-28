@@ -63,6 +63,9 @@ def check(original, observation, out, compare=None):
     (out/'handler-prolog.bin').write_bytes(mapped(image, 0x402210, 6, executable=True))
     (out/'handler-installer.bin').write_bytes(mapped(image, 0x402263, 15, executable=True))
     (out/'event-normalizer.bin').write_bytes(mapped(image, 0x414a1b, 119, executable=True))
+    (out/'original-guard-validator.bin').write_bytes(mapped(image, 0x4021d0, 50, executable=True))
+    (out/'original-security-check.bin').write_bytes(mapped(image, 0x40154c, 14, executable=True))
+    (out/'file-scope-header.bin').write_bytes(mapped(image, 0x41b400, 16))
     # These new native cases execute original outer FILE scope code with an
     # explicitly supplied driver. They are NOT additional Windows comparisons.
     base, _ = pe_sections(image)
@@ -115,6 +118,9 @@ def check(original, observation, out, compare=None):
                   handler_prolog_sha256=sha((out/'handler-prolog.bin').read_bytes()),
                   handler_installer_sha256=sha((out/'handler-installer.bin').read_bytes()),
                   event_normalizer_sha256=sha((out/'event-normalizer.bin').read_bytes()),
+                  guard_validator_sha256=sha((out/'original-guard-validator.bin').read_bytes()),
+                  security_check_sha256=sha((out/'original-security-check.bin').read_bytes()),
+                  scope_header_sha256=sha((out/'file-scope-header.bin').read_bytes()),
                   observation_sha256=sha((observation/'report.json').read_bytes()),
                   vectors_sha256=sha(vector_bytes), rust_sha256=source_hash, command=command,
                   comparisons=5, whole_pe_translation_pairs=0,
@@ -125,7 +131,7 @@ def check(original, observation, out, compare=None):
                   scope='Live registry fixture; body EAX/flags inputs; original stack/FS/saved-state restoration only')
     if compare:
         previous = json.loads(compare.read_text())
-        for key in ['pe_sha256', 'helper_sha256', 'epilog_sha256', 'handler_scope_store_sha256', 'handler_prolog_sha256', 'handler_installer_sha256', 'event_normalizer_sha256', 'observation_sha256', 'vectors_sha256', 'rust_sha256', 'file_scope_code_sha256', 'file_scope_imports']:
+        for key in ['pe_sha256', 'helper_sha256', 'epilog_sha256', 'handler_scope_store_sha256', 'handler_prolog_sha256', 'handler_installer_sha256', 'event_normalizer_sha256', 'guard_validator_sha256', 'security_check_sha256', 'scope_header_sha256', 'observation_sha256', 'vectors_sha256', 'rust_sha256', 'file_scope_code_sha256', 'file_scope_imports']:
             if previous[key] != result[key]:
                 raise ValueError('wrapper cross-host provenance differs: '+key)
         result['matching_windows_native_report'] = str(compare)

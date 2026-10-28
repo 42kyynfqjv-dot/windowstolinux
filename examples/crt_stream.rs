@@ -200,3 +200,13 @@ mod handler_bridge;
 #[allow(dead_code)]
 #[path = "../src/selection.rs"]
 mod selection;
+
+#[allow(dead_code)]
+#[path = "../src/frame_memory.rs"]
+mod frame_memory;
+#[allow(dead_code)]
+#[path = "../src/frame_proof.rs"]
+mod frame_proof;
+#[allow(dead_code)]
+#[path = "../src/handler_guard.rs"]
+mod handler_guard;

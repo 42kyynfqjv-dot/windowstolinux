@@ -11,8 +11,30 @@ pub(crate) struct GuardProof {
     failure_target: u32,
     checked_offsets: Vec<i32>,
     temporary_bytes: u32,
+    #[allow(dead_code)]
+    header: [i32; 4],
 }
 impl GuardProof {
+    #[allow(dead_code)] // CRT backend is not used by all slice examples.
+    pub fn normal_call(&self, name: &str) -> String {
+        let header = self.header;
+        let checks=header.iter().enumerate().map(|(i,n)|format!("if frame.rt.load(frame.rt.offset(table,{})?,32)?.known_scalar()? != {}u32{{return Err(\"live guard header changed\");}}",i*4,*n as u32)).collect::<String>();
+        format!(
+            r#"fn {name}(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,continuation:u32)->RegistryResult<()>{{
+ frame.validate()?;let table=frame.rt.resolve_absolute(frame.binding.layout.scope,CrtRegionKind::Module)?;
+ frame.rt.valid(table,16)?;{checks}
+ let cookie=frame.rt.load(frame.rt.resolve_absolute(frame.binding.layout.cookie_address,CrtRegionKind::Module)?,32)?.known_scalar()?;
+ let sp=CrtCpu::pointer(cpu.r[4])?;let low=frame.rt.offset(sp,-{depth})?;frame.rt.valid(low,{depth})?;
+ frame.epoch.registry.range(low.address(),u64::from(sp.address()))?;
+ if frame.rt.overlapping_tags(low.address(),{depth}).iter().any(|(_,v)|matches!(v,CrtValue::ProtectedReturn(_)|CrtValue::ThreadHead(_)|CrtValue::OpaqueSaved(_))){{return Err("guard temporary protected overlap");}}
+ cpu.push(frame.rt,CrtValue::Pointer(frame.binding.at(frame.rt,frame.binding.layout.bp)?))?;cpu.push(frame.rt,CrtValue::Pointer(table))?;
+ frame.call(cpu,continuation,|f,child|{{let bp=f.binding.at(f.rt,f.binding.layout.bp)?.address();let memory=&CrtGuardView{{owner:f.rt.owner,frame:f,bp}};(||{{{body}}})()?;child.clobber(CrtValue::Scalar{{bits:0,known:0}});child.finish(f.rt)}})?;
+ cpu.discard(frame.rt,8)?;cpu.flags=CrtFlags::unknown();Ok(())
+}}"#,
+            depth = self.temporary_bytes + 12,
+            body = self.body
+        )
+    }
     pub fn body(&self) -> &str {
         &self.body
     }
@@ -242,6 +264,33 @@ pub(crate) fn prove_guard(
     frame: &ProvenFrame,
 ) -> Result<GuardProof, String> {
     frame.validate_eh4_header(header)?;
+    prove_guard_offsets(
+        code,
+        origin,
+        security_code,
+        security_origin,
+        cookie_va,
+        header,
+        frame.guard_offsets(),
+    )
+}
+/// Offsets must be derived from a checked original prolog, not guest input.
+pub(crate) fn prove_guard_offsets(
+    code: &[u8],
+    origin: u32,
+    security_code: &[u8],
+    security_origin: u32,
+    cookie_va: u32,
+    header: [i32; 4],
+    guards: &[i32],
+) -> Result<GuardProof, String> {
+    if header[1] != 0
+        || header[3] != 0
+        || !guards.contains(&header[2])
+        || (header[0] != -2 && !guards.contains(&header[0]))
+    {
+        return Err("guard header/prolog layout disagreement".into());
+    }
     let failure_target = security_failure(security_code, security_origin, cookie_va)?;
     let nodes = decode(code, origin)?;
     let end = origin + code.len() as u32;
@@ -282,7 +331,7 @@ pub(crate) fn prove_guard(
         ]),
         sp: 0,
         header,
-        guards: frame.guard_offsets(),
+        guards,
         equal: None,
         checked: Vec::new(),
     };
@@ -416,6 +465,7 @@ pub(crate) fn prove_guard(
         failure_target,
         checked_offsets: state.checked,
         temporary_bytes,
+        header,
     })
 }
 

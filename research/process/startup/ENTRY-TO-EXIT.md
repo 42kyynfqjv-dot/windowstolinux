@@ -300,3 +300,37 @@ that header/call binding. This can be attempted on Sol. The original prefix call
 stores/register setup and actual target filter bytes also remain to be connected.
 Table-driven temporary registrations and selected normal-source restoration are
 still unproved; no result/level/normalizer summary authorizes resumption.
+
+## Sol connection: original readonly guard proof at the live call boundary
+
+The unchanged guard validator (VA0x4021d0,50bytes), security checker
+(VA0x40154c,14bytes) and FILE scope header (VA0x41b400,16bytes) are now extracted
+and hashed with the other component regions. GuardProof can consume guard offsets
+derived from the already-proved CRT prolog layout. Its original ProvenFrame entry
+still delegates through the same checks; the CRT path cannot invent a guest offset.
+The header is stored inside the resulting proof so an emitter cannot supply a
+different header after proving it.
+
+The emitted call validates the complete live module header against that proof,
+reads the initialized cookie and checks the original guard predicates through a
+readonly view of actual CRT guard bytes. It preflights temporary stack ownership,
+executes a protected call with the original table/frame arguments, then performs
+caller cleanup and volatile-register/flag invalidation. As with the existing
+GuardProof backend, private helper instructions are summarized by the decoded
+proof; mismatching guards are excluded from the admitted entry domain. This is
+not emulation of the helper's fail-fast target.
+
+The connected native case now runs normalizer, readonly guard call, installed
+pair, decoded filter and cleanup. Mutated/unknown headers and a corrupted live
+guard reject; valid header/guard calls succeed after restoring the test mutation.
+These strengthen the existing30scenarios. CRT test count includes nine inherited
+frame_proof/frame_memory/handler_guard tests newly imported, not nine new Windows
+comparisons. Existing five wrapper observations remain distinct component evidence.
+
+Still missing: original prefix caller instructions/register setup and target
+filter bridge, complete scope search/local-unwind scheduling, temporary-registration
+and exceptional/collided effects, selected normal-source restoration and actual
+entry-to-exit execution. The checks do not authorize clearing suspension, reviving
+the outer Machine or assuming captured context. Routine prefix caller lifting can
+continue on Sol; exceptional registration/restoration requires a concrete reviewed
+contract when reached. Full startup/rcedit remains rejected.

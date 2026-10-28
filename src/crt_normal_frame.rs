@@ -100,6 +100,31 @@ pub(crate) fn emit_handler_prolog(bytes: &[u8], origin: u32) -> Result<String, S
  cpu.push(frame.rt,cpu.r[5])?;cpu.r[5]=cpu.r[4];cpu.r[4]=CrtValue::Pointer(low);cpu.flags=CrtFlags::unknown();Ok(())
 }"#.into())
 }
+impl super::PrologProof {
+    pub(crate) fn guard_proof(
+        &self,
+        code: &[u8],
+        origin: u32,
+        security: &[u8],
+        security_origin: u32,
+        header: [i32; 4],
+    ) -> Result<crate::handler_guard::GuardProof, String> {
+        let offset = self
+            .layout
+            .guard
+            .checked_sub(self.layout.frame_pointer)
+            .ok_or("guard prolog offset")?;
+        crate::handler_guard::prove_guard_offsets(
+            code,
+            origin,
+            security,
+            security_origin,
+            self.cookie_address,
+            header,
+            &[offset],
+        )
+    }
+}
 pub(crate) const EMITTED_TYPES: &str = r#"
 #[derive(Clone,Debug,PartialEq,Eq)]
 struct CrtNormalLayout {
@@ -600,4 +625,14 @@ impl CrtHandlerPair {
  }
 }
 
+struct CrtGuardView<'a,'b,'e>{owner:u64,frame:&'a CrtLiveFrame<'b,'e>,bp:u32}
+impl CrtGuardView<'_,'_,'_>{
+ fn frame_pointer(&self)->u32{self.bp}
+ fn read_guard(&self,offset:i32)->RegistryResult<(u32,u32,u32)>{
+  self.frame.validate()?;let b=self.frame.binding;
+  if b.layout.bp.checked_add(offset)!=Some(b.layout.guard){return Err("live guard offset provenance");}
+  let bits=self.frame.rt.load(b.at(self.frame.rt,b.layout.guard)?,32)?.known_scalar()?;
+  Ok((b.at(self.frame.rt,b.layout.bp)?.address(),b.cookie,bits))
+ }
+}
 "#;

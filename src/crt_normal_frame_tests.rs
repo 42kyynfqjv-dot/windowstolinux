@@ -324,6 +324,14 @@ fn live_dispatch(){
       assert_eq!(original_normalizer_call(view,h,&objects,0x40222e)?,CrtValue::scalar(0xe0420042));
       assert!(h.r[1].known_scalar().is_err());assert!(h.r[2].known_scalar().is_err());assert_eq!(h.flags.zf,None);
      }
+     let table=view.rt.map_region(0x41b400,16,CrtRegionKind::Module,Some(&original_scope_header().into_iter().flat_map(i32::to_le_bytes).collect::<Vec<_>>()))?;
+     original_guard_call(view,h,0x402249)?;
+     let table_word=view.rt.offset(table,8)?;let before=h.r;view.rt.store(table_word,32,CrtValue::scalar((-40i32)as u32))?;
+     assert!(original_guard_call(view,h,0x402249).is_err());assert_eq!(h.r,before);view.rt.store(table_word,32,CrtValue::scalar((-44i32)as u32))?;
+     view.rt.store(table_word,32,CrtValue::Scalar{bits:0,known:0})?;assert!(original_guard_call(view,h,0x402249).is_err());view.rt.store(table_word,32,CrtValue::scalar((-44i32)as u32))?;
+     let guard_word=b.at(view.rt,b.layout.guard)?;let guard_value=view.rt.load(guard_word,32)?;view.rt.store(guard_word,32,CrtValue::scalar(0))?;
+     assert!(original_guard_call(view,h,0x402249).is_err());view.rt.store(guard_word,32,guard_value)?;
+     original_guard_call(view,h,0x402249)?;
      h.r[0]=CrtValue::Pointer(record);h.r[3]=CrtValue::Pointer(b.at(view.rt,b.layout.record)?);
      live_install(&mut pair,view,h)?;let(actual_record,actual_context)=pair.read(view,h)?;
      assert_eq!(view.rt.load(actual_record,32)?.known_scalar()?,0xe0420042);
@@ -603,9 +611,16 @@ fn run(case: &str) {
         assert!(crate::selection::prove_code_identity(&normalizer,0x414a1b,&std::collections::BTreeSet::from([0x41ccb8]),0xc00002b4).is_err());
         assert!(crate::selection::prove_code_identity(&normalizer,0x414a1b,&std::collections::BTreeSet::new(),0xe0420042).is_err());
         let normalizer_source=crate::selection::prove_code_identity(&normalizer,0x414a1b,&std::collections::BTreeSet::from([0x41ccb8]),0xe0420042).unwrap().normal_call("original_normalizer_call");
+        let guard=handler_bytes("original-guard-validator.bin","558bec568b7508578b7d0c8b0683f8fe740d8b4e0403cf330c38e85df3ffff8b46088b4e0c03cf330c385f5e5de94af3ffff");
+        let security=handler_bytes("original-security-check.bin","3b0d00c041007501c3e97c020000");
+        let header_bytes=handler_bytes("file-scope-header.bin","feffffff00000000d4ffffff00000000");
+        let header:[i32;4]=header_bytes.chunks_exact(4).map(|c|i32::from_le_bytes(c.try_into().unwrap())).collect::<Vec<_>>().try_into().unwrap();
+        let header_source=format!("fn original_scope_header()->[i32;4]{{{:?}}}",header);
+        let guard_source=p.guard_proof(&guard,0x4021d0,&security,0x40154c,header).unwrap().normal_call("original_guard_call");
+        assert!(p.guard_proof(&guard,0x4021d0,&security,0x40154c,[-2,0,-40,0]).is_err());
         let context_types=crate::handler_context::EMITTED_TYPES;
         let context_check=context_proof.normal_object_check();
-        let source = format!("#![allow(dead_code)]\nmod guest_memory{{{memory}}}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{fixture}\n{file_scope}\n{context_types}\n{context_check}\n{scope_store}\n{permuted_store}\n{install}\n{handler_prolog}\n{filter_source}\n{false_filter_source}\n{normalizer_source}\nfn raise_site()->CrtNormalRaiseSite{{{{{raise}}}}}\n{CASES}",
+        let source = format!("#![allow(dead_code)]\nmod guest_memory{{{memory}}}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{fixture}\n{file_scope}\n{context_types}\n{context_check}\n{scope_store}\n{permuted_store}\n{install}\n{handler_prolog}\n{filter_source}\n{false_filter_source}\n{normalizer_source}\n{guard_source}\n{header_source}\nfn raise_site()->CrtNormalRaiseSite{{{{{raise}}}}}\n{CASES}",
             include_str!("linker/unwind_runtime.rs").replace("//!", "//"),
             emitted_literal(include_str!("frame_proof.rs")),emitted_literal(include_str!("thread_registry.rs")),
             crate::crt_stream_runtime::EMITTED_TYPES,crate::crt_stream_cpu::EMITTED_TYPES,
