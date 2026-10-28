@@ -1,6 +1,12 @@
 # Cohesive handler execution milestone — SUB-579 / same PR45
 
-Latest integrated boundary: [original dispatcher and owned FS composition](DISPATCH-COMPOSITION.md).
+Current integration: [owned software exception event](RAISED-EVENT.md) derives the
+event from the original imported call, reserves checked scratch, and keeps the
+exception-captured context opaque. It composes original dispatch, cleanup and
+restoration under the explicit closed-delivery domain; full startup remains
+rejected. Component execution evidence is reported separately from PE admission.
+
+Previous integrated boundary: [original dispatcher and owned FS composition](DISPATCH-COMPOSITION.md).
 It adds instruction-derived handler/local-unwind effects under an explicit closed
 callback and opaque incoming-chain boundary; full startup remains rejected.
 

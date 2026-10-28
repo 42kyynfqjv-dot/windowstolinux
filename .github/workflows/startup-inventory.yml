@@ -158,6 +158,11 @@ jobs:
         run: |
           python research/process/startup/check_dispatched.py "$env:RUNNER_TEMP/unwind-slice" target/debug/examples/frame_unwind.exe --output "$env:RUNNER_TEMP/unwind-slice/dispatched-native-windows"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Check original software-exception invocation on Windows
+        shell: pwsh
+        run: |
+          python research/process/startup/check_raised.py "$env:RUNNER_TEMP/unwind-slice" target/debug/examples/frame_unwind.exe --output "$env:RUNNER_TEMP/unwind-slice/raised-native-windows"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -223,6 +228,8 @@ jobs:
       - run: python3 research/process/startup/check_connected.py --selftest
       - run: python3 research/process/startup/check_connected.py original-unwind target/debug/examples/frame_unwind --output original-unwind/connected-native-linux --require-windows-component
       - run: python3 research/process/startup/check_dispatched.py original-unwind target/debug/examples/frame_unwind --output original-unwind/dispatched-native-linux --require-windows-component
+      - run: python3 research/process/startup/check_raised.py --selftest
+      - run: python3 research/process/startup/check_raised.py original-unwind target/debug/examples/frame_unwind --output original-unwind/raised-native-linux --require-windows-component
       - run: python3 research/process/startup/check_unwind_variants.py target/debug/examples/unwind_slice --output original-unwind/independent-vectors
       - run: python3 research/process/startup/check_dispatch_variants.py target/debug/examples/unwind_slice --output original-unwind/dispatch-vectors
       - uses: actions/upload-artifact@v4

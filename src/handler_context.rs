@@ -17,6 +17,7 @@ use std::collections::{BTreeMap, BTreeSet};
 /// value. The value stored in a PE file is not the live selector value.
 pub(crate) struct ContextCheckProof {
     body: String,
+    projection_body: String,
     selector_va: u32,
     bypass_selector: u32,
     temporary_bytes: u32,
@@ -26,6 +27,14 @@ impl ContextCheckProof {
     /// -> Result<(), &'static str>`. Include EMITTED_TYPES in the same module.
     pub(crate) fn body(&self) -> &str {
         &self.body
+    }
+    /// The same decoded decision over an event-owned opaque captured context.
+    /// `self` must provide preflight(owner), captured_below_limit(owner) and
+    /// captured_at_most_base(owner), each fallible. No raw ESP, EIP or general
+    /// register value is manufactured by this lowering. The event capability
+    /// supplies only the explicitly admitted same-thread valid-stack domain.
+    pub(crate) fn projection_body(&self) -> &str {
+        &self.projection_body
     }
     pub(crate) fn selector_va(&self) -> u32 {
         self.selector_va
@@ -112,8 +121,13 @@ enum Decision {
     FailFast13,
     Branch(Predicate, Box<Decision>, Box<Decision>),
 }
+#[derive(Clone, Copy)]
+enum ContextAccess {
+    Numeric,
+    OpaqueProjection,
+}
 impl Decision {
-    fn source(&self) -> String {
+    fn source(&self, access: ContextAccess) -> String {
         match self {
             Self::Return => "Ok(())".into(),
             Self::FailFast13 => {
@@ -122,13 +136,23 @@ impl Decision {
             Self::Branch(predicate, yes, no) => {
                 let predicate = match predicate {
                     Predicate::SelectorEquals(value) => format!("selector=={value}u32"),
-                    Predicate::EspBelowLimit => "self.captured_esp<self.limit".into(),
-                    Predicate::EspAtMostBase => "self.captured_esp<=self.base".into(),
+                    Predicate::EspBelowLimit => match access {
+                        ContextAccess::Numeric => "self.captured_esp<self.limit".into(),
+                        ContextAccess::OpaqueProjection => {
+                            "self.captured_below_limit(owner)?".into()
+                        }
+                    },
+                    Predicate::EspAtMostBase => match access {
+                        ContextAccess::Numeric => "self.captured_esp<=self.base".into(),
+                        ContextAccess::OpaqueProjection => {
+                            "self.captured_at_most_base(owner)?".into()
+                        }
+                    },
                 };
                 format!(
                     "if {predicate} {{ {} }} else {{ {} }}",
-                    yes.source(),
-                    no.source()
+                    yes.source(access),
+                    no.source(access)
                 )
             }
         }
@@ -435,7 +459,14 @@ pub(crate) fn prove_context_check(
         return Err("context helper: changed selector/bounds/failure decision".into());
     }
     Ok(ContextCheckProof {
-        body: format!("self.preflight(owner)?;\n{}\n", decision.source()),
+        body: format!(
+            "self.preflight(owner)?;\n{}\n",
+            decision.source(ContextAccess::Numeric)
+        ),
+        projection_body: format!(
+            "self.preflight(owner)?;\n{}\n",
+            decision.source(ContextAccess::OpaqueProjection)
+        ),
         selector_va,
         bypass_selector: *bypass,
         temporary_bytes: proof.temporary_bytes,
@@ -630,5 +661,98 @@ fn main(){{
             .unwrap()
             .success());
         std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn opaque_projection_preserves_predicate_order_and_owner_preflight() {
+        let proof = prove_context_check(&code(), ORIGIN, SELECTOR).unwrap();
+        let body = proof.projection_body();
+        assert!(body.contains("selector==4201465u32"));
+        assert!(!body.contains("captured_esp"));
+        assert!(!body.contains("self.limit"));
+        assert!(!body.contains("self.base"));
+        // This deliberately adversarial test provider can return all four
+        // predicate combinations. It is not the production capability, whose
+        // constructor narrows admission to a live same-thread valid stack.
+        // Independent expected truth values and access order catch accidental
+        // constant folding, reversed edges and selector bypass of preflight.
+        let source = format!(
+            r#"
+struct Opaque {{owner:u64,live:bool,below:bool,at_most:bool,fail_query:bool,reads:std::cell::RefCell<Vec<u8>>}}
+impl Opaque {{
+ fn preflight(&self,owner:u64)->Result<(),&'static str>{{
+  self.reads.borrow_mut().push(0);
+  if !self.live||owner==0||owner!=self.owner{{Err("identity")}}else{{Ok(())}}
+ }}
+ fn captured_below_limit(&self,_owner:u64)->Result<bool,&'static str>{{
+  self.reads.borrow_mut().push(1);if self.fail_query{{Err("query")}}else{{Ok(self.below)}}
+ }}
+ fn captured_at_most_base(&self,_owner:u64)->Result<bool,&'static str>{{
+  self.reads.borrow_mut().push(2);if self.fail_query{{Err("query")}}else{{Ok(self.at_most)}}
+ }}
+ fn check(&self,owner:u64,selector:u32)->Result<(),&'static str>{{{body}}}
+}}
+fn main(){{
+ for (below,at_most,accepted,reads) in [
+  (false,true,true,vec![0,1,2]),(false,false,false,vec![0,1,2]),
+  (true,true,false,vec![0,1]),(true,false,false,vec![0,1])
+ ] {{
+  for selector in [0u32,0x401bf8,0x401bfa,u32::MAX] {{
+   let p=Opaque{{owner:7,live:true,below,at_most,fail_query:false,reads:Default::default()}};
+   assert_eq!(p.check(7,selector).is_ok(),accepted);assert_eq!(*p.reads.borrow(),reads);
+  }}
+  let p=Opaque{{owner:7,live:true,below,at_most,fail_query:false,reads:Default::default()}};
+  assert_eq!(p.check(7,0x401bf9),Ok(()));assert_eq!(*p.reads.borrow(),vec![0]);
+ }}
+ for (owner,live) in [(0,true),(8,true),(7,false)] {{
+  for selector in [0u32,0x401bf9] {{
+   let p=Opaque{{owner:7,live,below:false,at_most:true,fail_query:false,reads:Default::default()}};
+   assert_eq!(p.check(owner,selector),Err("identity"));assert_eq!(*p.reads.borrow(),vec![0]);
+  }}
+ }}
+ let p=Opaque{{owner:7,live:true,below:false,at_most:true,fail_query:true,reads:Default::default()}};
+ assert_eq!(p.check(7,0),Err("query"));assert_eq!(*p.reads.borrow(),vec![0,1]);
+}}
+"#
+        );
+        let directory = std::env::temp_dir().join(format!(
+            "w2l-context-opaque-projection-{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&directory).unwrap();
+        let file = directory.join("run.rs");
+        let binary = directory.join(if cfg!(windows) { "run.exe" } else { "run" });
+        std::fs::write(&file, source).unwrap();
+        let result = std::process::Command::new("rustc")
+            .arg("--edition=2021")
+            .arg(&file)
+            .arg("-o")
+            .arg(&binary)
+            .output()
+            .unwrap();
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn opaque_projection_cannot_admit_other_captured_context_fields() {
+        for offset in [0u32, 0xac, 0xb0, 0xb8, 0xc0] {
+            let mut bytes = code();
+            // Original MOV EAX,[EAX+0xc4] is the captured ESP load. ContextFlags,
+            // ECX, EAX, EIP and EFlags are not observations of the projection.
+            bytes[27..31].copy_from_slice(&offset.to_le_bytes());
+            assert!(
+                prove_context_check(&bytes, ORIGIN, SELECTOR).is_err(),
+                "unexpected captured field {offset:#x}"
+            );
+        }
     }
 }

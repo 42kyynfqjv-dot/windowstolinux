@@ -47,6 +47,7 @@ fn run() -> Result<(), String> {
     let (mut cookie, mut handler, mut trace, mut feature, mut event) =
         (None, None, None, None, None);
     let mut raise_exception_iat = None;
+    let mut raised = None;
     let mut calls = Vec::new();
     let (mut initializer, mut fill_helper, mut selected_landing) = (None, None, None);
     let (mut fill_features, mut module_iat, mut module_base) = (None, None, None);
@@ -91,6 +92,7 @@ fn run() -> Result<(), String> {
         let parts: Vec<_> = line.split_whitespace().collect();
         match parts.as_slice() {
             [] => {}
+            ["raised-event"] => set(&mut raised, true)?,
             ["cookie", value] => set(&mut cookie, number(value)?)?,
             ["handler", value] => set(&mut handler, number(value)?)?,
             ["trace", value] => set(&mut trace, number(value)?)?,
@@ -221,12 +223,20 @@ fn run() -> Result<(), String> {
             context_selector: context_selector.ok_or("missing context selector")?,
         };
         if let Some(dispatch) = dispatch {
-            unwind::frame_unwind::prove_dispatched(&input, &connected, &dispatch)?
+            if raised.is_some() {
+                unwind::frame_unwind::prove_raised(&input, &connected, &dispatch)?
+            } else {
+                unwind::frame_unwind::prove_dispatched(&input, &connected, &dispatch)?
+            }
         } else {
+            if raised.is_some() {
+                return Err("raised event requires original dispatcher composition".into());
+            }
             unwind::frame_unwind::prove_connected(&input, &connected)?
         }
     } else {
-        if dispatch.is_some()
+        if raised.is_some()
+            || dispatch.is_some()
             || fill_helper.is_some()
             || fill_features.is_some()
             || module_iat.is_some()

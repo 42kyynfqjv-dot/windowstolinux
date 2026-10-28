@@ -114,11 +114,11 @@ fn ranges(input: &Input) -> Result<Vec<(u32, u32)>, String> {
 /// Original code derives those values. A noncontiguous activation is retained
 /// as a cut and cannot be promoted to a continuous original-entry certificate.
 pub fn prove_fragments(input: &Input) -> Result<Proven, String> {
-    prove_composition(input, None, None)
+    prove_composition(input, None, None, false)
 }
 
 pub fn prove_connected(input: &Input, connected: &Connected) -> Result<Proven, String> {
-    prove_composition(input, Some(connected), None)
+    prove_composition(input, Some(connected), None, false)
 }
 
 pub use super::dispatch_contract::Dispatch;
@@ -129,13 +129,26 @@ pub fn prove_dispatched(
     connected: &Connected,
     dispatch: &Dispatch,
 ) -> Result<Proven, String> {
-    prove_composition(input, Some(connected), Some(dispatch))
+    prove_composition(input, Some(connected), Some(dispatch), false)
+}
+
+/// Execute the original software-exception call in a closed, same-thread
+/// delivery domain. Captured Windows registers remain opaque; the original
+/// selected landing constructs a distinct restoration context. This is an
+/// invocation component, not authority to skip process startup or admit a PE.
+pub fn prove_raised(
+    input: &Input,
+    connected: &Connected,
+    dispatch: &Dispatch,
+) -> Result<Proven, String> {
+    prove_composition(input, Some(connected), Some(dispatch), true)
 }
 
 fn prove_composition(
     input: &Input,
     connected: Option<&Connected>,
     dispatch_input: Option<&Dispatch>,
+    raised: bool,
 ) -> Result<Proven, String> {
     if input.frames.is_empty()
         || input.frames.len() > 8
@@ -301,7 +314,9 @@ fn prove_composition(
         })
         .transpose()?;
     if let Some(context) = &context_proof {
-        functions.push_str(&format!("impl ThreadContext{{fn check(&self,owner:u64,selector:u32)->Result<(),&'static str>{{ {} }} }}\n",context.body()));
+        if !raised {
+            functions.push_str(&format!("impl ThreadContext{{fn check(&self,owner:u64,selector:u32)->Result<(),&'static str>{{ {} }} }}\n",context.body()));
+        }
         evidence.push(format!("// Context selector at {:#x} remains runtime unknown; bypass value {:#x}, original failure INT29 code {} excluded by same-thread valid-context entry boundary.",context.selector_va(),context.bypass_selector(),context.failure_code()));
         let call = prefix_proof
             .as_ref()
@@ -566,6 +581,18 @@ fn prove_composition(
         })
         .collect();
     let selected = selection::select_frames(&selection_inputs, &filters, input.event_code)?;
+    let raise_call = if raised {
+        let call = input.calls.last().ok_or("raised missing original call")?;
+        Some(super::raise_call::prove_call(
+            frames.last().ok_or("raised missing original frame")?,
+            &call.bytes,
+            call.va,
+            input.raise_exception_iat,
+            input.event_code,
+        )?)
+    } else {
+        None
+    };
     let dispatch_bundle = dispatch_input
         .map(|d| {
             super::dispatch_contract::prove_bundle(
@@ -677,13 +704,20 @@ fn prove_composition(
         } else {
             format!("if filter_{index}(code,&mut temporaries)?!={} {{return Err(\"filter runtime/proof disagreement\");}}",step.proof.result())
         };
+        // Only the event-owned opaque identity is shared between handlers in
+        // raised mode. Guest CALL registers are not a captured Windows CONTEXT.
+        let context_value = if raised {
+            "raised_event.identity()"
+        } else {
+            "current"
+        };
         let snippet = format!(
             r#"
 {{
  let image=&mut images[{frame}];
  let bp=i32::try_from(i64::from(image.ebp)-i64::from(image.entry_sp)).map_err(|_|"filter frame base")?;
  if !matches!(image.words.get(&(bp-20)),Some(FrameWord::Unknown|FrameWord::Scalar(_))) {{return Err("filter owner slot");}}
- let mut bridge=BridgeMemory::new((owner,{frame}usize,event_code),(owner,{frame}usize,current),std::collections::BTreeMap::from([(-28,BridgeWord::Vacant),(-24,BridgeWord::Vacant)]),std::collections::BTreeMap::from([(-20,BridgeWord::Vacant)]))?;
+ let mut bridge=BridgeMemory::new((owner,{frame}usize,event_code),(owner,{frame}usize,{context_value}),std::collections::BTreeMap::from([(-28,BridgeWord::Vacant),(-24,BridgeWord::Vacant)]),std::collections::BTreeMap::from([(-20,BridgeWord::Vacant)]))?;
  let identity=bridge.identity();
  let pair=install_{index}(&mut bridge)?;
  let &(event_owner,event_frame,code)=pair.record(identity)?;
@@ -891,7 +925,7 @@ fn prove_composition(
     let event = input.event_code;
     let global_count = input.globals.len();
     let bound_ranges = format!("{bound_ranges:?}");
-    let evidence = evidence.join("\n");
+    let mut evidence = evidence.join("\n");
     if let Some(landing) = &landing_proof {
         if landing.target != input.target.va {
             return Err("connected original transfer target mismatch".into());
@@ -923,17 +957,23 @@ fn prove_composition(
         }
         let mut support = String::new();
         let mut setup = String::new();
-        let run_name = if dispatch_input.is_some() {
+        let run_name = if raised {
+            "run_raised"
+        } else if dispatch_input.is_some() {
             "run_dispatched"
         } else {
             "run_connected"
         };
-        let composition_boundary = if dispatch_input.is_some() {
+        let composition_boundary = if raised {
+            "The original software-exception CALL supplies this event. Closed same-thread delivery with valid captured stack and no debugger/vectored interception is an explicit domain, not established startup. Captured registers remain unknown. Original selected handler, cleanup and restoration execute; unsupported delivery outcomes reject before emission. Not whole-PE admission."
+        } else if dispatch_input.is_some() {
             "Original handler routing, local FS effects, helper bridges, cleanup and restoration execute. Windows delivery and the closed RtlUnwind external contract remain boundaries; arbitrary nested/collided dispatch and the later Main/CRT epilog are not admitted."
         } else {
             "Connected original initialization and selected landing; Windows delivery, handler search/RtlUnwind and thread-registration teardown remain explicit cuts."
         };
-        let lifecycle = if dispatch_input.is_some() {
+        let lifecycle = if raised {
+            "new_dispatch_known"
+        } else if dispatch_input.is_some() {
             "new_dispatch"
         } else {
             "new_owned"
@@ -988,6 +1028,48 @@ fn prove_composition(
 "#
             )
         };
+        let signature = if raised {
+            "entry_sp:u32,cookie:u32,feature:i32,initial_trace:u32,thread_limit:u32,thread_base:u32,selector:u32"
+        } else {
+            "entry_sp:u32,cookie:u32,current:[u32;10],feature:i32,initial_trace:u32,thread_limit:u32,thread_base:u32,selector:u32,handler_sp:u32"
+        };
+        let flags_check = if raised {
+            ""
+        } else {
+            "if current[9]&!0x8d5!=0x202 {return Err(\"connected current flags boundary\");}"
+        };
+        let machine_context = if raised { "[None;10]" } else { "current" };
+        let context_setup = if raised {
+            ""
+        } else {
+            "let thread_context=ThreadContext::new(owner,thread_limit,thread_base,current[4])?;"
+        };
+        let mut event_support = String::new();
+        let invocation_setup = if let Some(call) = &raise_call {
+            event_support.push_str(super::exception_event::EMITTED_TYPES);
+            // The helper's second lowering consumes only the proven same-thread
+            // bounds capability, never a made-up numeric captured ESP.
+            functions.push_str(&format!("impl CapturedContext{{fn check(&self,owner:u64,selector:u32)->Result<(),&'static str>{{ {} }} }}\n",context_proof.as_ref().ok_or("raised context proof")?.projection_body()));
+            evidence.push_str(&format!("\n// Original RaiseException CALL {:#x}, protected continuation {:#x}, IAT {:#x}, argument cells {:?}; guest registers {:?}, known flags {:?}. No Windows CONTEXT equality asserted.",call.call_pc(),call.next_pc(),call.iat(),call.arguments(),call.registers(),call.known_flags()));
+            format!("let raising_frame=images.len().checked_sub(1).ok_or(\"raised empty frames\")?;let mut raised_event=OwnedExceptionEvent::from_raise(&mut machine,&registry,bindings[raising_frame],&images[raising_frame],RaiseSite{{instruction:{},return_ip:{},iat:{},code:{},caller_sp_offset:{},callee_sp_offset:{}}},{handler_temporary_bytes})?;let handler_sp=raised_event.handler_sp();let thread_context=raised_event.captured_context();",call.call_pc(),call.next_pc(),call.iat(),call.event_code(),call.caller_sp_offset(),call.callee_sp_offset())
+        } else {
+            String::new()
+        };
+        let event_value = if raised {
+            "raised_event.code()".to_string()
+        } else {
+            format!("{event}u32")
+        };
+        let finish_event = if raised {
+            "raised_event.finish(&machine,&registry)?;"
+        } else {
+            ""
+        };
+        let transfer_event = if raised {
+            "raised_event.begin_restoration(&machine,&registry)?;"
+        } else {
+            ""
+        };
         let source = format!(
             r#"
 {evidence}
@@ -1001,6 +1083,7 @@ mod composed {{
 {context_types}
 {bridge_types}
 {support}
+{event_support}
 {functions}
 #[derive(Clone,Debug,PartialEq,Eq)]
 enum Predecessor {{Borrowed{{owner:u64}},Frame{{owner:u64,index:usize}}}}
@@ -1010,25 +1093,27 @@ fn validate_frame_extent(low:u32,entry_sp:u32,bound:&[(u32,u32)],stacks:&[(u64,u
 }}
 #[derive(Debug,PartialEq,Eq)]
 pub struct Outcome {{{outcome_fields}pub trace:u32,pub frame_words:Vec<Vec<Option<u32>>>,pub offsets:Vec<Vec<i32>>,pub globals:Vec<Option<u32>>,pub cursors:Vec<Option<i32>>,pub live:Vec<bool>,pub restored:[Option<u32>;10],pub selected_frame:usize,pub selected_target:u32}}
-pub fn {run_name}(entry_sp:u32,cookie:u32,current:[u32;10],feature:i32,initial_trace:u32,thread_limit:u32,thread_base:u32,selector:u32,handler_sp:u32)->Result<Outcome,&'static str>{{
- if current[9]&!0x8d5!=0x202 {{return Err("connected current flags boundary");}}
- let mut machine=Machine::{lifecycle}(vec![{specs}],{selected_frame},current,Some(initial_trace)).map_err(|_|"connected lifecycle")?;
+pub fn {run_name}({signature})->Result<Outcome,&'static str>{{
+ {flags_check}
+ let mut machine=Machine::{lifecycle}(vec![{specs}],{selected_frame},{machine_context},Some(initial_trace)).map_err(|_|"connected lifecycle")?;
  let owner=machine.owner();{predecessor_setup}
  {setup}
- let thread_context=ThreadContext::new(owner,thread_limit,thread_base,current[4])?;
+ {context_setup}
  if entry_sp.checked_add(4).is_none_or(|end|end>thread_base)||entry_sp<thread_limit{{return Err("connected entry thread stack");}}
  let bound_ranges={bound_ranges};let mut stack_ranges=Vec::new();let mut next_sp=entry_sp;let mut images=Vec::new();let mut caller_ebp=None;
  {initialize}
  if images.iter().any(|image|image.esp<thread_limit){{return Err("connected frame outside owned thread stack");}}
+ // Attach private frame identity once to the actual image at its creation index.
+ let bindings:Vec<_>=(0..images.len()).map(|i|machine.binding(i)).collect::<Result<_,_>>().map_err(|_|"connected image binding")?;
+ {invocation_setup}
  let handler_low=handler_sp.checked_sub({handler_temporary_bytes}).ok_or("handler scratch underflow")?;
  if handler_low<thread_limit||handler_sp.checked_add(4).is_none_or(|end|end>thread_base){{return Err("handler scratch thread bounds");}}
  validate_frame_extent(handler_low,handler_sp,&bound_ranges,&stack_ranges)?;
- // Attach private frame identity once to the actual image at its creation index.
- let bindings:Vec<_>=(0..images.len()).map(|i|machine.binding(i)).collect::<Result<_,_>>().map_err(|_|"connected image binding")?;
  let ordinary:Vec<Vec<i32>>={ordinary};
- let event_code=normalize({event}u32,feature)?;
+ let event_code=normalize({event_value},feature)?;
  let mut globals=vec![None;{global_count}];
  {cleanup_run}
+ {transfer_event}
  let restored=machine.restore_owned({target},|lease,_current|{{
   let binding=bindings[{selected_frame}];lease.bind_storage(binding)?;
   lease.perform(||{{
@@ -1046,6 +1131,7 @@ pub fn {run_name}(entry_sp:u32,cookie:u32,current:[u32;10],feature:i32,initial_t
    original.map_err(|_|Error::Restoration)
   }})
  }}).map_err(|_|"connected original landing/restoration")?;
+ {finish_event}
  let offsets:Vec<Vec<i32>>={offsets_literal};let cursor_slots:Vec<Option<usize>>={cursors_literal};
  let mut frame_words=Vec::new();
  for (index,image) in images.iter().enumerate(){{

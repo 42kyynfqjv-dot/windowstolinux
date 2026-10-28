@@ -77,7 +77,10 @@ struct Machine {
     selected: usize,
     current: usize,
     trace: Option<u32>,
+    // Legacy scalar context is never an authority in owned-storage mode.
     context: [u32; 10],
+    owned_context: Option<[Option<u32>; 10]>,
+    event_issued: bool,
     phase: Phase,
     owned_storage: bool,
     explicit_dispatch: bool,
@@ -328,6 +331,8 @@ impl Machine {
             current,
             trace,
             context,
+            owned_context: None,
+            event_issued: false,
             phase: Phase::Cleanup,
             owned_storage: false,
             explicit_dispatch: false,
@@ -344,6 +349,14 @@ impl Machine {
         current: [u32; 10],
         trace: Option<u32>,
     ) -> Result<Self, Error> {
+        Self::new_owned_known(specs, selected, current.map(Some), trace)
+    }
+    fn new_owned_known(
+        specs: Vec<FrameSpec>,
+        selected: usize,
+        current: [Option<u32>; 10],
+        trace: Option<u32>,
+    ) -> Result<Self, Error> {
         let inputs = specs
             .iter()
             .map(|_| FrameInput {
@@ -352,7 +365,7 @@ impl Machine {
             })
             .collect();
         let mut machine = Self::new(specs, inputs, selected, trace)?;
-        machine.context = current;
+        machine.owned_context = Some(current);
         machine.owned_storage = true;
         Ok(machine)
     }
@@ -365,7 +378,15 @@ impl Machine {
         current: [u32; 10],
         trace: Option<u32>,
     ) -> Result<Self, Error> {
-        let mut machine = Self::new_owned(specs, selected, current, trace)?;
+        Self::new_dispatch_known(specs, selected, current.map(Some), trace)
+    }
+    fn new_dispatch_known(
+        specs: Vec<FrameSpec>,
+        selected: usize,
+        current: [Option<u32>; 10],
+        trace: Option<u32>,
+    ) -> Result<Self, Error> {
+        let mut machine = Self::new_owned_known(specs, selected, current, trace)?;
         // No binding, event or view has escaped this constructor. Undo only
         // legacy eager advancement; the new mode never revives an exposed ID.
         for frame in &mut machine.frames {
@@ -375,6 +396,30 @@ impl Machine {
         machine.phase = Phase::Cleanup;
         machine.explicit_dispatch = true;
         Ok(machine)
+    }
+    fn check_raise_binding(&self, binding: OwnedFrameBinding) -> Result<(), Error> {
+        if !self.explicit_dispatch
+            || !self.owned_storage
+            || self.owned_context != Some([None; 10])
+            || self.event_issued
+            || self.phase != Phase::Cleanup
+            || self.current + 1 != self.frames.len()
+            || self
+                .frames
+                .iter()
+                .any(|frame| !frame.live || frame.cursor != 0)
+        {
+            return Err(Error::Phase);
+        }
+        if self.owned_binding(self.current)? != binding {
+            return Err(Error::Identity);
+        }
+        Ok(())
+    }
+    fn issue_owned_event(&mut self, binding: OwnedFrameBinding) -> Result<(u64, u64), Error> {
+        self.check_raise_binding(binding)?;
+        self.event_issued = true;
+        Ok((self.owner, self.event))
     }
     fn retire_dispatched(&mut self, binding: OwnedFrameBinding) -> Result<(), Error> {
         if !self.explicit_dispatch || self.phase != Phase::Cleanup || self.current == self.selected
@@ -645,7 +690,7 @@ impl Machine {
         self.phase = Phase::Restoring;
         let fault = Cell::new(None);
         let bound = Cell::new(false);
-        let mut current = self.context.map(Some);
+        let mut current = self.owned_context.ok_or(Error::Identity)?;
         for index in [1, 2, 9] {
             current[index] = None;
         }
@@ -677,15 +722,11 @@ impl Machine {
             || [1, 2, 9].iter().any(|&index| result[index].is_some())
             || [3, 6, 7]
                 .iter()
-                .any(|&index| result[index].is_some_and(|value| value != self.context[index]))
+                .any(|&index| result[index].is_some() && result[index] != current[index])
         {
             return self.reject(Error::Restoration);
         }
-        for (index, value) in result.iter().enumerate() {
-            if let Some(value) = value {
-                self.context[index] = *value;
-            }
-        }
+        self.owned_context = Some(result);
         self.phase = Phase::Done;
         Ok(result)
     }
@@ -1443,5 +1484,78 @@ mod owned_tests {
             legacy.execute_owned_cleanup(request, |_, _| panic!("legacy cells rebound")),
             Err(Error::Identity)
         );
+    }
+
+    #[test]
+    fn raised_context_starts_unknown_and_rejects_legacy_numeric_authority() {
+        for known in [Some(0), Some(0x8000)] {
+            let mut current = [None; 10];
+            current[4] = known;
+            let mut machine = Machine::new_dispatch_known(
+                vec![FrameSpec { scopes: vec![] }],
+                0,
+                current,
+                Some(0),
+            )
+            .unwrap();
+            let binding = machine.binding(0).unwrap();
+            assert_eq!(machine.issue_owned_event(binding), Err(Error::Phase));
+            assert!(!machine.event_issued);
+        }
+        let mut legacy =
+            Machine::new_dispatch(vec![FrameSpec { scopes: vec![] }], 0, [0; 10], Some(0)).unwrap();
+        assert_eq!(
+            legacy.issue_owned_event(legacy.binding(0).unwrap()),
+            Err(Error::Phase)
+        );
+        let mut machine =
+            Machine::new_dispatch_known(vec![FrameSpec { scopes: vec![] }], 0, [None; 10], Some(0))
+                .unwrap();
+        let binding = machine.binding(0).unwrap();
+        assert_eq!(
+            machine.issue_owned_event(binding),
+            Ok((machine.owner, machine.event))
+        );
+        assert_eq!(machine.issue_owned_event(binding), Err(Error::Phase));
+    }
+
+    #[test]
+    fn optional_owned_context_never_promotes_unknown_nonvolatiles_to_shadow_zero() {
+        for promoted in [None, Some(3), Some(6), Some(7)] {
+            let mut machine = Machine::new_dispatch_known(
+                vec![FrameSpec { scopes: vec![] }],
+                0,
+                [None; 10],
+                Some(0),
+            )
+            .unwrap();
+            let binding = machine.binding(0).unwrap();
+            machine.finish_selected_dispatch(binding).unwrap();
+            let result = machine.restore_owned(0x9000, |lease, current| {
+                assert_eq!(current, [None; 10]);
+                lease.bind_storage(binding)?;
+                let mut projection = [None; 10];
+                projection[0] = Some(7);
+                projection[4] = Some(0x8000);
+                projection[5] = Some(0x8100);
+                projection[8] = Some(0x9000);
+                if let Some(index) = promoted {
+                    projection[index] = Some(0);
+                }
+                Ok(projection)
+            });
+            if promoted.is_some() {
+                assert_eq!(result, Err(Error::Restoration));
+                assert_eq!(machine.owned_context, Some([None; 10]));
+                assert_eq!(machine.phase, Phase::Blocked);
+            } else {
+                let projection = result.unwrap();
+                assert_eq!(
+                    (projection[3], projection[6], projection[7]),
+                    (None, None, None)
+                );
+                assert_eq!(machine.owned_context, Some(projection));
+            }
+        }
     }
 }

@@ -17,6 +17,43 @@ enum Value {
     EncodedScope(u32),
     Guard(i32),
 }
+/// Original instruction-derived register expression at the fragment boundary.
+/// EntryRegister retains identity without asserting any known incoming bits.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum GuestRegister {
+    Unknown,
+    Scalar(u32),
+    EntryRegister(u8),
+    StackOffset(i32),
+    BorrowedPredecessor,
+    Cookie,
+    EncodedScope(u32),
+    FrameGuard(i32),
+    ProtectedReturn,
+}
+impl GuestRegister {
+    pub fn known_bits(self) -> (u32, u32) {
+        match self {
+            Self::Scalar(value) => (u32::MAX, value),
+            _ => (0, 0),
+        }
+    }
+}
+impl From<&Value> for GuestRegister {
+    fn from(value: &Value) -> Self {
+        match *value {
+            Value::Unknown => Self::Unknown,
+            Value::Scalar(n) => Self::Scalar(n),
+            Value::Stack(at) => Self::StackOffset(at),
+            Value::Saved(reg) => Self::EntryRegister(reg),
+            Value::Return => Self::ProtectedReturn,
+            Value::Borrowed => Self::BorrowedPredecessor,
+            Value::Cookie => Self::Cookie,
+            Value::EncodedScope(scope) => Self::EncodedScope(scope),
+            Value::Guard(at) => Self::FrameGuard(at),
+        }
+    }
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Kind {
     Allocated,
@@ -39,6 +76,7 @@ struct State<'a> {
     scopes: &'a BTreeSet<u32>,
     handlers: &'a BTreeSet<u32>,
     source: String,
+    known_flags: (u32, u32),
 }
 
 /// The predecessor parameter is copied as an opaque type. Its actual
@@ -67,6 +105,8 @@ fn frame_address(base:u32,offset:i32)->Result<u32,&'static str>{
 
 pub(crate) struct ProvenFrame {
     end: u32,
+    final_registers: [GuestRegister; 8],
+    known_flags: (u32, u32),
     esp: i32,
     ebp: i32,
     record: i32,
@@ -113,6 +153,14 @@ impl InitializerFragment {
     }
 }
 impl ProvenFrame {
+    pub fn final_registers(&self) -> &[GuestRegister; 8] {
+        &self.final_registers
+    }
+    /// Known EFLAGS bits only. Unknown bits are not zero. API argument flags
+    /// are separate original stack values and must not use this processor mask.
+    pub fn known_flags(&self) -> (u32, u32) {
+        self.known_flags
+    }
     pub fn end(&self) -> u32 {
         self.end
     }
@@ -463,6 +511,7 @@ pub(crate) fn prove_frame(
         bp: None,
         record: None,
         read_fs: false,
+        known_flags: (0, 0),
         cookie_va,
         scopes: allowed_scopes,
         handlers: allowed_handlers,
@@ -542,6 +591,7 @@ pub(crate) fn prove_frame(
                         .ok_or("frame: adjustment overflow")?
                 };
                 s.allocate(delta)?;
+                s.known_flags = (0, 0);
             }
             Operation::Binary(Binary::Xor, dst, src) => {
                 let left = s.read(&dst)?;
@@ -561,6 +611,9 @@ pub(crate) fn prove_frame(
                     _ => return Err("frame: unproved encoded pointer/guard expression".into()),
                 };
                 s.write(&dst, value)?;
+                // XOR clears CF/OF; AF is undefined and result-dependent
+                // ZF/SF/PF remain unknown for these symbolic operands.
+                s.known_flags = (0x801, 0);
             }
             Operation::Address(reg, address) => {
                 let value = Value::Stack(s.address(&address)?);
@@ -635,6 +688,8 @@ pub(crate) fn prove_frame(
     s.source.push_str(&format!("Ok(FrameImage{{words,entry_sp,ebp:frame_address(entry_sp,{bp})?,esp:frame_address(entry_sp,{})?,record:installed_head,scope_va:{scope_va},handler_va:{handler_va},try_level:{}i32}})\n",s.sp,level as i32));
     Ok(ProvenFrame {
         end,
+        final_registers: std::array::from_fn(|i| GuestRegister::from(&s.registers[i])),
+        known_flags: s.known_flags,
         esp: s.sp - bp,
         ebp: bp,
         record: record - bp,

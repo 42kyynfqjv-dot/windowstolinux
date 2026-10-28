@@ -15,6 +15,9 @@ mod dispatch_execution;
 #[allow(dead_code)]
 #[path = "dispatch_support.rs"]
 mod dispatch_support;
+#[allow(dead_code)]
+#[path = "exception_event.rs"]
+mod exception_event;
 #[path = "frame_init.rs"]
 mod frame_init;
 #[path = "frame_landing.rs"]
@@ -44,6 +47,15 @@ mod handler_guard;
 #[allow(dead_code)]
 #[path = "local_unwind.rs"]
 mod local_unwind;
+#[allow(dead_code)]
+#[path = "raise_call.rs"]
+mod raise_call;
+#[cfg(test)]
+#[path = "raise_contract_tests.rs"]
+mod raise_contract_tests;
+#[cfg(test)]
+#[path = "raised_review_tests.rs"]
+mod raised_review_tests;
 #[path = "selection.rs"]
 mod selection;
 #[allow(dead_code)]
