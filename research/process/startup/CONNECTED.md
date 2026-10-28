@@ -77,6 +77,14 @@ review found that initialization could change a local used by earlier scalar
 specialization. Such changes, overlapping writes and pointer-provenance erasure
 reject until a general state-refinement proof exists.
 
+The subsequent independent audit reproduced two more defects. Temporary stack
+accounting omitted pushes cleaned up before a later call; every original PUSH
+now contributes to the checked maximum depth, with a 64-versus-16-byte regression.
+An unused partially initialized word incorrectly caused outcome extraction to
+fail after otherwise valid execution. It now remains an unknown full-word
+observation; no unknown byte is read or converted to zero. A 717-byte fill in an
+independent layout checks that restoration and trace still match.
+
 Independent tests cover displaced CONTEXT layouts, two-frame delegation, varied
 restored EAX and cookies, filter write persistence, cursor progression, wrong or
 stale ownership, missing receipts, partial failures, helper path mutations,

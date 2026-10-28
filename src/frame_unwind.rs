@@ -466,7 +466,7 @@ fn prove_composition(input: &Input, connected: Option<&Connected>) -> Result<Pro
         }
         if let Some(initialized) = &initialized {
             let ordinary: Vec<_> = proof.ordinary_words().iter().copied().collect();
-            initialize.push_str(&format!("validate_frame_extent(image.esp.checked_sub({}).ok_or(\"initializer temporary stack underflow\")?,image.entry_sp,&bound_ranges,&stack_ranges[..stack_ranges.len()-1])?;\n{{let mut memory=FrameMemory::new(&mut image,owner,&{ordinary:?})?;initialize_owned(&mut memory,GuestModule{{owner,base:{}}})?;}}\n",initialized.temporary_bytes(),connected.unwrap().module_base));
+            initialize.push_str(&format!("let initializer_low=image.esp.checked_sub({}).ok_or(\"initializer temporary stack underflow\")?;if initializer_low<thread_limit{{return Err(\"initializer temporary thread stack\");}}validate_frame_extent(initializer_low,image.entry_sp,&bound_ranges,&stack_ranges[..stack_ranges.len()-1])?;\n{{let mut memory=FrameMemory::new(&mut image,owner,&{ordinary:?})?;initialize_owned(&mut memory,GuestModule{{owner,base:{}}})?;}}\n",initialized.temporary_bytes(),connected.unwrap().module_base));
         }
         initialize.push_str(&format!("if image.try_level!={level} {{return Err(\"derived EH4 level\");}}\npredecessor=Predecessor::Frame{{owner,index:{index}}};caller_ebp=Some(image.ebp);next_sp=image.esp.checked_sub(4).ok_or(\"nested stack address\")?;images.push(image);\n"));
         frames.push(proof);
@@ -915,7 +915,7 @@ pub fn run_connected(entry_sp:u32,cookie:u32,current:[u32;10],feature:i32,initia
  for (index,image) in images.iter().enumerate(){{
   let bp=i64::from(image.ebp)-i64::from(image.entry_sp);let mut values=Vec::new();
   for &offset in &offsets[index]{{let key=i32::try_from(bp+i64::from(offset)).map_err(|_|"connected observation offset")?;
-   values.push(match image.words.get(&key){{Some(FrameWord::Scalar(n)|FrameWord::StackAddress(n)|FrameWord::Continuation(n))=>Some(*n),Some(FrameWord::ModuleBase{{owner:o,base}})if *o==owner=>Some(*base),Some(FrameWord::Unknown)=>None,_=>return Err("connected observation type")}});
+   values.push(match image.words.get(&key){{Some(FrameWord::Scalar(n)|FrameWord::StackAddress(n)|FrameWord::Continuation(n))=>Some(*n),Some(FrameWord::ModuleBase{{owner:o,base}})if *o==owner=>Some(*base),Some(FrameWord::Bytes(bytes))=>match *bytes{{[Some(a),Some(b),Some(c),Some(d)]=>Some(u32::from_le_bytes([a,b,c,d])),_=>None}},Some(FrameWord::Unknown)=>None,_=>return Err("connected observation type")}});
   }}frame_words.push(values);
  }}
  let cursors=frame_words.iter().zip(cursor_slots).map(|(words,slot)|slot.and_then(|s|words[s]).map(|n|n as i32)).collect();

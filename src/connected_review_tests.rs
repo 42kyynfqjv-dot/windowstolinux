@@ -206,3 +206,49 @@ fn independent_connected_uninitialized_binding_and_effect_mutations_reject() {
     input.frames[0].prefix.bytes[at..at + 3].copy_from_slice(&[0x90, 0x90, 0x90]);
     assert!(prove_connected(&input, &connected).is_err());
 }
+
+#[test]
+fn unused_partial_word_is_unknown_observation_not_execution_failure() {
+    let (input, mut connected) = fixture(77);
+    // Independently extend the original fill by one byte. The final word at
+    // -52 has one known byte, and no admitted instruction reads its other bytes.
+    connected.initializer.bytes[1..5].copy_from_slice(&717u32.to_le_bytes());
+    let source = prove_connected(&input, &connected).unwrap().emit();
+    let harness = r#"
+fn main(){
+ let current=[9,8,7,6,0x3f8000,0x3f9000,5,4,3,0x202];
+ let result=run_connected(0x400000,0x12345678,current,0,19,0x300000,0x410000,0,0x3f0000).unwrap();
+ assert_eq!(result.trace,19);assert_eq!(result.restored[0],Some(77));
+ assert_eq!(result.restored[4],Some(0x400000-4-832));
+ assert_eq!(result.restored[5],Some(0x400000-4));
+ let at=result.offsets[0].iter().position(|&o|o == -52).unwrap();
+ assert_eq!(result.frame_words[0][at],None);
+}
+"#;
+    let dir = std::env::temp_dir().join(format!("w2l-connected-partial-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("partial.rs");
+    let binary = dir.join(if cfg!(windows) {
+        "partial.exe"
+    } else {
+        "partial"
+    });
+    std::fs::write(&file, source + harness).unwrap();
+    let compile = std::process::Command::new("rustc")
+        .arg("--edition=2021")
+        .arg(&file)
+        .arg("-o")
+        .arg(&binary)
+        .output()
+        .unwrap();
+    assert!(
+        compile.status.success(),
+        "{}",
+        String::from_utf8_lossy(&compile.stderr)
+    );
+    assert!(std::process::Command::new(binary)
+        .status()
+        .unwrap()
+        .success());
+    std::fs::remove_dir_all(dir).unwrap();
+}

@@ -608,6 +608,9 @@ pub(crate) fn prove_initializer(
                 if sp < initial_sp - 64 || args.insert(sp, value).is_some() {
                     return Err("initializer: argument ownership/budget".into());
                 }
+                // A PUSH writes even if its word is cleaned up before any
+                // CALL. The scratch ownership bound must cover that effect.
+                minimum_sp = minimum_sp.min(sp);
                 regs[4] = MainValue::Stack(sp);
             }
             Operation::Address(dst, address)
@@ -947,6 +950,29 @@ mod tests {
                 .unwrap_err()
                 .contains("overlapping")
         );
+    }
+    #[test]
+    fn transient_pushes_before_calls_contribute_to_scratch_ownership() {
+        let frame = frame();
+        let fill = scalar_fill();
+        let origin = frame.end();
+        let mut tail = initializer(origin, 4);
+        let mut code = Vec::new();
+        for _ in 0..16 {
+            code.extend([0x6a, 0]);
+        }
+        code.extend([0x83, 0xc4, 64]);
+        // Preserve the original bound fill call after relocating its source.
+        let displacement = i32::from_le_bytes(tail[12..16].try_into().unwrap());
+        tail[12..16].copy_from_slice(&(displacement - code.len() as i32).to_le_bytes());
+        code.extend(tail);
+        let proof = prove_initializer(&frame, &code, origin, &helper(&fill), 0x9000).unwrap();
+        // Sixteen real stores reach 64 bytes below ESP even though every later
+        // CALL uses at most 16. The emitted preflight must retain the former.
+        assert_eq!(proof.temporary_bytes(), 64);
+        assert!(proof
+            .body()
+            .starts_with("memory.preflight_call_stack(64)?;"));
     }
     #[test]
     fn emitted_initializer_executes_owned_range_and_typed_module_effect() {
