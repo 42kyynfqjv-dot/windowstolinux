@@ -11,6 +11,13 @@ enum Value {
     Scalar,
 }
 
+pub(crate) struct ProvenCleanup {
+    pub source: String,
+    /// Additional bytes below this helper's entry ESP. The caller owns the
+    /// existing return word and the argument at entry ESP+4 separately.
+    pub temporary_bytes: u32,
+}
+
 fn cell(address: &Address, registers: &[Value; 8]) -> Result<usize, String> {
     if address.index.is_some()
         || address
@@ -35,6 +42,13 @@ fn cell(address: &Address, registers: &[Value; 8]) -> Result<usize, String> {
 /// certificate. Its enclosing entry contract must also exclude unmodeled
 /// debug/control-flag effects and establish valid stack/segment access.
 pub(crate) fn prove_cleanup(code: &[u8], origin: u32) -> Result<String, String> {
+    Ok(prove_cleanup_effects(code, origin)?.source)
+}
+
+/// Same complete effect proof, additionally retaining its original stack depth.
+/// The currently admitted operations never change ESP or call another helper;
+/// zero is returned only after every instruction has passed those restrictions.
+pub(crate) fn prove_cleanup_effects(code: &[u8], origin: u32) -> Result<ProvenCleanup, String> {
     let graph = graph::decode(code, origin, origin)?;
     let end = origin
         .checked_add(code.len() as u32)
@@ -59,7 +73,10 @@ pub(crate) fn prove_cleanup(code: &[u8], origin: u32) -> Result<String, String> 
                     return Err("cleanup: terminal extent".into());
                 }
                 source.push_str("return Ok(());\n");
-                return Ok(source);
+                return Ok(ProvenCleanup {
+                    source,
+                    temporary_bytes: 0,
+                });
             }
             Operation::Binary(op, dst, src) => {
                 let (value, expression) = match src {
@@ -152,6 +169,16 @@ mod tests {
         assert_eq!(source, prove_cleanup(&body(), 0x4000).unwrap());
         assert_eq!(source.matches("r[0]=r[0].wrapping_add(r[0]);").count(), 4);
         assert!(source.contains("cells[1]=cells[1].wrapping_add(3u32);"));
+        let effects = prove_cleanup_effects(&body(), 0x3000).unwrap();
+        assert_eq!(effects.source, source);
+        assert_eq!(effects.temporary_bytes, 0);
+        // Zero stack depth is a consequence of admitted instructions, never
+        // permission to ignore additional PUSH/POP/allocation/CALL effects.
+        for prefix in [&[0x50][..], &[0x58], &[0x83, 0xec, 4], &[0xe8, 0, 0, 0, 0]] {
+            let mut extra = prefix.to_vec();
+            extra.extend(body());
+            assert!(prove_cleanup_effects(&extra, 0x3000).is_err());
+        }
     }
 
     #[test]

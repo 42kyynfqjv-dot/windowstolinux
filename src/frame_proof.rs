@@ -47,6 +47,7 @@ pub(crate) const EMITTED_TYPES: &str = r#"
 #[derive(Clone,Debug,PartialEq,Eq)]
 enum FrameWord<P> {
  Unknown, Scalar(u32), StackAddress(u32), Saved(u8,Option<u32>), Return,
+ Bytes([Option<u8>;4]), ModuleBase{owner:u64,base:u32}, Continuation(u32),
  Borrowed(P), Cookie(u32), EncodedScope{scope:u32,cookie:u32,bits:u32},
  Guard{frame:u32,cookie:u32,bits:u32},
 }
@@ -78,6 +79,7 @@ pub(crate) struct ProvenFrame {
     pending_arguments: Vec<u32>,
     guard_offsets: Vec<i32>,
     saved_slots: BTreeMap<i32, u8>,
+    stack_words: BTreeMap<i32, i32>,
     body: String,
 }
 /// Separate original stores after an explicitly unproved gap. This does not
@@ -170,6 +172,9 @@ impl ProvenFrame {
     }
     pub fn saved_slots(&self) -> &BTreeMap<i32, u8> {
         &self.saved_slots
+    }
+    pub fn stack_words(&self) -> &BTreeMap<i32, i32> {
+        &self.stack_words
     }
     pub fn initializer_body(&self) -> &str {
         &self.body
@@ -580,6 +585,7 @@ pub(crate) fn prove_frame(
     let mut ordinary_words = BTreeSet::new();
     let mut guard_offsets = Vec::new();
     let mut saved_slots = BTreeMap::new();
+    let mut stack_words = BTreeMap::new();
     for (&at, word) in &s.words {
         if word.kind == Kind::Allocated
             && matches!(word.value, Value::Unknown | Value::Scalar(_))
@@ -596,6 +602,9 @@ pub(crate) fn prove_frame(
             Value::Guard(frame) if frame == bp => guard_offsets.push(at - bp),
             Value::Saved(reg) => {
                 saved_slots.insert(at - bp, reg);
+            }
+            Value::Stack(target) => {
+                stack_words.insert(at - bp, target - bp);
             }
             _ => {}
         }
@@ -638,6 +647,7 @@ pub(crate) fn prove_frame(
         pending_arguments,
         guard_offsets,
         saved_slots,
+        stack_words,
         body: preflight + &s.source,
     })
 }

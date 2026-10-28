@@ -9,7 +9,7 @@ fn region(va: u32, bytes: Vec<u8>) -> Region {
     Region { va, bytes }
 }
 
-fn fixture() -> Input {
+pub(super) fn fixture() -> Input {
     // Owned prolog, two initialized scalar words and four original event args.
     let mut prefix = vec![0x55, 0x8b, 0xec, 0x6a, 0xfe, 0x68];
     prefix.extend(0x4000u32.to_le_bytes());

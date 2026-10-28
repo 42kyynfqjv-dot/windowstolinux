@@ -3,6 +3,12 @@
 mod cleanup;
 #[path = "dispatch.rs"]
 mod dispatch;
+#[path = "frame_init.rs"]
+mod frame_init;
+#[path = "frame_landing.rs"]
+mod frame_landing;
+#[path = "frame_memory.rs"]
+mod frame_memory;
 #[path = "frame_proof.rs"]
 mod frame_proof;
 #[path = "frame_unwind.rs"]
@@ -14,6 +20,12 @@ mod funclet;
 mod graph;
 #[path = "handler_bridge.rs"]
 mod handler_bridge;
+#[path = "handler_checks.rs"]
+mod handler_checks;
+#[path = "handler_context.rs"]
+mod handler_context;
+#[path = "handler_guard.rs"]
+mod handler_guard;
 #[path = "selection.rs"]
 mod selection;
 use iced_x86::{Code, Decoder, DecoderOptions, Mnemonic, OpKind, Register};

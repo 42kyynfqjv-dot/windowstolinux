@@ -43,6 +43,8 @@ struct State<'a> {
     cursor: i32,
     cursor_writes: usize,
     calls: Vec<usize>,
+    temporary_bytes: u32,
+    cleanup_entry_depth: Option<u32>,
     flags: Option<(bool, bool)>,
     source: String,
     serial: usize,
@@ -55,6 +57,20 @@ pub(crate) struct ProvenDispatch {
     pub source: String,
     pub parent: i32,
     pub action: usize,
+    /// Own maximum bytes below entry ESP, including nested CALL's return word
+    /// but excluding the callee's body. Caller owns the entry return/arguments.
+    pub temporary_bytes: u32,
+    /// Depth of the unique cleanup's entry ESP, derived before the original CALL.
+    pub cleanup_entry_depth: u32,
+}
+impl ProvenDispatch {
+    pub fn with_cleanup_depth(&self, cleanup_temporary_bytes: u32) -> Result<u32, String> {
+        Ok(self.temporary_bytes.max(
+            self.cleanup_entry_depth
+                .checked_add(cleanup_temporary_bytes)
+                .ok_or("dispatch: nested temporary stack overflow")?,
+        ))
+    }
 }
 fn scalar(value: &Value) -> Result<(String, Option<u32>), String> {
     if let Value::Scalar { expression, known } = value {
@@ -229,6 +245,7 @@ impl State<'_> {
             }
         }
         self.sp = next;
+        self.temporary_bytes = self.temporary_bytes.max(next.unsigned_abs());
         self.registers[4] = Value::Stack(next);
         self.flags = None;
         Ok(())
@@ -240,6 +257,11 @@ impl State<'_> {
         if !self.calls.is_empty() {
             return Err("dispatch: multiple cleanup calls".into());
         }
+        let entry_depth = self
+            .sp
+            .unsigned_abs()
+            .checked_add(4)
+            .ok_or("dispatch: cleanup CALL stack overflow")?;
         let argument = self
             .stack
             .get(&self.sp)
@@ -279,6 +301,8 @@ impl State<'_> {
         }
         self.flags = None;
         self.calls.push(action);
+        self.cleanup_entry_depth = Some(entry_depth);
+        self.temporary_bytes = self.temporary_bytes.max(entry_depth);
         Ok(())
     }
 }
@@ -361,6 +385,8 @@ pub(crate) fn prove_dispatch(
         cursor: entry,
         cursor_writes: 0,
         calls: Vec::new(),
+        temporary_bytes: 0,
+        cleanup_entry_depth: None,
         flags: None,
         source: format!("if *cursor!={entry}i32 {{return Err(Error::Order);}}\n"),
         serial: 0,
@@ -419,6 +445,7 @@ pub(crate) fn prove_dispatch(
                 }
                 s.stack.insert(next, Slot { value, kind });
                 s.sp = next;
+                s.temporary_bytes = s.temporary_bytes.max(next.unsigned_abs());
                 s.registers[4] = Value::Stack(next);
             }
             Operation::Pop(reg) => {
@@ -482,6 +509,10 @@ pub(crate) fn prove_dispatch(
                     source: s.source,
                     parent: s.cursor,
                     action: s.calls[0],
+                    temporary_bytes: s.temporary_bytes,
+                    cleanup_entry_depth: s
+                        .cleanup_entry_depth
+                        .ok_or("dispatch: missing cleanup depth")?,
                 });
             }
             Operation::Nop => {}
@@ -535,6 +566,45 @@ mod tests {
         assert_eq!(from.len(), to.len());
         let at = bytes.windows(from.len()).position(|x| x == from).unwrap();
         bytes[at..at + to.len()].copy_from_slice(to);
+    }
+    #[test]
+    fn temporary_stack_depth_tracks_allocations_saves_arguments_and_call_return() {
+        for allocation in [8u8, 12, 28] {
+            let mut bytes = code();
+            bytes[2] = allocation;
+            replace(
+                &mut bytes,
+                &[0x8b, 0x74, 0x24, 20],
+                &[0x8b, 0x74, 0x24, allocation + 12],
+            );
+            replace(
+                &mut bytes,
+                &[0x8b, 0x7c, 0x24, 24],
+                &[0x8b, 0x7c, 0x24, allocation + 16],
+            );
+            replace(
+                &mut bytes,
+                &[0x83, 0xc4, 8, 0xc3],
+                &[0x83, 0xc4, allocation, 0xc3],
+            );
+            let proof = proof(&bytes, 0).unwrap();
+            // Two saved registers (8), one argument (4), CALL return (4).
+            let expected = u32::from(allocation) + 16;
+            assert_eq!(proof.temporary_bytes, expected);
+            assert_eq!(proof.cleanup_entry_depth, expected);
+            assert_eq!(proof.with_cleanup_depth(0).unwrap(), expected);
+            assert_eq!(proof.with_cleanup_depth(20).unwrap(), expected + 20);
+            assert!(proof.with_cleanup_depth(u32::MAX).is_err());
+        }
+        // A deeper owned allocation, released before CALL, remains part of the
+        // required temporary extent even when the later call is shallower.
+        let mut bytes = code();
+        bytes.splice(0..0, [0x83, 0xec, 60, 0x83, 0xc4, 60]);
+        let proof = proof(&bytes, 0).unwrap();
+        assert_eq!(proof.temporary_bytes, 60);
+        assert_eq!(proof.cleanup_entry_depth, 24);
+        assert_eq!(proof.with_cleanup_depth(20).unwrap(), 60);
+        assert_eq!(proof.with_cleanup_depth(40).unwrap(), 64);
     }
     #[test]
     fn independent_stack_layout_keeps_runtime_values_and_original_cursor_effects() {

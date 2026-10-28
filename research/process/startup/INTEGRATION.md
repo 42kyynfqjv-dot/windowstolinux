@@ -1,5 +1,10 @@
 # Cohesive handler execution milestone — SUB-579 / same PR45
 
+Latest integrated boundary: [connected original initialization, checks and
+restoration](CONNECTED.md). The initializer and supplied saved-context cuts are
+closed within the declared component domain. Original dispatcher/FS/nested-unwind
+and full-startup admission remain open; PR #45 stays draft.
+
 Current fragment integration and evidence boundaries:
 [Original frame, filter and finally composition](FRAME-COMPOSITION.md). It records
 instruction-derived selection and complete cleanup effects, while retaining the

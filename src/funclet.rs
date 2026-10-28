@@ -19,6 +19,19 @@ pub(crate) struct ProvenFunclet {
     pub cursor_offset: i32,
     /// Global observation indices in original store order.
     pub global_writes: Vec<usize>,
+    /// Own maximum below helper entry ESP, including Dispatch CALL's return
+    /// word. Its caller still owns the existing funclet return word separately.
+    pub temporary_bytes: u32,
+    pub dispatch_entry_depth: u32,
+}
+impl ProvenFunclet {
+    pub fn with_dispatch_depth(&self, dispatch_temporary_bytes: u32) -> Result<u32, String> {
+        Ok(self.temporary_bytes.max(
+            self.dispatch_entry_depth
+                .checked_add(dispatch_temporary_bytes)
+                .ok_or("funclet: nested temporary stack overflow")?,
+        ))
+    }
 }
 
 fn frame_word(address: &Address, words: &BTreeMap<i32, u32>) -> Result<i32, String> {
@@ -79,6 +92,8 @@ pub(crate) fn prove_funclet(
     let mut global_writes = Vec::new();
     let mut serial = 0;
     let mut count = 0;
+    let mut temporary_bytes = 0;
+    let mut dispatch_entry_depth = None;
     while decoder.can_decode() {
         let instruction = decoder.decode();
         count += 1;
@@ -99,6 +114,13 @@ pub(crate) fn prove_funclet(
             }
             // cdecl pushes the second (local) pointer before the first (cursor).
             roles = Some((arguments[0], arguments[1]));
+            let depth = u32::try_from(arguments.len())
+                .ok()
+                .and_then(|n| n.checked_mul(4))
+                .and_then(|n| n.checked_add(4))
+                .ok_or("funclet: CALL temporary stack overflow")?;
+            temporary_bytes = temporary_bytes.max(depth);
+            dispatch_entry_depth = Some(depth);
             source.push_str("dispatch(cells,cursor)?;\n");
             for index in [0, 1, 2] {
                 registers[index] = Value::Unknown;
@@ -122,6 +144,7 @@ pub(crate) fn prove_funclet(
                     return Err("funclet: argument stack budget/phase".into());
                 }
                 arguments.push(offset);
+                temporary_bytes = temporary_bytes.max(u32::try_from(arguments.len()).unwrap() * 4);
             }
             Operation::Binary(Binary::Add, Operand::Reg(reg), Operand::Immediate(amount))
                 if reg.index == 4 && reg.width == 32 && reg.shift == 0 =>
@@ -195,6 +218,9 @@ pub(crate) fn prove_funclet(
                     local_offset,
                     cursor_offset,
                     global_writes,
+                    temporary_bytes,
+                    dispatch_entry_depth: dispatch_entry_depth
+                        .ok_or("funclet: missing Dispatch stack depth")?,
                 });
             }
             _ => return Err("funclet: unsupported reachable effect".into()),
@@ -259,6 +285,26 @@ mod tests {
         // reject cursor100 rather than claiming the original cursor0 is used.
         let swapped = prove(&code(-32, -28, false)).unwrap();
         assert_eq!((swapped.local_offset, swapped.cursor_offset), (-32, -28));
+    }
+    #[test]
+    fn nested_temporary_extent_includes_argument_and_original_call_words() {
+        let bytes = code(-28, -32, false);
+        let proof = prove(&bytes).unwrap();
+        // PUSH local, PUSH cursor, CALL return: 12 below funclet entry ESP.
+        assert_eq!(proof.temporary_bytes, 12);
+        assert_eq!(proof.dispatch_entry_depth, 12);
+        assert_eq!(proof.with_dispatch_depth(24).unwrap(), 36);
+        assert_eq!(proof.with_dispatch_depth(60).unwrap(), 72);
+        assert!(proof.with_dispatch_depth(u32::MAX).is_err());
+        // Equivalent two-step original argument cleanup cannot erase peak depth.
+        let mut split = bytes.clone();
+        split.splice(13..16, [0x83, 0xc4, 4, 0x83, 0xc4, 4]);
+        let split = prove(&split).unwrap();
+        assert_eq!(split.temporary_bytes, 12);
+        assert_eq!(split.with_dispatch_depth(24).unwrap(), 36);
+        let mut protected = bytes;
+        protected[15] = 12;
+        assert!(prove(&protected).is_err());
     }
     #[test]
     fn protected_uninitialized_alias_call_stack_and_clobber_mutations_reject() {

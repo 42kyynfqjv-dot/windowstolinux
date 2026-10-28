@@ -1,5 +1,9 @@
 # Original frame, filter and finally composition
 
+The subsequent [connected initialization/check/restoration integration](CONNECTED.md)
+closes several cuts described below. This page preserves the earlier fragment
+checkpoint and its evidence; it is not the current support matrix.
+
 This checkpoint compiles original instruction fragments from the retained authored
 Windows SEH experiment into one native composition. It remains separate from PE
 admission. **There are zero newly translated whole programs.** The original

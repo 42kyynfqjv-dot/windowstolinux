@@ -260,6 +260,7 @@ pub fn prove_filter(
 pub struct CodeIdentity {
     body: String,
     returns: usize,
+    temporary_bytes: u32,
 }
 impl CodeIdentity {
     /// Body for `(code:u32) -> Result<u32,&'static str>`. Original guard loads can
@@ -270,6 +271,9 @@ impl CodeIdentity {
     }
     pub fn proved_return_paths(&self) -> usize {
         self.returns
+    }
+    pub fn temporary_bytes(&self) -> u32 {
+        self.temporary_bytes
     }
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -403,6 +407,7 @@ pub fn prove_code_identity(
     let mut pending = vec![(origin, initial)];
     let mut explored = 0;
     let mut returns = 0;
+    let mut temporary_bytes = 0;
     while let Some((mut pc, mut state)) = pending.pop() {
         loop {
             explored += 1;
@@ -429,6 +434,7 @@ pub fn prove_code_identity(
                     }
                     state.words.insert(next, value);
                     state.sp = next;
+                    temporary_bytes = temporary_bytes.max((-next) as u32);
                 }
                 Code::Pop_r32 => {
                     if state.sp >= 0 || i.op0_register() == Register::ESP {
@@ -544,6 +550,7 @@ pub fn prove_code_identity(
             "if code!={event_code}u32{{return Err(\"original code-transform domain\");}} Ok(code)\n"
         ),
         returns,
+        temporary_bytes,
     })
 }
 

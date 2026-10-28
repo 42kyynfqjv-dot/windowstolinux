@@ -2,7 +2,7 @@
 #[path = "../src/unwind.rs"]
 pub mod unwind;
 use std::path::Path;
-use unwind::frame_unwind::{Frame, Input, Region};
+use unwind::frame_unwind::{Connected, Frame, Input, Region};
 
 fn number(value: &str) -> Result<u32, String> {
     value
@@ -48,6 +48,16 @@ fn run() -> Result<(), String> {
         (None, None, None, None, None);
     let mut raise_exception_iat = None;
     let mut calls = Vec::new();
+    let (mut initializer, mut fill_helper, mut selected_landing) = (None, None, None);
+    let (mut fill_features, mut module_iat, mut module_base) = (None, None, None);
+    let mut module_size = None;
+    let (
+        mut handler_prefix,
+        mut guard_helper,
+        mut security_helper,
+        mut context_helper,
+        mut context_selector,
+    ) = (None, None, None, None, None);
     let (
         mut dispatcher,
         mut dispatch_table,
@@ -77,6 +87,11 @@ fn run() -> Result<(), String> {
             ["feature", value] => set(&mut feature, number(value)?)?,
             ["event", value] => set(&mut event, number(value)?)?,
             ["raise-iat", value] => set(&mut raise_exception_iat, number(value)?)?,
+            ["module-iat", value] => set(&mut module_iat, number(value)?)?,
+            ["module-base", value] => set(&mut module_base, number(value)?)?,
+            ["module-size", value] => set(&mut module_size, number(value)?)?,
+            ["context-selector", value] => set(&mut context_selector, number(value)?)?,
+            ["fill-features", a, b] => set(&mut fill_features, [number(a)?, number(b)?])?,
             ["global", value] => globals.push(number(value)?),
             ["frame", prefix_va, prefix, table_va, table, activation_va, activation] => {
                 let activation = match (*activation_va, *activation) {
@@ -104,6 +119,13 @@ fn run() -> Result<(), String> {
                     "installer" => set(&mut installer, item)?,
                     "restore" => set(&mut restore, item)?,
                     "target" => set(&mut target, item)?,
+                    "connected-initializer" => set(&mut initializer, item)?,
+                    "fill-helper" => set(&mut fill_helper, item)?,
+                    "selected-landing" => set(&mut selected_landing, item)?,
+                    "handler-prefix" => set(&mut handler_prefix, item)?,
+                    "guard-helper" => set(&mut guard_helper, item)?,
+                    "security-helper" => set(&mut security_helper, item)?,
+                    "context-helper" => set(&mut context_helper, item)?,
                     _ => return Err("unknown manifest region kind".into()),
                 }
             }
@@ -131,7 +153,41 @@ fn run() -> Result<(), String> {
         calls,
         raise_exception_iat: raise_exception_iat.ok_or("missing RaiseException IAT")?,
     };
-    let proof = unwind::frame_unwind::prove_fragments(&input)?;
+    let proof = if let Some(initializer) = initializer {
+        unwind::frame_unwind::prove_connected(
+            &input,
+            &Connected {
+                initializer,
+                fill_helper: fill_helper.ok_or("missing fill helper")?,
+                fill_features: fill_features.ok_or("missing fill feature words")?,
+                module_iat: module_iat.ok_or("missing module IAT")?,
+                module_base: module_base.ok_or("missing module base")?,
+                module_size: module_size.ok_or("missing module size")?,
+                selected_landing: selected_landing.ok_or("missing complete landing")?,
+                handler_prefix: handler_prefix.ok_or("missing handler prefix")?,
+                guard_helper: guard_helper.ok_or("missing guard helper")?,
+                security_helper: security_helper.ok_or("missing security helper")?,
+                context_helper: context_helper.ok_or("missing context helper")?,
+                context_selector: context_selector.ok_or("missing context selector")?,
+            },
+        )?
+    } else {
+        if fill_helper.is_some()
+            || fill_features.is_some()
+            || module_iat.is_some()
+            || module_base.is_some()
+            || module_size.is_some()
+            || selected_landing.is_some()
+            || handler_prefix.is_some()
+            || guard_helper.is_some()
+            || security_helper.is_some()
+            || context_helper.is_some()
+            || context_selector.is_some()
+        {
+            return Err("incomplete connected manifest".into());
+        }
+        unwind::frame_unwind::prove_fragments(&input)?
+    };
     std::fs::write(&args[2], proof.emit()).map_err(|e| e.to_string())
 }
 fn main() {

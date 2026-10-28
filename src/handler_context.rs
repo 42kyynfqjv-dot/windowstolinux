@@ -1,0 +1,634 @@
+//! Decoded x86 context/TEB stack-bound helper at an explicit same-thread cut.
+//! This proves the local helper, not acquisition of a Windows TEB or CONTEXT,
+//! original exception delivery, or emulation of the INT 29 failure path.
+//!
+//! Primary contracts: Microsoft Learn x86 CONTEXT (`winnt/ns-winnt-context-r2`)
+//! identifies the architecture-specific Esp field; `cpp/intrinsics/fastfail`
+//! specifies nonreturning x86 INT 29 with its code in ECX. The TEB documentation
+//! (`winternl/ns-winternl-teb`) explicitly warns that its layout can change.
+//! Consequently FS:[0x18], NT_TIB offsets 4/8, and CONTEXT offset 0xc4 below
+//! are bound to the decoded x86 helper and a declared captured-state contract,
+//! not a portable host ABI assumption. Native fast-fail support starts in
+//! Windows 8; this component supplies no XP/7 failure-behavior claim.
+use iced_x86::{Code, Decoder, DecoderOptions, Instruction, OpKind, Register};
+use std::collections::{BTreeMap, BTreeSet};
+
+/// The containing proof owns the initialized selector word and its runtime
+/// value. The value stored in a PE file is not the live selector value.
+pub(crate) struct ContextCheckProof {
+    body: String,
+    selector_va: u32,
+    bypass_selector: u32,
+    temporary_bytes: u32,
+}
+impl ContextCheckProof {
+    /// Body of `ThreadContext::check(&self, owner:u64, selector:u32)
+    /// -> Result<(), &'static str>`. Include EMITTED_TYPES in the same module.
+    pub(crate) fn body(&self) -> &str {
+        &self.body
+    }
+    pub(crate) fn selector_va(&self) -> u32 {
+        self.selector_va
+    }
+    pub(crate) fn bypass_selector(&self) -> u32 {
+        self.bypass_selector
+    }
+    pub(crate) fn failure_code(&self) -> u32 {
+        13
+    }
+    pub(crate) fn temporary_bytes(&self) -> u32 {
+        self.temporary_bytes
+    }
+}
+
+/// The owner is the containing private activation/thread identity, not a guest
+/// integer that authorizes access. Construction is an explicit captured-state
+/// boundary: the caller must establish that these are the same live thread's
+/// initialized NT_TIB StackLimit/StackBase and x86 CONTEXT Esp fields.
+///
+/// This component deliberately narrows admission to a valid captured ESP even
+/// when the selector would bypass the original bounds test. Invalid boundaries
+/// reject before fragment effects; no INT 29 or process termination is emulated.
+/// No Rust layout is asserted to match an external TEB/CONTEXT layout.
+pub(crate) const EMITTED_TYPES: &str = r#"
+struct ThreadContext {
+ owner:u64, limit:u32, base:u32, captured_esp:u32, live:bool,
+}
+impl ThreadContext {
+ fn new(owner:u64,limit:u32,base:u32,captured_esp:u32)->Result<Self,&'static str>{
+  if owner==0 || limit==0 || limit>=base || captured_esp<limit || captured_esp>base {
+   return Err("invalid captured same-thread stack boundary");
+  }
+  Ok(Self{owner,limit,base,captured_esp,live:true})
+ }
+ fn preflight(&self,owner:u64)->Result<(),&'static str>{
+  if !self.live || owner==0 || owner!=self.owner {
+   return Err("stale or foreign captured thread context");
+  }
+  if self.limit==0 || self.limit>=self.base || self.captured_esp<self.limit || self.captured_esp>self.base {
+   return Err("invalid captured same-thread stack boundary");
+  }
+  Ok(())
+ }
+ fn invalidate(&mut self){self.live=false;}
+}
+"#;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Scalar {
+    Selector,
+    Esp,
+    Limit,
+    Base,
+    Constant(u32),
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Value {
+    Unknown,
+    Saved(u8),
+    Stack(i32),
+    Context,
+    Teb,
+    Number(Scalar),
+    Return,
+}
+#[derive(Clone)]
+struct State {
+    registers: [Value; 8],
+    stack: BTreeMap<i32, Value>,
+    sp: i32,
+    flags: Option<(Scalar, Scalar)>,
+    visited: BTreeSet<u32>,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Predicate {
+    SelectorEquals(u32),
+    EspBelowLimit,
+    EspAtMostBase,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum Decision {
+    Return,
+    FailFast13,
+    Branch(Predicate, Box<Decision>, Box<Decision>),
+}
+impl Decision {
+    fn source(&self) -> String {
+        match self {
+            Self::Return => "Ok(())".into(),
+            Self::FailFast13 => {
+                "Err(\"captured boundary would reach original INT 29 with ECX=13\")".into()
+            }
+            Self::Branch(predicate, yes, no) => {
+                let predicate = match predicate {
+                    Predicate::SelectorEquals(value) => format!("selector=={value}u32"),
+                    Predicate::EspBelowLimit => "self.captured_esp<self.limit".into(),
+                    Predicate::EspAtMostBase => "self.captured_esp<=self.base".into(),
+                };
+                format!(
+                    "if {predicate} {{ {} }} else {{ {} }}",
+                    yes.source(),
+                    no.source()
+                )
+            }
+        }
+    }
+}
+
+fn register(register: Register) -> Result<usize, String> {
+    match register {
+        Register::EAX => Ok(0),
+        Register::ECX => Ok(1),
+        Register::EDX => Ok(2),
+        Register::EBX => Ok(3),
+        Register::ESP => Ok(4),
+        Register::EBP => Ok(5),
+        Register::ESI => Ok(6),
+        Register::EDI => Ok(7),
+        _ => Err("context helper: partial register".into()),
+    }
+}
+fn number(value: Value) -> Result<Scalar, String> {
+    if let Value::Number(value) = value {
+        Ok(value)
+    } else {
+        Err("context helper: scalar provenance".into())
+    }
+}
+fn memory(i: &Instruction, state: &State, selector_va: u32) -> Result<Value, String> {
+    if i.memory_index() != Register::None {
+        return Err("context helper: indexed address".into());
+    }
+    let displacement = i.memory_displacement32();
+    if i.segment_prefix() == Register::FS {
+        if i.memory_base() == Register::None && displacement == 0x18 {
+            // Original x86 NT_TIB.Self access. This is a typed thread object,
+            // never a host pointer or a Rust structure layout cast.
+            return Ok(Value::Teb);
+        }
+        return Err("context helper: unsupported FS field".into());
+    }
+    if i.segment_prefix() != Register::None {
+        return Err("context helper: segment override".into());
+    }
+    if i.memory_base() == Register::None {
+        return if displacement == selector_va {
+            Ok(Value::Number(Scalar::Selector))
+        } else {
+            Err("context helper: unbound image read".into())
+        };
+    }
+    match state.registers[register(i.memory_base())?] {
+        Value::Stack(offset) => {
+            let offset = offset
+                .checked_add(displacement as i32)
+                .ok_or("context helper: stack offset overflow")?;
+            if offset % 4 != 0 {
+                return Err("context helper: unaligned stack read".into());
+            }
+            match state.stack.get(&offset) {
+                Some(value) if *value != Value::Return => Ok(*value),
+                _ => Err("context helper: protected or absent stack read".into()),
+            }
+        }
+        Value::Context if displacement == 0xc4 => Ok(Value::Number(Scalar::Esp)),
+        Value::Teb if displacement == 8 => Ok(Value::Number(Scalar::Limit)),
+        Value::Teb if displacement == 4 => Ok(Value::Number(Scalar::Base)),
+        _ => Err("context helper: object field ownership/bounds".into()),
+    }
+}
+fn operand(i: &Instruction, index: u32, state: &State, selector_va: u32) -> Result<Value, String> {
+    match i.op_kind(index) {
+        OpKind::Register => Ok(state.registers[register(i.op_register(index))?]),
+        OpKind::Memory => memory(i, state, selector_va),
+        OpKind::Immediate32 => Ok(Value::Number(Scalar::Constant(i.immediate32()))),
+        OpKind::Immediate8to32 => Ok(Value::Number(Scalar::Constant(i.immediate8to32() as u32))),
+        _ => Err("context helper: operand form".into()),
+    }
+}
+
+struct Proof<'a> {
+    instructions: &'a BTreeMap<u32, Instruction>,
+    selector_va: u32,
+    budget: usize,
+    covered: BTreeSet<u32>,
+    temporary_bytes: u32,
+}
+impl Proof<'_> {
+    fn walk(&mut self, mut pc: u32, mut state: State) -> Result<Decision, String> {
+        loop {
+            self.budget += 1;
+            if self.budget > 128 || !state.visited.insert(pc) {
+                return Err("context helper: cycle/path budget".into());
+            }
+            let i = self
+                .instructions
+                .get(&pc)
+                .ok_or("context helper: instruction-boundary target")?;
+            self.covered.insert(pc);
+            let next = pc
+                .checked_add(i.len() as u32)
+                .ok_or("context helper: instruction overflow")?;
+            match i.code() {
+                Code::Push_r32 | Code::Pushd_imm8 | Code::Pushd_imm32 => {
+                    let value = operand(i, 0, &state, self.selector_va)?;
+                    if !matches!(value, Value::Saved(_) | Value::Number(Scalar::Constant(_))) {
+                        return Err("context helper: unsupported stack value".into());
+                    }
+                    let sp = state
+                        .sp
+                        .checked_sub(4)
+                        .ok_or("context helper: stack overflow")?;
+                    if sp < -16 || state.stack.insert(sp, value).is_some() {
+                        return Err("context helper: stack ownership/budget".into());
+                    }
+                    state.sp = sp;
+                    self.temporary_bytes = self.temporary_bytes.max((-sp) as u32);
+                    state.registers[4] = Value::Stack(sp);
+                }
+                Code::Pop_r32 => {
+                    let target = register(i.op0_register())?;
+                    if target == 4 || state.sp >= 0 {
+                        return Err("context helper: protected POP".into());
+                    }
+                    let value = state
+                        .stack
+                        .remove(&state.sp)
+                        .ok_or("context helper: absent POP")?;
+                    if matches!(value,Value::Saved(index) if usize::from(index)!=target) {
+                        return Err("context helper: mismatched saved register".into());
+                    }
+                    state.registers[target] = value;
+                    state.sp += 4;
+                    state.registers[4] = Value::Stack(state.sp);
+                }
+                Code::Mov_r32_rm32 | Code::Mov_rm32_r32 if i.op0_kind() == OpKind::Register => {
+                    let target = register(i.op0_register())?;
+                    if !matches!(target, 0 | 1 | 2 | 5) {
+                        return Err("context helper: protected register write".into());
+                    }
+                    let value = operand(i, 1, &state, self.selector_va)?;
+                    if matches!(value, Value::Unknown | Value::Return) {
+                        return Err("context helper: unknown/protected MOV".into());
+                    }
+                    state.registers[target] = value;
+                }
+                Code::Cmp_rm32_imm32 | Code::Cmp_rm32_imm8 | Code::Cmp_r32_rm32 => {
+                    state.flags = Some((
+                        number(operand(i, 0, &state, self.selector_va)?)?,
+                        number(operand(i, 1, &state, self.selector_va)?)?,
+                    ));
+                }
+                Code::Je_rel8_32 | Code::Jb_rel8_32 | Code::Jbe_rel8_32 => {
+                    let predicate = match (i.code(), state.flags) {
+                        (Code::Je_rel8_32, Some((Scalar::Selector, Scalar::Constant(value)))) => {
+                            Predicate::SelectorEquals(value)
+                        }
+                        (Code::Jb_rel8_32, Some((Scalar::Esp, Scalar::Limit))) => {
+                            Predicate::EspBelowLimit
+                        }
+                        (Code::Jbe_rel8_32, Some((Scalar::Esp, Scalar::Base))) => {
+                            Predicate::EspAtMostBase
+                        }
+                        _ => {
+                            return Err("context helper: unknown or unsupported branch flags".into())
+                        }
+                    };
+                    let yes = self.walk(i.near_branch32(), state.clone())?;
+                    let no = self.walk(next, state)?;
+                    return Ok(Decision::Branch(predicate, Box::new(yes), Box::new(no)));
+                }
+                Code::Jmp_rel8_32 | Code::Jmp_rel32_32 => {
+                    pc = i.near_branch32();
+                    continue;
+                }
+                Code::Int_imm8 => {
+                    if i.immediate8() != 0x29
+                        || state.registers[1] != Value::Number(Scalar::Constant(13))
+                        || state.sp != -4
+                        || state.stack.get(&-4) != Some(&Value::Saved(5))
+                    {
+                        return Err("context helper: unproved failure/trap contract".into());
+                    }
+                    return Ok(Decision::FailFast13);
+                }
+                Code::Retnd => {
+                    if state.sp != 0
+                        || state.stack != initial_stack()
+                        || [3, 5, 6, 7]
+                            .into_iter()
+                            .any(|index| state.registers[index] != Value::Saved(index as u8))
+                    {
+                        return Err("context helper: return stack/saved-state contract".into());
+                    }
+                    return Ok(Decision::Return);
+                }
+                _ => return Err("context helper: unsupported instruction/effect".into()),
+            }
+            pc = next;
+        }
+    }
+}
+fn initial_stack() -> BTreeMap<i32, Value> {
+    BTreeMap::from([(0, Value::Return), (4, Value::Context)])
+}
+
+/// Derive the complete selector/bounds/failure decision from original decoded
+/// instructions. All selector outcomes are explored; neither file contents nor
+/// sampled runtime selector values choose a proof path. Unsupported instructions,
+/// target interiors, cycles, changed field widths/offsets and changed failure or
+/// saved-state contracts reject before native source is returned.
+pub(crate) fn prove_context_check(
+    code: &[u8],
+    origin: u32,
+    selector_va: u32,
+) -> Result<ContextCheckProof, String> {
+    let end = origin
+        .checked_add(u32::try_from(code.len()).map_err(|_| "context helper size")?)
+        .ok_or("context helper: code overflow")?;
+    let selector_end = selector_va
+        .checked_add(4)
+        .ok_or("context helper: selector overflow")?;
+    if code.is_empty()
+        || code.len() > 256
+        || origin == 0
+        || selector_va == 0
+        || !selector_va.is_multiple_of(4)
+        || (origin < selector_end && selector_va < end)
+    {
+        return Err("context helper: code/selector range contract".into());
+    }
+    let mut decoder = Decoder::with_ip(32, code, u64::from(origin), DecoderOptions::NONE);
+    let mut instructions = BTreeMap::new();
+    while decoder.can_decode() {
+        let i = decoder.decode();
+        let offset = (i.ip() as u32 - origin) as usize;
+        let first = code[offset];
+        let fs_load = first == 0x64
+            && i.code() == Code::Mov_r32_rm32
+            && i.op1_kind() == OpKind::Memory
+            && i.segment_prefix() == Register::FS;
+        if i.is_invalid()
+            || i.has_lock_prefix()
+            || i.has_rep_prefix()
+            || i.has_repne_prefix()
+            || i.memory_index() != Register::None
+            || (i.segment_prefix() != Register::None && !fs_load)
+            || (matches!(first, 0x26 | 0x2e | 0x36 | 0x3e | 0x64 | 0x65 | 0x66 | 0x67) && !fs_load)
+            || instructions.len() >= 64
+        {
+            return Err("context helper: instruction/prefix/width policy".into());
+        }
+        // Reject doubled or hidden width/address prefixes on the one FS form.
+        if fs_load && (i.len() != 7 || code[offset + 1] != 0x8b) {
+            return Err("context helper: exact FS self form".into());
+        }
+        instructions.insert(i.ip() as u32, i);
+    }
+    let mut registers = std::array::from_fn(|index| {
+        if [3, 5, 6, 7].contains(&index) {
+            Value::Saved(index as u8)
+        } else {
+            Value::Unknown
+        }
+    });
+    registers[4] = Value::Stack(0);
+    let mut proof = Proof {
+        instructions: &instructions,
+        selector_va,
+        budget: 0,
+        covered: BTreeSet::new(),
+        temporary_bytes: 0,
+    };
+    let decision = proof.walk(
+        origin,
+        State {
+            registers,
+            stack: initial_stack(),
+            sp: 0,
+            flags: None,
+            visited: BTreeSet::new(),
+        },
+    )?;
+    if proof.covered.len() != instructions.len() {
+        return Err("context helper: unproved or trailing instruction region".into());
+    }
+    let Decision::Branch(Predicate::SelectorEquals(bypass), _, _) = &decision else {
+        return Err("context helper: missing runtime selector decision".into());
+    };
+    // This structural equality compares decoded effects, not application byte
+    // hashes/addresses. Alternative equivalent register moves remain admissible.
+    let expected = Decision::Branch(
+        Predicate::SelectorEquals(*bypass),
+        Box::new(Decision::Return),
+        Box::new(Decision::Branch(
+            Predicate::EspBelowLimit,
+            Box::new(Decision::FailFast13),
+            Box::new(Decision::Branch(
+                Predicate::EspAtMostBase,
+                Box::new(Decision::Return),
+                Box::new(Decision::FailFast13),
+            )),
+        )),
+    );
+    if decision != expected {
+        return Err("context helper: changed selector/bounds/failure decision".into());
+    }
+    Ok(ContextCheckProof {
+        body: format!("self.preflight(owner)?;\n{}\n", decision.source()),
+        selector_va,
+        bypass_selector: *bypass,
+        temporary_bytes: proof.temporary_bytes,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    const ORIGIN: u32 = 0x402877;
+    const SELECTOR: u32 = 0x415128;
+    fn code() -> Vec<u8> {
+        vec![
+            0x55, 0x8b, 0xec, 0x81, 0x3d, 0x28, 0x51, 0x41, 0, 0xf9, 0x1b, 0x40, 0, 0x74, 0x1f,
+            0x64, 0x8b, 0x0d, 0x18, 0, 0, 0, 0x8b, 0x45, 8, 0x8b, 0x80, 0xc4, 0, 0, 0, 0x3b, 0x41,
+            8, 0x72, 5, 0x3b, 0x41, 4, 0x76, 5, 0x6a, 13, 0x59, 0xcd, 0x29, 0x5d, 0xc3,
+        ]
+    }
+    #[test]
+    fn decoded_original_contract_and_relocated_instruction_identity() {
+        let proof = prove_context_check(&code(), ORIGIN, SELECTOR).unwrap();
+        assert_eq!(proof.selector_va(), SELECTOR);
+        assert_eq!(proof.bypass_selector(), 0x401bf9);
+        assert_eq!(proof.failure_code(), 13);
+        assert!(proof.body().contains("selector==4201465u32"));
+        assert!(proof.body().contains("self.captured_esp<=self.base"));
+        assert_eq!(
+            proof.body(),
+            prove_context_check(&code(), 0x1000, SELECTOR)
+                .unwrap()
+                .body()
+        );
+        let mut alternate = code();
+        alternate[1..3].copy_from_slice(&[0x89, 0xe5]);
+        assert_eq!(
+            proof.body(),
+            prove_context_check(&alternate, ORIGIN, SELECTOR)
+                .unwrap()
+                .body()
+        );
+        let mut relocated = code();
+        relocated[5..9].copy_from_slice(&0x6000u32.to_le_bytes());
+        assert_eq!(
+            proof.body(),
+            prove_context_check(&relocated, ORIGIN, 0x6000)
+                .unwrap()
+                .body()
+        );
+    }
+    #[test]
+    fn changed_offsets_branches_failure_and_saved_state_reject() {
+        for (at, value) in [
+            (14, 30),
+            (18, 4),
+            (24, 12),
+            (27, 0xc0),
+            (33, 4),
+            (35, 4),
+            (38, 8),
+            (39, 0x72),
+            (40, 4),
+            (42, 12),
+            (43, 0x58),
+            (45, 0x28),
+            (46, 0x5b),
+            (47, 0x90),
+        ] {
+            let mut bad = code();
+            bad[at] = value;
+            assert!(
+                prove_context_check(&bad, ORIGIN, SELECTOR).is_err(),
+                "accepted mutation{at}"
+            );
+        }
+        for end in 0..code().len() {
+            assert!(
+                prove_context_check(&code()[..end], ORIGIN, SELECTOR).is_err(),
+                "truncated{end}"
+            );
+        }
+        assert!(prove_context_check(&code(), u32::MAX - 20, SELECTOR).is_err());
+        assert!(prove_context_check(&code(), ORIGIN, ORIGIN + 1).is_err());
+        assert!(prove_context_check(&code(), ORIGIN, SELECTOR + 4).is_err());
+        for prefix in [0x66, 0x67, 0xf2, 0xf3, 0x64] {
+            let mut bytes = vec![prefix];
+            bytes.extend(code());
+            assert!(prove_context_check(&bytes, ORIGIN, SELECTOR).is_err());
+        }
+        for suffix in [0x90, 0xcc, 0xc3] {
+            let mut bytes = code();
+            bytes.push(suffix);
+            assert!(prove_context_check(&bytes, ORIGIN, SELECTOR).is_err());
+        }
+    }
+    #[test]
+    fn generated_owner_lifetime_and_complete_stack_boundaries() {
+        let proof = prove_context_check(&code(), ORIGIN, SELECTOR).unwrap();
+        let source = format!(
+            r#"{EMITTED_TYPES}
+impl ThreadContext {{fn check(&self,owner:u64,selector:u32)->Result<(),&'static str>{{{}}}}}
+fn main(){{
+ for esp in [0x1000,0x1001,0x1800,0x2000] {{
+  let mut context=ThreadContext::new(7,0x1000,0x2000,esp).unwrap();
+  for selector in [0,0x401bf9,u32::MAX] {{assert_eq!(context.check(7,selector),Ok(()));}}
+  assert!(context.check(8,0x401bf9).is_err());context.invalidate();
+  assert!(context.check(7,0).is_err());assert!(context.check(7,0x401bf9).is_err());
+ }}
+ for esp in [0,0xfff,0x2001,u32::MAX] {{assert!(ThreadContext::new(7,0x1000,0x2000,esp).is_err());}}
+ for (owner,low,high,esp) in [(0,1,2,1),(7,0,2,1),(7,2,1,1),(7,1,1,1)] {{
+  assert!(ThreadContext::new(owner,low,high,esp).is_err());
+ }}
+ let context=ThreadContext::new(7,1,u32::MAX,u32::MAX).unwrap();
+ assert_eq!(context.check(7,0),Ok(()));
+}}
+"#,
+            proof.body()
+        );
+        let directory =
+            std::env::temp_dir().join(format!("w2l-context-boundary-{}", std::process::id()));
+        std::fs::create_dir_all(&directory).unwrap();
+        let file = directory.join("run.rs");
+        let binary = directory.join(if cfg!(windows) { "run.exe" } else { "run" });
+        std::fs::write(&file, source).unwrap();
+        let result = std::process::Command::new("rustc")
+            .arg("--edition=2021")
+            .arg(&file)
+            .arg("-o")
+            .arg(&binary)
+            .output()
+            .unwrap();
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn original_decision_distinguishes_selector_bypass_from_fail_fast() {
+        let proof = prove_context_check(&code(), ORIGIN, SELECTOR).unwrap();
+        // Exercise only the decoded decision in this test, including states
+        // deliberately excluded by the production constructor/preflight. This
+        // makes the stronger entry restriction visible instead of claiming the
+        // original selector bypass itself rejects every invalid ESP.
+        let original = proof
+            .body()
+            .strip_prefix("self.preflight(owner)?;\n")
+            .unwrap();
+        let source = format!(
+            r#"{EMITTED_TYPES}
+impl ThreadContext {{fn original_decision(&self,selector:u32)->Result<(),&'static str>{{{original}}}}}
+fn main(){{
+ for (esp,inside) in [(0,false),(0xfff,false),(0x1000,true),(0x1001,true),(0x2000,true),(0x2001,false),(u32::MAX,false)] {{
+  let raw=ThreadContext{{owner:7,limit:0x1000,base:0x2000,captured_esp:esp,live:true}};
+  assert_eq!(raw.original_decision(0x401bf9),Ok(()));
+  for selector in [0,0x401bf8,0x401bfa,u32::MAX] {{
+   let observed=raw.original_decision(selector);
+   assert_eq!(observed.is_ok(),inside,"ESP={{esp:#x}}, selector={{selector:#x}}");
+   if !inside {{assert!(observed.unwrap_err().contains("INT 29 with ECX=13"));}}
+  }}
+ }}
+}}
+"#
+        );
+        let directory = std::env::temp_dir().join(format!(
+            "w2l-context-original-decision-{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&directory).unwrap();
+        let file = directory.join("run.rs");
+        let binary = directory.join(if cfg!(windows) { "run.exe" } else { "run" });
+        std::fs::write(&file, source).unwrap();
+        let result = std::process::Command::new("rustc")
+            .arg("--edition=2021")
+            .arg(&file)
+            .arg("-o")
+            .arg(&binary)
+            .output()
+            .unwrap();
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+}

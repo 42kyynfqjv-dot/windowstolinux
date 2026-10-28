@@ -273,14 +273,165 @@ def handler_fragments(image,index,bound):
         raw = bytes.fromhex(row['code_hex'])
         if raw[:1] == b'\xe8':
             calls.append(dict(call_rva=row['rva'],target_rva=row['rva']+5+struct.unpack('<i',raw[1:])[0]))
-    return [normalizer,prefix,installer], dict(
+    combined = fragment(pseudo,window_rows,handler,installer_end,'handler-through-installer',
+        'complete original prefix through pair installation; helper effects and flags branch require composed proof')
+    return [normalizer,prefix,installer,combined], dict(
         handler_rva=handler,normalizer_call_rva=call_rva,normalizer_rva=helper,
         feature_word_rva=feature_word-base,feature_word_value='unobserved runtime value; initialized ownership still required',
-        prefix_calls=calls,installer_rva=installer_start,
+        prefix_calls=calls,installer_rva=installer_start,installer_end_rva=installer_end,
         installer_fields=dict(handler_pair_record=-28,handler_pair_context=-24,
             handler_context_argument=16,establisher_pair_pointer=-4,
             owner_ebp_from_establisher=16,owner_pair_pointer=-20,exception_code_offset=0),
         unresolved='Event-code transformation, cookie/context helper effects, exception flags, live pointer ownership and execution ordering require production proof')
+
+
+def linked_cfg(image,index,entry,name,external_jumps=()):
+    """Retain all local direct edges; calls and declared tail exits stay effects."""
+    pending=[entry];visited={};calls=[];tails=[];traps=[]
+    while pending:
+        at=pending.pop()
+        if at in visited:continue
+        if not entry <= at < entry+512 or at not in index or len(visited)>=256:
+            raise ValueError('linked helper graph leaves bounded original range')
+        row=index[at];visited[at]=row;raw=bytes.fromhex(row['code_hex']);after=at+len(raw)
+        if raw==b'\xc3' or (raw[0]==0xc2 and len(raw)==3):continue
+        if raw[0]==0xe8:
+            calls.append(dict(call_rva=at,target_rva=after+struct.unpack('<i',raw[1:])[0]))
+            pending.append(after)
+        elif raw[0] in (0xe9,0xeb):
+            delta=struct.unpack('<i' if raw[0]==0xe9 else '<b',raw[1:])[0]
+            target=after+delta
+            if target in external_jumps:tails.append(dict(jump_rva=at,target_rva=target))
+            else:pending.append(target)
+        elif 0x70<=raw[0]<=0x7f:
+            pending.extend([after,after+struct.unpack('<b',raw[1:])[0]])
+        elif raw[0]==0x0f and len(raw)>1 and 0x80<=raw[1]<=0x8f:
+            pending.extend([after,after+struct.unpack('<i',raw[2:])[0]])
+        elif raw[:1]==b'\xff':
+            raise ValueError('unbound linked-helper indirect control effect')
+        elif raw==b'\xcd\x29':
+            traps.append(dict(rva=at,kind='INT 29; failure contract required'))
+            # Retaining fallthrough is conservative evidence, not a claim the
+            # Windows fail-fast trap returns successfully.
+            pending.append(after)
+        else:pending.append(after)
+    end=max(row['rva']+row['size'] for row in visited.values())
+    all_rows=[];cursor=entry
+    while cursor<end:
+        if cursor not in index:raise ValueError('linked helper byte coverage gap')
+        row=index[cursor];all_rows.append(row);cursor+=row['size']
+    block=fragment(dict(rva=entry,size=end-entry),all_rows,entry,end,name,
+        'complete bounded local instruction envelope; call/tail/trap effects require separate proof')
+    block.update(direct_calls=calls,external_tail_edges=tails,traps=traps)
+    return block
+
+
+def module_word(image,va,role):
+    base,sections=pe_sections(image)
+    owners=[s for s in sections if base+s['rva']<=va and va+4<=base+s['rva']+s['virtual']]
+    if len(owners)!=1:raise ValueError('module word has ambiguous/incomplete virtual ownership')
+    owner=owners[0];offset=va-base-owner['rva']
+    backed=max(0,min(4,owner['size']-offset))
+    prefix=cut(image,owner['start']+offset,backed) if backed else b''
+    initial=prefix+b'\0'*(4-backed)
+    return dict(rva=va-base,size=4,section_rva=owner['rva'],section_flags=owner['flags'],
+        file_backed_bytes=backed,file_prefix_hex=prefix.hex(),zero_fill_bytes=4-backed,
+        image_initial_word=struct.unpack('<I',initial)[0],role=role,
+        runtime_value='unobserved; image initial bytes are not a proof of post-startup state')
+
+
+def connected_helper_evidence(image,index,bound,frames,blocks,handler,observation):
+    base,_=pe_sections(image);main=bound['_main'];main_rows=function_rows(main,index)
+    by_name={b['name']:b for b in blocks}
+    memset_calls=[r for r in main['relocations'] if r['symbol']=='_memset' and r['kind']==0x14 and r['addend']==0]
+    if len(memset_calls)!=1:raise ValueError('missing unique original memset call')
+    memset=linked_cfg(image,index,memset_calls[0]['target_va']-base,'original-memset')
+    memset_words=[]
+    for row in memset['instructions']:
+        raw=bytes.fromhex(row['code_hex'])
+        if raw[:3]==b'\x0f\xba\x25' and len(raw)==8:
+            va=u32(raw,3)
+            if va not in [base+w['rva'] for w in memset_words]:
+                memset_words.append(module_word(image,va,'memset CPU-dispatch feature word'))
+    if len(memset_words)!=2:raise ValueError('original memset feature inventory changed')
+    prefix_calls=handler['prefix_calls']
+    if len(prefix_calls)!=3:raise ValueError('original handler prefix dependency inventory changed')
+    guard_entry=prefix_calls[1]['target_rva'];context_entry=prefix_calls[2]['target_rva']
+    guard_rows=[];cursor=guard_entry
+    for _ in range(64):
+        row=index.get(cursor)
+        if row is None:raise ValueError('guard helper instruction gap')
+        guard_rows.append(row);raw=bytes.fromhex(row['code_hex'])
+        if raw[0]==0xe8:
+            security_entry=cursor+len(raw)+struct.unpack('<i',raw[1:])[0]
+            break
+        cursor+=row['size']
+    else:raise ValueError('guard helper has no bounded security call')
+    guard=linked_cfg(image,index,guard_entry,'original-guard-validator',[security_entry])
+    # Security check is CMP/JNE/RET plus a failure tail edge. Derive the failure
+    # destination from original instructions, retaining that external obligation.
+    cursor=security_entry
+    for _ in range(16):
+        row=index.get(cursor)
+        if row is None:raise ValueError('security helper instruction gap')
+        raw=bytes.fromhex(row['code_hex'])
+        if raw[0]==0xe9:
+            failure=cursor+len(raw)+struct.unpack('<i',raw[1:])[0]
+            break
+        cursor+=row['size']
+    else:raise ValueError('security helper failure edge not bounded')
+    security=linked_cfg(image,index,security_entry,'original-security-check',[failure])
+    cookie_refs=[r['target_va'] for f in bound.values() for r in f['relocations'] if r['symbol']=='___security_cookie']
+    first=bytes.fromhex(security['instructions'][0]['code_hex'])
+    if len(set(cookie_refs))!=1 or len(first)!=6 or first[:2]!=b'\x3b\x0d' or u32(first,2)!=cookie_refs[0]:
+        raise ValueError('security comparison cookie provenance differs from frames')
+    context=linked_cfg(image,index,context_entry,'original-context-check')
+    selectors=[r for r in context['instructions'] if r['code_hex'].startswith('813d') and r['size']==10]
+    if len(selectors)!=1:raise ValueError('context check selector inventory changed')
+    raw=bytes.fromhex(selectors[0]['code_hex']);selector_va=u32(raw,2);stub_va=u32(raw,6)
+    stub=index.get(stub_va-base)
+    if stub is None or stub['code_hex']!='c20000':raise ValueError('context selector comparison stub changed')
+    selector=module_word(image,selector_va,'context-check runtime dispatch pointer')
+    selector.update(comparison_stub_rva=stub_va-base,comparison_stub_hex=stub['code_hex'])
+    # Include the complete original selected landing, context-field setup,
+    # manual Restore call, abandoned return sentinel and three capture stores.
+    landing=by_name['main-selected-handler-0'];target=observation['restore_target_rva']
+    cursor=target;capture=[]
+    for prefix in [b'\x89\x85',b'\x89\xa5',b'\x89\xad']:
+        row=index.get(cursor)
+        if row is None:raise ValueError('missing manual restore capture instruction')
+        raw=bytes.fromhex(row['code_hex'])
+        if len(raw)!=6 or raw[:2]!=prefix:raise ValueError('manual restoration capture sequence changed')
+        capture.append(row);cursor+=6
+    continuation=fragment(main,main_rows,landing['rva'],cursor,'selected-through-capture',
+        'complete original landing, context setup, nonlocal Restore call and capture; no omitted call in this interval')
+    restore_calls=[r for r in main['relocations'] if r['symbol']=='_Restore' and r['kind']==0x14]
+    if len(restore_calls)!=1:raise ValueError('manual restoration call provenance changed')
+    continuation['restore_call_rva']=main['rva']+restore_calls[0]['offset']-1
+    continuation['restore_target_rva']=target
+    continuation['capture_end_rva']=cursor
+    continuation['capture_stores']=[dict(rva=r['rva'],frame_offset=struct.unpack('<i',bytes.fromhex(r['code_hex'])[2:])[0],
+        register=reg) for r,reg in zip(capture,['EAX','ESP','EBP'])]
+    header=u32(image,60)
+    directory_rva,directory_size=struct.unpack('<II',cut(image,header+24+96+10*8,8))
+    if not directory_rva or not 4<=directory_size<=512:raise ValueError('load-config declared range unsupported')
+    declared=mapped_bytes(image,base+directory_rva,directory_size)
+    embedded_size=u32(declared,0)
+    if not directory_size<=embedded_size<=512:raise ValueError('load-config embedded extent unsupported')
+    embedded=mapped_bytes(image,base+directory_rva,embedded_size)
+    configuration=dict(rva=directory_rva,declared_directory_size=directory_size,embedded_size=embedded_size,
+        declared_bytes_hex=declared.hex(),embedded_bytes_hex=embedded.hex(),
+        dll_characteristics=struct.unpack('<H',cut(image,header+24+70,2))[0],
+        interpretation='Bytes beyond directory size are recorded as embedded image evidence, not asserted loader-consumed fields')
+    return [memset,guard,security,context,continuation],dict(
+        memset_call_rva=main['rva']+memset_calls[0]['offset']-1,
+        memset_feature_words=memset_words,guard_entry_rva=guard_entry,
+        security_entry_rva=security_entry,security_failure_target_rva=failure,
+        cookie_word=module_word(image,cookie_refs[0],'security cookie read by original checker'),
+        context_selector=selector,load_configuration=configuration,
+        failure_obligation='Security mismatch tail target and INT29 effects are retained, not treated as successful returns',
+        context_obligation='FS:[0x18] TEB identity, stack bounds and initialized CONTEXT.ESP require owned runtime state',
+        memset_obligation='All scalar/REP/SIMD paths and CPU-dispatch feature values require proven effects or an explicit independently validated effect contract')
 
 
 def frame_evidence(root):
@@ -380,9 +531,12 @@ def frame_evidence(root):
                            original_relocations=function['relocations']))
     handler_blocks,handler = handler_fragments(image,index,bound)
     fragments.extend(handler_blocks)
+    observation=json.loads((root/'report.json').read_text())['observation']
+    connected_blocks,connected=connected_helper_evidence(image,index,bound,frames,fragments,handler,observation)
+    fragments.extend(connected_blocks)
     return dict(kind='original frame/filter fragment provenance; not whole startup or Windows dispatch equivalence',
         pe_sha256=sha(image),object_sha256=sha(obj),disassembly_sha256=sha((root/'disasm.txt').read_bytes()),
-        frames=frames,fragments=fragments,handler=handler,
+        frames=frames,fragments=fragments,handler=handler,connected=connected,
         cuts=[
             'Original FS registration/cookie/handler state is retained but is not initialized by a slice extraction.',
             'Main initialization and activation are separate cuts; memset/GetModuleHandleW effects between them remain unproved.',
@@ -404,7 +558,7 @@ def artifact_tests(root):
     """Independent fragment expectations and unexecuted evidence mutations."""
     import tempfile
     import unittest
-    original = {name:(root/name).read_bytes() for name in ['unwind.obj','unwind.exe','disasm.txt']}
+    original = {name:(root/name).read_bytes() for name in ['unwind.obj','unwind.exe','disasm.txt','report.json']}
     baseline = frame_evidence(root)
     base,mappings = pe_sections(original['unwind.exe'])
     blocks = {b['name']:b for b in baseline['fragments']}
@@ -470,6 +624,43 @@ def artifact_tests(root):
             rows = function_rows(function,index)
             start = blocks['Inner-initialize']['rva']+1
             with self.assertRaises(ValueError): fragment(function,rows,start,start+6,'bad','test')
+        def test_connected_helpers_retain_failure_and_initial_state_limits(self):
+            self.assertTrue(blocks['original-guard-validator']['direct_calls'])
+            self.assertTrue(blocks['original-guard-validator']['external_tail_edges'])
+            self.assertEqual(blocks['original-security-check']['external_tail_edges'][0]['target_rva'],
+                             baseline['connected']['security_failure_target_rva'])
+            self.assertEqual(len(blocks['original-context-check']['traps']),1)
+            memset=blocks['original-memset']['instructions']
+            self.assertTrue(any(row['code_hex']=='f3aa' for row in memset))
+            self.assertTrue(any(row['code_hex'].startswith('f30f7f') for row in memset))
+            words=baseline['connected']['memset_feature_words']
+            self.assertEqual(sorted((w['file_backed_bytes'],w['zero_fill_bytes']) for w in words),[(0,4),(4,0)])
+        def test_cookie_comparison_must_match_prolog_identity(self):
+            check=blocks['original-security-check']
+            row=check['instructions'][0];raw=bytes.fromhex(row['code_hex'])
+            changed=raw[:2]+struct.pack('<I',u32(raw,2)+4)
+            image=patch(original['unwind.exe'],file_at(row['rva']),changed)
+            text=original['disasm.txt'].decode()
+            address=f'{base+row["rva"]:08X}:'
+            lines=text.splitlines(keepends=True)
+            found=[i for i,line in enumerate(lines) if address in line]
+            self.assertEqual(len(found),1)
+            before=' '.join(f'{b:02X}' for b in raw)
+            after=' '.join(f'{b:02X}' for b in changed)
+            self.assertIn(before,lines[found[0]])
+            lines[found[0]]=lines[found[0]].replace(before,after,1)
+            with self.assertRaisesRegex(ValueError,'cookie provenance'):
+                replay({'unwind.exe':image,'disasm.txt':''.join(lines).encode()})
+        def test_continuation_includes_real_restore_call_and_capture(self):
+            continuation=blocks['selected-through-capture']
+            self.assertEqual([r['register'] for r in continuation['capture_stores']],['EAX','ESP','EBP'])
+            self.assertTrue(any(r['rva']==continuation['restore_call_rva'] and r['code_hex'].startswith('e8')
+                                for r in continuation['instructions']))
+            self.assertTrue(any(r['code_hex'].startswith('830d') for r in continuation['instructions']))
+            report=json.loads(original['report.json'])
+            report['observation']['restore_target_rva']+=6
+            with self.assertRaisesRegex(ValueError,'capture sequence'):
+                replay({'report.json':json.dumps(report).encode()})
     result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(FrameEvidenceTests))
     if not result.wasSuccessful():
         raise SystemExit(1)
