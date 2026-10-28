@@ -238,3 +238,51 @@ OwnedExceptionEvent uses owned FrameId, while this source uses NormalFrameId in
 a leased normal epoch; bypassing that identity distinction or reconstructing a
 Windows CONTEXT from these guest CALL registers is invalid. C++ FuncInfo dispatch
 for the original formatter remains a separate unresolved part of that composition.
+
+
+## Suspended source validation before dispatch
+
+The pending event now provides a read-only `dispatch_source` projection of the
+actual interrupted EH4 frame. It checks the live pending identity, thread-head
+capability, exact source binding, typed registers, flag knowledge, CALL stack
+position, unique protected continuation, and untouched epilog cursor. The same
+storage reconstruction and protected-frame comparison used by normal execution
+then revalidate cookies, encoded scope, saved words and registration metadata.
+Normal execution still requires the unsuspended epoch: no pending bit is cleared
+or temporarily hidden to obtain this projection. No frame storage, lock, guest
+register or saved outer event is mutated by successful or rejected projection.
+
+The existing two native issuance functions now also exercise the connected source
+projection. Independent mutations cover changed register/flag knowledge, cookie,
+encoded scope, saved register word, lost CALL tag and partial epilog cursor. These
+checks run for both exception flags0/1; they are component tests and add no Windows
+exception or full-PE comparisons. Local175root/171frame/92CRT tests and Clippy pass.
+
+This supplies validated input for dispatch; it does not invent a handler outcome.
+A complete bridge must represent a new event whose source is NormalFrameId while
+preserving the finished outer Machine event and its context. Existing owned-event
+handler transitions assume FrameId registrations, and the leased normal epoch
+prohibits those callbacks. Simply clearing suspension or coercing the IDs would
+remove the required ownership distinction. The next coherent change needs an
+explicit nested-event source/lifetime and handler-result receipt tied to that
+source, followed by original cleanup/restoration; formatter C++ FuncInfo remains
+unproved. Full startup and rcedit remain rejected.
+
+### Additional timeout investigation
+
+The max failure in40705066650 is a retained process wait, not output-pipe drain:
+`corpus/launch.py` sends output directly to files and times `Popen.wait`. Its
+observer validated the same live PID/creation time,0.015625CPU seconds, loaded CRT
+and one WCT thread with no detected cycle. Those observations establish a live
+original process at timeout; they do not identify the Windows wait or root cause.
+A separate local real-child regression writes all64expected bytes, stays alive,
+and verifies matching output still raises TimeoutExpired, preserves diagnostics
+and kills/reaps the owned child. The two launch tests pass; this reproduces the
+harness boundary, not the Windows program's underlying hang.
+
+For74649b09, dedicated40707782515 passed; push40707782489 instead failed original
+Windows corpus case23 (PE SHA256
+`6c4846a95a41aecc55d122576c091538094902940315a7463aff56b707949ab5`),
+also at `process.wait` after15seconds. The PR run's authored-Windows job passed.
+This is a distinct preserved failure, not a successful reproduction of the max
+cause. No retry, relaxed timeout or substitution of translated output was used.

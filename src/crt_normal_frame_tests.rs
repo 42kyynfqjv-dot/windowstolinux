@@ -298,6 +298,24 @@ fn pending_normal_exception(){
    let registers=c.r;let before=CrtCpu::pointer(c.r[4])?;
    let pending=CrtNormalException::issue(&mut rt,&mut c,e,&b,raise_site())?;
    pending.validate_pending(&rt,e)?;
+   let source=pending.dispatch_source(&rt,&c,e,&b)?;
+   assert_eq!(source.try_level,0);assert_eq!(source.record,b.at(&rt,b.layout.record)?.address());
+   assert_eq!(source.words.get(&-32),None); // ordinary writes are not promoted to protected metadata
+   let flags_before=c.flags;c.flags.cf=Some(!c.flags.cf.unwrap_or(false));
+   assert!(pending.dispatch_source(&rt,&c,e,&b).is_err());c.flags=flags_before;
+   let reg=c.r[0];c.r[0]=CrtValue::scalar(123);assert!(pending.dispatch_source(&rt,&c,e,&b).is_err());c.r[0]=reg;
+   let cookie=rt.resolve_absolute(b.layout.cookie_address,CrtRegionKind::Module)?;
+   let value=rt.load(cookie,32)?;rt.store(cookie,32,CrtValue::scalar(0))?;
+   assert!(pending.dispatch_source(&rt,&c,e,&b).is_err());rt.store(cookie,32,value)?;
+   let scope=b.at(&rt,b.layout.scope_slot)?;let value=rt.load(scope,32)?;
+   rt.store(scope,32,CrtValue::scalar(0))?;assert!(pending.dispatch_source(&rt,&c,e,&b).is_err());rt.store(scope,32,value)?;
+   let saved=b.at(&rt,-36)?;let value=rt.load(saved,32)?;
+   rt.store(saved,32,CrtValue::scalar(123))?;assert!(pending.dispatch_source(&rt,&c,e,&b).is_err());rt.store(saved,32,value)?;
+   let issued_return=rt.offset(before,-4)?;let value=rt.tags.remove(&issued_return.address()).unwrap();
+   assert!(pending.dispatch_source(&rt,&c,e,&b).is_err());rt.tags.insert(issued_return.address(),value);
+   let frame=e.registry.normal_epoch.as_mut().unwrap().frames.last_mut().unwrap();frame.next=1;
+   assert!(pending.dispatch_source(&rt,&c,e,&b).is_err());e.registry.normal_epoch.as_mut().unwrap().frames.last_mut().unwrap().next=0;
+   pending.dispatch_source(&rt,&c,e,&b)?;
    let foreign=runtime(e.registry);assert!(pending.validate_pending(&foreign,e).is_err());
    let issued_sp=c.r[4];assert!(CrtNormalException::issue(&mut rt,&mut c,e,&b,raise_site()).is_err());assert_eq!(c.r[4],issued_sp);
    assert_eq!(pending.call_registers,registers);assert_eq!(pending.code,0xe0420042);assert_eq!(pending.noncontinuable,flags==1);

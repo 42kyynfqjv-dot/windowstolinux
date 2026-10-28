@@ -75,7 +75,11 @@ impl CrtNormalBinding {
    return_id:cpu.return_id,layout,cookie,id:None,consumed:Default::default(),done:false})
  }
  fn authority(&self,rt:&CrtStreamRuntime,epoch:&NormalCallEpoch<'_>)->RegistryResult<()>{
-  epoch.state()?;rt.validate_thread_head(self.token)?;
+  epoch.state()?;self.identity(rt,epoch)?;
+  if let Some(id)=self.id{epoch.top(id)?;}else if epoch.head()?!=self.previous{return Err("CRT normal predecessor no longer live");}Ok(())
+ }
+ fn identity(&self,rt:&CrtStreamRuntime,epoch:&NormalCallEpoch<'_>)->RegistryResult<()>{
+  rt.validate_thread_head(self.token)?;
   if self.done||rt.anchor!=self.anchor||rt.owner!=self.identity.owner||rt.thread!=self.identity.instance
    ||epoch.registry.identity!=self.identity||epoch.generation!=self.epoch
    ||self.token.registry!=self.identity.instance||self.token.epoch!=self.epoch
@@ -83,7 +87,6 @@ impl CrtNormalBinding {
    return Err("CRT normal stale epoch/arena/predecessor");
   }
   rt.valid(self.caller,4)?;
-  if let Some(id)=self.id{epoch.top(id)?;}else if epoch.head()?!=self.previous{return Err("CRT normal predecessor no longer live");}
   Ok(())
  }
  fn at(&self,rt:&CrtStreamRuntime,offset:i32)->RegistryResult<CrtPointer>{rt.offset(self.caller,i64::from(offset))}
@@ -93,6 +96,11 @@ impl CrtNormalBinding {
  /// remain forgotten and the restored typed register must still match.
  fn image(&self,rt:&CrtStreamRuntime,cpu:&CrtCpu,epoch:&NormalCallEpoch<'_>)->RegistryResult<FrameImage<RegistryHead>>{
   self.authority(rt,epoch)?;
+  self.storage_image(rt,cpu)
+ }
+ /// Read-only reconstruction. Callers must establish live normal or suspended
+ /// authority before using it; it cannot mutate the registry or clear suspension.
+ fn storage_image(&self,rt:&CrtStreamRuntime,cpu:&CrtCpu)->RegistryResult<FrameImage<RegistryHead>>{
   if cpu.entry!=self.entry||cpu.return_id!=self.return_id||cpu.returned||cpu.return_pop!=self.layout.pop{return Err("CRT normal changed CPU activation");}
   let l=&self.layout;let frame=self.at(rt,l.bp)?;let low=self.at(rt,l.low)?;let record=self.at(rt,l.record)?;
   if !self.consumed.contains(&l.bp)&&cpu.r[5]!=CrtValue::Pointer(frame){return Err("CRT normal actual frame pointer");}
@@ -244,6 +252,21 @@ impl CrtNormalException {
   cpu.push(rt,CrtValue::ProtectedReturn(return_id))?;rt.generation=generation;
   epoch.registry.normal_epoch.as_mut().ok_or("normal exception missing epoch")?.pending_exception=Some(generation);
   Ok(pending)
+ }
+ /// Establish the actual interrupted EH4 source before any handler dispatch.
+ /// This read-only projection does not grant normal-call or restoration authority.
+ fn dispatch_source(&self,rt:&CrtStreamRuntime,cpu:&CrtCpu,epoch:&NormalCallEpoch<'_>,binding:&CrtNormalBinding)->RegistryResult<FrameImage<RegistryHead>>{
+  self.validate_pending(rt,epoch)?;binding.identity(rt,epoch)?;
+  if binding.id!=Some(self.frame)||binding.epoch!=self.epoch||!binding.consumed.is_empty()
+   ||cpu.r.iter().enumerate().any(|(i,v)|i!=4&&*v!=self.call_registers[i])
+   ||cpu.r[4]!=CrtValue::Pointer(rt.offset(CrtCpu::pointer(self.call_registers[4])?,-4)?)
+   ||(cpu.flags.cf,cpu.flags.zf,cpu.flags.sf,cpu.flags.of)!=(self.call_flags.cf,self.call_flags.zf,self.call_flags.sf,self.call_flags.of){
+   return Err("normal exception changed interrupted activation");
+  }
+  let image=binding.storage_image(rt,cpu)?;
+  let frame=epoch.registry.normal_epoch.as_ref().ok_or("normal exception expired epoch")?.frames.last().ok_or("normal exception missing frame")?;
+  if frame.next!=0{return Err("normal exception partial epilog source");}
+  NormalCallEpoch::check_image(frame,&image)?;Ok(image)
  }
  fn validate_pending(&self,rt:&CrtStreamRuntime,epoch:&NormalCallEpoch<'_>)->RegistryResult<()>{
   epoch.registry.available()?;

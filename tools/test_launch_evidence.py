@@ -31,3 +31,24 @@ class LaunchEvidence(unittest.TestCase):
                 if timeout < 1:
                     self.assertIsNone(r['poll_at_timeout'])
                     self.assertEqual(r['stage'],'failed')
+
+    def test_complete_expected_output_does_not_turn_live_child_timeout_into_success(self):
+        # Reproduce the observed max boundary without executing a foreign PE:
+        # complete expected output followed by a still-live owned process.
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            expected = b'A' * 64
+            command = [sys.executable, '-c',
+                       "import sys,time; sys.stdout.buffer.write(b'A'*64); sys.stdout.buffer.flush(); time.sleep(30)"]
+            with self.assertRaises(subprocess.TimeoutExpired):
+                launch.execute(command, root/'out', root/'err', root/'evidence',
+                               {}, {'stdout_hex': expected.hex(), 'exit': 0}, .5)
+            record = json.loads((root/'evidence/launch.json').read_text())
+            self.assertEqual(bytes.fromhex(record['stdout_hex']), expected)
+            self.assertEqual(record['stderr_hex'], '')
+            self.assertTrue(record['timeout'])
+            self.assertIsNone(record['poll_at_timeout'])
+            self.assertEqual(record['stage'], 'failed')
+            self.assertIn('TimeoutExpired', record['failure'])
+            self.assertIsNotNone(record['final_poll'])
+            self.assertNotIn('exit', record)

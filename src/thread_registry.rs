@@ -353,7 +353,9 @@ impl NormalCallEpoch<'_> {
   if id.identity!=self.registry.identity||id.epoch!=self.generation||frame.id!=id{return Err("normal call stale, foreign or non-LIFO frame");}Ok(frame)
  }
  fn validate_image(&self,id:NormalFrameId,image:&FrameImage<RegistryHead>)->RegistryResult<()>{
-  let frame=self.top(id)?;
+  let frame=self.top(id)?;Self::check_image(frame,image)
+ }
+ fn check_image(frame:&RegistryNormalFrame,image:&FrameImage<RegistryHead>)->RegistryResult<()>{
   if frame.kind!=NormalRegistrationKind::Eh4{return Err("normal call registration kind mismatch");}
   let(previous,handler,scope,cookie,_)=ThreadRegistry::image_record(image)?;
   if frame.entry_sp!=image.entry_sp||frame.ebp!=image.ebp||frame.record!=image.record
