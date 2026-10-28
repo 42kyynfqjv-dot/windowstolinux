@@ -264,9 +264,15 @@ def run(original,out):
         if 'observed' not in item:continue
         w=item['observed']['wrapper']
         vectors.append(' '.join(str(n) for n in [w['cookie'],*w['saved'],w['body_eax'],w['body_flags'],w['return_eax'],w['return_flags'],w['caller_stack_delta']]))
-    (out/'normal-wrapper-vectors.txt').write_text('\n'.join(vectors)+'\n')
+    write_wrapper_vectors(out/'normal-wrapper-vectors.txt', vectors)
     (out/'report.json').write_text(json.dumps(report,indent=2)+'\n')
     print(json.dumps(dict(pe_sha256=plan['pe_sha256'],runs=len(results),whole_pe_translation_pairs=0)))
+
+def write_wrapper_vectors(path, vectors):
+    # Canonical ASCII/LF is part of the cross-host hash contract. Text mode on
+    # Windows would translate these LF characters into CRLF.
+    path.write_bytes(('\n'.join(vectors)+'\n').encode('ascii'))
+
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser();parser.add_argument('original',type=Path);parser.add_argument('output',type=Path)

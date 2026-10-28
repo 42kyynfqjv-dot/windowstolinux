@@ -7,6 +7,16 @@ claimed here.
 
 ## Current connected normal-wrapper boundary
 
+Sol review of `0521552f` found dedicated CI 40692595720 failed after all 86
+ordinary CRT tests passed: Windows text-mode vector writing inserted five CRLF
+line endings and violated the canonical LF byte/hash contract. The archived
+vector file confirms all five CRLF sequences. Vector writing now uses explicit
+ASCII bytes, with a regression forbidding text-mode output. Original failed-run
+observations remain intact; a separately labelled canonicalized vector copy
+permits local Linux comparison, and fresh Windows/Linux CI is still required.
+This is a reproduced evidence-encoding defect, unrelated to historical process
+timeouts. No timeout or rejection gate is relaxed.
+
 The original EH4 helper can now install its actual checked-stack record in a
 live `NormalCallEpoch`. The binding fixes the memory arena, thread, registry
 instance, epoch, predecessor variant/generation, stack capability and caller

@@ -6,11 +6,21 @@ import tempfile
 import unittest
 
 from check_normal_wrapper import observations
-from observe_stdio import CASES, summarize
+from observe_stdio import CASES, summarize, write_wrapper_vectors
 from test_observe_stdio import sample, encoded
 
 
 class WrapperEvidenceTests(unittest.TestCase):
+    def test_vector_writer_uses_canonical_bytes_without_host_text_translation(self):
+        class ByteSink:
+            def write_bytes(self, data):
+                self.data = data
+            def write_text(self, data):
+                raise AssertionError('host text translation would corrupt evidence hashes')
+        sink = ByteSink()
+        write_wrapper_vectors(sink, ['1 2 3', '4 5 6'])
+        self.assertEqual(sink.data, b'1 2 3\n4 5 6\n')
+
     def test_synthetic_report_cannot_be_counted_as_original_observation(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory)
