@@ -80,6 +80,7 @@ struct Machine {
     context: [u32; 10],
     phase: Phase,
     owned_storage: bool,
+    explicit_dispatch: bool,
 }
 
 /// Private token attached once to the external image occupying this exact frame
@@ -329,6 +330,7 @@ impl Machine {
             context,
             phase: Phase::Cleanup,
             owned_storage: false,
+            explicit_dispatch: false,
         };
         machine.advance_completed_frames();
         Ok(machine)
@@ -354,6 +356,57 @@ impl Machine {
         machine.owned_storage = true;
         Ok(machine)
     }
+    /// Original dispatcher mode keeps each activation live after its last
+    /// cleanup. Only a subsequent proved handler-return/unlink command can
+    /// retire it; guard rechecks and temporary FS teardown still need its bytes.
+    fn new_dispatch(
+        specs: Vec<FrameSpec>,
+        selected: usize,
+        current: [u32; 10],
+        trace: Option<u32>,
+    ) -> Result<Self, Error> {
+        let mut machine = Self::new_owned(specs, selected, current, trace)?;
+        // No binding, event or view has escaped this constructor. Undo only
+        // legacy eager advancement; the new mode never revives an exposed ID.
+        for frame in &mut machine.frames {
+            frame.live = true;
+        }
+        machine.current = machine.frames.len() - 1;
+        machine.phase = Phase::Cleanup;
+        machine.explicit_dispatch = true;
+        Ok(machine)
+    }
+    fn retire_dispatched(&mut self, binding: OwnedFrameBinding) -> Result<(), Error> {
+        if !self.explicit_dispatch || self.phase != Phase::Cleanup || self.current == self.selected
+        {
+            return self.reject(Error::Phase);
+        }
+        let expected = self.owned_binding(self.current)?;
+        if binding != expected || !self.frames[self.current].live {
+            return self.reject(Error::Identity);
+        }
+        let frame = &mut self.frames[self.current];
+        if frame.cursor != frame.scopes.len() {
+            return self.reject(Error::Order);
+        }
+        frame.live = false;
+        self.current -= 1;
+        Ok(())
+    }
+    fn finish_selected_dispatch(&mut self, binding: OwnedFrameBinding) -> Result<(), Error> {
+        if !self.explicit_dispatch || self.phase != Phase::Cleanup || self.current != self.selected
+        {
+            return self.reject(Error::Phase);
+        }
+        if self.owned_binding(self.current)? != binding || !self.frames[self.current].live {
+            return self.reject(Error::Identity);
+        }
+        if self.frames[self.current].cursor != self.frames[self.current].scopes.len() {
+            return self.reject(Error::Order);
+        }
+        self.phase = Phase::Restore;
+        Ok(())
+    }
     fn owner(&self) -> u64 {
         self.owner
     }
@@ -378,6 +431,9 @@ impl Machine {
         Err(error)
     }
     fn advance_completed_frames(&mut self) {
+        if self.explicit_dispatch {
+            return;
+        }
         while self.frames[self.current].cursor == self.frames[self.current].scopes.len() {
             if self.current == self.selected {
                 self.phase = Phase::Restore;
@@ -397,6 +453,9 @@ impl Machine {
             return Err(Error::Phase);
         }
         let frame = &self.frames[self.current];
+        if self.explicit_dispatch && frame.cursor == frame.scopes.len() {
+            return Ok(None);
+        }
         let scope = &frame.scopes[frame.cursor];
         Ok(Some(Request {
             owner: self.owner,
@@ -993,6 +1052,90 @@ mod owned_tests {
     struct Image {
         binding: OwnedFrameBinding,
         value: u32,
+    }
+    #[test]
+    fn original_dispatch_keeps_finished_and_empty_frames_live_until_unlink() {
+        let mut machine = Machine::new_dispatch(
+            vec![
+                FrameSpec { scopes: vec![] },
+                FrameSpec { scopes: vec![] },
+                FrameSpec {
+                    scopes: vec![Scope {
+                        scope: 9,
+                        action: 4,
+                    }],
+                },
+            ],
+            0,
+            [0; 10],
+            Some(0),
+        )
+        .unwrap();
+        let bindings = (0..3)
+            .map(|i| machine.binding(i).unwrap())
+            .collect::<Vec<_>>();
+        let request = machine.next_cleanup().unwrap().unwrap();
+        machine
+            .execute_owned_cleanup(request, |lease, trace| {
+                lease.bind_storage(bindings[2])?;
+                trace.write(7)
+            })
+            .unwrap();
+        assert_eq!(machine.next_cleanup().unwrap(), None);
+        assert!(machine.frames.iter().all(|frame| frame.live));
+        assert_eq!(machine.phase, Phase::Cleanup);
+        // Original handler guard recheck and FS teardown may still read frame2.
+        machine.retire_dispatched(bindings[2]).unwrap();
+        assert_eq!(machine.current, 1);
+        assert!(machine.frames[1].live);
+        assert_eq!(machine.next_cleanup().unwrap(), None);
+        machine.retire_dispatched(bindings[1]).unwrap();
+        assert!(machine.frames[0].live);
+        assert_eq!(machine.phase, Phase::Cleanup);
+        machine.finish_selected_dispatch(bindings[0]).unwrap();
+        assert_eq!(machine.phase, Phase::Restore);
+        assert_eq!(machine.trace, Some(7));
+    }
+    #[test]
+    fn original_dispatch_rejects_missing_cleanup_foreign_or_selected_unlink() {
+        fn fresh() -> Machine {
+            Machine::new_dispatch(
+                vec![
+                    FrameSpec { scopes: vec![] },
+                    FrameSpec {
+                        scopes: vec![Scope {
+                            scope: 3,
+                            action: 2,
+                        }],
+                    },
+                ],
+                0,
+                [0; 10],
+                Some(0),
+            )
+            .unwrap()
+        }
+        let mut machine = fresh();
+        let binding = machine.binding(1).unwrap();
+        assert_eq!(machine.retire_dispatched(binding), Err(Error::Order));
+        assert!(machine.frames[1].live);
+        let mut machine = fresh();
+        let foreign = fresh().binding(1).unwrap();
+        assert_eq!(machine.retire_dispatched(foreign), Err(Error::Identity));
+        let mut machine = fresh();
+        let selected = machine.binding(0).unwrap();
+        assert_eq!(
+            machine.finish_selected_dispatch(selected),
+            Err(Error::Phase)
+        );
+        let mut single =
+            Machine::new_dispatch(vec![FrameSpec { scopes: vec![] }], 0, [0; 10], Some(0)).unwrap();
+        let selected = single.binding(0).unwrap();
+        assert_eq!(single.retire_dispatched(selected), Err(Error::Phase));
+        let mut legacy =
+            Machine::new_owned(vec![FrameSpec { scopes: vec![] }], 0, [0; 10], Some(0)).unwrap();
+        let binding = legacy.binding(0).unwrap();
+        assert_eq!(legacy.finish_selected_dispatch(binding), Err(Error::Phase));
     }
     fn setup() -> (Machine, Vec<Image>) {
         let machine = Machine::new_owned(

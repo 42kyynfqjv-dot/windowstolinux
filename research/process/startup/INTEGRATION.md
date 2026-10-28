@@ -1,6 +1,10 @@
 # Cohesive handler execution milestone — SUB-579 / same PR45
 
-Latest integrated boundary: [connected original initialization, checks and
+Latest integrated boundary: [original dispatcher and owned FS composition](DISPATCH-COMPOSITION.md).
+It adds instruction-derived handler/local-unwind effects under an explicit closed
+callback and opaque incoming-chain boundary; full startup remains rejected.
+
+Previous integrated boundary: [connected original initialization, checks and
 restoration](CONNECTED.md). The initializer and supplied saved-context cuts are
 closed within the declared component domain. Original dispatcher/FS/nested-unwind
 and full-startup admission remain open; PR #45 stays draft.

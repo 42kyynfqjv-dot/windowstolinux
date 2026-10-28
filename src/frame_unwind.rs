@@ -114,14 +114,29 @@ fn ranges(input: &Input) -> Result<Vec<(u32, u32)>, String> {
 /// Original code derives those values. A noncontiguous activation is retained
 /// as a cut and cannot be promoted to a continuous original-entry certificate.
 pub fn prove_fragments(input: &Input) -> Result<Proven, String> {
-    prove_composition(input, None)
+    prove_composition(input, None, None)
 }
 
 pub fn prove_connected(input: &Input, connected: &Connected) -> Result<Proven, String> {
-    prove_composition(input, Some(connected))
+    prove_composition(input, Some(connected), None)
 }
 
-fn prove_composition(input: &Input, connected: Option<&Connected>) -> Result<Proven, String> {
+pub use super::dispatch_contract::Dispatch;
+
+/// Original handler/local-unwind composition, still separate from PE admission.
+pub fn prove_dispatched(
+    input: &Input,
+    connected: &Connected,
+    dispatch: &Dispatch,
+) -> Result<Proven, String> {
+    prove_composition(input, Some(connected), Some(dispatch))
+}
+
+fn prove_composition(
+    input: &Input,
+    connected: Option<&Connected>,
+    dispatch_input: Option<&Dispatch>,
+) -> Result<Proven, String> {
     if input.frames.is_empty()
         || input.frames.len() > 8
         || input.calls.len() != input.frames.len()
@@ -468,7 +483,17 @@ fn prove_composition(input: &Input, connected: Option<&Connected>) -> Result<Pro
             let ordinary: Vec<_> = proof.ordinary_words().iter().copied().collect();
             initialize.push_str(&format!("let initializer_low=image.esp.checked_sub({}).ok_or(\"initializer temporary stack underflow\")?;if initializer_low<thread_limit{{return Err(\"initializer temporary thread stack\");}}validate_frame_extent(initializer_low,image.entry_sp,&bound_ranges,&stack_ranges[..stack_ranges.len()-1])?;\n{{let mut memory=FrameMemory::new(&mut image,owner,&{ordinary:?})?;initialize_owned(&mut memory,GuestModule{{owner,base:{}}})?;}}\n",initialized.temporary_bytes(),connected.unwrap().module_base));
         }
-        initialize.push_str(&format!("if image.try_level!={level} {{return Err(\"derived EH4 level\");}}\npredecessor=Predecessor::Frame{{owner,index:{index}}};caller_ebp=Some(image.ebp);next_sp=image.esp.checked_sub(4).ok_or(\"nested stack address\")?;images.push(image);\n"));
+        initialize.push_str(&format!(
+            "if image.try_level!={level} {{return Err(\"derived EH4 level\");}}\n"
+        ));
+        if dispatch_input.is_some() {
+            initialize.push_str(&format!("let binding=machine.binding({index}).map_err(|_|\"registration binding\")?;let registration=registry.install_frame(binding,&image)?;registrations.push(registration);predecessor=registry.head()?;\n"));
+        } else {
+            initialize.push_str(&format!(
+                "predecessor=Predecessor::Frame{{owner,index:{index}}};\n"
+            ));
+        }
+        initialize.push_str("caller_ebp=Some(image.ebp);next_sp=image.esp.checked_sub(4).ok_or(\"nested stack address\")?;images.push(image);\n");
         frames.push(proof);
         activations.push(activation);
         tables.push(table);
@@ -541,6 +566,19 @@ fn prove_composition(input: &Input, connected: Option<&Connected>) -> Result<Pro
         })
         .collect();
     let selected = selection::select_frames(&selection_inputs, &filters, input.event_code)?;
+    let dispatch_bundle = dispatch_input
+        .map(|d| {
+            super::dispatch_contract::prove_bundle(
+                input,
+                connected.ok_or("dispatcher requires connected initialization")?,
+                d,
+                &frames,
+                &layouts,
+                &levels,
+                &selected,
+            )
+        })
+        .transpose()?;
     let landing_proof = connected
         .map(|extra| {
             if selected.target() != extra.selected_landing.va {
@@ -589,6 +627,7 @@ fn prove_composition(input: &Input, connected: Option<&Connected>) -> Result<Pro
     ));
     evidence.push(format!("// Event normalizer: {} proved return paths over unknown initialized feature word; cookie/context helper status is specified by the composition mode.",normalizer.proved_return_paths()));
     let mut filter_runs = String::new();
+    let mut dispatched_filters = BTreeMap::new();
     for (index, step) in selected.filters().iter().enumerate() {
         let frame = step.frame;
         let installer = handler_bridge::prove_installer(
@@ -607,7 +646,39 @@ fn prove_composition(input: &Input, connected: Option<&Connected>) -> Result<Pro
         functions.push_str(&format!("fn install_{index}<E,C>(state:&mut BridgeMemory<E,C>)->Result<InstalledPair<'_,E,C>,&'static str>{{ {} }}\n",installer.body()));
         functions.push_str(&format!("fn filter_{index}(code:u32,words:&mut[Option<u32>])->Result<i32,&'static str>{{ {} }}\n",step.proof.body()));
         let offsets = &layouts[frame].writable_words;
-        filter_runs.push_str(&format!(r#"
+        let filter_call = if dispatch_input.is_some() {
+            let at =
+                16 + usize::try_from(step.scope).map_err(|_| "dispatch filter scope")? * 12 + 4;
+            let filter_target = u32::from_le_bytes(
+                input.frames[frame]
+                    .table
+                    .bytes
+                    .get(at..at + 4)
+                    .ok_or("dispatch filter row")?
+                    .try_into()
+                    .unwrap(),
+            );
+            format!(
+                r#"
+ let mut registers=unknown_packet();
+ let filter_code=BridgeValue::Capability(DispatchCapability::Code{{owner,frame:{frame},address:{filter_target}}});
+ let filter_frame=BridgeValue::Capability(DispatchCapability::Frame{{owner,index:{frame},binding:bindings[{frame}]}});
+ registers[1]=filter_code.clone();registers[2]=filter_frame.clone();
+ let BridgeExit::Return{{registers,cleanup}}=original_filter_bridge(&registers,|kind,target,entry,args,resume|{{
+  if kind!=BridgeCall::Filter||target!=&filter_code||entry[5]!=filter_frame||!args.is_empty()||resume.is_some(){{return Err("original filter bridge authority");}}
+  let value=filter_{index}(code,&mut temporaries)?;
+  let mut reply=unknown_packet();reply[0]=BridgeValue::Scalar(value as u32);reply[4]=call_return(entry.clone(),4)?[4].clone();
+  Ok(BridgeReply{{registers:reply,resume:None}})
+ }})? else{{return Err("original filter bridge return");}};
+ if cleanup!=0||registers[0]!=BridgeValue::Scalar({result}i32 as u32){{return Err("filter runtime/proof disagreement");}}
+"#,
+                result = step.proof.result()
+            )
+        } else {
+            format!("if filter_{index}(code,&mut temporaries)?!={} {{return Err(\"filter runtime/proof disagreement\");}}",step.proof.result())
+        };
+        let snippet = format!(
+            r#"
 {{
  let image=&mut images[{frame}];
  let bp=i32::try_from(i64::from(image.ebp)-i64::from(image.entry_sp)).map_err(|_|"filter frame base")?;
@@ -621,11 +692,14 @@ fn prove_composition(input: &Input, connected: Option<&Connected>) -> Result<Pro
  let slots={offsets:?};
  let mut temporaries=Vec::new();
  for offset in slots {{temporaries.push(match image.words.get(&(bp+offset)){{Some(FrameWord::Unknown)=>None,Some(FrameWord::Scalar(value))=>Some(*value),_=>return Err("filter temporary ownership")}});}}
- if filter_{index}(code,&mut temporaries)?!={result} {{return Err("filter runtime/proof disagreement");}}
+ {filter_call}
  for (offset,value) in slots.into_iter().zip(temporaries) {{if let Some(value)=value{{image.words.insert(bp+offset,FrameWord::Scalar(value));}}}}
  bridge.invalidate();
 }}
-"#,result=step.proof.result()));
+"#
+        );
+        filter_runs.push_str(&snippet);
+        dispatched_filters.insert((frame, step.scope), snippet);
     }
 
     let mut cleanup_bindings = BTreeMap::new();
@@ -768,11 +842,16 @@ fn prove_composition(input: &Input, connected: Option<&Connected>) -> Result<Pro
                 .try_into()
                 .unwrap(),
         );
+        let try_transition = if dispatch_input.is_some() {
+            String::new()
+        } else {
+            format!("memory.write_try_level({eh_parent}).map_err(|_|Error::Identity)?;")
+        };
         owned_arms.push_str(&format!(r#"{action}=>{{
           if frame!={frame} || lease_scope!=Some({scope}) || lease_action!=Some({action}) {{return Err(Error::Identity);}}
           let mut cells=[trace.read()?,memory.read_u32({local_offset}).map_err(|_|Error::Uninitialized)?];
           let mut cursor=memory.read_u32({cursor_offset}).map_err(|_|Error::Uninitialized)? as i32;
-          memory.write_try_level({eh_parent}).map_err(|_|Error::Identity)?;
+          {try_transition}
           funclet_{action}(&mut cells,&mut cursor,&mut globals,dispatch_{cursor})?;
           trace.write(cells[0])?;
           memory.write_u32({local_offset},cells[1]).map_err(|_|Error::Identity)?;
@@ -842,11 +921,77 @@ fn prove_composition(input: &Input, connected: Option<&Connected>) -> Result<Pro
         for frame in (selected_frame..frames.len()).rev() {
             guard_runs.push_str(&format!("{{let memory=&FrameMemory::new(&mut images[{frame}],owner,&ordinary[{frame}])?;let code=normalize(event_code,feature)?;if code!=event_code{{return Err(\"normalizer identity\");}}guard_{frame}(memory,cookie)?;thread_context.check(owner,selector)?;}}\n"));
         }
+        let mut support = String::new();
+        let mut setup = String::new();
+        let run_name = if dispatch_input.is_some() {
+            "run_dispatched"
+        } else {
+            "run_connected"
+        };
+        let composition_boundary = if dispatch_input.is_some() {
+            "Original handler routing, local FS effects, helper bridges, cleanup and restoration execute. Windows delivery and the closed RtlUnwind external contract remain boundaries; arbitrary nested/collided dispatch and the later Main/CRT epilog are not admitted."
+        } else {
+            "Connected original initialization and selected landing; Windows delivery, handler search/RtlUnwind and thread-registration teardown remain explicit cuts."
+        };
+        let lifecycle = if dispatch_input.is_some() {
+            "new_dispatch"
+        } else {
+            "new_owned"
+        };
+        let outcome_fields = if dispatch_input.is_some() {
+            "pub notification_writes:Vec<(u32,u32,u32)>,pub linked_registrations:Vec<bool>,"
+        } else {
+            ""
+        };
+        let outcome_values = if dispatch_input.is_some() {
+            "notification_writes:notification.try_borrow().map_err(|_|\"notification observation alias\")?.writes.iter().map(|(address,value)|match value{BridgeValue::Scalar(n)=>Ok((*address,0,*n)),BridgeValue::Capability(DispatchCapability::Code{address:target,..})=>Ok((*address,1,*target)),BridgeValue::Capability(DispatchCapability::Frame{index,..})=>Ok((*address,2,*index as u32)),_=>Err(\"notification observation type\")}).collect::<Result<_,_>>()?,linked_registrations:registry.frames.iter().map(|frame|frame.linked).collect(),"
+        } else {
+            ""
+        };
+        let predecessor_setup = if let (Some(d), Some(bundle)) =
+            (dispatch_input, dispatch_bundle.as_ref())
+        {
+            support = super::dispatch_support::emit(input, d, bundle, &owned_arms)?;
+            handler_temporary_bytes = handler_temporary_bytes
+                .checked_add(bundle.temporary_bytes)
+                .ok_or("dispatcher scratch sum")?;
+            // One original handler remains live while RtlUnwind invokes each
+            // younger handler. Reserve a disjoint private nested activation;
+            // no numerical Windows dispatcher stack placement is asserted.
+            handler_temporary_bytes = handler_temporary_bytes
+                .checked_mul(2)
+                .and_then(|n| n.checked_add(16))
+                .ok_or("dispatcher nested scratch")?;
+            setup=format!("let mut registry=ThreadRegistry::new(owner,thread_limit,thread_base,&{bound_ranges},{}u32)?;let mut registrations=Vec::new();let mut predecessor=registry.head()?;let notification=std::cell::RefCell::new(NotificationState::new(owner,{:?})?);",input.cookie_va,d.notification_words);
+            ""
+        } else {
+            "let mut predecessor=Predecessor::Borrowed{owner};"
+        };
+        let cleanup_run = if let (Some(d), Some(bundle)) =
+            (dispatch_input, dispatch_bundle.as_ref())
+        {
+            super::dispatch_emit::emit_control(bundle, d, selected_frame, &dispatched_filters)?
+        } else {
+            format!(
+                r#"
+ {guard_runs}
+ {filter_runs}
+ while let Some(request)=machine.next_cleanup().map_err(|_|"connected cleanup phase")?{{
+  let action=request.action();
+  machine.execute_owned_cleanup(request,|lease,trace|{{
+    let frame=lease.frame_index();let lease_scope=lease.scope();let lease_action=lease.action();let binding=*bindings.get(frame).ok_or(Error::Identity)?;
+    lease.bind_storage(binding)?;
+    let memory=&mut FrameMemory::new(images.get_mut(binding.frame_index()).ok_or(Error::Identity)?,binding.owner(),&ordinary[frame]).map_err(|_|Error::Identity)?;
+    lease.perform(||{{match action {{{owned_arms}_=>return Err(Error::Order)}} Ok(())}})?;Ok(())
+  }}).map_err(|_|"connected original cleanup receipt")?;
+ }}
+"#
+            )
+        };
         let source = format!(
             r#"
 {evidence}
-// Connected original initialization and selected landing; Windows delivery,
-// handler search/RtlUnwind and thread-registration teardown remain explicit cuts.
+// {composition_boundary}
 // Restored state is instruction-derived from CONTEXT {context_offset}; observation end {landing_end:#x}, stores {captures:?}.
 #[allow(dead_code)]
 mod composed {{
@@ -855,6 +1000,7 @@ mod composed {{
 {memory_types}
 {context_types}
 {bridge_types}
+{support}
 {functions}
 #[derive(Clone,Debug,PartialEq,Eq)]
 enum Predecessor {{Borrowed{{owner:u64}},Frame{{owner:u64,index:usize}}}}
@@ -863,11 +1009,12 @@ fn validate_frame_extent(low:u32,entry_sp:u32,bound:&[(u32,u32)],stacks:&[(u64,u
  if low>=high||high>1u64<<32||bound.iter().any(|&(a,b)|low<u64::from(b)&&u64::from(a)<high)||stacks.iter().any(|&(a,b)|low<b&&a<high){{return Err("guest stack aliases bound image or another frame");}} Ok(())
 }}
 #[derive(Debug,PartialEq,Eq)]
-pub struct Outcome {{pub trace:u32,pub frame_words:Vec<Vec<Option<u32>>>,pub offsets:Vec<Vec<i32>>,pub globals:Vec<Option<u32>>,pub cursors:Vec<Option<i32>>,pub live:Vec<bool>,pub restored:[Option<u32>;10],pub selected_frame:usize,pub selected_target:u32}}
-pub fn run_connected(entry_sp:u32,cookie:u32,current:[u32;10],feature:i32,initial_trace:u32,thread_limit:u32,thread_base:u32,selector:u32,handler_sp:u32)->Result<Outcome,&'static str>{{
+pub struct Outcome {{{outcome_fields}pub trace:u32,pub frame_words:Vec<Vec<Option<u32>>>,pub offsets:Vec<Vec<i32>>,pub globals:Vec<Option<u32>>,pub cursors:Vec<Option<i32>>,pub live:Vec<bool>,pub restored:[Option<u32>;10],pub selected_frame:usize,pub selected_target:u32}}
+pub fn {run_name}(entry_sp:u32,cookie:u32,current:[u32;10],feature:i32,initial_trace:u32,thread_limit:u32,thread_base:u32,selector:u32,handler_sp:u32)->Result<Outcome,&'static str>{{
  if current[9]&!0x8d5!=0x202 {{return Err("connected current flags boundary");}}
- let mut machine=Machine::new_owned(vec![{specs}],{selected_frame},current,Some(initial_trace)).map_err(|_|"connected lifecycle")?;
- let owner=machine.owner();let mut predecessor=Predecessor::Borrowed{{owner}};
+ let mut machine=Machine::{lifecycle}(vec![{specs}],{selected_frame},current,Some(initial_trace)).map_err(|_|"connected lifecycle")?;
+ let owner=machine.owner();{predecessor_setup}
+ {setup}
  let thread_context=ThreadContext::new(owner,thread_limit,thread_base,current[4])?;
  if entry_sp.checked_add(4).is_none_or(|end|end>thread_base)||entry_sp<thread_limit{{return Err("connected entry thread stack");}}
  let bound_ranges={bound_ranges};let mut stack_ranges=Vec::new();let mut next_sp=entry_sp;let mut images=Vec::new();let mut caller_ebp=None;
@@ -880,19 +1027,8 @@ pub fn run_connected(entry_sp:u32,cookie:u32,current:[u32;10],feature:i32,initia
  let bindings:Vec<_>=(0..images.len()).map(|i|machine.binding(i)).collect::<Result<_,_>>().map_err(|_|"connected image binding")?;
  let ordinary:Vec<Vec<i32>>={ordinary};
  let event_code=normalize({event}u32,feature)?;
- {guard_runs}
- {filter_runs}
  let mut globals=vec![None;{global_count}];
- while let Some(request)=machine.next_cleanup().map_err(|_|"connected cleanup phase")?{{
-  let action=request.action();
-  machine.execute_owned_cleanup(request,|lease,trace|{{
-    let frame=lease.frame_index();let lease_scope=lease.scope();let lease_action=lease.action();let binding=*bindings.get(frame).ok_or(Error::Identity)?;
-    lease.bind_storage(binding)?;
-    let memory=&mut FrameMemory::new(images.get_mut(binding.frame_index()).ok_or(Error::Identity)?,binding.owner(),&ordinary[frame]).map_err(|_|Error::Identity)?;
-    lease.perform(||{{match action {{{owned_arms}_=>return Err(Error::Order)}} Ok(())}})?;
-    Ok(())
-  }}).map_err(|_|"connected original cleanup receipt")?;
- }}
+ {cleanup_run}
  let restored=machine.restore_owned({target},|lease,_current|{{
   let binding=bindings[{selected_frame}];lease.bind_storage(binding)?;
   lease.perform(||{{
@@ -919,10 +1055,11 @@ pub fn run_connected(entry_sp:u32,cookie:u32,current:[u32;10],feature:i32,initia
   }}frame_words.push(values);
  }}
  let cursors=frame_words.iter().zip(cursor_slots).map(|(words,slot)|slot.and_then(|s|words[s]).map(|n|n as i32)).collect();
- Ok(Outcome{{trace:machine.trace.ok_or("connected unknown trace")?,frame_words,offsets,globals,cursors,live:machine.frames.iter().map(|f|f.live).collect(),restored,selected_frame:{selected_frame},selected_target:{selected_target}}})
+ let outcome=Outcome{{{outcome_values}trace:machine.trace.ok_or("connected unknown trace")?,frame_words,offsets,globals,cursors,live:machine.frames.iter().map(|f|f.live).collect(),restored,selected_frame:{selected_frame},selected_target:{selected_target}}};
+ Ok(outcome)
 }}
 }}
-pub use composed::{{run_connected,Outcome}};
+pub use composed::{{{run_name},Outcome}};
 "#
         );
         return Ok(Proven { source });

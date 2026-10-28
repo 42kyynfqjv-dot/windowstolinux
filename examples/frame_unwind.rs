@@ -2,7 +2,7 @@
 #[path = "../src/unwind.rs"]
 pub mod unwind;
 use std::path::Path;
-use unwind::frame_unwind::{Connected, Frame, Input, Region};
+use unwind::frame_unwind::{Connected, Dispatch, Frame, Input, Region};
 
 fn number(value: &str) -> Result<u32, String> {
     value
@@ -51,6 +51,16 @@ fn run() -> Result<(), String> {
     let (mut initializer, mut fill_helper, mut selected_landing) = (None, None, None);
     let (mut fill_features, mut module_iat, mut module_base) = (None, None, None);
     let mut module_size = None;
+    let (mut full_handler, mut local_body, mut local_wrapper, mut nested_handler) =
+        (None, None, None, None);
+    let (
+        mut filter_bridge,
+        mut selected_bridge,
+        mut global_bridge,
+        mut notification,
+        mut cleanup_bridge,
+    ) = (None, None, None, None, None);
+    let (mut rtl_unwind_iat, mut notification_words) = (None, None);
     let (
         mut handler_prefix,
         mut guard_helper,
@@ -91,6 +101,11 @@ fn run() -> Result<(), String> {
             ["module-base", value] => set(&mut module_base, number(value)?)?,
             ["module-size", value] => set(&mut module_size, number(value)?)?,
             ["context-selector", value] => set(&mut context_selector, number(value)?)?,
+            ["rtl-unwind-iat", value] => set(&mut rtl_unwind_iat, number(value)?)?,
+            ["notification-words", action, target, frame] => set(
+                &mut notification_words,
+                [number(action)?, number(target)?, number(frame)?],
+            )?,
             ["fill-features", a, b] => set(&mut fill_features, [number(a)?, number(b)?])?,
             ["global", value] => globals.push(number(value)?),
             ["frame", prefix_va, prefix, table_va, table, activation_va, activation] => {
@@ -126,6 +141,15 @@ fn run() -> Result<(), String> {
                     "guard-helper" => set(&mut guard_helper, item)?,
                     "security-helper" => set(&mut security_helper, item)?,
                     "context-helper" => set(&mut context_helper, item)?,
+                    "handler-complete" => set(&mut full_handler, item)?,
+                    "local-unwind" => set(&mut local_body, item)?,
+                    "local-unwind-wrapper" => set(&mut local_wrapper, item)?,
+                    "nested-handler" => set(&mut nested_handler, item)?,
+                    "filter-bridge" => set(&mut filter_bridge, item)?,
+                    "selected-transfer" => set(&mut selected_bridge, item)?,
+                    "global-unwind-wrapper" => set(&mut global_bridge, item)?,
+                    "notification" => set(&mut notification, item)?,
+                    "cleanup-bridge" => set(&mut cleanup_bridge, item)?,
                     _ => return Err("unknown manifest region kind".into()),
                 }
             }
@@ -153,26 +177,57 @@ fn run() -> Result<(), String> {
         calls,
         raise_exception_iat: raise_exception_iat.ok_or("missing RaiseException IAT")?,
     };
-    let proof = if let Some(initializer) = initializer {
-        unwind::frame_unwind::prove_connected(
-            &input,
-            &Connected {
-                initializer,
-                fill_helper: fill_helper.ok_or("missing fill helper")?,
-                fill_features: fill_features.ok_or("missing fill feature words")?,
-                module_iat: module_iat.ok_or("missing module IAT")?,
-                module_base: module_base.ok_or("missing module base")?,
-                module_size: module_size.ok_or("missing module size")?,
-                selected_landing: selected_landing.ok_or("missing complete landing")?,
-                handler_prefix: handler_prefix.ok_or("missing handler prefix")?,
-                guard_helper: guard_helper.ok_or("missing guard helper")?,
-                security_helper: security_helper.ok_or("missing security helper")?,
-                context_helper: context_helper.ok_or("missing context helper")?,
-                context_selector: context_selector.ok_or("missing context selector")?,
-            },
-        )?
+    let any_dispatch = full_handler.is_some()
+        || local_body.is_some()
+        || local_wrapper.is_some()
+        || nested_handler.is_some()
+        || filter_bridge.is_some()
+        || selected_bridge.is_some()
+        || global_bridge.is_some()
+        || notification.is_some()
+        || cleanup_bridge.is_some()
+        || rtl_unwind_iat.is_some()
+        || notification_words.is_some();
+    let dispatch = if any_dispatch {
+        Some(Dispatch {
+            full_handler: full_handler.ok_or("missing complete handler")?,
+            local_body: local_body.ok_or("missing local unwind")?,
+            local_wrapper: local_wrapper.ok_or("missing local unwind wrapper")?,
+            nested_handler: nested_handler.ok_or("missing nested handler")?,
+            filter_bridge: filter_bridge.ok_or("missing filter bridge")?,
+            selected_bridge: selected_bridge.ok_or("missing selected transfer")?,
+            global_bridge: global_bridge.ok_or("missing global unwind wrapper")?,
+            notification: notification.ok_or("missing notification")?,
+            cleanup_bridge: cleanup_bridge.ok_or("missing cleanup bridge")?,
+            rtl_unwind_iat: rtl_unwind_iat.ok_or("missing RtlUnwind IAT")?,
+            notification_words: notification_words.ok_or("missing notification words")?,
+        })
     } else {
-        if fill_helper.is_some()
+        None
+    };
+    let proof = if let Some(initializer) = initializer {
+        let connected = Connected {
+            initializer,
+            fill_helper: fill_helper.ok_or("missing fill helper")?,
+            fill_features: fill_features.ok_or("missing fill feature words")?,
+            module_iat: module_iat.ok_or("missing module IAT")?,
+            module_base: module_base.ok_or("missing module base")?,
+            module_size: module_size.ok_or("missing module size")?,
+            selected_landing: selected_landing.ok_or("missing complete landing")?,
+            handler_prefix: handler_prefix.ok_or("missing handler prefix")?,
+            guard_helper: guard_helper.ok_or("missing guard helper")?,
+            security_helper: security_helper.ok_or("missing security helper")?,
+            context_helper: context_helper.ok_or("missing context helper")?,
+            context_selector: context_selector.ok_or("missing context selector")?,
+        };
+        if let Some(dispatch) = dispatch {
+            unwind::frame_unwind::prove_dispatched(&input, &connected, &dispatch)?
+        } else {
+            unwind::frame_unwind::prove_connected(&input, &connected)?
+        }
+    } else {
+        if dispatch.is_some()
+            || fill_helper.is_some()
             || fill_features.is_some()
             || module_iat.is_some()
             || module_base.is_some()

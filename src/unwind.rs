@@ -3,6 +3,18 @@
 mod cleanup;
 #[path = "dispatch.rs"]
 mod dispatch;
+#[allow(dead_code)]
+#[path = "dispatch_contract.rs"]
+mod dispatch_contract;
+#[allow(dead_code)]
+#[path = "dispatch_emit.rs"]
+mod dispatch_emit;
+#[allow(dead_code)]
+#[path = "dispatch_execution.rs"]
+mod dispatch_execution;
+#[allow(dead_code)]
+#[path = "dispatch_support.rs"]
+mod dispatch_support;
 #[path = "frame_init.rs"]
 mod frame_init;
 #[path = "frame_landing.rs"]
@@ -24,10 +36,22 @@ mod handler_bridge;
 mod handler_checks;
 #[path = "handler_context.rs"]
 mod handler_context;
+#[allow(dead_code)]
+#[path = "handler_dispatch.rs"]
+mod handler_dispatch;
 #[path = "handler_guard.rs"]
 mod handler_guard;
+#[allow(dead_code)]
+#[path = "local_unwind.rs"]
+mod local_unwind;
 #[path = "selection.rs"]
 mod selection;
+#[allow(dead_code)]
+#[path = "thread_registry.rs"]
+mod thread_registry;
+#[allow(dead_code)]
+#[path = "unwind_bridges.rs"]
+mod unwind_bridges;
 use iced_x86::{Code, Decoder, DecoderOptions, Mnemonic, OpKind, Register};
 use std::collections::{BTreeMap, BTreeSet};
 
