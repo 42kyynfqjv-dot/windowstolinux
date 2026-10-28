@@ -210,3 +210,29 @@ Verification accounting: CRT example includes three inherited handler_bridge
 model tests newly imported by the harness and one new prolog rejection test.
 They are not four new differential cases. The 27-case native harness gains the
 connected installer/read/lifetime assertions inside its existing success case.
+
+## Sol review: stack identity correction and bounded filter borrowing
+
+A regression reproduced a component defect in 3958e24f: pair validation checked
+ESP's address without requiring its stack capability. A pointer from another
+runtime at the same numeric address could pass pair.read before a later stack
+operation rejected it. Validation now checks the actual pointer's runtime
+identity/range and matching stack capability. This does not change PE admission.
+
+CrtHandlerPair::call_filter now lends the live pair across an actual protected
+nested call. Owner-only pair reads remain unavailable to the child CPU; the
+borrowed path checks event/frame identity, the still-live owner return, owner
+slot and both stored pointers before and after the callback. TryLevel changes
+reject rather than silently retarget selection. The parent revalidates on return.
+Independent cases mutate the owner slot/pair word or fail the callback; preceding
+marker writes remain and delivery fails. The native success case now executes
+installer, borrowed filter read, live scope changes and nested original cleanup
+on the same pending source. There are 30 native cases and two separate projection
+negative controls. Filter body semantics are still an explicit callback cut.
+
+Next connected implementation remains actual original prefix/helper calls and
+original filter instructions under this borrow, followed by table-driven local
+unwind/temporary registration effects and a normal-source selected restoration
+proof. The present scalar return grants no disposition/guest-resumption authority.
+Astra High is warranted for that combined prefix/temporary-registration/restoration
+proof; current shared storage and borrow machinery can be reviewed on Sol.

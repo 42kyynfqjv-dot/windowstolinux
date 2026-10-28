@@ -547,9 +547,11 @@ impl CrtHandlerPair {
  }
  fn validate(&self,frame:&CrtLiveFrame<'_,'_>,cpu:&CrtCpu)->RegistryResult<()>{
   frame.validate()?;
+  frame.rt.valid(CrtCpu::pointer(cpu.r[4])?,0)?;
   if cpu.returned||cpu.return_id!=self.activation||frame.state.activation!=self.activation
    ||frame.event.epoch!=self.epoch||frame.event.generation!=self.event||frame.event.frame!=self.frame
-   ||cpu.r[5]!=CrtValue::Pointer(self.bp)||CrtCpu::pointer(cpu.r[4])?.address()>self.low.address()
+   ||cpu.r[5]!=CrtValue::Pointer(self.bp)||CrtCpu::pointer(cpu.r[4])?.cap!=self.low.cap
+   ||CrtCpu::pointer(cpu.r[4])?.address()>self.low.address()
    ||frame.rt.load(self.bp,32)?!=cpu.entry[5]
    ||frame.rt.load(CrtCpu::pointer(cpu.entry[4])?,32)?!=CrtValue::ProtectedReturn(self.activation){return Err("handler pair expired/foreign activation");}
   frame.rt.valid(self.low,8)?;frame.rt.valid(self.record,80)?;frame.rt.valid(self.context,716)?;Ok(())
@@ -571,7 +573,26 @@ impl CrtHandlerPair {
   frame.write(-20,value)?;self.installed=true;Ok(())
  }
  fn read(&self,frame:&CrtLiveFrame<'_,'_>,cpu:&CrtCpu)->RegistryResult<(CrtPointer,CrtPointer)>{
-  self.validate(frame,cpu)?;
+  self.validate(frame,cpu)?;self.read_graph(frame)
+ }
+ /// Lend the installed original pair only for a real protected nested call.
+ /// The body still needs a decoded filter/effect proof; return is not a
+ /// disposition or restoration certificate. Mutations remain observable.
+ fn call_filter<F>(&self,frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,continuation:u32,body:F)->RegistryResult<CrtValue>
+ where F:FnOnce(&mut CrtLiveFrame<'_,'_>,&mut CrtCpu,CrtPointer,CrtPointer)->RegistryResult<CrtValue>{
+  self.read(frame,cpu)?;let level=frame.state.level;
+  let result=frame.call(cpu,continuation,|child,callee|{
+   let(record,context)=self.read_graph(child)?;
+   let result=body(child,callee,record,context)?;self.read_graph(child)?;
+   if child.state.level!=level{return Err("handler filter changed scope");}Ok(result)
+  });
+  match result{Ok(value)=>{if let Err(error)=self.read(frame,cpu){frame.state.failed=true;return Err(error);}Ok(value)},Err(error)=>Err(error)}
+ }
+ fn read_graph(&self,frame:&CrtLiveFrame<'_,'_>)->RegistryResult<(CrtPointer,CrtPointer)>{
+  frame.validate()?;frame.rt.valid(self.low,8)?;
+  if frame.event.epoch!=self.epoch||frame.event.generation!=self.event||frame.event.frame!=self.frame{return Err("handler borrowed pair event");}
+  let entry=frame.rt.offset(self.bp,4)?;
+  if frame.rt.load(entry,32)?!=CrtValue::ProtectedReturn(self.activation){return Err("handler borrowed pair owner retired");}
   if !self.installed||frame.read(-20)?!=CrtValue::Pointer(self.low)
    ||frame.rt.load(self.low,32)?!=CrtValue::Pointer(self.record)
    ||frame.rt.load(frame.rt.offset(self.low,4)?,32)?!=CrtValue::Pointer(self.context){return Err("handler pair changed live graph");}

@@ -286,7 +286,7 @@ fn file_scope_failure(){
 }
 
 fn live_dispatch(){
- for mode in 0..27 {
+ for mode in 0..30 {
   let(m,mut r,main,mut permit)=fixture_with_extra(&[(0x410000,0x420000)]);let mut rt=runtime(&r);let outer=m.owned_context;
   let result=r.with_normal_calls(&m,&mut permit,&main,|e|{
    let mut c=cpu(&mut rt,0xe000,71);let mut b=CrtNormalBinding::bind(&rt,&c,e,epilog_run_layout())?;start(&mut rt,&mut c,e,&mut b,99)?;
@@ -312,7 +312,7 @@ fn live_dispatch(){
    if mode==22{rt.memory.release(context.cap,context.owner).map_err(|_|"test release")?;}
    let result=event.execute_context_checked_live_handler(&objects,&mut rt,&c,e,&b,&mut d,0x401900,|view,h|{
     assert!(!(20..=22).contains(&mode),"invalid event/object reached callback");
-    if mode==0 {
+    if mode==0||mode>=27 {
      // Original PUSH EBP; MOV EBP,ESP; SUB ESP,28 effects. The full
      // original handler prefix and its helper calls remain a separate gate.
      original_handler_prolog(view,h)?;
@@ -321,7 +321,21 @@ fn live_dispatch(){
      live_install(&mut pair,view,h)?;let(actual_record,actual_context)=pair.read(view,h)?;
      assert_eq!(view.rt.load(actual_record,32)?.known_scalar()?,0xe0420042);
      assert_eq!(view.rt.load(view.rt.offset(actual_context,0xc4)?,32)?.known_scalar()?,0x9500);
+     let filter=pair.call_filter(view,h,0x402300,|borrowed,k,r,c|{
+      assert_eq!(borrowed.rt.load(r,32)?.known_scalar()?,0xe0420042);
+      assert_eq!(borrowed.rt.load(borrowed.rt.offset(c,0xc4)?,32)?.known_scalar()?,0x9500);
+      if mode>=27{
+       borrowed.write_u32(-28,95)?;
+       if mode==27{borrowed.write_u32(-20,0)?;}
+       if mode==28{borrowed.rt.store(borrowed.rt.offset(pair.low,4)?,32,CrtValue::scalar(0))?;}
+       if mode==29{return Err("independent filter failure");}
+      }
+      assert!(pair.read(borrowed,k).is_err()); // child cannot impersonate owner
+      k.r[0]=CrtValue::scalar(1);k.finish(borrowed.rt)
+     })?;assert_eq!(filter,CrtValue::scalar(1));pair.read(view,h)?;
      assert!(live_install(&mut pair,view,h).is_err());
+     let original_sp=h.r[4];let foreign=runtime(view.epoch.registry);h.r[4]=CrtValue::Pointer(foreign.resolve_absolute(pair.low.address(),CrtRegionKind::Stack)?);
+     assert!(pair.read(view,h).is_err(),"foreign stack address accepted");h.r[4]=original_sp;
      let prior=h.return_id;h.return_id+=1;assert!(pair.read(view,h).is_err());h.return_id=prior;
      view.write_u32(-20,0)?;assert!(pair.read(view,h).is_err());view.write(-20,CrtValue::Pointer(pair.low))?;
      h.r[3]=old_bx;h.leave(view.rt)?;assert!(pair.read(view,h).is_err());
@@ -387,7 +401,7 @@ fn live_dispatch(){
     assert!(result.is_err());assert_eq!(event.delivery,CrtNormalDelivery::Pending);assert_eq!(rt.load(marker,32)?.known_scalar()?,91);
    }else{
     assert!(result.is_err(),"mode {mode}");assert_eq!(event.delivery,CrtNormalDelivery::Failed);
-    if mode!=5{assert_eq!(rt.load(marker,32)?.known_scalar()?,if mode==23{95}else if mode==15||mode==16||mode==19{94}else{92});}
+    if mode!=5{assert_eq!(rt.load(marker,32)?.known_scalar()?,if mode==23||mode>=27{95}else if mode==15||mode==16||mode==19{94}else{92});}
    }
    if mode==19{rt.check_lock(lease.unwrap())?;}if mode==18{assert!(rt.locks.is_empty());}
    Err::<(),_>("live handler effects still require containment/restoration proof")
