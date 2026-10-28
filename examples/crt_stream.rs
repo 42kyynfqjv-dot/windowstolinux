@@ -192,3 +192,7 @@ fn main() {
 #[allow(dead_code)]
 #[path = "../src/handler_context.rs"]
 mod handler_context;
+
+#[allow(dead_code)]
+#[path = "../src/handler_bridge.rs"]
+mod handler_bridge;

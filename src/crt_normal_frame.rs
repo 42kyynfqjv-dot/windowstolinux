@@ -81,6 +81,25 @@ impl NormalScopeStoreProof {
         format!("fn {name}(frame:&mut CrtLiveFrame<'_,'_>,cpu:&CrtCpu)->RegistryResult<()>{{frame.store_level_operand(cpu.r[{}],cpu.r[{}])}}",self.base,self.source)
     }
 }
+/// Exact admitted x86 frame prolog for the original EH4 handler. This does
+/// not prove the following helper calls or exception delivery.
+pub(crate) fn emit_handler_prolog(bytes: &[u8], origin: u32) -> Result<String, String> {
+    if bytes != [0x55, 0x8b, 0xec, 0x83, 0xec, 0x1c]
+        || origin == 0
+        || origin.checked_add(6).is_none()
+    {
+        return Err("handler prolog instruction contract".into());
+    }
+    Ok(r#"fn original_handler_prolog(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu)->RegistryResult<()>{
+ frame.validate()?;let entry=CrtCpu::pointer(cpu.r[4])?;
+ if cpu.returned||cpu.return_id!=frame.state.activation||cpu.r[4]!=cpu.entry[4]
+  ||frame.rt.load(entry,32)?!=CrtValue::ProtectedReturn(cpu.return_id){return Err("handler prolog activation");}
+ let low=frame.rt.offset(entry,-32)?;frame.rt.valid(low,32)?;
+ if !frame.rt.overlapping_tags(low.address(),32).is_empty(){return Err("handler prolog typed stack overlap");}
+ frame.epoch.registry.range(low.address(),u64::from(entry.address()))?;
+ cpu.push(frame.rt,cpu.r[5])?;cpu.r[5]=cpu.r[4];cpu.r[4]=CrtValue::Pointer(low);cpu.flags=CrtFlags::unknown();Ok(())
+}"#.into())
+}
 pub(crate) const EMITTED_TYPES: &str = r#"
 #[derive(Clone,Debug,PartialEq,Eq)]
 struct CrtNormalLayout {
@@ -508,6 +527,55 @@ impl CrtNormalException {
    Ok(value)=>{self.delivery=CrtNormalDelivery::Returned;Ok(CrtNormalHandlerReturn{identity:self.identity,epoch:self.epoch,frame:self.frame,generation:self.generation,level:state.level,value})},
    Err(error)=>{self.delivery=CrtNormalDelivery::Failed;epoch.fail(error)},
   }
+ }
+}
+
+/// Event-owned handler locals. Construction requires the original handler
+/// prolog's actual EBP/ESP and protected CALL, not a numeric scratch address.
+struct CrtHandlerPair { activation:u64,epoch:u64,event:u64,frame:NormalFrameId,low:CrtPointer,bp:CrtPointer,record:CrtPointer,context:CrtPointer,installed:bool }
+impl CrtHandlerPair {
+ fn bind(frame:&CrtLiveFrame<'_,'_>,cpu:&CrtCpu,objects:&CrtNormalObjects)->RegistryResult<Self>{
+  frame.validate()?;objects.validate(frame.event,frame.rt,frame.epoch)?;
+  let entry=CrtCpu::pointer(cpu.entry[4])?;let bp=CrtCpu::pointer(cpu.r[5])?;
+  if cpu.returned||cpu.return_id!=frame.state.activation||bp!=frame.rt.offset(entry,-4)?
+   ||cpu.r[4]!=CrtValue::Pointer(frame.rt.offset(bp,-28)?)
+   ||frame.rt.load(entry,32)?!=CrtValue::ProtectedReturn(cpu.return_id)
+   ||frame.rt.load(bp,32)?!=cpu.entry[5]{return Err("handler locals original prolog ownership");}
+  let low=frame.rt.offset(bp,-28)?;frame.rt.valid(low,28)?;
+  if frame.rt.overlapping_tags(low.address(),28).iter().any(|(_,v)|matches!(v,CrtValue::ProtectedReturn(_)|CrtValue::ThreadHead(_)|CrtValue::OpaqueSaved(_))){return Err("handler locals protected overlap");}
+  Ok(Self{activation:cpu.return_id,epoch:frame.event.epoch,event:frame.event.generation,frame:frame.event.frame,low,bp,record:objects.record,context:objects.context,installed:false})
+ }
+ fn validate(&self,frame:&CrtLiveFrame<'_,'_>,cpu:&CrtCpu)->RegistryResult<()>{
+  frame.validate()?;
+  if cpu.returned||cpu.return_id!=self.activation||frame.state.activation!=self.activation
+   ||frame.event.epoch!=self.epoch||frame.event.generation!=self.event||frame.event.frame!=self.frame
+   ||cpu.r[5]!=CrtValue::Pointer(self.bp)||CrtCpu::pointer(cpu.r[4])?.address()>self.low.address()
+   ||frame.rt.load(self.bp,32)?!=cpu.entry[5]
+   ||frame.rt.load(CrtCpu::pointer(cpu.entry[4])?,32)?!=CrtValue::ProtectedReturn(self.activation){return Err("handler pair expired/foreign activation");}
+  frame.rt.valid(self.low,8)?;frame.rt.valid(self.record,80)?;frame.rt.valid(self.context,716)?;Ok(())
+ }
+ fn store(&self,frame:&mut CrtLiveFrame<'_,'_>,cpu:&CrtCpu,offset:i32,value:CrtValue)->RegistryResult<()>{
+  self.validate(frame,cpu)?;
+  let expected=match offset{-28=>self.record,-24=>self.context,_=>return Err("handler pair word bound")};
+  if self.installed||value!=CrtValue::Pointer(expected){return Err("handler pair input provenance/replay");}
+  frame.rt.store(frame.rt.offset(self.bp,i64::from(offset))?,32,value)
+ }
+ fn context_argument(&self,frame:&CrtLiveFrame<'_,'_>,cpu:&CrtCpu)->RegistryResult<CrtValue>{
+  self.validate(frame,cpu)?;let value=frame.rt.load(frame.rt.offset(self.bp,16)?,32)?;
+  if value!=CrtValue::Pointer(self.context){return Err("handler original context argument");}Ok(value)
+ }
+ fn install(&mut self,frame:&mut CrtLiveFrame<'_,'_>,cpu:&CrtCpu,value:CrtValue)->RegistryResult<()>{
+  self.validate(frame,cpu)?;
+  if self.installed||value!=CrtValue::Pointer(self.low)||cpu.r[3]!=CrtValue::Pointer(frame.binding.at(frame.rt,frame.binding.layout.record)?){return Err("handler pair owner address");}
+  if frame.rt.load(self.low,32)?!=CrtValue::Pointer(self.record)||frame.rt.load(frame.rt.offset(self.low,4)?,32)?!=CrtValue::Pointer(self.context){return Err("handler pair incomplete words");}
+  frame.write(-20,value)?;self.installed=true;Ok(())
+ }
+ fn read(&self,frame:&CrtLiveFrame<'_,'_>,cpu:&CrtCpu)->RegistryResult<(CrtPointer,CrtPointer)>{
+  self.validate(frame,cpu)?;
+  if !self.installed||frame.read(-20)?!=CrtValue::Pointer(self.low)
+   ||frame.rt.load(self.low,32)?!=CrtValue::Pointer(self.record)
+   ||frame.rt.load(frame.rt.offset(self.low,4)?,32)?!=CrtValue::Pointer(self.context){return Err("handler pair changed live graph");}
+  Ok((self.record,self.context))
  }
 }
 

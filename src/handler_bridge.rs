@@ -14,9 +14,15 @@ pub(crate) struct InstallerLayout {
 }
 pub(crate) struct InstallerProof {
     body: String,
+    #[allow(dead_code)] // CRT lowering; other slice examples use the abstract backend.
+    live_body: String,
     end: u32,
 }
 impl InstallerProof {
+    #[allow(dead_code)] // CRT lowering; other slice examples use body().
+    pub fn live_body(&self) -> &str {
+        &self.live_body
+    }
     pub fn body(&self) -> &str {
         &self.body
     }
@@ -180,6 +186,7 @@ pub(crate) fn prove_installer(
     let mut context = false;
     let mut installed = false;
     let mut body = String::from("state.begin_install()?;\n");
+    let mut live_body = String::from("pair.validate(frame,cpu)?;\n");
     let mut count = 0;
     while decoder.can_decode() {
         let i = decoder.decode();
@@ -202,14 +209,17 @@ pub(crate) fn prove_installer(
                 match (i.memory_base(), offset, eax) {
                     (Register::EBP, -28, Value::Record) if !record => {
                         record = true;
+                        live_body.push_str("pair.store(frame,cpu,-28,cpu.r[0])?;\n");
                         body.push_str("state.store_handler(-28,state.eax.clone())?;\n");
                     }
                     (Register::EBP, -24, Value::Context) if !context => {
                         context = true;
+                        live_body.push_str("pair.store(frame,cpu,-24,cpu.r[0])?;\n");
                         body.push_str("state.store_handler(-24,state.eax.clone())?;\n");
                     }
                     (Register::EBX, -4, Value::Pair) if record && context && !installed => {
                         installed = true;
+                        live_body.push_str("pair.install(frame,cpu,cpu.r[0])?;\n");
                         body.push_str("state.store_owner(-20,state.eax.clone())?;\n");
                     }
                     _ => return Err("bridge: unsupported pointer store/ownership/order".into()),
@@ -222,6 +232,7 @@ pub(crate) fn prove_installer(
                     && i.memory_displacement32() == 16 =>
             {
                 eax = Value::Context;
+                live_body.push_str("cpu.r[0]=pair.context_argument(frame,cpu)?;\n");
                 body.push_str("state.eax=state.context_argument()?;\n");
             }
             Code::Lea_r32_m
@@ -230,6 +241,7 @@ pub(crate) fn prove_installer(
                     && i.memory_displacement32() as i32 == -28 =>
             {
                 eax = Value::Pair;
+                live_body.push_str("cpu.r[0]=CrtValue::Pointer(pair.low);\n");
                 body.push_str("state.eax=state.pair_address(-28)?;\n");
             }
             _ => return Err("bridge: unproved effect or saved-register write".into()),
@@ -239,7 +251,12 @@ pub(crate) fn prove_installer(
         return Err("bridge: incomplete pointer graph installation".into());
     }
     body.push_str("state.finish_install()\n");
-    Ok(InstallerProof { body, end })
+    live_body.push_str("pair.read(frame,cpu).map(|_|())\n");
+    Ok(InstallerProof {
+        body,
+        live_body,
+        end,
+    })
 }
 
 #[cfg(test)]

@@ -178,3 +178,35 @@ scalar with establisher address bits. All reject. The ed4d843a CI artifact retai
 24 cases per host and matching PE/Rust hashes; that evidence predates the three
 new cases. Full-CI Linux completion is reported independently of the successful
 startup workflow. Historical original-process timeouts remain unresolved.
+
+## Connected original handler-local installation checkpoint
+
+The CRT backend now lowers the admitted original PUSH EBP / MOV EBP,ESP /
+SUB ESP,28 prolog and the existing InstallerProof's decoded five MOV/LEA
+operations to checked live storage. Both byte regions are extracted from the
+same original PE in check_normal_wrapper.py and included in hash comparison.
+The prolog checks the full stack extent and rejects overlapping typed state.
+SUB flags remain conservatively unknown. The same installer proof still serves
+the abstract backend; CRT lowering is emitted from the same decoded operations.
+
+CrtHandlerPair binds the live callback activation, pending delivery, normal-frame
+owner, actual saved EBP/return and initialized captured objects. Its reads verify
+the actual owner slot and both pointer words. Changed activation, replaced owner
+slot and access after LEAVE reject, including restoration of numeric EBP alone.
+The native case reads event code and captured ESP through the installed pair,
+then continues existing live scope-store/nested cleanup checks. This is connected
+component evidence with an explicit cut across the other original prefix calls;
+it does not claim that a complete original handler already executes.
+
+Remaining executable gap: lower/bind the original prefix normalizer, guard and
+context calls into this actual activation, preserve its pair locals across the
+original filter/LocalUnwindEffects schedule, and give the selected landing a
+normal-source restoration proof. Current pair access is restricted to the owning
+handler CPU; a filter borrowing it requires a proved call/borrow boundary.
+Captured-state acquisition, temporary nested registrations and borrowed-chain
+containment remain obligations. No ordinary startup/rcedit admission changes.
+
+Verification accounting: CRT example includes three inherited handler_bridge
+model tests newly imported by the harness and one new prolog rejection test.
+They are not four new differential cases. The 27-case native harness gains the
+connected installer/read/lifetime assertions inside its existing success case.

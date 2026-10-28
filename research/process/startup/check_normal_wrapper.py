@@ -60,6 +60,8 @@ def check(original, observation, out, compare=None):
     (out/'epilog.bin').write_bytes(epilog)
     scope_store = mapped(image, 0x402355, 3, executable=True)
     (out/'handler-scope-store.bin').write_bytes(scope_store)
+    (out/'handler-prolog.bin').write_bytes(mapped(image, 0x402210, 6, executable=True))
+    (out/'handler-installer.bin').write_bytes(mapped(image, 0x402263, 15, executable=True))
     # These new native cases execute original outer FILE scope code with an
     # explicitly supplied driver. They are NOT additional Windows comparisons.
     base, _ = pe_sections(image)
@@ -109,6 +111,8 @@ def check(original, observation, out, compare=None):
     result = dict(kind='original prolog/epilog component comparison with explicit unexecuted body boundary',
                   pe_sha256=sha(image), helper_sha256=sha(helper), epilog_sha256=sha(epilog),
                   handler_scope_store_sha256=sha(scope_store),
+                  handler_prolog_sha256=sha((out/'handler-prolog.bin').read_bytes()),
+                  handler_installer_sha256=sha((out/'handler-installer.bin').read_bytes()),
                   observation_sha256=sha((observation/'report.json').read_bytes()),
                   vectors_sha256=sha(vector_bytes), rust_sha256=source_hash, command=command,
                   comparisons=5, whole_pe_translation_pairs=0,
@@ -119,7 +123,7 @@ def check(original, observation, out, compare=None):
                   scope='Live registry fixture; body EAX/flags inputs; original stack/FS/saved-state restoration only')
     if compare:
         previous = json.loads(compare.read_text())
-        for key in ['pe_sha256', 'helper_sha256', 'epilog_sha256', 'handler_scope_store_sha256', 'observation_sha256', 'vectors_sha256', 'rust_sha256', 'file_scope_code_sha256', 'file_scope_imports']:
+        for key in ['pe_sha256', 'helper_sha256', 'epilog_sha256', 'handler_scope_store_sha256', 'handler_prolog_sha256', 'handler_installer_sha256', 'observation_sha256', 'vectors_sha256', 'rust_sha256', 'file_scope_code_sha256', 'file_scope_imports']:
             if previous[key] != result[key]:
                 raise ValueError('wrapper cross-host provenance differs: '+key)
         result['matching_windows_native_report'] = str(compare)

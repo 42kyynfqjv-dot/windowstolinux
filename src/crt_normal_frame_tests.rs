@@ -312,6 +312,21 @@ fn live_dispatch(){
    if mode==22{rt.memory.release(context.cap,context.owner).map_err(|_|"test release")?;}
    let result=event.execute_context_checked_live_handler(&objects,&mut rt,&c,e,&b,&mut d,0x401900,|view,h|{
     assert!(!(20..=22).contains(&mode),"invalid event/object reached callback");
+    if mode==0 {
+     // Original PUSH EBP; MOV EBP,ESP; SUB ESP,28 effects. The full
+     // original handler prefix and its helper calls remain a separate gate.
+     original_handler_prolog(view,h)?;
+     let mut pair=CrtHandlerPair::bind(view,h,&objects)?;let old_bx=h.r[3];
+     h.r[0]=CrtValue::Pointer(record);h.r[3]=CrtValue::Pointer(b.at(view.rt,b.layout.record)?);
+     live_install(&mut pair,view,h)?;let(actual_record,actual_context)=pair.read(view,h)?;
+     assert_eq!(view.rt.load(actual_record,32)?.known_scalar()?,0xe0420042);
+     assert_eq!(view.rt.load(view.rt.offset(actual_context,0xc4)?,32)?.known_scalar()?,0x9500);
+     assert!(live_install(&mut pair,view,h).is_err());
+     let prior=h.return_id;h.return_id+=1;assert!(pair.read(view,h).is_err());h.return_id=prior;
+     view.write_u32(-20,0)?;assert!(pair.read(view,h).is_err());view.write(-20,CrtValue::Pointer(pair.low))?;
+     h.r[3]=old_bx;h.leave(view.rt)?;assert!(pair.read(view,h).is_err());
+     let returned_bp=h.r[5];h.r[5]=CrtValue::Pointer(pair.bp);assert!(pair.read(view,h).is_err());h.r[5]=returned_bp;
+    }
     assert_eq!(view.read_u32(-28)?,91);view.write_u32(-28,92)?;
     // A typed alias observes immediate bytes, before callback completion.
     assert_eq!(view.rt.load(marker,32)?.known_scalar()?,92);
@@ -550,9 +565,13 @@ fn run(case: &str) {
         let scope_bytes=match std::env::var("W2L_EH4_CODE") { Ok(path)=>std::fs::read(std::path::Path::new(&path).join("handler-scope-store.bin")).unwrap(), Err(_)=>vec![0x89,0x58,0x0c] };
         let scope_store=super::normal_frame::NormalScopeStoreProof::prove(&scope_bytes,0x402355).unwrap().emit("original_scope_store");
         let permuted_store=super::normal_frame::NormalScopeStoreProof::prove(&[0x89,0x51,0x0c],0x402600).unwrap().emit("permuted_scope_store");
+        let handler_bytes=|file:&str,literal:&str|match std::env::var("W2L_EH4_CODE"){Ok(path)=>std::fs::read(std::path::Path::new(&path).join(file)).unwrap(),Err(_)=>bytes_hex(literal)};
+        let handler_prolog=super::normal_frame::emit_handler_prolog(&handler_bytes("handler-prolog.bin","558bec83ec1c"),0x402210).unwrap();
+        let installer=crate::handler_bridge::prove_installer(&handler_bytes("handler-installer.bin","8945e48b45108945e88d45e48943fc"),0x402263,&crate::handler_bridge::InstallerLayout{handler_start:-28,handler_end:0,owner_start:-48,owner_end:0,writable_handler_words:vec![-28,-24],writable_owner_words:vec![-20]}).unwrap();
+        let install=format!("fn live_install(pair:&mut CrtHandlerPair,frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu)->RegistryResult<()>{{ {} }}",installer.live_body());
         let context_types=crate::handler_context::EMITTED_TYPES;
         let context_check=context_proof.normal_object_check();
-        let source = format!("#![allow(dead_code)]\nmod guest_memory{{{memory}}}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{fixture}\n{file_scope}\n{context_types}\n{context_check}\n{scope_store}\n{permuted_store}\nfn raise_site()->CrtNormalRaiseSite{{{{{raise}}}}}\n{CASES}",
+        let source = format!("#![allow(dead_code)]\nmod guest_memory{{{memory}}}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{fixture}\n{file_scope}\n{context_types}\n{context_check}\n{scope_store}\n{permuted_store}\n{install}\n{handler_prolog}\nfn raise_site()->CrtNormalRaiseSite{{{{{raise}}}}}\n{CASES}",
             include_str!("linker/unwind_runtime.rs").replace("//!", "//"),
             emitted_literal(include_str!("frame_proof.rs")),emitted_literal(include_str!("thread_registry.rs")),
             crate::crt_stream_runtime::EMITTED_TYPES,crate::crt_stream_cpu::EMITTED_TYPES,
@@ -791,4 +810,15 @@ fn scope_store_decoder_rejects_partial_prefixed_and_unbound_operands() {
         assert!(Proof::prove(&code, 0x402500).is_err());
     }
     assert!(Proof::prove(&[0x89, 0x58, 12], u32::MAX - 1).is_err());
+}
+
+#[test]
+fn handler_prolog_rejects_changed_allocation_and_truncated_code() {
+    for bytes in [
+        vec![0x55, 0x8b, 0xec, 0x83, 0xec, 0x18],
+        vec![0x55, 0x8b, 0xec],
+        vec![0x55, 0x8b, 0xec, 0x83, 0xec, 0x1c, 0x90],
+    ] {
+        assert!(super::normal_frame::emit_handler_prolog(&bytes, 0x402210).is_err());
+    }
 }
