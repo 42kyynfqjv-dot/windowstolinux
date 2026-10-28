@@ -48,9 +48,11 @@ Three new Rust test functions cover:
 - Five independent return values (0, 1, 93, signed minimum bits and all-one bits),
   original instruction execution, a recursive outer lease, scope/result-local
   state at the call, an externally visible body write and exact stack retirement.
-- Six invalid compositions: mismatched lock/cleanup arguments, uninitialized
+- Eight invalid compositions: mismatched lock/cleanup arguments, uninitialized
   lock, unresolved body effect after a write, body changing scope state, body
-  releasing the lock, and success without the protected RET. Failure must preserve
+  releasing the lock, success without the protected RET, an extra live recursive lease, and a cleanup
+  argument changed after acquisition. The latter two assert the distinct active
+  versus reset scope states and saved-word retention at failure. Failure must preserve
   reached effects and poison the registry without fabricated cleanup.
 - Seventeen byte/shape negatives for scope/result ownership, call targets,
   partial/changed operations, lock member, truncation, argument cleanup and an
@@ -106,6 +108,46 @@ Primary contracts: [EnterCriticalSection](https://learn.microsoft.com/en-us/wind
 [internal CRT functions](https://learn.microsoft.com/en-us/cpp/c-runtime-library/internal-crt-globals-and-functions?view=msvc-170),
 and the original byte/metadata evidence in `formatter_binding.py`. Independent
 Rust implementation; no Wine or proprietary source import and no clean-room claim.
+
+## Sol review and connected exception-session gate
+
+Substantive review found no confirmed production defect in this bounded normal
+scope. Two additional negative compositions now cover a nested live lease and a
+cleanup argument changed after acquisition. They check retained saved words and
+different failure points: the former stops with scope zero and two locks; the
+latter reaches original cleanup with scope -2 and keeps its lock. Positive cases
+also execute an actual nested native activation through distinct protected return
+identities. Existing canonical LF vector coverage remains intact.
+
+The concrete remaining integration constraint is in the shared registry, rather
+than missing lock instructions. `with_normal_calls` leases the registry under a
+finished event and requires the original Machine phase/context to remain fixed.
+`expected_callback` explicitly rejects while `normal_epoch` exists. Ordinary CRT
+CALLs have a checked normal RET or an unsupported-domain error; that error is not
+an owned guest exception. The C++ registration is separately rejected by the EH4
+registration validator. Removing any of these guards cannot establish delivery.
+
+The next coherent implementation needs an owned nested exception session which:
+
+1. Suspends a specific live normal activation/epoch without consuming its saved
+   predecessor, original event authority or protected returns; derives the new
+   event from actual instruction/API state and preserves unknown register bits.
+2. Registers the integer function's original C++ record/FuncInfo under its own
+   layout/state and invokes proved original dispatch effects. Retains the outer
+   EH4 record, actual FILE lease and frame bytes throughout delivery.
+3. Distinguishes normal return, nonlocal transfer, termination and unsupported
+   effects. Ordered unwind executes only cleanup instructions actually reached.
+   C++ termination cannot be turned into an ordinary return or an invented
+   release of the outer FILE lock.
+4. Restores or abandons the suspended activation using existing owned context
+   and cleanup receipts. Requires independent resume, selected-unwind,
+   termination-callback return/failure, stale session, wrong thread, nested
+   failure and missing-containment negatives before enabling emission.
+
+This is a bounded state/authority and proof/emitter integration decision suitable
+for Astra High. Sol can complete review, regression evidence and CI. It is not
+permission to admit the full driver while C++ dispatch/PTD/termination remains
+unproved, or to infer absence of exceptions from the normal observations.
 
 ## Prior checkpoint and failure evidence
 

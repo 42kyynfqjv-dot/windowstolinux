@@ -227,8 +227,15 @@ fn file_scope_normal(){
     let bp=CrtCpu::pointer(child.r[5])?;
     assert_eq!(rt.load(rt.offset(bp,-4)?,32)?.known_scalar()?,0);
     assert_eq!(rt.load(rt.offset(bp,-28)?,32)?.known_scalar()?,0);
-    rt.store(rt.offset(holders,12)?,32,CrtValue::scalar(expected^0x55))?;
-    child.clobber(CrtValue::scalar(expected));child.finish(rt)
+    // A real nested native activation must return through its own token
+    // without consuming the FILE wrapper or driver continuation.
+    let driver_return=child.return_id;
+    child.call_activation(rt,0x1234,0,|rt,nested|{
+     assert_ne!(nested.return_id,driver_return);rt.check_lock(lease)?;
+     rt.store(rt.offset(holders,12)?,32,CrtValue::scalar(expected^0x55))?;
+     nested.clobber(CrtValue::scalar(expected));nested.finish(rt)
+    })?;
+    assert_eq!(child.return_id,driver_return);child.finish(rt)
    })?;
    assert_eq!(value,CrtValue::scalar(expected));assert_eq!(calls,1);
    assert_eq!(rt.load(rt.offset(holders,12)?,32)?.known_scalar()?,expected^0x55);
@@ -240,7 +247,7 @@ fn file_scope_normal(){
  }
 }
 fn file_scope_failure(){
- for mode in 0..6{
+ for mode in 0..8{
   let(m,mut r,main,mut permit)=fixture_with_extra(&[(0x410000,0x420000)]);let mut rt=runtime(&r);let mut reached=None;
   let result=r.with_normal_calls(&m,&mut permit,&main,|e|{
    let mut c=cpu(&mut rt,0xe000,71);let holders=file_setup(&mut rt,&mut c)?;
@@ -255,6 +262,8 @@ fn file_scope_failure(){
      3=>{rt.store(rt.offset(bp,-4)?,32,CrtValue::scalar((-2i32)as u32))?;},
      4=>{rt.unlock(lease)?;},
      5=>{child.r[0]=CrtValue::scalar(7);return Ok(child.r[0]);}, // no protected RET
+     6=>{rt.lock_file(rt.thread,rt.file())?;}, // extra live recursive acquisition
+     7=>{rt.store(rt.offset(holders,4)?,32,CrtValue::Pointer(rt.offset(rt.file(),4)?))?;},
      _=>panic!("preflight did not reject"),
     }
     child.r[0]=CrtValue::scalar(7);child.finish(rt)
@@ -263,6 +272,15 @@ fn file_scope_failure(){
   let f=&r.normal_epoch.as_ref().unwrap().frames[0];assert!(f.installed&&!f.unlinked);
   if let Some(p)=reached{assert_eq!(rt.load(p,32).unwrap().known_scalar().unwrap(),123);}
   if mode==2||mode==3||mode==5{assert_eq!(rt.locks.len(),1);}
+  if mode==6||mode==7{
+   assert_eq!(rt.locks.len(),if mode==6{2}else{1});
+   let level=rt.resolve_absolute(0xdff8,CrtRegionKind::Stack).unwrap();
+   // An extra body lock fails before the scope reset; a changed cleanup
+   // argument fails inside original cleanup after the reset. Neither retires it.
+   assert_eq!(rt.load(level,32).unwrap().known_scalar().unwrap(),if mode==6{0}else{(-2i32)as u32});
+   let saved=rt.resolve_absolute(0xdfdc,CrtRegionKind::Stack).unwrap();
+   assert_eq!(rt.load(saved,32).unwrap(),CrtValue::Scalar{bits:0xabcd0000,known:0xffff0000});
+  }
   if mode==2{let level=rt.resolve_absolute(0xdff8,CrtRegionKind::Stack).unwrap();assert_eq!(rt.load(level,32).unwrap().known_scalar().unwrap(),0);}
  }
 }
