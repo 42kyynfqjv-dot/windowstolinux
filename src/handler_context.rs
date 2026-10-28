@@ -36,6 +36,34 @@ impl ContextCheckProof {
     pub(crate) fn projection_body(&self) -> &str {
         &self.projection_body
     }
+    /// Connect the decoded helper to live pending-event object storage. The
+    /// selector is read from the original module cell, never supplied as a
+    /// Boolean bypass. Acquisition of captured objects remains a separate cut.
+    #[allow(dead_code)] // Shared emitter used by the CRT composition harness, not every slice example.
+    pub(crate) fn normal_object_check(&self) -> String {
+        format!(
+            r#"
+impl ThreadContext {{fn original_check(&self,owner:u64,selector:u32)->Result<(),&'static str>{{{body}}}}}
+impl CrtNormalObjects {{
+ fn check_original_context(&self,event:&CrtNormalException,rt:&CrtStreamRuntime,epoch:&NormalCallEpoch<'_>)->RegistryResult<()>{{
+  self.validate(event,rt,epoch)?;
+  let selector=rt.load(rt.resolve_absolute({selector},CrtRegionKind::Module)?,32)?.known_scalar()?;
+  let captured=ThreadContext::new(self.identity.owner,epoch.registry.limit,epoch.registry.base,self.captured_esp)?;
+  captured.original_check(self.identity.owner,selector)
+ }}
+}}
+impl CrtNormalException {{
+ fn execute_context_checked_handler<F>(&mut self,objects:&CrtNormalObjects,rt:&mut CrtStreamRuntime,interrupted:&CrtCpu,epoch:&mut NormalCallEpoch<'_>,binding:&CrtNormalBinding,dispatcher:&mut CrtCpu,continuation:u32,body:F)->RegistryResult<CrtNormalHandlerReturn>
+ where F:FnOnce(&mut CrtStreamRuntime,&mut CrtCpu)->RegistryResult<CrtValue>{{
+  objects.check_original_context(self,rt,epoch)?;
+  self.execute_bound_handler(objects,rt,interrupted,epoch,binding,dispatcher,continuation,body)
+ }}
+}}
+"#,
+            body = self.body,
+            selector = self.selector_va
+        )
+    }
     pub(crate) fn selector_va(&self) -> u32 {
         self.selector_va
     }

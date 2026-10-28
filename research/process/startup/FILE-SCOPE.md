@@ -413,3 +413,25 @@ fixture cleanup correctness. Both local Linux controls pass; fresh Windows
 results require CI. A passing control alongside a fixture timeout would narrow
 that observation but would not establish a root cause. All earlier timeout
 artifacts and output-present/process-alive findings remain unresolved.
+
+## Original context-helper composition review
+
+The decoded ContextCheckProof can now emit a checked handler-entry wrapper over
+CrtNormalObjects. It validates the event's objects, reads the live initialized
+selector from the bound module cell, and runs the original decoded selector/stack
+bounds decision against captured ESP before invoking the owned callback. Unknown
+selector state rejects before callback effects. Invalid capture still rejects even
+if the selector would bypass the original comparison, as required by the declared
+valid-stack subset. Other context fields remain unknown.
+
+The composition harness uses literal original helper bytes and includes seven
+captured-object scenarios (one added unknown-selector path); it does not replace
+the remaining handler body with a proof. CRT suite100passing includes six inherited
+context-helper test functions now also compiled into this example: these are
+reused coverage, not six new independent tests. Root175/frame171 remain unchanged.
+The shortest entry-to-exit route and observable gates are in ENTRY-TO-EXIT.md.
+
+Artifact12828416598 from b245fdf8 PR run40715398388 records both host exit controls
+and all18original launch samples passing. This confirms diagnostic wiring, not a
+root cause or fix for prior intermittent timeouts. Historical artifacts remain
+preserved; no retries, timeout changes or failing samples removed.

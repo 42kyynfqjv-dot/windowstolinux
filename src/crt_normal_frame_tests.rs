@@ -372,7 +372,7 @@ fn pending_handler_activation(){
  }
 }
 fn captured_objects(){
- for mode in 0..6{
+ for mode in 0..7{
   let(m,mut r,main,mut permit)=fixture_with_extra(&[(0x410000,0x420000)]);let mut rt=runtime(&r);
   assert!(r.with_normal_calls(&m,&mut permit,&main,|e|{
    let mut c=cpu(&mut rt,0xe000,71);let mut b=CrtNormalBinding::bind(&rt,&c,e,epilog_run_layout())?;start(&mut rt,&mut c,e,&mut b,99)?;
@@ -386,13 +386,23 @@ fn captured_objects(){
    // all other context bytes remain unknown.
    let objects=CrtNormalObjects::bind(&event,&rt,e,record,if mode==3{record}else{context});
    if (1..=3).contains(&mode){assert!(objects.is_err());return Err("rejected captured input");}
-   let objects=objects?;assert_ne!(objects.captured_esp,CrtCpu::pointer(c.r[4])?.address());
+   let objects=objects?;
+   rt.map_region(0x415128,4,CrtRegionKind::Module,Some(&0u32.to_le_bytes()))?;
+   objects.check_original_context(&event,&rt,e)?;
+   let selector=rt.resolve_absolute(0x415128,CrtRegionKind::Module)?;
+   rt.store(selector,32,CrtValue::Scalar{bits:0,known:0})?;assert!(objects.check_original_context(&event,&rt,e).is_err());
+   rt.store(selector,32,CrtValue::scalar(0x401bf9))?;objects.check_original_context(&event,&rt,e)?;
+   assert_ne!(objects.captured_esp,CrtCpu::pointer(c.r[4])?.address());
    assert_eq!(rt.load(context,32)?,CrtValue::Scalar{bits:0,known:0});
    let mut d=cpu(&mut rt,0xc000,200);let sp=rt.resolve_absolute(0xbfc0,CrtRegionKind::Stack)?;d.r[4]=CrtValue::Pointer(sp);
    for(i,value)in [CrtValue::Pointer(record),CrtValue::Pointer(b.at(&rt,b.layout.record)?),CrtValue::Pointer(context),CrtValue::scalar(0)].into_iter().enumerate(){rt.store(rt.offset(sp,i as i64*4)?,32,value)?;}
    if mode==4{rt.store(sp,32,CrtValue::Pointer(context))?;}
-   let result=event.execute_bound_handler(&objects,&mut rt,&c,e,&b,&mut d,0x401900,|rt,h|{
+   if mode==6{rt.store(selector,32,CrtValue::Scalar{bits:0,known:0})?;}
+   let result=event.execute_context_checked_handler(&objects,&mut rt,&c,e,&b,&mut d,0x401900,|rt,h|{
+    assert_ne!(mode,6,"unproved selector reached handler body");
     if mode==5{rt.store(rt.offset(context,0xc4)?,32,CrtValue::scalar(0x9600))?;}
+    // The existing decoded original helper executes over the same live
+    // captured objects immediately before this explicit callback body cut.
     h.r[0]=CrtValue::scalar(1);h.finish(rt)
    });
    if mode==0{let receipt=result?;assert_eq!(event.take_handler_result(receipt,&rt,&c,e,&b)?,1);}else{assert!(result.is_err());}
@@ -439,7 +449,11 @@ fn run(case: &str) {
         let fixture = emitted_literal(include_str!("thread_registry_normal_tests.rs"))
             .split("fn complete(").next().unwrap().replace("0x408000", "0x41c000");
         let raise = super::normal_frame::NormalRaiseCallProof::prove(&[0xff,0x15,0,0x50,0x41,0],0x401800,0x415000).unwrap().emit_site();
-        let source = format!("#![allow(dead_code)]\nmod guest_memory{{{memory}}}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{fixture}\n{file_scope}\nfn raise_site()->CrtNormalRaiseSite{{{{{raise}}}}}\n{CASES}",
+        let context_code=bytes_hex("558bec813d28514100f91b4000741f648b0d180000008b45088b80c40000003b410872053b410476056a0d59cd295dc3");
+        let context_proof=crate::handler_context::prove_context_check(&context_code,0x402877,0x415128).unwrap();
+        let context_types=crate::handler_context::EMITTED_TYPES;
+        let context_check=context_proof.normal_object_check();
+        let source = format!("#![allow(dead_code)]\nmod guest_memory{{{memory}}}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{fixture}\n{file_scope}\n{context_types}\n{context_check}\nfn raise_site()->CrtNormalRaiseSite{{{{{raise}}}}}\n{CASES}",
             include_str!("linker/unwind_runtime.rs").replace("//!", "//"),
             emitted_literal(include_str!("frame_proof.rs")),emitted_literal(include_str!("thread_registry.rs")),
             crate::crt_stream_runtime::EMITTED_TYPES,crate::crt_stream_cpu::EMITTED_TYPES,
