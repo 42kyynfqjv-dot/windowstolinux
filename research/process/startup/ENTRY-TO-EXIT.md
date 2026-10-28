@@ -334,3 +334,37 @@ entry-to-exit execution. The checks do not authorize clearing suspension, revivi
 the outer Machine or assuming captured context. Routine prefix caller lifting can
 continue on Sol; exceptional registration/restoration requires a concrete reviewed
 contract when reached. Full startup/rcedit remains rejected.
+
+## Sol original prefix caller: through the first helper and code writeback
+
+PrefixProof now retains a native lowering of its decoded caller instructions
+through the original normalizer call and MOV [record],EAX. The lowering uses
+CrtCpu/checked memory for actual pushes, register loads, local byte/word stores,
+CALL and record writeback. It is derived while the existing full prefix data-flow
+proof validates the original sequence; it is not an application/result stencil.
+The complete98byte prefix atVA0x402210 is extracted and hashed with the original
+component artifact. No complete-handler execution is inferred from this slice.
+
+The normalizer binding now distinguishes caller-owned arguments from the
+standalone component wrapper. In the prefix form it checks the actual existing
+argument and preserves it after RET. The original caller accumulates four argument
+words over three helpers and cleans them once; immediate per-helper cleanup would
+change original stack behavior. The new native case checks saved EBX/ESI/EDI,
+local flag/constant stores, code writeback and the remaining code argument at
+EBP-44. Its failure case rejects an unknown module word while preserving preceding
+caller stores/pushes. Both cases stop at the guard/context continuation rather
+than manufacture a normal return or dispatch disposition.
+
+Thirty-two adapter scenarios now run; two new prefix scenarios are native
+instruction/component evidence, not Windows/ELF whole-PE pairs. Four inherited
+handler_checks tests newly imported explain the CRT suite total increase.
+Original Windows wrapper observations and historical timeouts remain separate.
+
+Next Sol work: extend this same caller lowering through table decoding, original
+guard/context calls, deferred16byte cleanup and zero-flags branch to the already
+connected installer. Bind decoded-table provenance after the original XOR,
+preserve original arguments/register clobbers and reject unproved flag delivery.
+Then connect actual filter bridge/target bytes and table-driven local unwind.
+Temporary-registration exceptional/collided effects and selected normal-source
+restoration remain open; scalar result and scope equality do not supply that
+permission. No full startup/rcedit admission changes.

@@ -314,6 +314,23 @@ impl CodeIdentity {
     /// return this same code without observable writes.
     #[allow(dead_code)] // CRT integration, not every standalone slice.
     pub fn normal_call(&self, name: &str) -> String {
+        self.emit_normal_call(name, false)
+    }
+    #[allow(dead_code)]
+    pub fn prefix_call(&self, name: &str) -> String {
+        self.emit_normal_call(name, true)
+    }
+    fn emit_normal_call(&self, name: &str, caller_arguments: bool) -> String {
+        let arguments = if caller_arguments {
+            "if frame.rt.load(CrtCpu::pointer(cpu.r[4])?,32)?.known_scalar()?!=code{return Err(\"normalizer prefix argument\");}"
+        } else {
+            "cpu.push(frame.rt,CrtValue::scalar(code))?;"
+        };
+        let cleanup = if caller_arguments {
+            ""
+        } else {
+            "cpu.discard(frame.rt,4)?;cpu.flags=CrtFlags::unknown();"
+        };
         let globals=self.globals.iter().map(|at|format!("frame.rt.load(frame.rt.resolve_absolute({at},CrtRegionKind::Module)?,32)?.known_scalar()?;\n")).collect::<String>();
         format!(
             r#"fn {name}(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,objects:&CrtNormalObjects,continuation:u32)->RegistryResult<CrtValue>{{
@@ -324,12 +341,12 @@ impl CodeIdentity {
  let sp=CrtCpu::pointer(cpu.r[4])?;let low=frame.rt.offset(sp,-{depth})?;frame.rt.valid(low,{depth})?;
  frame.epoch.registry.range(low.address(),u64::from(sp.address()))?;
  if frame.rt.overlapping_tags(low.address(),{depth}).iter().any(|(_,v)|matches!(v,CrtValue::ProtectedReturn(_)|CrtValue::ThreadHead(_)|CrtValue::OpaqueSaved(_))){{return Err("normalizer temporary stack aliases protected storage");}}
- cpu.push(frame.rt,CrtValue::scalar(code))?;
+ {arguments}
  let returned=frame.call(cpu,continuation,|f,child|{{
   if f.rt.load(f.rt.offset(CrtCpu::pointer(child.entry[4])?,4)?,32)?.known_scalar()?!=code{{return Err("normalizer original argument");}}
   child.clobber(CrtValue::scalar(value));child.finish(f.rt)
  }})?;
- cpu.discard(frame.rt,4)?;cpu.flags=CrtFlags::unknown();Ok(returned)
+ {cleanup}Ok(returned)
 }}"#,
             body = self.body,
             depth = self.temporary_bytes + 8

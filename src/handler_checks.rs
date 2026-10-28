@@ -32,6 +32,8 @@ pub(crate) struct CallSite {
 }
 #[derive(Clone, Debug)]
 pub(crate) struct PrefixProof {
+    #[allow(dead_code)]
+    pub(crate) front: String,
     pub calls: Vec<CallSite>,
     pub exception_flags_mask: u8,
     pub exception_flags_branch: u32,
@@ -43,6 +45,10 @@ pub(crate) struct PrefixProof {
     pub handler_pair_offset: i32,
 }
 impl PrefixProof {
+    #[allow(dead_code)]
+    pub fn normalizer_front(&self) -> &str {
+        &self.front
+    }
     /// Full zero flags is the admitted incoming domain, even though the code
     /// tests a subset. A nonzero flag is never silently interpreted as search.
     pub fn require_search_flags(&self, flags: u32) -> Result<(), String> {
@@ -157,6 +163,8 @@ pub(crate) fn prove_prefix(code: &[u8], origin: u32, b: &Bindings) -> Result<Pre
     let mut pair_installed = false;
     let mut decoder = Decoder::with_ip(32, code, u64::from(origin), DecoderOptions::NONE);
     let mut count = 0;
+    let mut front = String::new();
+    let mut front_done = false;
     while decoder.can_decode() {
         let i = decoder.decode();
         count += 1;
@@ -182,6 +190,34 @@ pub(crate) fn prove_prefix(code: &[u8], origin: u32, b: &Bindings) -> Result<Pre
             )
         {
             return Err("handler installer additional effect".into());
+        }
+        if !front_done {
+            let r = |reg| register(reg);
+            let addr = || -> Result<String, String> {
+                let base = if i.memory_base() == Register::None {
+                    "None".into()
+                } else {
+                    format!("Some({})", r(i.memory_base())?)
+                };
+                Ok(format!(
+                    "cpu.address(frame.rt,{base},None,1,{},None)?",
+                    i.memory_displacement32()
+                ))
+            };
+            let statement=match i.code(){
+             Code::Push_r32=>format!("cpu.push(frame.rt,cpu.r[{}])?;",r(i.op0_register())?),
+             Code::Push_rm32=>format!("let v=frame.rt.load({},32)?;cpu.push(frame.rt,v)?;",addr()?),
+             Code::Mov_r32_rm32|Code::Mov_rm32_r32 if i.op0_kind()==OpKind::Register&&i.op1_kind()==OpKind::Register=>format!("cpu.r[{}]=cpu.r[{}];",r(i.op0_register())?,r(i.op1_register())?),
+             Code::Sub_rm32_imm8 if i.op0_register()==Register::ESP=>format!("cpu.r[4]=CrtValue::Pointer(frame.rt.offset(CrtCpu::pointer(cpu.r[4])?,-{})?);cpu.flags=CrtFlags::unknown();",i.immediate8to32()),
+             Code::Mov_r32_rm32=>format!("cpu.r[{}]=frame.rt.load({},32)?;",r(i.op0_register())?,addr()?),
+             Code::Mov_rm32_r32=>format!("frame.rt.store({},32,cpu.r[{}])?;",addr()?,r(i.op1_register())?),
+             Code::Mov_rm32_imm32=>format!("frame.rt.store({},32,CrtValue::scalar({}))?;",addr()?,i.immediate32()),
+             Code::Mov_rm8_imm8=>format!("frame.rt.store({},8,CrtValue::scalar({}))?;",addr()?,i.immediate8()),
+             Code::Call_rel32_32 if i.near_branch32()==b.normalizer_va=>format!("normalizer_prefix_call(frame,cpu,objects,{})?;",i.next_ip32()),
+             _=>return Err("prefix live front unsupported instruction".into()),
+            };
+            front.push_str(&statement);
+            front.push('\n');
         }
         match i.code() {
             Code::Push_r32 | Code::Push_rm32 => {
@@ -303,6 +339,7 @@ pub(crate) fn prove_prefix(code: &[u8], origin: u32, b: &Bindings) -> Result<Pre
                             && !writeback =>
                     {
                         writeback = true;
+                        front_done = true;
                     }
                     (Value::Establisher, -4)
                         if width == 4
@@ -427,6 +464,7 @@ pub(crate) fn prove_prefix(code: &[u8], origin: u32, b: &Bindings) -> Result<Pre
         return Err("handler prefix incomplete saved-state/effect contract".into());
     }
     Ok(PrefixProof {
+        front,
         calls,
         exception_flags_mask: 0x66,
         exception_flags_branch: flag_branch.ok_or("handler flags branch absent")?,

@@ -286,7 +286,7 @@ fn file_scope_failure(){
 }
 
 fn live_dispatch(){
- for mode in 0..30 {
+ for mode in 0..32 {
   let(m,mut r,main,mut permit)=fixture_with_extra(&[(0x410000,0x420000)]);let mut rt=runtime(&r);let outer=m.owned_context;
   let result=r.with_normal_calls(&m,&mut permit,&main,|e|{
    let mut c=cpu(&mut rt,0xe000,71);let mut b=CrtNormalBinding::bind(&rt,&c,e,epilog_run_layout())?;start(&mut rt,&mut c,e,&mut b,99)?;
@@ -312,6 +312,25 @@ fn live_dispatch(){
    if mode==22{rt.memory.release(context.cap,context.owner).map_err(|_|"test release")?;}
    let result=event.execute_context_checked_live_handler(&objects,&mut rt,&c,e,&b,&mut d,0x401900,|view,h|{
     assert!(!(20..=22).contains(&mode),"invalid event/object reached callback");
+    if mode==30||mode==31{
+     let feature=view.rt.map_region(0x41ccb8,4,CrtRegionKind::Module,Some(&1u32.to_le_bytes()))?;
+     let entry=h.r[4];let before=h.entry;
+     if mode==31{view.rt.store(feature,32,CrtValue::Scalar{bits:0,known:0})?;}
+     let front=original_prefix_front(view,h,&objects);
+     if mode==30{front?;}else{assert!(front.is_err());}
+
+     let bp=CrtCpu::pointer(h.r[5])?;
+     assert_eq!(h.r[4],CrtValue::Pointer(view.rt.offset(bp,-44)?));
+     assert_eq!(view.rt.load(CrtCpu::pointer(h.r[4])?,32)?.known_scalar()?,0xe0420042);
+     assert_eq!(view.rt.load(view.rt.offset(bp,-32)?,32)?,before[3]);
+     assert_eq!(view.rt.load(view.rt.offset(bp,-36)?,32)?,before[6]);
+     assert_eq!(view.rt.load(view.rt.offset(bp,-40)?,32)?,before[7]);
+     assert_eq!(view.rt.load(view.rt.offset(bp,-12)?,32)?.known_scalar()?,1);
+     assert_eq!(view.rt.load(view.rt.offset(bp,-1)?,8)?.known_scalar()?,0);
+     assert_eq!(view.rt.load(record,32)?.known_scalar()?,0xe0420042);assert_ne!(h.r[4],entry);
+     if mode==30{assert_eq!(view.rt.load(feature,32)?.known_scalar()?,1);}else{assert!(view.rt.load(feature,32)?.known_scalar().is_err());}
+     return Err("prefix front reached deferred guard/context caller boundary");
+    }
     if mode==0||mode>=27 {
      // Original PUSH EBP; MOV EBP,ESP; SUB ESP,28 effects. The full
      // original handler prefix and its helper calls remain a separate gate.
@@ -421,7 +440,7 @@ fn live_dispatch(){
     assert!(result.is_err());assert_eq!(event.delivery,CrtNormalDelivery::Pending);assert_eq!(rt.load(marker,32)?.known_scalar()?,91);
    }else{
     assert!(result.is_err(),"mode {mode}");assert_eq!(event.delivery,CrtNormalDelivery::Failed);
-    if mode!=5{assert_eq!(rt.load(marker,32)?.known_scalar()?,if mode==23||mode>=27{95}else if mode==15||mode==16||mode==19{94}else{92});}
+    if mode!=5{assert_eq!(rt.load(marker,32)?.known_scalar()?,if mode==30||mode==31{91}else if mode==23||mode>=27{95}else if mode==15||mode==16||mode==19{94}else{92});}
    }
    if mode==19{rt.check_lock(lease.unwrap())?;}if mode==18{assert!(rt.locks.is_empty());}
    Err::<(),_>("live handler effects still require containment/restoration proof")
@@ -618,9 +637,13 @@ fn run(case: &str) {
         let header_source=format!("fn original_scope_header()->[i32;4]{{{:?}}}",header);
         let guard_source=p.guard_proof(&guard,0x4021d0,&security,0x40154c,header).unwrap().normal_call("original_guard_call");
         assert!(p.guard_proof(&guard,0x4021d0,&security,0x40154c,[-2,0,-40,0]).is_err());
+        let prefix_bytes=handler_bytes("original-handler-prefix.bin","558bec83ec1c538b5d085657c645ff00ff33c745f401000000e8ed27010089038b5d0c8b43088d7310330500c0410056508975f08945f8e884ffffffff7510e8230600008b450883c4108b7b0cf6400466755a8945e48b45108945e88d45e48943fc");
+        let prefix=crate::handler_checks::prove_prefix(&prefix_bytes,0x402210,&crate::handler_checks::Bindings{normalizer_va:0x414a1b,guard_va:0x4021d0,context_va:0x402877,cookie_va:0x41c000,installer_va:0x402263}).unwrap();
+        let prefix_normalizer=crate::selection::prove_code_identity(&normalizer,0x414a1b,&std::collections::BTreeSet::from([0x41ccb8]),0xe0420042).unwrap().prefix_call("normalizer_prefix_call");
+        let prefix_front=format!("fn original_prefix_front(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,objects:&CrtNormalObjects)->RegistryResult<()>{{frame.validate()?;objects.validate(frame.event,frame.rt,frame.epoch)?;let sp=CrtCpu::pointer(cpu.r[4])?;frame.rt.valid(frame.rt.offset(sp,-{})?,{})?;{} Ok(())}}",prefix.temporary_bytes,prefix.temporary_bytes,prefix.normalizer_front());
         let context_types=crate::handler_context::EMITTED_TYPES;
         let context_check=context_proof.normal_object_check();
-        let source = format!("#![allow(dead_code)]\nmod guest_memory{{{memory}}}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{fixture}\n{file_scope}\n{context_types}\n{context_check}\n{scope_store}\n{permuted_store}\n{install}\n{handler_prolog}\n{filter_source}\n{false_filter_source}\n{normalizer_source}\n{guard_source}\n{header_source}\nfn raise_site()->CrtNormalRaiseSite{{{{{raise}}}}}\n{CASES}",
+        let source = format!("#![allow(dead_code)]\nmod guest_memory{{{memory}}}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{fixture}\n{file_scope}\n{context_types}\n{context_check}\n{scope_store}\n{permuted_store}\n{install}\n{handler_prolog}\n{filter_source}\n{false_filter_source}\n{normalizer_source}\n{guard_source}\n{header_source}\n{prefix_normalizer}\n{prefix_front}\nfn raise_site()->CrtNormalRaiseSite{{{{{raise}}}}}\n{CASES}",
             include_str!("linker/unwind_runtime.rs").replace("//!", "//"),
             emitted_literal(include_str!("frame_proof.rs")),emitted_literal(include_str!("thread_registry.rs")),
             crate::crt_stream_runtime::EMITTED_TYPES,crate::crt_stream_cpu::EMITTED_TYPES,

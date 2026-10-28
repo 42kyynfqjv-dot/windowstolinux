@@ -210,3 +210,7 @@ mod frame_proof;
 #[allow(dead_code)]
 #[path = "../src/handler_guard.rs"]
 mod handler_guard;
+
+#[allow(dead_code)]
+#[path = "../src/handler_checks.rs"]
+mod handler_checks;
