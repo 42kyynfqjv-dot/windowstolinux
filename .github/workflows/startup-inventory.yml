@@ -183,6 +183,13 @@ jobs:
         with:
           name: startup-stdio-observation
           path: ${{ runner.temp }}/stdio-observation
+      - name: Compile original CRT text component and compare independent effects
+        shell: pwsh
+        run: |
+          cargo test --locked --example crt_stream
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python research/process/startup/check_stdio.py "$env:RUNNER_TEMP/unwind-slice" "$env:RUNNER_TEMP/stdio-observation" "$env:RUNNER_TEMP/unwind-slice/stdio-native-windows"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -240,6 +247,12 @@ jobs:
         with:
           name: startup-unwind-slice
           path: original-unwind
+      - uses: actions/download-artifact@v4
+        with:
+          name: startup-stdio-observation
+          path: original-stdio-observation
+      - run: cargo test --locked --example crt_stream
+      - run: python3 research/process/startup/check_stdio.py original-unwind original-stdio-observation original-unwind/stdio-native-linux --compare original-unwind/stdio-native-windows/report.json
       - run: python3 research/process/startup/check_unwind.py original-unwind target/debug/examples/unwind_slice
       - run: python3 research/process/startup/coff_binding.py --test-artifact original-unwind
       - run: python3 research/process/startup/frame_binding.py --test-artifact original-unwind

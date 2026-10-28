@@ -144,7 +144,7 @@ int main(int argc,char **argv) {
         }else if(ev.dwDebugEventCode==EXCEPTION_DEBUG_EVENT) {
             DWORD code=ev.u.Exception.ExceptionRecord.ExceptionCode;DWORD at=(DWORD)(uintptr_t)ev.u.Exception.ExceptionRecord.ExceptionAddress;
             action=DBG_EXCEPTION_NOT_HANDLED;
-            
+
             if(interval_complete) {
                 printf("{\"kind\":\"exception\",\"code\":%lu,\"address\":%lu,\"first_chance\":%lu}\n",code,at,ev.u.Exception.dwFirstChance);fflush(stdout);
                 /* Instrumentation is over: no other thread/context is touched. */

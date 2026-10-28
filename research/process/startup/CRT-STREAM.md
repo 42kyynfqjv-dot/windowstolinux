@@ -13,6 +13,102 @@ instructions, authored byte vectors and public API contracts. They are not
 computed by the production converter, emitted Rust or its fixture generator.
 The manifest is not a completed test report.
 
+## Implemented component boundary
+
+`examples/crt_stream.rs` now compiles the original narrow text writer, descriptor
+selection, console exclusion and errno mapping into native Rust. Each admitted
+instruction graph is checked before emission. The writer and flush certificates
+use bounded, parameterized instruction protocols; they are not a general proof
+for arbitrary CRT graphs. Structural inventory alone grants no emission authority.
+Generated code has checked owned memory and compiled control flow, with no decoder,
+solver, Wine or AI dependency at runtime.
+
+The selector calls the original writer and the separately proved error mapper.
+The caller supplies a live, initialized narrow descriptor, input, context, committed
+fault-free stack and cookie. These are explicit component preconditions. The
+descriptor-lock/EH4 wrapper at `40df1c` is not aliased to the selector at `40e02d`.
+Pending context errno fields do not establish a later commit into Windows PTD.
+
+The original flush and stream initialization/teardown bodies also compile through
+the shared emitter in focused tests. Their unresolved callees have declared test
+contracts. In particular, failed lock initialization does not create a valid lock,
+and shutdown requires its own phase authority after Main. Those tests do not
+establish the original startup or normal-exit call chain.
+
+Independent review found and fixed pointer TEST-versus-CMP confusion, reading
+call-clobbered unknown values as available inputs, discarded protected stack
+words, stale descriptor assumptions at teardown, and freed-pointer transport.
+Further independent review reproduced an alias between an original executable
+region and the component's writable stack. Complete code, data and IAT extents
+now exclude each other and all constructed component storage before emission.
+The last lifetime distinction matters: original code can copy or clear a retired pointer
+word, while dereference, arithmetic and free still require its live generation.
+Address reuse cannot revive an old pointer. Each finding has a focused regression.
+The stack-probe regression also covers saving unknown register bits without
+mistaking their canonical stored representation for a different protected value.
+
+### Recorded Windows observation and native checks
+
+Observer checkpoint `1aa2a51df0f66ef7d9620b13787c3c05a394c507` passed dedicated
+[CI 40636074964](https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/40636074964)
+and both full regression runs. Its unchanged original PE SHA-256 is
+`45b0a49607edc860fb705bbfb5eff96ccaf91805a9058b3f9efbd2261da3c0b7`.
+It retains the frozen source identity and relevant instruction-region hashes;
+this freshly linked artifact is distinct from the earlier PE below.
+
+All five original observer cases and the forced cleanup-failure control passed
+on Windows Server 2022 build 20348. In these runs, printf returned 275 and Main
+returned 0 **before** the WriteFile call. The write occurred during shutdown.
+
+| Original API outcome | Writer triple | Logical return | Flush return |
+| --- | --- | --- | --- |
+| Real full write | `[0, 276, 1]` | 275 | 0 |
+| Scripted success, count 7 | `[0, 7, 1]` | 6 | `0xffffffff` |
+| Scripted success, count 1 | `[0, 1, 1]` | 0 | `0xffffffff` |
+| Scripted success, count 0 | `[0, 0, 1]` | `0xffffffff` | `0xffffffff` |
+| Real invalid-handle failure | `[6, 0, 1]` | `0xffffffff` | `0xffffffff` |
+
+The three scripted successes skip the OS call and write no physical bytes.
+The invalid-handle case executes the real OS call with a substituted argument.
+Dynamic errno/PTD fields were not observed. Native context checks use the separate
+frozen predictions, not an invented Windows observation.
+
+`check_stdio.py` checks original PE/object/source identities and raw observer
+receipts before compiling. It runs 21 unique scenarios: 16 frozen byte/API vectors
+and five projections of the observed original payload. Both direct text and
+composed selector entries run for each scenario (42 component invocations per
+host). It checks exact request bytes, call counts, triples, logical returns and
+pending context fields, then compares deterministic generated Rust and results
+between Windows and Linux. The five projections remain five original observations,
+not ten. None is a whole-PE translation pair. Three supplemental native-only
+empty, maximum-LF-expansion and oversized-input scenarios add six entry
+invocations. The oversized case rejects both entries before any backend call.
+They are counted separately and add no original Windows observations.
+
+Local review passes 56 CRT example test functions (46 new and 10 inherited graph
+tests), 175 unchanged root tests and all existing example targets. Python startup
+discovery runs 43 tests, with the artifact-dependent frame gate deliberately
+skipped there and exercised separately by CI. Formatting and Clippy with warnings
+denied pass. Fresh cross-host results for this implementation must come from its
+own workflow head; the observer checkpoint above does not certify later code.
+
+Reproduce with the `startup-unwind-slice` and `startup-stdio-observation` artifacts
+from the same dedicated workflow run:
+
+```sh
+cargo test --locked --example crt_stream
+python3 -m unittest discover -s research/process/startup -v
+python3 research/process/startup/check_stdio.py ORIGINAL OBSERVED OUTPUT \
+  --compare ORIGINAL/stdio-native-windows/report.json
+```
+
+The remaining connected gate is original formatter/context execution, the
+descriptor lock/exception wrapper and actual startup-to-normal-exit callback and
+flush/close composition. Main's earlier conditional stdio boundary is not replaced
+until those effects are proved. Full startup, rcedit and general CRT admission stay
+rejected. Historical original-Windows timeout causes remain unresolved; a later
+passing run does not establish their cause.
+
 ## Exact retained evidence
 
 The retained directory is `/tmp/w2l-reported-final-7ee6`. Its original PE SHA-256

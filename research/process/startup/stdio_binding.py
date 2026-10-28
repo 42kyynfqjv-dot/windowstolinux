@@ -9,7 +9,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from coff_binding import cut, pe_sections
+from coff_binding import cut, pe_sections, import_at_iat, u32
 from frame_binding import instructions
 
 
@@ -40,6 +40,9 @@ DEPENDENCIES = [
     ('descriptor_unlock_funclet', 0x40e01f, 0x40e02d),
     ('write_selector', 0x40e02d, 0x40e249),
     ('console_selector', 0x40dba9, 0x40dc26),
+    ('isatty', 0x410105, 0x41015b),
+    ('stack_probe', 0x4146e0, 0x41470b),
+    ('security_check', 0x40154c, 0x40155a),
     ('errno_search', 0x407b93, 0x407c12),
     ('errno_mapper', 0x407c12, 0x407c71),
     ('global_errno_update', 0x407c71, 0x407c94),
@@ -87,6 +90,25 @@ def extract(original, output):
                   reference_identity_matches=sha(image) == frozen['artifact']['pe_sha256'],
                   image_base=base, regions=records, whole_pe_translation_pairs=0,
                   emission_allowed=False)
+    # Measurement bindings only. The Rust component proves all operand uses.
+    bindings = dict(cookie=0x41c000, descriptor_table=0x41cf08,
+                    write_iat=0x415080, error_iat=0x415044,
+                    descriptor_limit_address=0x41d108, descriptor_limit=1,
+                    module_begin=base, module_end=base+u32(image,u32(image,60)+80))
+    if not base < bindings['module_end'] <= 0xffffffff:
+        raise ValueError('stdio image extent overflow')
+    for field, expected in [('write_iat', ('kernel32.dll', 'WriteFile')),
+                            ('error_iat', ('kernel32.dll', 'GetLastError'))]:
+        if tuple(import_at_iat(image, bindings[field] - base)) != expected:
+            raise ValueError('original CRT import identity: ' + field)
+    result['component_bindings'] = bindings
+    error_table=mapped(image,0x416038,360,executable=False)
+    (output/'errno_table.bin').write_bytes(error_table)
+    records.append(dict(name='errno_table',va=0x416038,size=len(error_table),sha256=sha(error_table),
+                        file='errno_table.bin',calls=[],effects_proven=False))
+    lines = [f"region {r['name']} {r['va']} {r['file']}" for r in records]
+    lines += [f"binding {name} {value}" for name, value in bindings.items()]
+    (output / 'stdio.manifest').write_text('\n'.join(lines) + '\n')
     (output / 'stdio-binding.json').write_text(json.dumps(result, indent=2) + '\n')
     return result
 
