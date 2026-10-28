@@ -2,7 +2,7 @@
 #[path = "../src/unwind.rs"]
 pub mod unwind;
 use std::path::Path;
-use unwind::frame_unwind::{Connected, Dispatch, Frame, Input, Region};
+use unwind::frame_unwind::{Connected, Dispatch, Frame, Input, Region, Reported};
 
 fn number(value: &str) -> Result<u32, String> {
     value
@@ -48,6 +48,16 @@ fn run() -> Result<(), String> {
         (None, None, None, None, None);
     let mut raise_exception_iat = None;
     let mut raised = None;
+    let mut reported = None;
+    let (
+        mut completion,
+        mut printf_wrapper,
+        mut iob_accessor,
+        mut options_accessor,
+        mut printf_format,
+    ) = (None, None, None, None, None);
+    let mut formatter = None;
+    let mut reported_globals = Vec::new();
     let mut calls = Vec::new();
     let (mut initializer, mut fill_helper, mut selected_landing) = (None, None, None);
     let (mut fill_features, mut module_iat, mut module_base) = (None, None, None);
@@ -93,6 +103,9 @@ fn run() -> Result<(), String> {
         match parts.as_slice() {
             [] => {}
             ["raised-event"] => set(&mut raised, true)?,
+            ["reported-component"] => set(&mut reported, true)?,
+            ["formatter", value] => set(&mut formatter, number(value)?)?,
+            ["reported-global", value] => reported_globals.push(number(value)?),
             ["cookie", value] => set(&mut cookie, number(value)?)?,
             ["handler", value] => set(&mut handler, number(value)?)?,
             ["trace", value] => set(&mut trace, number(value)?)?,
@@ -152,6 +165,11 @@ fn run() -> Result<(), String> {
                     "global-unwind-wrapper" => set(&mut global_bridge, item)?,
                     "notification" => set(&mut notification, item)?,
                     "cleanup-bridge" => set(&mut cleanup_bridge, item)?,
+                    "main-completion" => set(&mut completion, item)?,
+                    "printf-wrapper" => set(&mut printf_wrapper, item)?,
+                    "iob-helper" => set(&mut iob_accessor, item)?,
+                    "stdio-options-helper" => set(&mut options_accessor, item)?,
+                    "printf-format" => set(&mut printf_format, item)?,
                     _ => return Err("unknown manifest region kind".into()),
                 }
             }
@@ -207,6 +225,34 @@ fn run() -> Result<(), String> {
     } else {
         None
     };
+    let any_reported = completion.is_some()
+        || printf_wrapper.is_some()
+        || iob_accessor.is_some()
+        || options_accessor.is_some()
+        || printf_format.is_some()
+        || formatter.is_some()
+        || !reported_globals.is_empty();
+    let reported = if reported.is_some() {
+        if raised.is_none() || initializer.is_none() || dispatch.is_none() {
+            return Err(
+                "reported component requires original raised dispatcher composition".into(),
+            );
+        }
+        Some(Reported {
+            completion: completion.ok_or("missing Main completion")?,
+            printf_wrapper: printf_wrapper.ok_or("missing printf wrapper")?,
+            iob_accessor: iob_accessor.ok_or("missing stdout accessor")?,
+            options_accessor: options_accessor.ok_or("missing stdio options accessor")?,
+            formatter: formatter.ok_or("missing linked formatter target")?,
+            format: printf_format.ok_or("missing complete printf format")?,
+            entry_globals: reported_globals,
+        })
+    } else {
+        if any_reported {
+            return Err("unmarked/incomplete reported component".into());
+        }
+        None
+    };
     let proof = if let Some(initializer) = initializer {
         let connected = Connected {
             initializer,
@@ -223,7 +269,9 @@ fn run() -> Result<(), String> {
             context_selector: context_selector.ok_or("missing context selector")?,
         };
         if let Some(dispatch) = dispatch {
-            if raised.is_some() {
+            if let Some(reported) = reported {
+                unwind::frame_unwind::prove_reported(&input, &connected, &dispatch, &reported)?
+            } else if raised.is_some() {
                 unwind::frame_unwind::prove_raised(&input, &connected, &dispatch)?
             } else {
                 unwind::frame_unwind::prove_dispatched(&input, &connected, &dispatch)?

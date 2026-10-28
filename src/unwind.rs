@@ -48,6 +48,18 @@ mod handler_guard;
 #[path = "local_unwind.rs"]
 mod local_unwind;
 #[allow(dead_code)]
+#[path = "main_completion.rs"]
+mod main_completion;
+#[cfg(test)]
+#[path = "main_completion_review_tests.rs"]
+mod main_completion_review_tests;
+#[allow(dead_code)]
+#[path = "main_return.rs"]
+mod main_return;
+#[cfg(test)]
+#[path = "main_return_tests.rs"]
+mod main_return_tests;
+#[allow(dead_code)]
 #[path = "raise_call.rs"]
 mod raise_call;
 #[cfg(test)]
@@ -56,8 +68,14 @@ mod raise_contract_tests;
 #[cfg(test)]
 #[path = "raised_review_tests.rs"]
 mod raised_review_tests;
+#[cfg(test)]
+#[path = "reported_review_tests.rs"]
+mod reported_review_tests;
 #[path = "selection.rs"]
 mod selection;
+#[allow(dead_code)]
+#[path = "stdio_effect.rs"]
+mod stdio_effect;
 #[allow(dead_code)]
 #[path = "thread_registry.rs"]
 mod thread_registry;

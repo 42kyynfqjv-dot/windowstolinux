@@ -514,6 +514,7 @@ pub(crate) struct ProvenInitialization {
     fill_range: (i32, u32),
     module_slot: i32,
     temporary_bytes: u32,
+    initialized_words: BTreeSet<i32>,
 }
 impl ProvenInitialization {
     pub fn body(&self) -> &str {
@@ -533,6 +534,9 @@ impl ProvenInitialization {
     }
     pub fn temporary_bytes(&self) -> u32 {
         self.temporary_bytes
+    }
+    pub fn initialized_words(&self) -> &BTreeSet<i32> {
+        &self.initialized_words
     }
 }
 fn main_address(address: &Address, regs: &[MainValue; 8]) -> Result<i32, String> {
@@ -585,6 +589,9 @@ pub(crate) fn prove_initializer(
     let mut module_slot = None;
     let mut level = None;
     let mut module_called = false;
+    // Touching one byte is sufficient for the overlap exclusion, but not for
+    // exporting a full initialized scalar to a later instruction proof.
+    let mut touched_words = BTreeSet::new();
     let mut initialized_words = BTreeSet::new();
     let mut decoder = Decoder::with_ip(32, code, u64::from(origin), DecoderOptions::NONE);
     while decoder.can_decode() {
@@ -651,9 +658,10 @@ pub(crate) fn prove_initializer(
                     if !frame.ordinary_words().contains(&offset) {
                         return Err("initializer: protected destination".into());
                     }
-                    if !initialized_words.insert(offset) {
+                    if !touched_words.insert(offset) {
                         return Err("initializer: overlapping initialization effects".into());
                     }
+                    initialized_words.insert(offset);
                     match value {
                         MainValue::Scalar(n) => {
                             if frame
@@ -711,7 +719,7 @@ pub(crate) fn prove_initializer(
                     if !frame.ordinary_words().contains(&word) {
                         return Err("initializer: fill touches protected/unallocated bytes".into());
                     }
-                    if initialized_words.contains(&word)
+                    if touched_words.contains(&word)
                         || frame.scalar_words().get(&word).is_some_and(|prior| {
                             prior.to_le_bytes()[at.rem_euclid(4) as usize] != byte
                         })
@@ -720,7 +728,10 @@ pub(crate) fn prove_initializer(
                     }
                     filled_words.insert(word);
                 }
-                initialized_words.extend(filled_words);
+                initialized_words.extend(filled_words.iter().copied().filter(|&word| {
+                    i64::from(word) >= i64::from(destination) && i64::from(word) + 4 <= limit
+                }));
+                touched_words.extend(filled_words);
                 prove_fill(helper, count)?;
                 body.push_str(&format!("memory.fill({destination},{count},{byte})?;\n"));
                 fill_range = Some((destination, count));
@@ -769,6 +780,7 @@ pub(crate) fn prove_initializer(
         try_level: level.ok_or("initializer: missing TryLevel")?,
         fill_range: fill_range.ok_or("initializer: missing fill")?,
         module_slot: module_slot.ok_or("initializer: missing module result")?,
+        initialized_words,
         temporary_bytes: u32::try_from(initial_sp - minimum_sp)
             .map_err(|_| "initializer: temporary stack extent")?,
     })

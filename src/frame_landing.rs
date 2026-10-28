@@ -29,6 +29,13 @@ pub(crate) struct ProvenLanding {
     temporary_bytes: u32,
     /// Original post-transfer stores: restored register index -> frame offset.
     pub observations: BTreeMap<u8, i32>,
+    pub final_words: BTreeMap<i32, InitializedWord>,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum InitializedWord {
+    Scalar,
+    Stack,
+    Continuation,
 }
 impl ProvenLanding {
     pub fn temporary_bytes(&self) -> u32 {
@@ -449,6 +456,19 @@ pub(crate) fn prove_landing(
     if observations.keys().copied().collect::<BTreeSet<_>>() != BTreeSet::from([0, 4, 5]) {
         return Err("landing: incomplete original post-transfer observations".into());
     }
+    let final_words = state
+        .written
+        .iter()
+        .map(|(&offset, value)| {
+            let kind = match value {
+                Value::Scalar(_) => InitializedWord::Scalar,
+                Value::Stack(..) | Value::Address(_) => InitializedWord::Stack,
+                Value::Continuation(_) => InitializedWord::Continuation,
+                Value::Unknown => return Err("landing: unknown final initialized word".to_string()),
+            };
+            Ok((offset, kind))
+        })
+        .collect::<Result<_, String>>()?;
     Ok(ProvenLanding {
         prepare_source: prepared.ok_or("landing: missing Restore preparation")?,
         restore_source: restored.ok_or("landing: missing Restore execution")?,
@@ -458,6 +478,7 @@ pub(crate) fn prove_landing(
         end,
         temporary_bytes,
         observations,
+        final_words,
     })
 }
 

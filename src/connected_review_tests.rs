@@ -208,6 +208,29 @@ fn independent_connected_uninitialized_binding_and_effect_mutations_reject() {
 }
 
 #[test]
+fn filter_temporaries_cannot_alias_connected_initializer_effects() {
+    // The original filter's result remains identical. Changing only the first
+    // temporary's address must not grant authority over a typed module value,
+    // a complete byte-filled word, or the partially initialized endpoint.
+    for (offset, count) in [(-792i32, 716u32), (-768, 716), (-52, 717)] {
+        let (mut input, mut connected) = fixture(77);
+        connected.initializer.bytes[1..5].copy_from_slice(&count.to_le_bytes());
+        let mut filter = bytes("8b55ec8b028b08898d");
+        filter.extend(offset.to_le_bytes());
+        filter.extend([0x8b, 0x95]);
+        filter.extend(offset.to_le_bytes());
+        filter.extend(bytes("8955d433c0817dd4"));
+        filter.extend(input.event_code.to_le_bytes());
+        filter.extend(bytes("0f94c0c3"));
+        input.filters[0].bytes = filter;
+        assert!(
+            prove_connected(&input, &connected).is_err(),
+            "filter temporary aliases initialized offset {offset}, fill count {count}"
+        );
+    }
+}
+
+#[test]
 fn unused_partial_word_is_unknown_observation_not_execution_failure() {
     let (input, mut connected) = fixture(77);
     // Independently extend the original fill by one byte. The final word at

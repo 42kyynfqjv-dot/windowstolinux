@@ -65,6 +65,8 @@ enum Phase {
     Restore,
     Restoring,
     Done,
+    Returning,
+    Returned,
     Blocked,
 }
 struct Machine {

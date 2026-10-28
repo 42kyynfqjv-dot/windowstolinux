@@ -58,6 +58,19 @@ pub struct Connected {
     pub context_selector: u32,
 }
 
+/// Reporting and normal function return at an explicit initialized CRT-state
+/// boundary. The linked formatter and process startup are not certified here.
+pub struct Reported {
+    pub completion: Region,
+    pub printf_wrapper: Region,
+    pub iob_accessor: Region,
+    pub options_accessor: Region,
+    pub formatter: u32,
+    pub format: Region,
+    /// Addresses only. Runtime scalar contents must be explicitly supplied.
+    pub entry_globals: Vec<u32>,
+}
+
 fn ranges(input: &Input) -> Result<Vec<(u32, u32)>, String> {
     let mut ranges = Vec::new();
     let mut add = |va: u32, size: usize| -> Result<(), String> {
@@ -114,11 +127,11 @@ fn ranges(input: &Input) -> Result<Vec<(u32, u32)>, String> {
 /// Original code derives those values. A noncontiguous activation is retained
 /// as a cut and cannot be promoted to a continuous original-entry certificate.
 pub fn prove_fragments(input: &Input) -> Result<Proven, String> {
-    prove_composition(input, None, None, false)
+    prove_composition(input, None, None, false, None)
 }
 
 pub fn prove_connected(input: &Input, connected: &Connected) -> Result<Proven, String> {
-    prove_composition(input, Some(connected), None, false)
+    prove_composition(input, Some(connected), None, false, None)
 }
 
 pub use super::dispatch_contract::Dispatch;
@@ -129,7 +142,7 @@ pub fn prove_dispatched(
     connected: &Connected,
     dispatch: &Dispatch,
 ) -> Result<Proven, String> {
-    prove_composition(input, Some(connected), Some(dispatch), false)
+    prove_composition(input, Some(connected), Some(dispatch), false, None)
 }
 
 /// Execute the original software-exception call in a closed, same-thread
@@ -141,7 +154,16 @@ pub fn prove_raised(
     connected: &Connected,
     dispatch: &Dispatch,
 ) -> Result<Proven, String> {
-    prove_composition(input, Some(connected), Some(dispatch), true)
+    prove_composition(input, Some(connected), Some(dispatch), true, None)
+}
+
+pub fn prove_reported(
+    input: &Input,
+    connected: &Connected,
+    dispatch: &Dispatch,
+    reported: &Reported,
+) -> Result<Proven, String> {
+    prove_composition(input, Some(connected), Some(dispatch), true, Some(reported))
 }
 
 fn prove_composition(
@@ -149,6 +171,7 @@ fn prove_composition(
     connected: Option<&Connected>,
     dispatch_input: Option<&Dispatch>,
     raised: bool,
+    reported: Option<&Reported>,
 ) -> Result<Proven, String> {
     if input.frames.is_empty()
         || input.frames.len() > 8
@@ -446,6 +469,18 @@ fn prove_composition(
             evidence.push(format!("// Original connected initializer {:#x}..{:#x}: byte fill {:?}, owned module result at {}; helper instructions verified for all admitted alignment/feature classes.",connected.unwrap().initializer.va,p.end(),p.fill_range(),p.module_slot()));
             functions.push_str(&format!("fn initialize_owned<P>(memory:&mut FrameMemory<P>,module:GuestModule)->Result<(),&'static str>{{ {} }}\n",p.body()));
         }
+        let initializer_touches = |offset: i32| {
+            initialized.as_ref().is_some_and(|p| {
+                let (start, length) = p.fill_range();
+                p.module_slot() == offset
+                    || p.initialized_words().contains(&offset)
+                    || (i64::from(offset) < i64::from(start) + i64::from(length)
+                        && i64::from(start) < i64::from(offset) + 4)
+            })
+        };
+        if initializer_touches(-20) {
+            return Err("fragment initializer aliases exception pair owner slot".into());
+        }
         let mut temporaries = BTreeSet::new();
         for row in f.table.bytes[16..].as_chunks::<12>().0 {
             let va = u32::from_le_bytes(row[4..8].try_into().unwrap());
@@ -469,6 +504,7 @@ fn prove_composition(
                     if offset != -20 {
                         if !proof.ordinary_words().contains(&offset)
                             || proof.scalar_words().contains_key(&offset)
+                            || initializer_touches(offset)
                         {
                             return Err(
                                 "fragment filter temporary aliases initialized or protected state"
@@ -626,6 +662,51 @@ fn prove_composition(
             )
         })
         .transpose()?;
+    let reporting = reported.map(|report| -> Result<_,String> {
+        use super::main_completion::{Bindings,Layout,Word};
+        let extra=connected.ok_or("report requires original connected initialization")?;
+        let d=dispatch_input.ok_or("report requires original dispatch")?;
+        let landing=landing_proof.as_ref().ok_or("report requires original landing")?;
+        if !raised || selected.selected_frame()!=0 || report.completion.va!=landing.end || report.entry_globals.len()>16 {
+            return Err("report original completion continuity/root frame".into());
+        }
+        let end=extra.module_base.checked_add(extra.module_size).ok_or("report module overflow")?;
+        fn region(r:&Region)->super::stdio_effect::Region<'_>{super::stdio_effect::Region{code:r.bytes.as_slice(),origin:r.va}}
+        let wrapper=super::stdio_effect::prove_wrapper(region(&report.printf_wrapper),region(&report.iob_accessor),region(&report.options_accessor),report.formatter,(extra.module_base,end))?;
+        let format=super::stdio_effect::prove_format(&report.format.bytes)?;
+        // The module envelope is an exclusion against stacks, not an alias
+        // among its own members. Every concrete reporting role is disjoint.
+        let mut occupied:Vec<_>=bound_ranges.iter().copied().filter(|r|*r!=(extra.module_base,end)).collect();
+        for r in [&d.full_handler,&d.local_body,&d.local_wrapper,&d.nested_handler,&d.filter_bridge,&d.selected_bridge,&d.global_bridge,&d.notification,&d.cleanup_bridge] {
+            occupied.push((r.va,r.va.checked_add(r.bytes.len() as u32).ok_or("report dispatcher overflow")?));
+        }
+        for va in d.notification_words.into_iter().chain([d.rtl_unwind_iat]) {occupied.push((va,va.checked_add(4).ok_or("report dispatch data overflow")?));}
+        let mut add=|va:u32,len:usize|->Result<(),String>{
+            let high=va.checked_add(u32::try_from(len).map_err(|_|"report extent")?).ok_or("report extent overflow")?;
+            if len==0||len>8192||va<extra.module_base||high>end||occupied.iter().any(|&(a,b)|va<b&&a<high){return Err("report role alias/outside module".into());}
+            occupied.push((va,high));Ok(())
+        };
+        for r in [&report.completion,&report.printf_wrapper,&report.iob_accessor,&report.options_accessor,&report.format] {add(r.va,r.bytes.len())?;}
+        add(report.formatter,1)?;add(wrapper.stdout_address(),56)?;add(wrapper.options_address(),8)?;
+        for &va in &report.entry_globals {if va%4!=0{return Err("report unaligned entry scalar".into());}add(va,4)?;}
+        let frame=&frames[0];
+        let initialized=connected_initialization.as_ref().ok_or("report missing initializer effects")?;
+        let mut words:BTreeMap<_,_>=frame.ordinary_words().iter().map(|&at|(at,Word::Uninitialized)).collect();
+        for &at in frame.scalar_words().keys().chain(initialized.initialized_words().iter()) {
+            if !words.contains_key(&at){return Err("report initialized word outside ordinary frame".into());}words.insert(at,Word::Scalar);
+        }
+        words.insert(initialized.module_slot(),Word::Module);
+        for (&at,kind) in &landing.final_words {
+            if !words.contains_key(&at){return Err("report landing word outside ordinary frame".into());}
+            words.insert(at,match kind {frame_landing::InitializedWord::Scalar=>Word::Scalar,frame_landing::InitializedWord::Stack=>Word::Stack,frame_landing::InitializedWord::Continuation=>Word::Continuation});
+        }
+        let globals:BTreeMap<_,_>=std::iter::once(input.trace_va).chain(input.globals.iter().copied()).chain(report.entry_globals.iter().copied()).enumerate().map(|(index,va)|(va,index)).collect();
+        if globals.len()!=1+input.globals.len()+report.entry_globals.len(){return Err("report global authority alias".into());}
+        let completion=super::main_completion::prove(&report.completion.bytes,report.completion.va,&Layout{words,esp:frame.esp_offset(),saved:frame.saved_slots().clone(),guards:frame.guard_offsets().iter().copied().collect(),predecessor:frame.record_offset()},&Bindings{module_base:extra.module_base,module_size:extra.module_size,globals,printf:report.printf_wrapper.va,format:report.format.va,security_check:extra.security_helper.va})?;
+        if completion.argument_count!=format.arguments(){return Err("report original variadic/format arity".into());}
+        evidence.push(format!("// Original reporting call {:#x}, {} scalar arguments, output bound {} bytes. CRT wrapper requirements remain unresolved effect boundaries: {:?}. Explicit entry-scalar addresses {:?}; values are runtime inputs, not zero initialization assumptions.",completion.printf_pc,completion.argument_count,format.max_bytes(),wrapper.required_effects(),report.entry_globals));
+        Ok((completion,wrapper))
+    }).transpose()?;
     evidence.push(format!("// Filter-derived selected frame {}, EH4 scope {}, landing {:#x}; landing {}.",selected.selected_frame(),selected.selected_scope(),selected.target(),if connected.is_some(){"is executed from original context stores through nonlocal transfer and observation stores"}else{"instructions are not executed"}));
 
     // Each filter body is decoded, not an expected-result stencil. The installed
@@ -817,6 +898,7 @@ fn prove_composition(
     let mut specs: Vec<Vec<String>> = vec![Vec::new(); frames.len()];
     let mut arms = String::new();
     let mut owned_arms = String::new();
+    let mut initialized_globals = BTreeSet::new();
     let offsets: Vec<Vec<i32>> = frames
         .iter()
         .map(|f| {
@@ -838,6 +920,7 @@ fn prove_composition(
             frames[frame].scalar_words(),
             &globals,
         )?;
+        initialized_globals.extend(proof.global_writes.iter().copied());
         evidence.push(format!("// Cleanup action {action}: original funclet {va:#x}, complete post-call global writes {:?}.",proof.global_writes));
         let cursor = *known_cursors
             .entry((frame, proof.cursor_offset))
@@ -891,6 +974,14 @@ fn prove_composition(
           memory.write_u32({local_offset},cells[1]).map_err(|_|Error::Identity)?;
           memory.write_u32({cursor_offset},cursor as u32).map_err(|_|Error::Identity)?;
         }},"#,local_offset=proof.local_offset,cursor_offset=proof.cursor_offset));
+    }
+    // This bounded reporting adapter maps every supplied cleanup-global role.
+    // Require original executed writes for all of them before emission rather
+    // than padding unused or unknown cells with zero at runtime.
+    if reported.is_some()
+        && (0..input.globals.len()).any(|index| !initialized_globals.contains(&index))
+    {
+        return Err("report cleanup global initialization not proved".into());
     }
     let mut decode = Decoder::with_ip(
         32,
@@ -957,14 +1048,18 @@ fn prove_composition(
         }
         let mut support = String::new();
         let mut setup = String::new();
-        let run_name = if raised {
+        let run_name = if reported.is_some() {
+            "run_reported"
+        } else if raised {
             "run_raised"
         } else if dispatch_input.is_some() {
             "run_dispatched"
         } else {
             "run_connected"
         };
-        let composition_boundary = if raised {
+        let composition_boundary = if reported.is_some() {
+            "Original Main reporting predicates, variadic routing and protected normal return execute after the original selected handler. Owned initialized stdout/options, public integer-printf semantics and buffering policy are explicit external effect boundaries: the linked formatter, FILE initialization, CRT entry and process-exit flush are NOT proved. Not whole-PE admission."
+        } else if raised {
             "The original software-exception CALL supplies this event. Closed same-thread delivery with valid captured stack and no debugger/vectored interception is an explicit domain, not established startup. Captured registers remain unknown. Original selected handler, cleanup and restoration execute; unsupported delivery outcomes reject before emission. Not whole-PE admission."
         } else if dispatch_input.is_some() {
             "Original handler routing, local FS effects, helper bridges, cleanup and restoration execute. Windows delivery and the closed RtlUnwind external contract remain boundaries; arbitrary nested/collided dispatch and the later Main/CRT epilog are not admitted."
@@ -1028,7 +1123,9 @@ fn prove_composition(
 "#
             )
         };
-        let signature = if raised {
+        let signature = if reported.is_some() {
+            "entry_sp:u32,cookie:u32,feature:i32,initial_trace:u32,thread_limit:u32,thread_base:u32,selector:u32,entry_globals:&[u32],stdio_options:[u32;2],policy:ReportPolicy,mut sink:impl FnMut(&[u8])->std::io::Result<usize>"
+        } else if raised {
             "entry_sp:u32,cookie:u32,feature:i32,initial_trace:u32,thread_limit:u32,thread_base:u32,selector:u32"
         } else {
             "entry_sp:u32,cookie:u32,current:[u32;10],feature:i32,initial_trace:u32,thread_limit:u32,thread_base:u32,selector:u32,handler_sp:u32"
@@ -1070,6 +1167,84 @@ fn prove_composition(
         } else {
             ""
         };
+        let mut report_support = String::new();
+        let mut report_run = String::new();
+        let mut report_fields = String::new();
+        let mut report_values = String::new();
+        let mut report_exports = String::new();
+        let outcome_derive = if reported.is_some() {
+            "#[derive(Debug)]"
+        } else {
+            "#[derive(Debug,PartialEq,Eq)]"
+        };
+        if let (Some(report), Some((completion, wrapper))) = (reported, reporting.as_ref()) {
+            report_support.push_str(super::main_completion::EMITTED_TYPES);
+            report_support.push_str(super::stdio_effect::EMITTED_TYPES);
+            report_support.push_str(super::main_return::EMITTED_TYPES);
+            report_support.push_str(r#"
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+pub enum ReportPolicy {ImmediateProjection,Deferred}
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+pub enum ReportFlush {Success,Failure}
+pub struct ReportOutput {inner:OwnedStdio,owner:u64,logical:Option<u32>}
+impl std::fmt::Debug for ReportOutput {fn fmt(&self,f:&mut std::fmt::Formatter<'_>)->std::fmt::Result{f.debug_struct("ReportOutput").field("logical_count",&self.logical).field("written_bytes",&self.inner.written_bytes()).field("pending_bytes",&self.inner.pending_bytes()).field("stream_error",&self.inner.stream_error).finish()}}
+impl ReportOutput {
+ pub fn logical_count(&self)->Option<u32>{self.logical}
+ pub fn pending_bytes(&self)->&[u8]{self.inner.pending_bytes()}
+ pub fn written_bytes(&self)->usize{self.inner.written_bytes()}
+ pub fn stream_error(&self)->bool{self.inner.stream_error}
+ /// An explicitly requested component flush, never an implicit CRT exit.
+ pub fn flush(&mut self,sink:impl FnMut(&[u8])->std::io::Result<usize>)->Result<ReportFlush,&'static str>{self.inner.flush(self.owner,sink).map(|r|match r{FlushResult::Success=>ReportFlush::Success,FlushResult::Failure=>ReportFlush::Failure})}
+}
+"#);
+            let wrapper_body = wrapper.body();
+            functions.push_str(&format!("fn reporting_printf(stdio:&mut OwnedStdio,owner:u64,request:PrintRequest<'_>,sink:impl FnMut(&[u8])->std::io::Result<usize>)->Result<Option<u32>,&'static str>{{if request.call_pc!={}u32||request.target!={}u32||request.format!={}u32{{return Err(\"report bound original printf call\");}}let format:&[u8]=&{:?};let arguments=request.arguments;let result=(||->Result<PrintResult,&'static str>{{{wrapper_body}}})();result.map(PrintResult::word)}}\n",completion.printf_pc,report.printf_wrapper.va,report.format.va,report.format.bytes));
+            let scratch = completion
+                .temporary_bytes()
+                .checked_add(wrapper.temporary_bytes())
+                .ok_or("report nested scratch overflow")?;
+            let completion_body = completion.source();
+            report_run = format!(
+                r#"
+ if entry_globals.len()!={extra_count}{{return Err("report explicit initialized entry scalar count");}}
+ let mut reporting_globals=Vec::with_capacity(1+globals.len()+entry_globals.len());
+ reporting_globals.push(machine.trace.ok_or("report unknown trace")?);
+ reporting_globals.extend(globals.iter().map(|n|n.ok_or("report uninitialized global scalar")).collect::<Result<Vec<_>,_>>()?);
+ reporting_globals.extend_from_slice(entry_globals);
+ let mut report_stdio=OwnedStdio::new(owner,{stdout},{options},stdio_options,match policy{{ReportPolicy::ImmediateProjection=>OutputPolicy::ImmediateProjection,ReportPolicy::Deferred=>OutputPolicy::Deferred}})?;
+ let report_low=images[{selected_frame}].esp.checked_sub({scratch}).ok_or("report temporary stack underflow")?;
+ if report_low<thread_limit{{return Err("report temporary stack thread bounds");}}
+ validate_frame_extent(report_low,images[{selected_frame}].esp,&bound_ranges,&[])?;
+ let plan=NormalReturnPlan{{pops:vec!{pops:?},cookie_offset:{cookie_offset},security_target:{security_target},return_offset:{return_offset}}};
+ let mut logical_count=None;
+ let main_return;
+ {{
+  let mut session=NormalReturnSession::new(&mut machine,&mut registry,bindings[{selected_frame}],&images[{selected_frame}],&raised_event,plan)?;
+  let original=(||->Result<CompletionOutcome<RegistryHead>,&'static str>{{
+   let memory=&mut FrameMemory::new(&mut images[{selected_frame}],owner,&ordinary[{selected_frame}])?;
+   let globals=&mut reporting_globals;
+   let mut printf=|request:PrintRequest<'_>|->Result<Option<u32>,&'static str>{{let value=reporting_printf(&mut report_stdio,owner,request,&mut sink)?;logical_count=value;Ok(value)}};
+   let mut effects=|effect:CompletionEffect<'_,RegistryHead>|session.apply(effect);
+   {completion_body}
+  }})();
+  let outcome=original?;let receipt=session.finish(&outcome)?;main_return=receipt.value;
+ }}
+ let returned=machine.owned_context.ok_or("report missing returned register state")?;
+ let report=ReportOutput{{inner:report_stdio,owner,logical:logical_count}};
+"#,
+                extra_count = report.entry_globals.len(),
+                stdout = wrapper.stdout_address(),
+                options = wrapper.options_address(),
+                pops = completion.pops,
+                cookie_offset = completion.cookie_offset,
+                security_target = completion.security_target,
+                return_offset = completion.return_offset
+            );
+            report_fields =
+                "pub main_return:u32,pub returned:[Option<u32>;10],pub report:ReportOutput,".into();
+            report_values = "main_return,returned,report,".into();
+            report_exports = ",ReportPolicy,ReportFlush,ReportOutput".into();
+        }
         let source = format!(
             r#"
 {evidence}
@@ -1084,6 +1259,7 @@ mod composed {{
 {bridge_types}
 {support}
 {event_support}
+{report_support}
 {functions}
 #[derive(Clone,Debug,PartialEq,Eq)]
 enum Predecessor {{Borrowed{{owner:u64}},Frame{{owner:u64,index:usize}}}}
@@ -1091,8 +1267,8 @@ fn validate_frame_extent(low:u32,entry_sp:u32,bound:&[(u32,u32)],stacks:&[(u64,u
  let low=u64::from(low);let high=u64::from(entry_sp)+4;
  if low>=high||high>1u64<<32||bound.iter().any(|&(a,b)|low<u64::from(b)&&u64::from(a)<high)||stacks.iter().any(|&(a,b)|low<b&&a<high){{return Err("guest stack aliases bound image or another frame");}} Ok(())
 }}
-#[derive(Debug,PartialEq,Eq)]
-pub struct Outcome {{{outcome_fields}pub trace:u32,pub frame_words:Vec<Vec<Option<u32>>>,pub offsets:Vec<Vec<i32>>,pub globals:Vec<Option<u32>>,pub cursors:Vec<Option<i32>>,pub live:Vec<bool>,pub restored:[Option<u32>;10],pub selected_frame:usize,pub selected_target:u32}}
+{outcome_derive}
+pub struct Outcome {{{report_fields}{outcome_fields}pub trace:u32,pub frame_words:Vec<Vec<Option<u32>>>,pub offsets:Vec<Vec<i32>>,pub globals:Vec<Option<u32>>,pub cursors:Vec<Option<i32>>,pub live:Vec<bool>,pub restored:[Option<u32>;10],pub selected_frame:usize,pub selected_target:u32}}
 pub fn {run_name}({signature})->Result<Outcome,&'static str>{{
  {flags_check}
  let mut machine=Machine::{lifecycle}(vec![{specs}],{selected_frame},{machine_context},Some(initial_trace)).map_err(|_|"connected lifecycle")?;
@@ -1132,6 +1308,7 @@ pub fn {run_name}({signature})->Result<Outcome,&'static str>{{
   }})
  }}).map_err(|_|"connected original landing/restoration")?;
  {finish_event}
+ {report_run}
  let offsets:Vec<Vec<i32>>={offsets_literal};let cursor_slots:Vec<Option<usize>>={cursors_literal};
  let mut frame_words=Vec::new();
  for (index,image) in images.iter().enumerate(){{
@@ -1141,11 +1318,11 @@ pub fn {run_name}({signature})->Result<Outcome,&'static str>{{
   }}frame_words.push(values);
  }}
  let cursors=frame_words.iter().zip(cursor_slots).map(|(words,slot)|slot.and_then(|s|words[s]).map(|n|n as i32)).collect();
- let outcome=Outcome{{{outcome_values}trace:machine.trace.ok_or("connected unknown trace")?,frame_words,offsets,globals,cursors,live:machine.frames.iter().map(|f|f.live).collect(),restored,selected_frame:{selected_frame},selected_target:{selected_target}}};
+ let outcome=Outcome{{{report_values}{outcome_values}trace:machine.trace.ok_or("connected unknown trace")?,frame_words,offsets,globals,cursors,live:machine.frames.iter().map(|f|f.live).collect(),restored,selected_frame:{selected_frame},selected_target:{selected_target}}};
  Ok(outcome)
 }}
 }}
-pub use composed::{{{run_name},Outcome}};
+pub use composed::{{{run_name},Outcome{report_exports}}};
 "#
         );
         return Ok(Proven { source });
