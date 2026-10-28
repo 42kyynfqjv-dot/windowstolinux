@@ -563,12 +563,17 @@ impl CrtHandlerPair {
   frame.validate()?;objects.validate(frame.event,frame.rt,frame.epoch)?;
   let entry=CrtCpu::pointer(cpu.entry[4])?;let bp=CrtCpu::pointer(cpu.r[5])?;
   if cpu.returned||cpu.return_id!=frame.state.activation||bp!=frame.rt.offset(entry,-4)?
-   ||cpu.r[4]!=CrtValue::Pointer(frame.rt.offset(bp,-28)?)
+   ||(cpu.r[4]!=CrtValue::Pointer(frame.rt.offset(bp,-28)?)
+      &&(cpu.r[4]!=CrtValue::Pointer(frame.rt.offset(bp,-40)?)
+       ||[(32,3),(36,6),(40,7)].iter().any(|&(off,r)|frame.rt.offset(bp,-off).and_then(|p|frame.rt.load(p,32))!=Ok(cpu.entry[r]))))
    ||frame.rt.load(entry,32)?!=CrtValue::ProtectedReturn(cpu.return_id)
    ||frame.rt.load(bp,32)?!=cpu.entry[5]{return Err("handler locals original prolog ownership");}
   let low=frame.rt.offset(bp,-28)?;frame.rt.valid(low,28)?;
   if frame.rt.overlapping_tags(low.address(),28).iter().any(|(_,v)|matches!(v,CrtValue::ProtectedReturn(_)|CrtValue::ThreadHead(_)|CrtValue::OpaqueSaved(_))){return Err("handler locals protected overlap");}
   Ok(Self{activation:cpu.return_id,epoch:frame.event.epoch,event:frame.event.generation,frame:frame.event.frame,low,bp,record:objects.record,context:objects.context,installed:false})
+ }
+ fn from_installed(frame:&CrtLiveFrame<'_,'_>,cpu:&CrtCpu,objects:&CrtNormalObjects)->RegistryResult<Self>{
+  let mut pair=Self::bind(frame,cpu,objects)?;pair.installed=true;pair.read(frame,cpu)?;Ok(pair)
  }
  fn validate(&self,frame:&CrtLiveFrame<'_,'_>,cpu:&CrtCpu)->RegistryResult<()>{
   frame.validate()?;

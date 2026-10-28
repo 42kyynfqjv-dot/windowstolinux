@@ -52,6 +52,14 @@ impl CrtNormalObjects {{
   captured.original_check(self.identity.owner,selector)
  }}
 }}
+fn context_prefix_call(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,objects:&CrtNormalObjects,continuation:u32)->RegistryResult<()>{{
+ frame.validate()?;objects.check_original_context(frame.event,frame.rt,frame.epoch)?;
+ if frame.rt.load(CrtCpu::pointer(cpu.r[4])?,32)?!=CrtValue::Pointer(objects.context){{return Err("context prefix argument");}}
+ let sp=CrtCpu::pointer(cpu.r[4])?;let low=frame.rt.offset(sp,-{depth})?;frame.rt.valid(low,{depth})?;
+ frame.epoch.registry.range(low.address(),u64::from(sp.address()))?;
+ if frame.rt.overlapping_tags(low.address(),{depth}).iter().any(|(_,v)|matches!(v,CrtValue::ProtectedReturn(_)|CrtValue::OpaqueSaved(_)|CrtValue::ThreadHead(_))){{return Err("context temporary protected overlap");}}
+ frame.call(cpu,continuation,|f,child|{{objects.check_original_context(f.event,f.rt,f.epoch)?;child.clobber(CrtValue::Scalar{{bits:0,known:0}});child.finish(f.rt)}})?;Ok(())
+}}
 impl CrtNormalException {{
  fn execute_context_checked_handler<F>(&mut self,objects:&CrtNormalObjects,rt:&mut CrtStreamRuntime,interrupted:&CrtCpu,epoch:&mut NormalCallEpoch<'_>,binding:&CrtNormalBinding,dispatcher:&mut CrtCpu,continuation:u32,body:F)->RegistryResult<CrtNormalHandlerReturn>
  where F:FnOnce(&mut CrtStreamRuntime,&mut CrtCpu)->RegistryResult<CrtValue>{{
@@ -66,7 +74,8 @@ impl CrtNormalException {{
 }}
 "#,
             body = self.body,
-            selector = self.selector_va
+            selector = self.selector_va,
+            depth = self.temporary_bytes + 4
         )
     }
     pub(crate) fn selector_va(&self) -> u32 {

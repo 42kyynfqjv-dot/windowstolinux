@@ -368,3 +368,32 @@ Then connect actual filter bridge/target bytes and table-driven local unwind.
 Temporary-registration exceptional/collided effects and selected normal-source
 restoration remain open; scalar result and scope equality do not supply that
 permission. No full startup/rcedit admission changes.
+
+## Sol connected full prefix caller through installer
+
+The same PrefixProof lowering now executes the remaining original caller
+instructions: load/decode the scope table with its actual cookie, establish the
+owner-frame address, retain guard/context arguments, invoke both checked helpers,
+load the original record, perform the single16byte cleanup, read TryLevel, test
+flags and reach the installer only in the full zero-flags search domain. A decoded
+table scalar gains Module provenance only after matching this bound frame's
+proved scope address. Complete module-range checks still precede helper reads.
+
+Guard/context bindings now support caller-owned arguments without per-call
+cleanup. Helper bodies retain their existing decoded proof/summary and protected
+CALL/RET behavior. The context helper is extracted/hashed from this same PE too.
+The ordinary-prefix native case adopts the actually installed pair after checking
+all three saved nonvolatile slots, executes a decoded filter and verifies the
+owner/table locals, ESI/EDI state and forgotten helper arguments. Header corruption
+and an unknown context selector fail at the expected distinct stack depths while
+preserving caller effects. The unknown-feature failure remains at the earlier
+normalizer boundary. Thirty-four scenarios now run; these are component cases,
+not new whole-PE comparisons or a Windows acquired-context implementation.
+
+The full98byte caller path is connected for the admitted component entry. The
+ordinary handler's actual filter bridge/target bytes, scope-table search and local
+unwind schedule, temporary-registration/nested exceptional effects and selected
+normal-source restoration remain unproved. Current native filter code is an
+independently authored instruction fixture. Full startup/rcedit remains rejected.
+Next useful Sol work is the actual filter bridge and target binding before any
+normal-frame retirement or resumption is admitted.

@@ -286,7 +286,7 @@ fn file_scope_failure(){
 }
 
 fn live_dispatch(){
- for mode in 0..32 {
+ for mode in 0..34 {
   let(m,mut r,main,mut permit)=fixture_with_extra(&[(0x410000,0x420000)]);let mut rt=runtime(&r);let outer=m.owned_context;
   let result=r.with_normal_calls(&m,&mut permit,&main,|e|{
    let mut c=cpu(&mut rt,0xe000,71);let mut b=CrtNormalBinding::bind(&rt,&c,e,epilog_run_layout())?;start(&mut rt,&mut c,e,&mut b,99)?;
@@ -312,23 +312,34 @@ fn live_dispatch(){
    if mode==22{rt.memory.release(context.cap,context.owner).map_err(|_|"test release")?;}
    let result=event.execute_context_checked_live_handler(&objects,&mut rt,&c,e,&b,&mut d,0x401900,|view,h|{
     assert!(!(20..=22).contains(&mode),"invalid event/object reached callback");
-    if mode==30||mode==31{
+    if mode>=30{
      let feature=view.rt.map_region(0x41ccb8,4,CrtRegionKind::Module,Some(&1u32.to_le_bytes()))?;
      let entry=h.r[4];let before=h.entry;
      if mode==31{view.rt.store(feature,32,CrtValue::Scalar{bits:0,known:0})?;}
-     let front=original_prefix_front(view,h,&objects);
+     if mode!=31{view.rt.map_region(0x41b400,16,CrtRegionKind::Module,Some(&original_scope_header().into_iter().flat_map(i32::to_le_bytes).collect::<Vec<_>>()))?;}
+     if mode==32{let table_word=view.rt.resolve_absolute(0x41b408,CrtRegionKind::Module)?;view.rt.store(table_word,32,CrtValue::scalar(0))?;}
+     if mode==33{let selector=view.rt.resolve_absolute(0x415128,CrtRegionKind::Module)?;view.rt.store(selector,32,CrtValue::Scalar{bits:0,known:0})?;}
+     let front=if mode!=31{original_prefix_caller(view,h,&objects)}else{original_prefix_front(view,h,&objects)};
      if mode==30{front?;}else{assert!(front.is_err());}
 
      let bp=CrtCpu::pointer(h.r[5])?;
-     assert_eq!(h.r[4],CrtValue::Pointer(view.rt.offset(bp,-44)?));
-     assert_eq!(view.rt.load(CrtCpu::pointer(h.r[4])?,32)?.known_scalar()?,0xe0420042);
+     assert_eq!(h.r[4],CrtValue::Pointer(view.rt.offset(bp,match mode{30=>-40,31=>-44,32=>-52,_=>-56})?));
+     if mode==31{assert_eq!(view.rt.load(CrtCpu::pointer(h.r[4])?,32)?.known_scalar()?,0xe0420042);}
+     if mode==30{
+      let pair=CrtHandlerPair::from_installed(view,h,&objects)?;assert_eq!(pair.read(view,h)?,(record,context));
+      let filter=pair.call_filter(view,h,0x402300,|f,k,_,_|{decoded_filter(f,k)?;k.finish(f.rt)})?;assert_eq!(filter,CrtValue::scalar(1));view.write_u32(-28,91)?;
+      assert_eq!(view.rt.load(view.rt.offset(bp,-8)?,32)?,CrtValue::Pointer(view.rt.resolve_absolute(0x41b400,CrtRegionKind::Module)?));
+      assert_eq!(view.rt.load(view.rt.offset(bp,-16)?,32)?,CrtValue::Pointer(b.at(view.rt,b.layout.bp)?));
+      assert_eq!(h.r[6],CrtValue::Pointer(b.at(view.rt,b.layout.bp)?));assert_eq!(h.r[7].known_scalar()?,0);
+      assert!(view.rt.load(view.rt.offset(bp,-44)?,32)?.known_scalar().is_err());
+     }
      assert_eq!(view.rt.load(view.rt.offset(bp,-32)?,32)?,before[3]);
      assert_eq!(view.rt.load(view.rt.offset(bp,-36)?,32)?,before[6]);
      assert_eq!(view.rt.load(view.rt.offset(bp,-40)?,32)?,before[7]);
      assert_eq!(view.rt.load(view.rt.offset(bp,-12)?,32)?.known_scalar()?,1);
      assert_eq!(view.rt.load(view.rt.offset(bp,-1)?,8)?.known_scalar()?,0);
      assert_eq!(view.rt.load(record,32)?.known_scalar()?,0xe0420042);assert_ne!(h.r[4],entry);
-     if mode==30{assert_eq!(view.rt.load(feature,32)?.known_scalar()?,1);}else{assert!(view.rt.load(feature,32)?.known_scalar().is_err());}
+     if mode!=31{assert_eq!(view.rt.load(feature,32)?.known_scalar()?,1);}else{assert!(view.rt.load(feature,32)?.known_scalar().is_err());}
      return Err("prefix front reached deferred guard/context caller boundary");
     }
     if mode==0||mode>=27 {
@@ -440,7 +451,7 @@ fn live_dispatch(){
     assert!(result.is_err());assert_eq!(event.delivery,CrtNormalDelivery::Pending);assert_eq!(rt.load(marker,32)?.known_scalar()?,91);
    }else{
     assert!(result.is_err(),"mode {mode}");assert_eq!(event.delivery,CrtNormalDelivery::Failed);
-    if mode!=5{assert_eq!(rt.load(marker,32)?.known_scalar()?,if mode==30||mode==31{91}else if mode==23||mode>=27{95}else if mode==15||mode==16||mode==19{94}else{92});}
+    if mode!=5{assert_eq!(rt.load(marker,32)?.known_scalar()?,if mode>=30{91}else if mode==23||mode>=27{95}else if mode==15||mode==16||mode==19{94}else{92});}
    }
    if mode==19{rt.check_lock(lease.unwrap())?;}if mode==18{assert!(rt.locks.is_empty());}
    Err::<(),_>("live handler effects still require containment/restoration proof")
@@ -613,7 +624,8 @@ fn run(case: &str) {
         let fixture = emitted_literal(include_str!("thread_registry_normal_tests.rs"))
             .split("fn complete(").next().unwrap().replace("0x408000", "0x41c000");
         let raise = super::normal_frame::NormalRaiseCallProof::prove(&[0xff,0x15,0,0x50,0x41,0],0x401800,0x415000).unwrap().emit_site();
-        let context_code=bytes_hex("558bec813d28514100f91b4000741f648b0d180000008b45088b80c40000003b410872053b410476056a0d59cd295dc3");
+        let context_literal=bytes_hex("558bec813d28514100f91b4000741f648b0d180000008b45088b80c40000003b410872053b410476056a0d59cd295dc3");
+        let context_code=match std::env::var("W2L_EH4_CODE"){Ok(path)=>std::fs::read(std::path::Path::new(&path).join("original-context-check.bin")).unwrap(),Err(_)=>context_literal};
         let context_proof=crate::handler_context::prove_context_check(&context_code,0x402877,0x415128).unwrap();
         let scope_bytes=match std::env::var("W2L_EH4_CODE") { Ok(path)=>std::fs::read(std::path::Path::new(&path).join("handler-scope-store.bin")).unwrap(), Err(_)=>vec![0x89,0x58,0x0c] };
         let scope_store=super::normal_frame::NormalScopeStoreProof::prove(&scope_bytes,0x402355).unwrap().emit("original_scope_store");
@@ -639,11 +651,16 @@ fn run(case: &str) {
         assert!(p.guard_proof(&guard,0x4021d0,&security,0x40154c,[-2,0,-40,0]).is_err());
         let prefix_bytes=handler_bytes("original-handler-prefix.bin","558bec83ec1c538b5d085657c645ff00ff33c745f401000000e8ed27010089038b5d0c8b43088d7310330500c0410056508975f08945f8e884ffffffff7510e8230600008b450883c4108b7b0cf6400466755a8945e48b45108945e88d45e48943fc");
         let prefix=crate::handler_checks::prove_prefix(&prefix_bytes,0x402210,&crate::handler_checks::Bindings{normalizer_va:0x414a1b,guard_va:0x4021d0,context_va:0x402877,cookie_va:0x41c000,installer_va:0x402263}).unwrap();
+        let mut alternative_prefix=prefix_bytes.clone();alternative_prefix.splice(0..1,[0xff,0xf5]);
+        let alternative=crate::handler_checks::prove_prefix(&alternative_prefix,0x40220f,&crate::handler_checks::Bindings{normalizer_va:0x414a1b,guard_va:0x4021d0,context_va:0x402877,cookie_va:0x41c000,installer_va:0x402263}).unwrap();
+        assert_eq!(prefix.caller_body(),alternative.caller_body());
         let prefix_normalizer=crate::selection::prove_code_identity(&normalizer,0x414a1b,&std::collections::BTreeSet::from([0x41ccb8]),0xe0420042).unwrap().prefix_call("normalizer_prefix_call");
         let prefix_front=format!("fn original_prefix_front(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,objects:&CrtNormalObjects)->RegistryResult<()>{{frame.validate()?;objects.validate(frame.event,frame.rt,frame.epoch)?;let sp=CrtCpu::pointer(cpu.r[4])?;frame.rt.valid(frame.rt.offset(sp,-{})?,{})?;{} Ok(())}}",prefix.temporary_bytes,prefix.temporary_bytes,prefix.normalizer_front());
+        let guard_prefix=p.guard_proof(&guard,0x4021d0,&security,0x40154c,header).unwrap().prefix_call("guard_prefix_call");
+        let prefix_caller=format!("fn original_prefix_caller(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,objects:&CrtNormalObjects)->RegistryResult<()>{{frame.validate()?;objects.validate(frame.event,frame.rt,frame.epoch)?;if frame.rt.load(frame.rt.offset(objects.record,4)?,32)?.known_scalar()?!=0{{return Err(\"prefix full search flags\");}}let sp=CrtCpu::pointer(cpu.r[4])?;frame.rt.valid(frame.rt.offset(sp,-{})?,{})?;{}Ok(())}}",prefix.temporary_bytes,prefix.temporary_bytes,prefix.caller_body());
         let context_types=crate::handler_context::EMITTED_TYPES;
         let context_check=context_proof.normal_object_check();
-        let source = format!("#![allow(dead_code)]\nmod guest_memory{{{memory}}}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{fixture}\n{file_scope}\n{context_types}\n{context_check}\n{scope_store}\n{permuted_store}\n{install}\n{handler_prolog}\n{filter_source}\n{false_filter_source}\n{normalizer_source}\n{guard_source}\n{header_source}\n{prefix_normalizer}\n{prefix_front}\nfn raise_site()->CrtNormalRaiseSite{{{{{raise}}}}}\n{CASES}",
+        let source = format!("#![allow(dead_code)]\nmod guest_memory{{{memory}}}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{fixture}\n{file_scope}\n{context_types}\n{context_check}\n{scope_store}\n{permuted_store}\n{install}\n{handler_prolog}\n{filter_source}\n{false_filter_source}\n{normalizer_source}\n{guard_source}\n{header_source}\n{prefix_normalizer}\n{prefix_front}\n{guard_prefix}\n{prefix_caller}\nfn raise_site()->CrtNormalRaiseSite{{{{{raise}}}}}\n{CASES}",
             include_str!("linker/unwind_runtime.rs").replace("//!", "//"),
             emitted_literal(include_str!("frame_proof.rs")),emitted_literal(include_str!("thread_registry.rs")),
             crate::crt_stream_runtime::EMITTED_TYPES,crate::crt_stream_cpu::EMITTED_TYPES,
