@@ -5,6 +5,16 @@ admit a complete formatter, CRT startup, rcedit, or another whole PE. Production
 admission barriers remain in place. No new Windows/ELF whole-program pairs are
 claimed here.
 
+## Current FILE scope integration
+
+[Original FILE scope and remaining formatter effects](FILE-SCOPE.md) records the
+new connected lock/scope/normal-cleanup/epilog component and the concrete C++
+unwind/PTD/termination dependencies. The driver remains an explicit cut; three
+new native test functions do not add whole-PE or original-Windows comparisons.
+The prior `6cb18d4` dedicated workflow and one full workflow passed; the other
+full run preserved an unresolved original-Windows `untaken` timeout. See that
+report for exact run IDs, hashes and evidence distinctions.
+
 ## Current connected normal-wrapper boundary
 
 Sol review of `0521552f` found dedicated CI 40692595720 failed after all 86
@@ -13,7 +23,7 @@ line endings and violated the canonical LF byte/hash contract. The archived
 vector file confirms all five CRLF sequences. Vector writing now uses explicit
 ASCII bytes, with a regression forbidding text-mode output. Original failed-run
 observations remain intact; a separately labelled canonicalized vector copy
-permits local Linux comparison, and fresh Windows/Linux CI is still required.
+permits local Linux comparison, and subsequent Windows/Linux CI 40694121946 passed.
 This is a reproduced evidence-encoding defect, unrelated to historical process
 timeouts. No timeout or rejection gate is relaxed.
 
@@ -46,8 +56,8 @@ observations and hashes, extracts the unchanged 69-byte helper and 18-byte epilo
 then compares native restoration under the observed body EAX/flags boundary.
 Windows and Linux must use identical emitted Rust and original PE bytes. These
 are five component comparisons per host, **not whole-PE translation pairs or
-execution of the formatter body**. Fresh CI evidence is required before claiming
-those comparisons passed. Synthetic harness smoke tests are not Windows evidence.
+execution of the formatter body**. Fresh CI 40694121946 now confirms those five comparisons on each host.
+Synthetic harness smoke tests are not Windows evidence.
 
 The preceding `7c946bf2113855b36c1610b746c8262547f77905` checkpoint passed
 dedicated run 40688384215 and both nine-job full runs 40688395175/40688384484.

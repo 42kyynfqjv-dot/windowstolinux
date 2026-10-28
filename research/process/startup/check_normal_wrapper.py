@@ -11,6 +11,7 @@ from pathlib import Path
 import subprocess
 
 from formatter_binding import mapped
+from coff_binding import import_at_iat, pe_sections
 from observe_stdio import CASES, parse_events, summarize
 
 
@@ -57,6 +58,24 @@ def check(original, observation, out, compare=None):
     epilog = mapped(image, 0x404696, 18, executable=True)
     (out/'helper.bin').write_bytes(helper)
     (out/'epilog.bin').write_bytes(epilog)
+    # These new native cases execute original outer FILE scope code with an
+    # explicitly supplied driver. They are NOT additional Windows comparisons.
+    base, _ = pe_sections(image)
+    file_imports = {}
+    for address, expected in [(0x41504c, ('kernel32.dll', 'EnterCriticalSection')),
+                              (0x415050, ('kernel32.dll', 'LeaveCriticalSection'))]:
+        actual_import = tuple(import_at_iat(image, address-base))
+        if actual_import != expected:
+            raise ValueError('FILE scope original import identity mismatch')
+        file_imports[str(address)] = list(actual_import)
+    file_regions = {}
+    for name, start, end in [('file-wrapper', 0x404668, 0x4046a8),
+                             ('file-lock', 0x404634, 0x404648),
+                             ('file-unlock', 0x404648, 0x40465c),
+                             ('file-cleanup', 0x4046ab, 0x4046b7)]:
+        raw = mapped(image, start, end-start, executable=True)
+        (out/(name+'.bin')).write_bytes(raw)
+        file_regions[name] = sha(raw)
     env = dict(os.environ, W2L_EH4_CODE=str(out.resolve()), W2L_EH4_EVIDENCE=str(out.resolve()),
                W2L_EH4_VECTORS=str((observation/'normal-wrapper-vectors.txt').resolve()))
     command = ['cargo', 'test', '--locked', '--example', 'crt_stream',
@@ -66,6 +85,13 @@ def check(original, observation, out, compare=None):
     (out/'cargo.stderr').write_bytes(run.stderr)
     if run.returncode or b'1 passed' not in run.stdout:
         raise ValueError('original wrapper native comparison test failed; see retained cargo logs')
+    scope_command = ['cargo', 'test', '--locked', '--example', 'crt_stream',
+                     'crt_exception_wrapper::normal_tests::file_scope_']
+    scope_run = subprocess.run(scope_command, env=env, capture_output=True, timeout=180)
+    (out/'file-scope-cargo.stdout').write_bytes(scope_run.stdout)
+    (out/'file-scope-cargo.stderr').write_bytes(scope_run.stderr)
+    if scope_run.returncode or b'3 passed' not in scope_run.stdout:
+        raise ValueError('original FILE scope native component checks failed')
     expected = [[w['return_eax'], w['return_flags'], w['caller_stack_delta'], *w['saved']] for w in observed]
     actual = [[int(n) for n in line.split()] for line in (out/'normal-wrapper-results.txt').read_text().splitlines()]
     if actual != expected:
@@ -76,10 +102,13 @@ def check(original, observation, out, compare=None):
                   observation_sha256=sha((observation/'report.json').read_bytes()),
                   vectors_sha256=sha(vector_bytes), rust_sha256=source_hash, command=command,
                   comparisons=5, whole_pe_translation_pairs=0,
+                  file_scope_code_sha256=file_regions, file_scope_imports=file_imports,
+                  file_scope_native_test_functions=3,
+                  file_scope_evidence="Native component cases with explicit driver cut; no new Windows differential pairs",
                   scope='Live registry fixture; body EAX/flags inputs; original stack/FS/saved-state restoration only')
     if compare:
         previous = json.loads(compare.read_text())
-        for key in ['pe_sha256', 'helper_sha256', 'epilog_sha256', 'observation_sha256', 'vectors_sha256', 'rust_sha256']:
+        for key in ['pe_sha256', 'helper_sha256', 'epilog_sha256', 'observation_sha256', 'vectors_sha256', 'rust_sha256', 'file_scope_code_sha256', 'file_scope_imports']:
             if previous[key] != result[key]:
                 raise ValueError('wrapper cross-host provenance differs: '+key)
         result['matching_windows_native_report'] = str(compare)

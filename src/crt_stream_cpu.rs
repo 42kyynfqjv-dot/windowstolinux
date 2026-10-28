@@ -59,8 +59,17 @@ impl CrtCpu{
  /// never inferred from whichever RET the callee happens to execute.
  fn call_pop<B:CrtBackend,F>(&mut self,rt:&mut CrtStreamRuntime,lease:CrtLock,backend:&mut B,continuation:u32,return_pop:u16,callee:F)->Result<CrtValue,&'static str>
  where F:FnOnce(&mut CrtStreamRuntime,&mut CrtCpu,CrtLock,&mut B)->Result<CrtValue,&'static str>{
+  rt.check_lock(lease)?;
+  self.call_activation(rt,continuation,return_pop,|rt,child|callee(rt,child,lease,backend))
+ }
+ /// Shared protected CALL/RET mechanism. Lock acquisition and release cannot
+ /// require a lock that the original instruction has not yet acquired. Their
+ /// independently bound effects validate the exact object and thread instead.
+ /// This grants no external-effect or exception-containment certificate.
+ fn call_activation<F>(&mut self,rt:&mut CrtStreamRuntime,continuation:u32,return_pop:u16,callee:F)->Result<CrtValue,&'static str>
+ where F:FnOnce(&mut CrtStreamRuntime,&mut CrtCpu)->Result<CrtValue,&'static str>{
   if self.returned||continuation==0||return_pop>256||return_pop%4!=0{return Err("CRT call activation/continuation/cleanup");}
-  rt.check_lock(lease)?;let before=Self::pointer(self.r[4])?;
+  let before=Self::pointer(self.r[4])?;
   if before.kind!=CrtRegionKind::Stack{return Err("CRT call stack role");}
   let expected_after=rt.offset(before,i64::from(return_pop))?;
   for i in 0..return_pop/4{let p=rt.offset(before,i64::from(i)*4)?;if matches!(rt.load(p,32)?,CrtValue::OpaqueSaved(_)|CrtValue::ProtectedReturn(_)|CrtValue::ThreadHead(_)){return Err("CRT bound call arguments cross protected word");}}
@@ -71,7 +80,7 @@ impl CrtCpu{
   if rt.tags.values().any(|v|*v==CrtValue::ProtectedReturn(identity)){return Err("CRT call identity collision");}
   rt.generation=generation;self.push(rt,CrtValue::ProtectedReturn(identity))?;
   let mut child=Self{abi:self.abi,r:self.r,entry:self.r,flags:self.flags,return_id:identity,steps:self.steps,returned:false,return_pop};
-  let result=callee(rt,&mut child,lease,backend);
+  let result=callee(rt,&mut child);
   self.r=child.r;self.flags=child.flags;self.steps=child.steps;
   let value=result?;
   if !child.returned||self.r[4]!=CrtValue::Pointer(expected_after)||value!=self.r[0]||rt.tags.values().any(|v|*v==CrtValue::ProtectedReturn(identity)){return Err("CRT callee missing exact protected RET");}

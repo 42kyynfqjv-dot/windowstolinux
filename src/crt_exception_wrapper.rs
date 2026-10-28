@@ -9,6 +9,8 @@ use std::collections::{BTreeMap, BTreeSet};
 mod epilog;
 #[allow(unused_imports)]
 pub(crate) use epilog::EpilogProof;
+#[path = "crt_file_scope.rs"]
+pub(crate) mod file_scope;
 #[path = "crt_normal_frame.rs"]
 pub(crate) mod normal_frame;
 

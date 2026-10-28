@@ -4,7 +4,7 @@ use crate::crt_stream_ir::{Graph, Op};
 use crate::graph::{Binary, Operand, Operation, Reg};
 
 pub(crate) struct EpilogProof {
-    graph: Graph,
+    pub(super) graph: Graph,
     layout: FrameLayout,
     scope: u32,
     handler: u32,

@@ -1,6 +1,11 @@
 # Cohesive handler execution milestone — SUB-579 / same PR45
 
-Current integration: [owned software exception event](RAISED-EVENT.md) derives the
+Current normal-call integration: [original FILE scope](FILE-SCOPE.md) connects
+owned lock acquisition, active scope, explicit driver cut, original normal cleanup
+and epilog. It preserves unresolved formatter exceptions and termination as
+admission blockers; no whole-startup claim.
+
+Previous event integration: [owned software exception event](RAISED-EVENT.md) derives the
 event from the original imported call, reserves checked scratch, and keeps the
 exception-captured context opaque. It composes original dispatch, cleanup and
 restoration under the explicit closed-delivery domain; full startup remains
