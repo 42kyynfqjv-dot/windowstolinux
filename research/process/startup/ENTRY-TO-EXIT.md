@@ -270,3 +270,33 @@ registrations and cleanup effects bind to the suspended normal epoch while
 preserving its borrowed predecessor and captured-context authority. It cannot be
 resolved by clearing suspension or reusing the finished outer Machine. Escalate
 that bounded question only when the shared instruction/effect connections reach it.
+
+## Sol connection: original event normalizer under live call ownership
+
+CodeIdentity now retains its initialized-global requirements and emits a CRT call
+wrapper for the existing proved summary. The proof explores all reachable feature
+branches and establishes the same event code at every return with no observable
+nonprivate writes. The wrapper validates actual initialized Module words, live
+captured objects, argument and full temporary stack range, executes the protected
+CALL/RET boundary, performs caller argument cleanup and invalidates ECX/EDX and
+status flags. It does not pretend that every private helper instruction is emitted;
+the optimization is justified by the existing all-path proof, not sampled output.
+
+The actual 119-byte helper at VA0x414a1b and initialized word0x41ccb8 are extracted
+from the unchanged PE in the wrapper workflow and hashed across hosts. Native
+cases run feature0,1,UINT_MAX and reject an uninitialized word before CPU/call
+changes. The exact helper rejects a special MXCSR-requiring event and missing
+module-read premises at proof time. Existing installed-pair/filter/cleanup cases
+run after the call. These are strengthened existing native scenarios, no new
+whole-PE Windows/ELF comparisons. The five original wrapper observations remain
+separate evidence with body inputs.
+
+The context helper is already decoded/checked at owned entry. The remaining
+readonly guard connection needs the actual scope-table cookie header bound to
+this normal frame's initialized live module state, then the original guard proof
+lowered at its call boundary. Current FrameImage rebuilding validates saved words
+and cookie identity, but it cannot stand in for original helper execution without
+that header/call binding. This can be attempted on Sol. The original prefix caller
+stores/register setup and actual target filter bytes also remain to be connected.
+Table-driven temporary registrations and selected normal-source restoration are
+still unproved; no result/level/normalizer summary authorizes resumption.

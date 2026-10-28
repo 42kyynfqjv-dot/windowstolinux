@@ -317,6 +317,13 @@ fn live_dispatch(){
      // original handler prefix and its helper calls remain a separate gate.
      original_handler_prolog(view,h)?;
      let mut pair=CrtHandlerPair::bind(view,h,&objects)?;let old_bx=h.r[3];
+     let feature=view.rt.map_region(0x41ccb8,4,CrtRegionKind::Module,None)?;
+     let before=h.r;assert!(original_normalizer_call(view,h,&objects,0x40222e).is_err());assert_eq!(h.r,before);
+     for value in [0,1,u32::MAX]{
+      view.rt.store(feature,32,CrtValue::scalar(value))?;
+      assert_eq!(original_normalizer_call(view,h,&objects,0x40222e)?,CrtValue::scalar(0xe0420042));
+      assert!(h.r[1].known_scalar().is_err());assert!(h.r[2].known_scalar().is_err());assert_eq!(h.flags.zf,None);
+     }
      h.r[0]=CrtValue::Pointer(record);h.r[3]=CrtValue::Pointer(b.at(view.rt,b.layout.record)?);
      live_install(&mut pair,view,h)?;let(actual_record,actual_context)=pair.read(view,h)?;
      assert_eq!(view.rt.load(actual_record,32)?.known_scalar()?,0xe0420042);
@@ -592,9 +599,13 @@ fn run(case: &str) {
         let filter_source=format!("fn decoded_filter(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu)->RegistryResult<CrtValue>{{ {} }}",filter.live_body());
         let false_filter=crate::selection::prove_filter(&bytes_hex("8b55ec8b028b08894de48b55e433c081fa430042e00f94c0c3"),0x1433,&crate::selection::FilterLayout{start:-32,end:0,exception_pointers_offset:-20,writable_words:vec![-28]},0xe0420042).unwrap();
         let false_filter_source=format!("fn decoded_false_filter(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu)->RegistryResult<CrtValue>{{ {} }}",false_filter.live_body());
+        let normalizer=handler_bytes("event-normalizer.bin","558bec51833db8cc4100018b4d087c5c81f9b40200c0740881f9b50200c0754c0fae5dfc8b45fc83f03fa8817442a9040200007507b88e0000c0c9c3a902010000742da9080400007507b8910000c0c9c3a9100800007507b8930000c0c9c3a920100000b88f0000c00f44c88bc1c9c3b8900000c0c9c3");
+        assert!(crate::selection::prove_code_identity(&normalizer,0x414a1b,&std::collections::BTreeSet::from([0x41ccb8]),0xc00002b4).is_err());
+        assert!(crate::selection::prove_code_identity(&normalizer,0x414a1b,&std::collections::BTreeSet::new(),0xe0420042).is_err());
+        let normalizer_source=crate::selection::prove_code_identity(&normalizer,0x414a1b,&std::collections::BTreeSet::from([0x41ccb8]),0xe0420042).unwrap().normal_call("original_normalizer_call");
         let context_types=crate::handler_context::EMITTED_TYPES;
         let context_check=context_proof.normal_object_check();
-        let source = format!("#![allow(dead_code)]\nmod guest_memory{{{memory}}}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{fixture}\n{file_scope}\n{context_types}\n{context_check}\n{scope_store}\n{permuted_store}\n{install}\n{handler_prolog}\n{filter_source}\n{false_filter_source}\nfn raise_site()->CrtNormalRaiseSite{{{{{raise}}}}}\n{CASES}",
+        let source = format!("#![allow(dead_code)]\nmod guest_memory{{{memory}}}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{fixture}\n{file_scope}\n{context_types}\n{context_check}\n{scope_store}\n{permuted_store}\n{install}\n{handler_prolog}\n{filter_source}\n{false_filter_source}\n{normalizer_source}\nfn raise_site()->CrtNormalRaiseSite{{{{{raise}}}}}\n{CASES}",
             include_str!("linker/unwind_runtime.rs").replace("//!", "//"),
             emitted_literal(include_str!("frame_proof.rs")),emitted_literal(include_str!("thread_registry.rs")),
             crate::crt_stream_runtime::EMITTED_TYPES,crate::crt_stream_cpu::EMITTED_TYPES,

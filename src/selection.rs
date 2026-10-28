@@ -305,11 +305,36 @@ pub struct CodeIdentity {
     body: String,
     returns: usize,
     temporary_bytes: u32,
+    #[allow(dead_code)]
+    globals: Vec<u32>,
 }
 impl CodeIdentity {
     /// Body for `(code:u32) -> Result<u32,&'static str>`. Original guard loads can
     /// be eliminated only because every possible guard result was proved to
     /// return this same code without observable writes.
+    #[allow(dead_code)] // CRT integration, not every standalone slice.
+    pub fn normal_call(&self, name: &str) -> String {
+        let globals=self.globals.iter().map(|at|format!("frame.rt.load(frame.rt.resolve_absolute({at},CrtRegionKind::Module)?,32)?.known_scalar()?;\n")).collect::<String>();
+        format!(
+            r#"fn {name}(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,objects:&CrtNormalObjects,continuation:u32)->RegistryResult<CrtValue>{{
+ frame.validate()?;objects.validate(frame.event,frame.rt,frame.epoch)?;
+ {globals}
+ let code=frame.rt.load(objects.record,32)?.known_scalar()?;
+ let value=(||{{ {body} }})()?;
+ let sp=CrtCpu::pointer(cpu.r[4])?;let low=frame.rt.offset(sp,-{depth})?;frame.rt.valid(low,{depth})?;
+ frame.epoch.registry.range(low.address(),u64::from(sp.address()))?;
+ if frame.rt.overlapping_tags(low.address(),{depth}).iter().any(|(_,v)|matches!(v,CrtValue::ProtectedReturn(_)|CrtValue::ThreadHead(_)|CrtValue::OpaqueSaved(_))){{return Err("normalizer temporary stack aliases protected storage");}}
+ cpu.push(frame.rt,CrtValue::scalar(code))?;
+ let returned=frame.call(cpu,continuation,|f,child|{{
+  if f.rt.load(f.rt.offset(CrtCpu::pointer(child.entry[4])?,4)?,32)?.known_scalar()?!=code{{return Err("normalizer original argument");}}
+  child.clobber(CrtValue::scalar(value));child.finish(f.rt)
+ }})?;
+ cpu.discard(frame.rt,4)?;cpu.flags=CrtFlags::unknown();Ok(returned)
+}}"#,
+            body = self.body,
+            depth = self.temporary_bytes + 8
+        )
+    }
     pub fn body(&self) -> &str {
         &self.body
     }
@@ -595,6 +620,7 @@ pub fn prove_code_identity(
         ),
         returns,
         temporary_bytes,
+        globals: initialized_globals.iter().copied().collect(),
     })
 }
 
