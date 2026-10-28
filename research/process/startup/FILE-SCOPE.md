@@ -286,3 +286,40 @@ Windows corpus case23 (PE SHA256
 also at `process.wait` after15seconds. The PR run's authored-Windows job passed.
 This is a distinct preserved failure, not a successful reproduction of the max
 cause. No retry, relaxed timeout or substitution of translated output was used.
+
+## Owned handler activation on the suspended source
+
+A pending event can now execute one separately bound native callback through the
+shared protected CALL/RET implementation. The dispatcher activation is a distinct
+CPU; its typed stack and four initialized arguments must fit below the interrupted
+CALL, within the same checked stack allocation and outside module ranges. Unknown
+or protected argument words, overlapping scratch and reused delivery phases reject.
+The body and arguments remain explicit component inputs requiring original-code
+and dispatch-effect proof; no captured Windows CONTEXT is synthesized here.
+
+The delivery phases are Pending, Calling, Returned and Failed. A successful exact
+RET must preserve callee-saved state; afterward the actual suspended frame is
+revalidated and its scope level must be unchanged. Only then is a non-Clone
+handler-return receipt issued, bound to registry, epoch, frame and event generation.
+This receipt records the actual callback result; it is not a disposition or
+permission to resume the interrupted CALL. That call remains suspended, with
+its registers/flags and outer event context unchanged. The callback's ordinary
+memory writes are retained, including on failure. A failed body, missing RET,
+changed saved state or corrupted source poisons the registry and delivery rather
+than rolling back writes or clearing suspension.
+
+One native regression function covers seven independently specified executions:
+valid result/receipt and replay rejection; body failure after a write; invalid
+callee-saved restoration; source metadata corruption; scratch overlap; missing
+RET; partially initialized arguments. These are native component tests, not new
+Windows handler comparisons. Local suites pass:175root,171frame,93CRT (one
+artifact-only observation ignored), formatting and Clippy. Existing recorded
+original helper/epilog comparisons remain a separate evidence category.
+
+Remaining composition is substantive: original handler instruction binding and
+its actual exception/context arguments, result interpretation/containment, and
+source-bound cleanup or guest resumption. In particular, an ordinary callback RET
+does not prove that Windows would continue the software RaiseException call.
+The enclosing compiler still rejects absent that proof; full startup/rcedit and
+formatter C++ FuncInfo remain unsupported. The historical max and corpus23
+Windows timeouts remain unexplained, with artifacts retained.

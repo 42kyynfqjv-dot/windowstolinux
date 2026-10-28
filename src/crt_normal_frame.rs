@@ -209,10 +209,13 @@ impl CrtNormalBinding {
 /// token owns the interrupted guest CALL state. There is deliberately no API
 /// turning it into a Windows captured CONTEXT or a normal-return receipt.
 struct CrtNormalRaiseSite { instruction:u32,continuation:u32,iat:u32 }
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+enum CrtNormalDelivery { Pending,Calling,Returned,Failed }
+struct CrtNormalHandlerReturn { identity:RegistryIdentity,epoch:u64,frame:NormalFrameId,generation:u64,value:CrtValue }
 struct CrtNormalException {
  anchor:guest_memory::Capability,identity:RegistryIdentity,epoch:u64,frame:NormalFrameId,
  generation:u64,code:u32,noncontinuable:bool,continuation:u32,
- call_registers:[CrtValue;8],call_flags:CrtFlags,return_id:u64,
+ call_registers:[CrtValue;8],call_flags:CrtFlags,return_id:u64,delivery:CrtNormalDelivery,
 }
 impl CrtNormalException {
  /// Called only at a separately proved FF /2 RaiseException import boundary.
@@ -246,7 +249,7 @@ impl CrtNormalException {
   if rt.tags.values().any(|v|*v==CrtValue::ProtectedReturn(return_id)){return Err("normal exception return collision");}
   let pending=Self{anchor:rt.anchor,identity:epoch.registry.identity,epoch:epoch.generation,frame,
    generation,code:args[0],noncontinuable:args[1]!=0,continuation,
-   call_registers:cpu.r,call_flags:cpu.flags,return_id};
+   call_registers:cpu.r,call_flags:cpu.flags,return_id,delivery:CrtNormalDelivery::Pending};
   // Publish suspension only after the original CALL push succeeds. No argument
   // cleanup, clobber, captured-register synthesis, unlock or frame retirement.
   cpu.push(rt,CrtValue::ProtectedReturn(return_id))?;rt.generation=generation;
@@ -267,6 +270,29 @@ impl CrtNormalException {
   let frame=epoch.registry.normal_epoch.as_ref().ok_or("normal exception expired epoch")?.frames.last().ok_or("normal exception missing frame")?;
   if frame.next!=0{return Err("normal exception partial epilog source");}
   NormalCallEpoch::check_image(frame,&image)?;Ok(image)
+ }
+ /// Component boundary: arguments and callback code require an enclosing
+ /// dispatch proof. This does not synthesize an OS captured CONTEXT, select a
+ /// disposition or authorize resuming the interrupted guest CALL.
+ fn execute_handler<F>(&mut self,rt:&mut CrtStreamRuntime,interrupted:&CrtCpu,epoch:&mut NormalCallEpoch<'_>,binding:&CrtNormalBinding,dispatcher:&mut CrtCpu,continuation:u32,body:F)->RegistryResult<CrtNormalHandlerReturn>
+ where F:FnOnce(&mut CrtStreamRuntime,&mut CrtCpu)->RegistryResult<CrtValue>{
+  if self.delivery!=CrtNormalDelivery::Pending{return Err("normal exception handler replay/phase");}
+  let before=self.dispatch_source(rt,interrupted,epoch,binding)?;
+  let sp=CrtCpu::pointer(dispatcher.r[4])?;let interrupted_sp=CrtCpu::pointer(interrupted.r[4])?;
+  if sp.kind!=CrtRegionKind::Stack||sp.cap!=interrupted_sp.cap||sp.address()%4!=0
+   ||sp.address().checked_add(16).is_none_or(|end|end>interrupted_sp.address()){
+   return Err("normal exception handler scratch aliases interrupted storage");
+  }
+  let low=rt.offset(sp,-4)?;rt.valid(low,20)?;epoch.registry.range(low.address(),u64::from(sp.address())+16)?;
+  for i in 0..4{let value=rt.load(rt.offset(sp,i*4)?,32)?;if matches!(value,CrtValue::ProtectedReturn(_)|CrtValue::ThreadHead(_)|CrtValue::OpaqueSaved(_)|CrtValue::Scalar{known:0,..}){return Err("normal exception unbound handler argument");}match value{CrtValue::Scalar{known,..}if known!=u32::MAX=>return Err("normal exception partial handler argument"),CrtValue::Pointer(p)=>rt.identity_range(p,0)?,_=>{}}}
+  self.delivery=CrtNormalDelivery::Calling;
+  let result=(||{
+   let value=dispatcher.call_activation(rt,continuation,0,body)?;
+   let after=self.dispatch_source(rt,interrupted,epoch,binding)?;
+   if after.try_level!=before.try_level{return Err("normal exception unproved scope transition");}
+   Ok(CrtNormalHandlerReturn{identity:self.identity,epoch:self.epoch,frame:self.frame,generation:self.generation,value})
+  })();
+  match result{Ok(receipt)=>{self.delivery=CrtNormalDelivery::Returned;Ok(receipt)},Err(error)=>{self.delivery=CrtNormalDelivery::Failed;epoch.fail(error)}}
  }
  fn validate_pending(&self,rt:&CrtStreamRuntime,epoch:&NormalCallEpoch<'_>)->RegistryResult<()>{
   epoch.registry.available()?;

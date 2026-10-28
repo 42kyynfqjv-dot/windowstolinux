@@ -329,6 +329,41 @@ fn pending_normal_exception(){
   assert_eq!(m.owned_context,original);assert!(r.normal_epoch.as_ref().unwrap().pending_exception.is_some());
  }
 }
+fn pending_handler_activation(){
+ for mode in 0..7{
+  let(m,mut r,main,mut permit)=fixture_with_extra(&[(0x410000,0x420000)]);let mut rt=runtime(&r);let context=m.owned_context;
+  let result=r.with_normal_calls(&m,&mut permit,&main,|e|{
+   let mut c=cpu(&mut rt,0xe000,71);let mut b=CrtNormalBinding::bind(&rt,&c,e,epilog_run_layout())?;start(&mut rt,&mut c,e,&mut b,99)?;
+   let marker=b.at(&rt,-32)?;rt.store(marker,32,CrtValue::scalar(91))?;
+   for arg in [0,0,0,0xe0420042]{c.push(&mut rt,CrtValue::scalar(arg))?;}
+   let mut pending=CrtNormalException::issue(&mut rt,&mut c,e,&b,raise_site())?;
+   let registers=c.r;let flags=(c.flags.cf,c.flags.zf,c.flags.sf,c.flags.of);
+   let mut dispatcher=cpu(&mut rt,0xc000,200);dispatcher.r[4]=CrtValue::Pointer(rt.resolve_absolute(0xbfc0,CrtRegionKind::Stack)?);
+   for i in 0..4{rt.store(rt.offset(CrtCpu::pointer(dispatcher.r[4])?,i*4)?,32,CrtValue::scalar(i as u32))?;}
+   if mode==4{dispatcher.r[4]=c.r[4];}
+   if mode==6{rt.store(CrtCpu::pointer(dispatcher.r[4])?,32,CrtValue::Scalar{bits:0,known:0xffff})?;}
+   let result=pending.execute_handler(&mut rt,&c,e,&b,&mut dispatcher,0x401900,|rt,h|{
+    // Explicit native callback cut, with real protected CALL/RET. The marker
+    // write must survive both success and rejection; no expected output stub.
+    rt.store(marker,32,CrtValue::scalar(92))?;
+    if mode==1{return Err("authored handler failure");}
+    if mode==2{h.r[3]=CrtValue::scalar(777);}
+    if mode==3{rt.store(b.at(rt,b.layout.scope_slot)?,32,CrtValue::scalar(0))?;}
+    h.r[0]=CrtValue::scalar(1);if mode==5{Ok(h.r[0])}else{h.finish(rt)}
+   });
+   assert_eq!(c.r,registers);assert_eq!((c.flags.cf,c.flags.zf,c.flags.sf,c.flags.of),flags);
+   assert_eq!(rt.load(marker,32)?.known_scalar()?,if mode==4||mode==6{91}else{92});
+   if mode==0{
+    let receipt=result?;assert_eq!(receipt.value,CrtValue::scalar(1));assert_eq!(receipt.frame,pending.frame);
+    assert_eq!((receipt.identity,receipt.epoch,receipt.generation),(pending.identity,pending.epoch,pending.generation));
+    assert_eq!(pending.delivery,CrtNormalDelivery::Returned);pending.dispatch_source(&rt,&c,e,&b)?;
+    assert!(pending.execute_handler(&mut rt,&c,e,&b,&mut dispatcher,0x401900,|_,_|panic!("replayed")).is_err());
+   }else{assert!(result.is_err());assert_eq!(pending.delivery,if mode==4||mode==6{CrtNormalDelivery::Pending}else{CrtNormalDelivery::Failed});}
+   assert!(e.state().is_err());assert!(epilog_run(&mut rt,&mut c,e,&mut b).is_err());
+   Err::<(),_>("component callback is not a disposition/restoration proof")
+  });assert!(result.is_err());assert_eq!(m.owned_context,context);
+ }
+}
 fn reject_normal_exception(){
  for mode in 0..10{
   let(m,mut r,main,mut permit)=fixture_with_extra(&[(0x410000,0x420000)]);let mut rt=runtime(&r);
@@ -348,7 +383,7 @@ fn reject_normal_exception(){
   }).unwrap();
  }
 }
-fn main(){match std::env::args().nth(1).unwrap().as_str(){"pending"=>pending_normal_exception(),"pending-reject"=>reject_normal_exception(),"file"=>file_scope_normal(),"file-failure"=>file_scope_failure(),"nested"=>nested_actual(),"mutations"=>mutations(),"consumed"=>consumed_mutation(),"failure"=>body_failure(),"certificate"=>wrong_certificate(),"observed"=>observed(),_=>panic!("case")}}
+fn main(){match std::env::args().nth(1).unwrap().as_str(){"handler"=>pending_handler_activation(),"pending"=>pending_normal_exception(),"pending-reject"=>reject_normal_exception(),"file"=>file_scope_normal(),"file-failure"=>file_scope_failure(),"nested"=>nested_actual(),"mutations"=>mutations(),"consumed"=>consumed_mutation(),"failure"=>body_failure(),"certificate"=>wrong_certificate(),"observed"=>observed(),_=>panic!("case")}}
 "#;
 
 fn run(case: &str) {
@@ -576,4 +611,9 @@ fn normal_raise_certificate_requires_exact_original_call_and_disjoint_iat() {
     let mut prefixed = vec![0x66];
     prefixed.extend(bytes);
     assert!(Proof::prove(&prefixed, 0x401800, 0x415000).is_err());
+}
+
+#[test]
+fn suspended_handler_call_returns_owned_receipt_and_preserves_failures() {
+    run("handler");
 }
