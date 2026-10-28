@@ -2,7 +2,7 @@
 import copy
 import json
 import unittest
-from observe_stdio import SITES,CASES,parse_events,summarize
+from observe_stdio import SITES,CASES,parse_events,summarize,summarize_wrapper
 
 
 def encoded(rows):return ('\n'.join(json.dumps(row) for row in rows)+'\n').encode()
@@ -10,7 +10,7 @@ def encoded(rows):return ('\n'.join(json.dumps(row) for row in rows)+'\n').encod
 def sample(label='baseline'):
     expected=CASES[label];base=0x400000;stdout=base+0x1c0b8
     # Independent event ordering exercises delayed flushing after Main return.
-    order=[1,10,11,12,13,2,3,8,15,10,11,4,5,6,7]
+    order=[1,16,17,10,11,12,13,18,19,20,2,3,8,15,10,11,4,5,6,7]
     if expected['error']:order +=[14]
     order +=[9,12,13]
     rows=[];write_calls=0
@@ -31,6 +31,14 @@ def sample(label='baseline'):
             writefile_address=0x77001000,stdout_address=stdout,stream_argument=stdout if site in (8,9,10,11,12,13) else 0,
             count_cell=0x5ff0,count_value=expected['count'],write_calls=write_calls,
             stream_words=words,arguments=args,text_result=expected['text_result'] if site==6 else [],request_hex=('41'*276) if site==4 else '')
+        row.update(thread_head=0x9000,wrapper_cookie=0,wrapper_words=[])
+        if site in (16,17,18,19,20):
+            row.update(eax=275,ebx=31,ebp=0x7800,esi=47,edi=59)
+        if site in (17,18):
+            cookie=0x12345678
+            row.update(esp=0x7000-48,ebp=0x7000-4,thread_head=0x7000-20,wrapper_cookie=cookie,
+                wrapper_words=[cookie^0x6ffc,59,47,31,0,0x6fd0,0,0x9000,0x402210,cookie^0x41b400,0xfffffffe,0x7800,0x4064d3])
+        if site==20:row['esp']=0x7010
         rows.append(row)
         if site==4 and expected['mode']:
             if expected['mode']<4:rows.append(dict(kind='injection',mode=expected['mode'],count=expected['count'],api_executed=False,physical_bytes_written=0))
@@ -51,6 +59,17 @@ class StdioObservationGates(unittest.TestCase):
                 self.assertEqual(result['main_return'],0)
                 self.assertLess(result['order']['main_return'],result['order']['writefile'])
                 self.assertEqual(result['api_class'],CASES[label]['api'])
+    def test_wrapper_actual_saved_words_fs_and_cleanup_are_not_assumed(self):
+        rows,_=sample();sites=[r for r in rows if r['kind']=='site']
+        self.assertEqual(summarize_wrapper(sites)['frame_offsets'],[-48,-4,-20])
+        for site,key,value in [(17,'esp',0x7000),(18,'thread_head',0x9000),(19,'ebx',0),
+                              (20,'esp',0x7004),(19,'eflags',0x203),(20,'eax',0)]:
+            bad=copy.deepcopy(sites);next(r for r in bad if r['site']==site)[key]=value
+            with self.subTest(site=site,key=key),self.assertRaises(ValueError):summarize_wrapper(bad)
+        for index in [0,1,2,3,5,7,8,9,10,11]:
+            bad=copy.deepcopy(sites);next(r for r in bad if r['site']==17)['wrapper_words'][index]^=1
+            with self.subTest(index=index),self.assertRaises(ValueError):summarize_wrapper(bad)
+
     def test_injected_success_cannot_claim_real_os_write(self):
         rows,plan=sample('short-seven');injection=next(r for r in rows if r['kind']=='injection');injection['api_executed']=True
         with self.assertRaises(ValueError):parse_events(encoded(rows),'short-seven',plan)

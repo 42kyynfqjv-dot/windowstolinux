@@ -42,6 +42,11 @@ SITES={
  13:('stdout-unlock-return',0x465a,'5d'),
  14:('after-file-error-bit',0x846d,'83c8ff'),
  15:('after-flush-reset',0x844b,'85ff'),
+ 16:('file-wrapper-entry',0x465c,'6a0c'),
+ 17:('file-wrapper-after-prolog',0x4668,'8365e400'),
+ 18:('file-wrapper-epilog',0x4696,'8b4df0'),
+ 19:('file-wrapper-ret',0x46a5,'c20c00'),
+ 20:('file-wrapper-after-call',0x64d3,'8bf0'),
 }
 CASES={
  'baseline':dict(mode=0,api='real Windows API',count=276,text_result=[0,276,1],logical=275,flush=0,error=False,physical='original'),
@@ -71,7 +76,12 @@ def prepare(original,out):
     pe=struct.unpack_from('<I',image,60)[0];size=struct.unpack_from('<I',image,pe+24+56)[0]
     stdout=info['report_binding']['stdout_address']
     if mapped_bytes(image,stdout,56) is None:raise ValueError('stdout FILE object is not full mapped extent')
-    lines=[f'{size} {stdout-base} {identities["4"]["iat_rva"]}']
+    # Cookie address is bound to the actual original helper A1 operand.
+    cookie_code=mapped_bytes(image,base+0x1e7d,5)
+    if cookie_code is None or cookie_code[0]!=0xa1:raise ValueError('original helper cookie operand changed')
+    cookie_rva=struct.unpack('<I',cookie_code[1:])[0]-base
+    if mapped_bytes(image,base+cookie_rva,4) is None:raise ValueError('cookie full range missing')
+    lines=[f'{size} {stdout-base} {identities["4"]["iat_rva"]} {cookie_rva}']
     lines += [f'{s["id"]} {s["rva"]} {int(s["instruction_hex"][:2],16)}' for s in sites]
     (out/'sites.txt').write_text('\n'.join(lines)+'\n')
     frozen_raw=(HERE/'stdio-frozen.json').read_bytes();frozen=json.loads(frozen_raw)
@@ -117,7 +127,9 @@ def parse_events(raw,label,plan,cleanup=False):
         for key in ['image_base','stack_limit','stack_base','eax','ecx','edx','ebx','esp','ebp','esi','edi','eflags','writefile_address','stdout_address','stream_argument','count_cell','count_value','write_calls']:
             if not word(s.get(key)):raise ValueError('invalid observed scalar: '+key)
         if not s['stack_limit']<=s['esp']<s['stack_base'] or s['stdout_address']!=s['image_base']+plan['stdout_rva']:raise ValueError('observed thread/object bounds')
-        for key,n in [('stream_words',14),('arguments',5 if s['site']==4 else 2 if s['site'] in (8,9) else 1 if s['site'] in (10,12) else 0),('text_result',3 if s['site']==6 else 0)]:
+        for key in ['thread_head','wrapper_cookie']:
+            if not word(s.get(key)):raise ValueError('invalid wrapper scalar')
+        for key,n in [('wrapper_words',13 if s['site'] in (17,18) else 0),('stream_words',14),('arguments',5 if s['site']==4 else 2 if s['site'] in (8,9) else 1 if s['site'] in (10,12) else 0),('text_result',3 if s['site']==6 else 0)]:
             if not isinstance(s.get(key),list) or len(s[key])!=n or not all(word(v) for v in s[key]):raise ValueError('observed bounded state incomplete')
         payload=bytes.fromhex(s.get('request_hex',''))
         if len(payload)>8192 or (s['site']!=4 and payload):raise ValueError('unexpected buffer observation')
@@ -153,12 +165,44 @@ def summarize(rows,label,plan):
     if main['eax']!=0:raise ValueError('original source Main result changed')
     unlock=[s for s in by[13] if s['stream_argument']==s['stdout_address'] and s['sequence']>flush['sequence'] and s['stream_words'][10]==0]
     if not unlock:raise ValueError('original stdout final unlock not observed')
-    return dict(label=label,api_class=expected['api'],requested_bytes=276,api_return=post['eax'],api_count=post['count_value'],
+    wrapper=summarize_wrapper(sites)
+    return dict(wrapper=wrapper,label=label,api_class=expected['api'],requested_bytes=276,api_return=post['eax'],api_count=post['count_value'],
         text_result=text['text_result'],logical_return=low['eax'],flush_return=flush['eax'],file_error=bool(flush['stream_words'][3]&0x10),
         printf_return=printf['eax'],main_return=main['eax'],
         order=dict(printf_return=printf['sequence'],main_return=main['sequence'],writefile=call['sequence'],flush_return=flush['sequence'],unlock=unlock[-1]['sequence']),
         lock_observations=[dict(sequence=s['sequence'],site=SITES[s['site']][0],stream_argument=s['stream_argument'],lock_words=s['stream_words'][8:14]) for s in sites if s['site'] in (10,11,12,13)],
         caveat='Observed original CRT downstream control; scripted successful API counts do not constitute real OS short writes or establish caller-volatile register/LastError semantics.')
+
+def summarize_wrapper(sites):
+    rows=[]
+    for site in range(16,21):
+        found=[r for r in sites if r['site']==site]
+        if len(found)!=1:raise ValueError('wrapper site multiplicity')
+        rows.append(found[0])
+    entry,installed,body,ret,caller=rows
+    if [r['sequence'] for r in rows]!=sorted(r['sequence'] for r in rows):raise ValueError('wrapper site order')
+    w=entry['esp'];base=entry['image_base'];cookie=installed['wrapper_cookie']
+    saved=['ebx','ebp','esi','edi']
+    if any(r['image_base']!=base for r in rows):raise ValueError('wrapper module identity')
+    for r in [installed,body]:
+        words=r['wrapper_words']
+        if len(words)!=13 or r['esp']!=w-48 or r['ebp']!=w-4 or r['thread_head']!=w-20:
+            raise ValueError('wrapper frame/FS layout')
+        if (r['wrapper_cookie']!=cookie or words[0]!=(cookie^(w-4)) or
+            [words[3],words[11],words[2],words[1]]!=[entry[k] for k in saved] or
+            words[5]!=w-48 or words[7]!=entry['thread_head'] or words[8]!=base+0x2210 or
+            words[9]!=(cookie^(base+0x1b400)) or words[10]!=0xfffffffe):
+            raise ValueError('wrapper actual record/saved/guard values')
+    if (ret['esp']!=w or caller['esp']!=w+16 or ret['thread_head']!=entry['thread_head'] or
+        caller['thread_head']!=entry['thread_head'] or any(ret[k]!=entry[k] or caller[k]!=entry[k] for k in saved) or
+        body['eax']!=ret['eax'] or ret['eax']!=caller['eax'] or
+        (body['eflags']&0x8c1)!=(ret['eflags']&0x8c1)):
+        raise ValueError('wrapper original restoration/RET effects')
+    return dict(kind='original instruction wrapper observation; body is not translated',
+        cookie=cookie,saved=[entry[k] for k in saved],body_eax=body['eax'],body_flags=body['eflags']&0x8c1,
+        return_eax=caller['eax'],return_flags=ret['eflags']&0x8c1,caller_stack_delta=caller['esp']-w,
+        frame_offsets=[installed['esp']-w,installed['ebp']-w,installed['thread_head']-w],
+        prior_head_restored=True)
 
 def modules(rows):
     result=[]
@@ -215,6 +259,12 @@ def run(original,out):
             'The invalid-handle argument is scripted, but WriteFile itself executes and supplies its actual failure result.',
             'Thread creation is logged, not suppressed. Any observed site on another thread rejects; arbitrary concurrent FILE mutation remains outside evidence.',
             'Module versions and loaded API addresses are observed; no general CRT ABI or full startup/termination equivalence follows.'])
+    vectors=[]
+    for item in results:
+        if 'observed' not in item:continue
+        w=item['observed']['wrapper']
+        vectors.append(' '.join(str(n) for n in [w['cookie'],*w['saved'],w['body_eax'],w['body_flags'],w['return_eax'],w['return_flags'],w['caller_stack_delta']]))
+    (out/'normal-wrapper-vectors.txt').write_text('\n'.join(vectors)+'\n')
     (out/'report.json').write_text(json.dumps(report,indent=2)+'\n')
     print(json.dumps(dict(pe_sha256=plan['pe_sha256'],runs=len(results),whole_pe_translation_pairs=0)))
 

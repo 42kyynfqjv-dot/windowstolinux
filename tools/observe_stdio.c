@@ -16,7 +16,7 @@
 struct Site { DWORD rva, address, id; BYTE byte; BOOL patched; };
 static struct Site sites[MAX_SITES];
 static unsigned site_count;
-static DWORD image_size, stdout_rva, write_iat_rva;
+static DWORD image_size, stdout_rva, write_iat_rva, cookie_rva;
 static unsigned mode, write_calls;
 static DWORD count_pointer, requested, write_arguments[5];
 static BOOL saw_main, saw_stdout_flush, saw_stdout_unlock;
@@ -36,20 +36,20 @@ static BOOL stack_read(HANDLE p,DWORD at,void *out,SIZE_T n,DWORD low,DWORD high
     return at>=low && (ULONGLONG)at+n<=high && read_exact(p,at,out,n);
 }
 static BOOL manifest(const char *path) {
-    FILE *f=fopen(path,"r"); unsigned long a,b,c,id,rva,byte; char extra,line[128];
+    FILE *f=fopen(path,"r"); unsigned long a,b,c,d,id,rva,byte; char extra,line[128];
     if(!f)return FALSE;
     if(!fgets(line,sizeof(line),f) || !strchr(line,'\n') ||
-       sscanf(line,"%lu %lu %lu %c",&a,&b,&c,&extra)!=3){fclose(f);return FALSE;}
-    image_size=a;stdout_rva=b;write_iat_rva=c;
+       sscanf(line,"%lu %lu %lu %lu %c",&a,&b,&c,&d,&extra)!=4){fclose(f);return FALSE;}
+    image_size=a;stdout_rva=b;write_iat_rva=c;cookie_rva=d;
     if(image_size==0 || image_size>16*1024*1024 || (ULONGLONG)stdout_rva+56>image_size ||
-       (ULONGLONG)write_iat_rva+4>image_size){fclose(f);return FALSE;}
+       (ULONGLONG)write_iat_rva+4>image_size || (ULONGLONG)cookie_rva+4>image_size){fclose(f);return FALSE;}
     while(fgets(line,sizeof(line),f)) {
         if(!strchr(line,'\n') || sscanf(line,"%lu %lu %lu %c",&id,&rva,&byte,&extra)!=3){fclose(f);return FALSE;}
-        if(site_count==MAX_SITES || id==0 || id>15 || rva>=image_size || byte>255 || byte==0xcc){fclose(f);return FALSE;}
+        if(site_count==MAX_SITES || id==0 || id>20 || rva>=image_size || byte>255 || byte==0xcc){fclose(f);return FALSE;}
         for(unsigned i=0;i<site_count;i++)if(sites[i].id==id || sites[i].rva==rva){fclose(f);return FALSE;}
         sites[site_count].id=id;sites[site_count].rva=rva;sites[site_count].byte=(BYTE)byte;site_count++;
     }
-    BOOL okay=site_count==15 && !ferror(f);fclose(f);return okay;
+    BOOL okay=site_count==20 && !ferror(f);fclose(f);return okay;
 }
 static BOOL module(HANDLE process,HANDLE file,DWORD base) {
     IMAGE_DOS_HEADER dos={0};IMAGE_NT_HEADERS32 nt={0};char path[2048]={0};
@@ -65,6 +65,7 @@ static BOOL module(HANDLE process,HANDLE file,DWORD base) {
 }
 static BOOL snapshot(HANDLE process,HANDLE thread,DWORD base,const struct Site *site,CONTEXT *c,unsigned sequence) {
     LDT_ENTRY selector={0};DWORD tib[3],stream[14],args[5]={0},triple[3]={0},count=0,iat=0;
+    DWORD wrapper[13]={0},cookie=0;unsigned wrappern=0;
     unsigned argc=0,triplen=0;BYTE buffer[8192];DWORD payload=0,stream_argument=0;
     if(!GetThreadSelectorEntry(thread,c->SegFs,&selector))return FALSE;
     DWORD teb=selector.BaseLow|((DWORD)selector.HighWord.Bytes.BaseMid<<16)|((DWORD)selector.HighWord.Bytes.BaseHi<<24);
@@ -91,6 +92,11 @@ static BOOL snapshot(HANDLE process,HANDLE thread,DWORD base,const struct Site *
         if(!stack_read(process,c->Ebp+8,&stream_argument,4,tib[2],tib[1]))return FALSE;
         if(site->id==13 && stream_argument==base+stdout_rva && saw_stdout_flush && stream[10]==0)saw_stdout_unlock=TRUE;
     }
+    if(site->id==17 || site->id==18) {
+        if(c->Ebp<44 || !stack_read(process,c->Ebp-44,wrapper,sizeof(wrapper),tib[2],tib[1]) ||
+           !read_exact(process,base+cookie_rva,&cookie,4))return FALSE;
+        wrappern=13;
+    }
     if(site->id==3)saw_main=TRUE;
     printf("{\"kind\":\"site\",\"sequence\":%u,\"site\":%lu,\"rva\":%lu,\"image_base\":%lu,\"stack_limit\":%lu,\"stack_base\":%lu,",sequence,site->id,site->rva,base,tib[2],tib[1]);
     printf("\"eax\":%lu,\"ecx\":%lu,\"edx\":%lu,\"ebx\":%lu,\"esp\":%lu,\"ebp\":%lu,\"esi\":%lu,\"edi\":%lu,\"eflags\":%lu,\"writefile_address\":%lu,",c->Eax,c->Ecx,c->Edx,c->Ebx,c->Esp,c->Ebp,c->Esi,c->Edi,c->EFlags,iat);
@@ -98,6 +104,8 @@ static BOOL snapshot(HANDLE process,HANDLE thread,DWORD base,const struct Site *
     for(unsigned k=0;k<14;k++)printf("%s%lu",k?",":"",stream[k]);
     printf("],\"arguments\":[");for(unsigned k=0;k<argc;k++)printf("%s%lu",k?",":"",args[k]);
     printf("],\"text_result\":[");for(unsigned k=0;k<triplen;k++)printf("%s%lu",k?",":"",triple[k]);
+    printf("],\"thread_head\":%lu,\"wrapper_cookie\":%lu,\"wrapper_words\":[",tib[0],cookie);
+    for(unsigned k=0;k<wrappern;k++)printf("%s%lu",k?",":"",wrapper[k]);
     printf("],\"request_hex\":\"");for(DWORD k=0;k<payload;k++)printf("%02x",buffer[k]);puts("\"}");fflush(stdout);return TRUE;
 }
 int main(int argc,char **argv) {

@@ -42,8 +42,8 @@ fn setup(allocation:u32)->(CrtStreamRuntime,CrtCpu,CrtThreadHead){
  cpu.push(&mut rt,CrtValue::ProtectedReturn(99)).unwrap();
  let head=rt.thread_head(7,11,[0,0,0]).unwrap();(rt,cpu,head)
 }
-type Helper=fn(&mut CrtStreamRuntime,&mut CrtCpu,u64,CrtThreadHead,fn(&mut CrtStreamRuntime,CrtPointer,CrtThreadHead)->Result<(),&'static str>)->Result<(),&'static str>;
-fn install(rt:&mut CrtStreamRuntime,record:CrtPointer,head:CrtThreadHead)->Result<(),&'static str>{
+type Helper=fn(&mut CrtStreamRuntime,&mut CrtCpu,u64,CrtThreadHead,fn(&mut CrtStreamRuntime,&CrtCpu,CrtPointer,CrtThreadHead)->Result<(),&'static str>)->Result<(),&'static str>;
+fn install(rt:&mut CrtStreamRuntime,_cpu:&CrtCpu,record:CrtPointer,head:CrtThreadHead)->Result<(),&'static str>{
  assert_eq!(rt.load(record,32)?,CrtValue::ThreadHead(head));
  assert_eq!(rt.load(rt.offset(record,4)?,32)?.known_scalar()?,0x402210);Ok(())
 }
@@ -70,7 +70,7 @@ for mode in 0..4{
 // Callback failure retains original reached memory and the relocated token.
 let(mut rt,mut cpu,head)=setup(12);let entry=cpu.entry;let mut installed_effect=None;
 let observable=rt.map_region(0xb000,4,CrtRegionKind::Result,Some(&[0;4])).unwrap();
-assert_eq!(prolog_12(&mut rt,&mut cpu,99,head,|rt,record,head|{installed_effect=Some((record,head));rt.store(observable,32,CrtValue::scalar(93))?;Err("install failure")}),Err("install failure"));
+assert_eq!(prolog_12(&mut rt,&mut cpu,99,head,|rt,_cpu,record,head|{installed_effect=Some((record,head));rt.store(observable,32,CrtValue::scalar(93))?;Err("install failure")}),Err("install failure"));
 assert_eq!(installed_effect,Some((rt.resolve_absolute(0x9bec,CrtRegionKind::Stack).unwrap(),head)));
 assert_eq!(rt.load(observable,32).unwrap().known_scalar().unwrap(),93);
 assert_eq!(cpu.entry,entry);assert_eq!(CrtCpu::pointer(cpu.r[4]).unwrap().address(),0x9c00-52);
@@ -79,7 +79,7 @@ assert_eq!(rt.load(rt.resolve_absolute(0x9bf4,CrtRegionKind::Stack).unwrap(),32)
 // A callback cannot substitute a record and still obtain helper completion.
 for field in [4,8,-28]{
  let(mut rt,mut cpu,head)=setup(12);
- assert!(prolog_12(&mut rt,&mut cpu,99,head,|rt,record,_|{rt.store(rt.offset(record,field)?,32,CrtValue::scalar(0))?;Ok(())}).is_err());
+ assert!(prolog_12(&mut rt,&mut cpu,99,head,|rt,_cpu,record,_|{rt.store(rt.offset(record,field)?,32,CrtValue::scalar(0))?;Ok(())}).is_err());
  assert_eq!(rt.load(CrtCpu::pointer(cpu.r[4]).unwrap(),32).unwrap(),CrtValue::ProtectedReturn(99));
 }
 // The ordinary ABI rejects this helper's changed ESP/EBP even if its effects ran.

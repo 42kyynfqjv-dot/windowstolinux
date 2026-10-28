@@ -5,6 +5,13 @@ use super::crt_stream_ir::{Graph, Op};
 use super::graph::{Address, Binary, Operand, Operation, Reg};
 use std::collections::{BTreeMap, BTreeSet};
 
+#[path = "crt_exception_epilog.rs"]
+mod epilog;
+#[allow(unused_imports)]
+pub(crate) use epilog::EpilogProof;
+#[path = "crt_normal_frame.rs"]
+pub(crate) mod normal_frame;
+
 #[derive(Clone, Copy)]
 pub(crate) struct Region<'a> {
     pub bytes: &'a [u8],
@@ -224,7 +231,7 @@ if rt.load(record,32)?!=CrtValue::ThreadHead(predecessor)
                 Ok(match op {
                 Op::FsPush => "cpu.push(rt,CrtValue::ThreadHead(predecessor))?;".into(),
                 Op::FsRead(r) => format!("cpu.set({},32,0,CrtValue::ThreadHead(predecessor))?;",r.index),
-                Op::FsWrite(r) if pc == install_pc => format!("{check}if cpu.r[{}]!=CrtValue::Pointer(record){{return Err(\"EH4 native installation pointer\");}}install(rt,record,predecessor)?;installed=true;",r.index),
+                Op::FsWrite(r) if pc == install_pc => format!("{check}if cpu.r[{}]!=CrtValue::Pointer(record){{return Err(\"EH4 native installation pointer\");}}install(rt,cpu,record,predecessor)?;installed=true;",r.index),
                 _ => return Err("EH4 native unbound FS effect".into()),
             })
             },
@@ -252,7 +259,7 @@ return Ok(());"#
         Ok(format!(
             r#"
 fn {name}(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,helper_id:u64,predecessor:CrtThreadHead,
- mut install:impl FnMut(&mut CrtStreamRuntime,CrtPointer,CrtThreadHead)->Result<(),&'static str>)->Result<(),&'static str>{{
+ mut install:impl FnMut(&mut CrtStreamRuntime,&CrtCpu,CrtPointer,CrtThreadHead)->Result<(),&'static str>)->Result<(),&'static str>{{
 if cpu.returned||helper_id==0||helper_id==cpu.return_id{{return Err("EH4 native helper activation");}}
 rt.validate_thread_head(predecessor)?;
 let outer_entry=cpu.entry;let outer_return=cpu.return_id;let outer_returned=cpu.returned;
@@ -542,3 +549,7 @@ mod tests {
 #[cfg(test)]
 #[path = "crt_exception_wrapper_native_tests.rs"]
 mod native_tests;
+
+#[cfg(test)]
+#[path = "crt_normal_frame_tests.rs"]
+mod normal_tests;

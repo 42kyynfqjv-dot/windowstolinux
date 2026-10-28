@@ -5,6 +5,45 @@ admit a complete formatter, CRT startup, rcedit, or another whole PE. Production
 admission barriers remain in place. No new Windows/ELF whole-program pairs are
 claimed here.
 
+## Current connected normal-wrapper boundary
+
+The original EH4 helper can now install its actual checked-stack record in a
+live `NormalCallEpoch`. The binding fixes the memory arena, thread, registry
+instance, epoch, predecessor variant/generation, stack capability and caller
+activation. Each transition rebuilds its registry projection from actual native
+storage. Saved partial-bit masks and pointer types are checked exactly; the
+registry's less precise scalar snapshot cannot grant additional knowledge.
+
+`EpilogProof` decodes the original FILE normal epilog: predecessor load and FS
+restore, guard discard, EDI/ESI/EBX pops, LEAVE and RET 12. It emits those effects
+with checked lifecycle transitions. Consumed saved slots require actual POP
+receipts, forgotten storage and matching restored registers. Retirement rejects
+extra protected tokens or escaping local pointers. Failed bodies remain failed
+with their reached memory effects and registry state intact; there is no invented
+exception cleanup. An independently reproduced certificate mismatch (RET 12
+using a RET 0 binding) is fixed by comparing the complete derived layout before
+any emitted epilog effects.
+
+This closes the normal-path stack-to-registry bridge, not the enclosing formatter
+body or exception-containment proof. The body in component tests is explicitly
+supplied, and the selected completed-event fixture is not original startup.
+The original C++ dispatcher, cold context acquisition and exit callback gates
+below remain open. Full startup/rcedit remains rejected and PR #45 stays draft.
+
+The observer now captures five original wrapper boundaries in each existing
+instrumented stdio scenario. `check_normal_wrapper.py` revalidates the raw
+observations and hashes, extracts the unchanged 69-byte helper and 18-byte epilog,
+then compares native restoration under the observed body EAX/flags boundary.
+Windows and Linux must use identical emitted Rust and original PE bytes. These
+are five component comparisons per host, **not whole-PE translation pairs or
+execution of the formatter body**. Fresh CI evidence is required before claiming
+those comparisons passed. Synthetic harness smoke tests are not Windows evidence.
+
+The preceding `7c946bf2113855b36c1610b746c8262547f77905` checkpoint passed
+dedicated run 40688384215 and both nine-job full runs 40688395175/40688384484.
+Historical Windows timeout causes remain unresolved. No formal GitHub approval
+review is submitted; that requires the user's confirmation for the specific PR.
+
 ## Implemented boundaries
 
 The shared CRT IR and native emitter now represent bounded integer division,
@@ -67,9 +106,10 @@ local tests in this checkpoint are not fresh Windows observations.
 
 ## Connected implementation still required
 
-1. Bind the native EH4 prolog installation callback to the live registry and
-   execute the enclosing FILE/descriptor wrapper effects on that same stack.
-   Protected continuation relocation itself is now mechanically executed.
+1. Compose the now-bound native EH4 prolog and normal epilog with the enclosing
+   FILE/descriptor wrapper body effects on that same stack. Prolog installation,
+   protected continuation relocation and normal retirement are component-tested;
+   body containment and exceptional behavior are not supplied by that result.
 2. Compose the original integer dispatcher and distinct C++ registration with
    actual parser/output/buffer calls. Any no-escape domain requires proof over
    every reachable instruction and effect; sampled success cannot supply it.
