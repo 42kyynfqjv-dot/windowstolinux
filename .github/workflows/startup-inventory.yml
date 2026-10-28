@@ -149,6 +149,7 @@ jobs:
           name: startup-handler-event
           path: original-event
       - run: python3 research/process/startup/check_event.py original-event target/debug/examples/handler_event
+      - run: python3 research/process/startup/check_event_variants.py target/debug/examples/handler_event --output original-event/independent-vectors
       - uses: actions/upload-artifact@v4
         if: always()
         with:
