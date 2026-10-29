@@ -69,11 +69,16 @@ constructor. Its 64 descriptor records have stride 56 and critical sections at
 record offset 0, while FILE locks use offset 32. Checked typed allocation issuance and distinct record-lock ownership now execute
 with original constructor/destructor instructions, followed by the inherited and
 standard-handle bodies in native component tests. No existing Buffer alias is
-relabelled. The allocation manager itself (`40bf2a`), its global lock 7/EH4
-cleanup, calloc/new-handler/errno effects (`407cf0`), free failure/errno effects
-(`407d50`), and continuation after a failed critical-section initialization remain
-unbound. The component supplies allocation availability, API outcomes, live
-initialization authority, zeroed allocation semantics and descriptor table/capacity
-publication. These are not a complete startup proof. Sol can review this slice
-and connect the manager using the existing protected-frame machinery; escalate
-only a concrete missing global-lock or exception-effect contract.
+relabelled. The original manager's allocation loop and normal cleanup funclet now
+execute on an owned component frame: lock 7 precedes scope activation, blocks and
+capacity publish in original order, and scope -2 precedes cleanup release. Distinct
+module-global leases preserve partial effects on acquisition/release failures.
+The actual EH4 prolog/registration/epilog, exception-driven cleanup invocation,
+Enter/Leave helper instructions and producer invocation remain to connect.
+calloc/new-handler/errno (`407cf0`), free failure/errno (`407d50`), and continuation
+after failed critical-section initialization remain unresolved. Explicit inputs
+include global-lock initialization, frame/request, allocator availability and API
+outcomes. Next: bind manager EH4 and invoke it from the inherited producer on the
+same owner, then continue locale/FILE production. Sol can proceed; escalate only a
+concrete missing exception-effect contract. Full startup/formatter/rcedit remains
+unsupported until unchanged-binary entry-to-exit evidence passes.

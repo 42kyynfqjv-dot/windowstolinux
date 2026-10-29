@@ -132,8 +132,7 @@ assert!(greater(&mut rt,&mut c).is_err());assert!(!c.returned);assert_eq!(rt.loa
     );
 }
 
-#[test]
-fn original_descriptor_construction_connects_inheritance_and_destruction() {
+fn descriptor_source() -> String {
     let descriptor_constructor:Vec<u8>="8bff558bec515153566a386a40e864beffff8bf033db8975f8595985f675048bf3eb4b8d86000e00003bf07441578d7e208bf05368a00f00008d47e050e8bdc1ffff834ff8ff80670df8891f8d7f38895fcc8d47e0c747d000000a0ac647d40a895fd6885fda3bc675c98b75f85f53e862beffff598bc65e5bc9c3".as_bytes().chunks_exact(2).map(|x|u8::from_str_radix(std::str::from_utf8(x).unwrap(),16).unwrap()).collect();
     let descriptor_destructor:Vec<u8>="8bff558bec568b750885f67425538d9e000e0000578bfe3bf3740e57ff155450410083c7383bfb75f256e82cbeffff595f5b5e5dc3".as_bytes().chunks_exact(2).map(|x|u8::from_str_radix(std::str::from_utf8(x).unwrap(),16).unwrap()).collect();
     let mut extra = inherited_source();
@@ -155,6 +154,11 @@ fn original_descriptor_construction_connects_inheritance_and_destruction() {
         },&Default::default(),8192).unwrap();
         extra.push_str(&format!("fn {name}(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,init:CrtInitialization,available:bool,fail_at:usize,calls:&mut usize,allocated:&mut Option<CrtPointer>)->Result<CrtValue,&'static str>{{{body}}}"));
     }
+    extra
+}
+#[test]
+fn original_descriptor_construction_connects_inheritance_and_destruction() {
+    let extra = descriptor_source();
     super::crt_stream_callees_tests::native(
         &extra,
         r#"
@@ -179,5 +183,41 @@ for fault in 0..4 {
 }
 "#,
         "descriptor-construction",
+    );
+}
+
+#[test]
+fn original_allocation_manager_scope_orders_lock_publication_and_cleanup() {
+    let manager:Vec<u8>="33f68975e46a07e863feffff598975fc8bfea108d14100897de03945087c1f3934bd08cf41007531e8edfeffff8904bd08cf410085c075146a0c5e8975e4c745fcfeffffffe815000000eba2a108d1410083c040a308d1410047ebbb".as_bytes().chunks_exact(2).map(|x|u8::from_str_radix(std::str::from_utf8(x).unwrap(),16).unwrap()).collect();
+    let manager_cleanup: Vec<u8> = "6a07e851feffff59c3"
+        .as_bytes()
+        .chunks_exact(2)
+        .map(|x| u8::from_str_radix(std::str::from_utf8(x).unwrap(), 16).unwrap())
+        .collect();
+    let cg = Graph::decode(&manager_cleanup, 0x40bfbf).unwrap();
+    let cb=crt_stream_emit::emit_body(&cg,|pc,target|{if target!=Target::Direct(0x40be17){return Err("cleanup target changed".into());}let next=pc+cg.nodes[&pc].length;Ok(format!("cpu.call_activation(rt,{next},0,|rt,child|{{let sp=CrtCpu::pointer(child.r[4])?;if rt.load(rt.offset(sp,4)?,32)?.known_scalar()?!=7{{return Err(\"cleanup lock index\");}}let lease=held.ok_or(\"cleanup without manager lease\")?;rt.check_global(lease)?;if release_fails{{return Err(\"declared LeaveCriticalSection effect failed\");}}rt.unlock_global(lease)?;*held=None;events.push(2);child.clobber(CrtValue::Scalar{{bits:0,known:0}});child.finish(rt)}})?;"))},&Default::default(),64).unwrap();
+    let graph = Graph::decode_with_exits(&manager, 0x40bf60, &[0x40bf4e]).unwrap();
+    let body=crt_stream_emit::emit_body_with_exit(&graph,|pc,target|{let next=pc+graph.nodes[&pc].length;let code=match target {
+ Target::Direct(0x40bdcf)=>"let sp=CrtCpu::pointer(child.r[4])?;if rt.load(rt.offset(sp,4)?,32)?.known_scalar()?!=7{return Err(\"manager lock index\");}if acquire_fails{return Err(\"declared EnterCriticalSection effect failed\");}*held=Some(rt.lock_global(2,7)?);events.push(1);child.clobber(CrtValue::Scalar{bits:0,known:0});child.finish(rt)",
+ Target::Direct(0x40be7a)=>"rt.check_global(held.ok_or(\"allocation without manager lock\")?)?;let mut calls=0;let mut allocated=None;construct(rt,child,init,allocations<successes,usize::MAX,&mut calls,&mut allocated)?;allocations+=1;Ok(child.r[0])",
+ Target::Direct(0x40bfbf)=>"if rt.load(rt.offset(CrtCpu::pointer(child.r[5])?,-4)?,32)?.known_scalar()?!=u32::MAX-1{return Err(\"cleanup before scope disable\");}cleanup(rt,child,held,events,release_fails)",
+ _=>return Err("manager call changed".into())};Ok(format!("cpu.call_activation(rt,{next},0,|rt,child|{{{code}}})?;"))},&std::collections::BTreeMap::from([(0x41cf08,"CrtRegionKind::Module".into()),(0x41d108,"CrtRegionKind::Module".into())]),16384,|_,_|Err("unbound FS".into()),|_,_|Ok(String::new()),|_,_|Ok(None),Some(0x40bf4e)).unwrap();
+    let extra=format!("{} fn cleanup(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,held:&mut Option<CrtGlobalLock>,events:&mut Vec<u32>,release_fails:bool)->Result<CrtValue,&'static str>{{{cb}}} fn manager(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,init:CrtInitialization,successes:usize,acquire_fails:bool,release_fails:bool,held:&mut Option<CrtGlobalLock>,events:&mut Vec<u32>)->Result<CrtValue,&'static str>{{let mut allocations=0;{body}}}",descriptor_source());
+    super::crt_stream_callees_tests::native(
+        &extra,
+        r#"
+for fault in 0..6 {
+ let(mut rt,init)=CrtStreamRuntime::new_initializing(1,2,0x4000,65536).unwrap();let lock=rt.map_region(0x41d1f8,24,CrtRegionKind::Module,None).unwrap();rt.construct_global_lock(init,7,lock,1).unwrap();
+ let table=rt.map_region(0x41cf08,128*4,CrtRegionKind::Module,Some(&[0;512])).unwrap();let capacity=rt.map_region(0x41d108,4,CrtRegionKind::Module,Some(&0u32.to_le_bytes())).unwrap();let stack=rt.map_region(0xa000,4096,CrtRegionKind::Stack,None).unwrap();let frame=rt.offset(stack,3072).unwrap();let sp=rt.offset(frame,-128).unwrap();rt.store(rt.offset(frame,8).unwrap(),32,CrtValue::scalar(if fault==4{0}else{64})).unwrap();rt.store(rt.offset(frame,-4).unwrap(),32,CrtValue::scalar(u32::MAX-1)).unwrap();rt.store(frame,32,CrtValue::OpaqueSaved(5)).unwrap();
+ let mut cpu=CrtCpu::new(sp,700).unwrap();cpu.r[5]=CrtValue::Pointer(frame);cpu.r[1]=CrtValue::Scalar{bits:0,known:0};let(mut held,mut events)=(None,vec![]);
+ let result=manager(&mut rt,&mut cpu,init,if fault==1{1}else if fault==5{0}else{2},fault==2,fault==3,&mut held,&mut events);
+ let cap=rt.load(capacity,32).unwrap().known_scalar().unwrap();
+ if fault==2{assert!(result.is_err());assert_eq!(cap,0);assert!(held.is_none());assert!(events.is_empty());assert_eq!(rt.load(rt.offset(frame,-4).unwrap(),32).unwrap(),CrtValue::scalar(u32::MAX-1));continue;}
+ if fault==3{assert!(result.is_err());assert_eq!(cap,128);rt.check_global(held.unwrap()).unwrap();assert_eq!(events,[1]);assert_eq!(rt.load(rt.offset(frame,-4).unwrap(),32).unwrap(),CrtValue::scalar(u32::MAX-1));continue;}
+ result.unwrap();assert!(!cpu.returned);assert!(held.is_none());assert_eq!(events,[1,2]);assert_eq!(cap,if fault==1{64}else if fault==4{64}else if fault==5{0}else{128});assert_eq!(CrtCpu::number(cpu.r[6]).unwrap(),if fault==1||fault==5{12}else{0});assert_eq!(rt.load(rt.offset(frame,-4).unwrap(),32).unwrap(),CrtValue::scalar(u32::MAX-1));
+ if cap>0{let CrtValue::Pointer(p)=rt.load(table,32).unwrap() else{panic!()};assert_eq!(p.kind,CrtRegionKind::Descriptor);assert!(rt.record_lock_live(p).is_ok());}if fault==1{assert_eq!(rt.load(rt.offset(table,4).unwrap(),32).unwrap(),CrtValue::scalar(0));}
+}
+"#,
+        "allocation-manager",
     );
 }

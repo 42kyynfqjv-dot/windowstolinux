@@ -152,9 +152,9 @@ def check(original, observation, out, compare=None):
     if tuple(import_at_iat(image, 0x415038-base)) != ('kernel32.dll', 'GetStartupInfoW'):
         raise ValueError('inherited startup-info import changed')
     file_regions['inherited-handle-initializer'] = sha(inherited)
-    for name, start, length in [('descriptor_constructor', 0x40be7a, 123), ('descriptor_destructor', 0x40bef5, 53)]:
+    for name, start, length in [('descriptor_constructor', 0x40be7a, 123), ('descriptor_destructor', 0x40bef5, 53), ('manager', 0x40bf60, 92), ('manager_cleanup', 0x40bfbf, 9)]:
         raw = mapped(image, start, length, executable=True)
-        fixture = re.search(r'let '+name+r':Vec<u8>="([0-9a-f]+)"', test_source)
+        fixture = re.search(r'let\s+'+name+r'\s*:\s*Vec<u8>\s*=\s*"([0-9a-f]+)"', test_source)
         if fixture is None or bytes.fromhex(fixture[1]) != raw:
             raise ValueError('descriptor lifecycle fixture differs from original PE')
         file_regions[name] = sha(raw)
@@ -174,7 +174,7 @@ def check(original, observation, out, compare=None):
         env=env, capture_output=True, timeout=180)
     (out/'standard-handles.stdout').write_bytes(standard_run.stdout)
     (out/'standard-handles.stderr').write_bytes(standard_run.stderr)
-    if standard_run.returncode or b'4 passed' not in standard_run.stdout:
+    if standard_run.returncode or b'5 passed' not in standard_run.stdout:
         raise ValueError('standard-handle component check failed')
     command = ['cargo', 'test', '--locked', '--example', 'crt_stream',
                'original_windows_wrapper_state_matches_native_normal_lifecycle', '--', '--ignored']
@@ -240,7 +240,7 @@ def check(original, observation, out, compare=None):
                   main_activation_sha256=sha((out/'main-activate.bin').read_bytes()),
                   main_scope_header_sha256=sha((out/'Main-scope-header.bin').read_bytes()),
                   locale_state_evidence=locale_state_evidence(image),
-                  descriptor_lifecycle_component_cases=4, descriptor_lifecycle_new_windows_pairs=0, inherited_component_cases=7, inherited_new_windows_pairs=0, standard_handle_component_cases=25, standard_handle_new_windows_pairs=0,
+                  manager_component_cases=6, manager_new_windows_pairs=0, descriptor_lifecycle_component_cases=4, descriptor_lifecycle_new_windows_pairs=0, inherited_component_cases=7, inherited_new_windows_pairs=0, standard_handle_component_cases=25, standard_handle_new_windows_pairs=0,
                   original_printf_routing_sha256=sha((out/'printf-routing-live.bin').read_bytes()),
                   original_printf_context_sha256=sha((out/'printf-context-live.bin').read_bytes()),
                   original_printf_entry_sha256=sha((out/'printf-entry-live.bin').read_bytes()),

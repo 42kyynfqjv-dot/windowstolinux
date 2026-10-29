@@ -27,6 +27,8 @@ struct CrtInitialization {anchor:guest_memory::Capability,thread:u64,serial:u64}
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 struct CrtLocale {anchor:guest_memory::Capability,thread:u64,generation:u64}
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
+struct CrtGlobalLock {anchor:guest_memory::Capability,thread:u64,serial:u64,depth:usize,index:u32,storage:CrtPointer}
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
 struct CrtRecordLock {anchor:guest_memory::Capability,thread:u64,serial:u64,depth:usize,record:CrtPointer}
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 struct CrtDescriptorLock {anchor:guest_memory::Capability,thread:u64,serial:u64,depth:usize,id:CrtDescriptorId}
@@ -49,7 +51,7 @@ struct CrtStreamRuntime {
  memory:guest_memory::Space,owner:u64,thread:u64,anchor:guest_memory::Capability,
  dispatchers:std::collections::BTreeMap<u64,CrtDispatcherContext>,regions:Vec<CrtRegion>,retired:Vec<CrtPointer>,tags:std::collections::BTreeMap<u32,CrtValue>,
  partial:std::collections::BTreeMap<u32,(u8,u8)>,descriptors:Vec<CrtDescriptor>,
- record_objects:Vec<CrtPointer>,record_locks:Vec<CrtRecordLock>,locks:Vec<CrtLock>,descriptor_locks:Vec<CrtDescriptorLock>,serial:u64,generation:u64,errno:Option<i32>,doserrno:Option<u32>,last_os_error:Option<u32>,
+ global_objects:std::collections::BTreeMap<u32,CrtPointer>,global_locks:Vec<CrtGlobalLock>,record_objects:Vec<CrtPointer>,record_locks:Vec<CrtRecordLock>,locks:Vec<CrtLock>,descriptor_locks:Vec<CrtDescriptorLock>,serial:u64,generation:u64,errno:Option<i32>,doserrno:Option<u32>,last_os_error:Option<u32>,
  locale_generation:u64,locale_live:bool,initialization:Option<u64>,shutdown:Option<CrtShutdown>,closed:bool,lock_objects:std::collections::BTreeSet<u32>,
 }
 impl CrtStreamRuntime {
@@ -62,7 +64,7 @@ impl CrtStreamRuntime {
   let mut memory=guest_memory::Space::new(byte_limit,64).map_err(|_|"CRT memory budget")?;
   let anchor=memory.map(file_address,size,guest_memory::Owner::Module(owner),guest_memory::Permissions::READ_WRITE,false).map_err(|_|"CRT FILE mapping")?;
   let pointer=CrtPointer{cap:anchor,owner:guest_memory::Owner::Module(owner),base:file_address,size,address:file_address,kind:CrtRegionKind::File};
-  Ok(Self{memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([file_address])})
+  Ok(Self{memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],global_objects:std::collections::BTreeMap::new(),global_locks:vec![],record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([file_address])})
  }
  /// Separate startup-exclusive storage authority, with no preconstructed lock.
  /// Ending it does not attest that original CRT initialization has completed.
@@ -74,17 +76,17 @@ impl CrtStreamRuntime {
  fn initialization(&self,token:CrtInitialization)->Result<(),&'static str>{
   if token.anchor!=self.anchor||token.thread!=self.thread||self.initialization!=Some(token.serial){return Err("CRT initialization owner/lifetime");}Ok(())
  }
- fn end_initialization(&mut self,token:CrtInitialization)->Result<(),&'static str>{self.initialization(token)?;if !self.locks.is_empty()||!self.descriptor_locks.is_empty()||!self.record_locks.is_empty(){return Err("CRT initialization with live lock lease");}self.initialization=None;Ok(())}
+ fn end_initialization(&mut self,token:CrtInitialization)->Result<(),&'static str>{self.initialization(token)?;if !self.locks.is_empty()||!self.descriptor_locks.is_empty()||!self.record_locks.is_empty()||!self.global_locks.is_empty(){return Err("CRT initialization with live lock lease");}self.initialization=None;Ok(())}
  /// The receipt attests only this component's caller/thread lifecycle. It
  /// cannot assert process-wide Windows shutdown or unrelated thread quiescence.
  fn begin_shutdown(&mut self,receipt:CrtShutdownReceipt)->Result<CrtShutdown,&'static str>{
-  if receipt.anchor!=self.anchor||receipt.thread!=self.thread||receipt.event==0||self.initialization.is_some()||self.shutdown.is_some()||self.closed||!self.locks.is_empty()||!self.descriptor_locks.is_empty()||!self.record_locks.is_empty(){return Err("CRT shutdown receipt/phase/active lease");}
+  if receipt.anchor!=self.anchor||receipt.thread!=self.thread||receipt.event==0||self.initialization.is_some()||self.shutdown.is_some()||self.closed||!self.locks.is_empty()||!self.descriptor_locks.is_empty()||!self.record_locks.is_empty()||!self.global_locks.is_empty(){return Err("CRT shutdown receipt/phase/active lease");}
   let serial=self.serial.checked_add(1).ok_or("CRT shutdown generation")?;let token=CrtShutdown{anchor:self.anchor,thread:self.thread,serial,event:receipt.event};self.serial=serial;self.shutdown=Some(token);Ok(token)
  }
  fn shutdown(&self,token:CrtShutdown)->Result<(),&'static str>{if self.closed||self.shutdown!=Some(token){return Err("CRT shutdown owner/lifetime");}Ok(())}
  fn destroy_lock_shutdown(&mut self,token:CrtShutdown,file:CrtPointer)->Result<(),&'static str>{self.shutdown(token)?;self.file_record(file)?;if self.locks.iter().any(|l|l.record==file.address)||!self.lock_objects.remove(&file.address){return Err("CRT shutdown lock still leased/missing");}Ok(())}
  fn free_shutdown(&mut self,token:CrtShutdown,p:CrtPointer)->Result<(),&'static str>{self.shutdown(token)?;self.free_allocation(p)}
- fn end_shutdown(&mut self,token:CrtShutdown)->Result<(),&'static str>{self.shutdown(token)?;if !self.locks.is_empty()||!self.descriptor_locks.is_empty()||!self.record_locks.is_empty()||!self.lock_objects.is_empty()||!self.record_objects.is_empty(){return Err("CRT shutdown remaining lock authority");}self.shutdown=None;self.closed=true;Ok(())}
+ fn end_shutdown(&mut self,token:CrtShutdown)->Result<(),&'static str>{self.shutdown(token)?;if !self.locks.is_empty()||!self.descriptor_locks.is_empty()||!self.record_locks.is_empty()||!self.global_locks.is_empty()||!self.lock_objects.is_empty()||!self.record_objects.is_empty()||!self.global_objects.is_empty(){return Err("CRT shutdown remaining lock authority");}self.shutdown=None;self.closed=true;Ok(())}
  fn construct_lock(&mut self,token:CrtInitialization,file:CrtPointer)->Result<(),&'static str>{
   self.initialization(token)?;self.file_record(file)?;if !self.lock_objects.insert(file.address){return Err("CRT duplicate lock construction");}Ok(())
  }
@@ -98,7 +100,28 @@ impl CrtStreamRuntime {
   self.partial.retain(|&at,_|at<lock.address||at>=lock.address+24);self.last_os_error=None;
   if result!=0{self.construct_lock(token,file)?;}Ok(result!=0)
  }
+ /// Explicit successful initialization outcome for a distinct module lock.
+ fn construct_global_lock(&mut self,token:CrtInitialization,index:u32,p:CrtPointer,result:u32)->Result<bool,&'static str>{
+  self.initialization(token)?;self.identity_range(p,24)?;
+  if index>=32||p.kind!=CrtRegionKind::Module||p.address%4!=0||self.global_objects.contains_key(&index)||self.global_objects.values().any(|q|u64::from(p.address)<u64::from(q.address)+24&&u64::from(q.address)<u64::from(p.address)+24)||!self.overlapping_tags(p.address,24).is_empty(){return Err("CRT global lock role/index/alias");}
+  self.memory.forget(p.address,24).map_err(|_|"CRT global lock bytes")?;self.partial.retain(|&at,_|at<p.address||at>=p.address+24);self.last_os_error=None;
+  if result!=0{self.global_objects.insert(index,self.subrange(p,24)?);}Ok(result!=0)
+ }
+ fn lock_global(&mut self,thread:u64,index:u32)->Result<CrtGlobalLock,&'static str>{
+  let p=*self.global_objects.get(&index).ok_or("CRT unconstructed global lock")?;self.identity_range(p,24)?;
+  if self.closed||thread!=self.thread||self.global_locks.len()>=32{return Err("CRT global lock thread/budget");}
+  let serial=self.serial.checked_add(1).ok_or("CRT global lock serial")?;
+  let token=CrtGlobalLock{anchor:self.anchor,thread,serial,depth:self.global_locks.len(),index,storage:p};self.global_locks.push(token);self.serial=serial;Ok(token)
+ }
+ fn check_global(&self,token:CrtGlobalLock)->Result<(),&'static str>{
+  if self.global_locks.last()!=Some(&token)||self.global_objects.get(&token.index)!=Some(&token.storage){return Err("CRT stale/foreign/unordered global lock");}self.identity_range(token.storage,24)
+ }
+ fn unlock_global(&mut self,token:CrtGlobalLock)->Result<(),&'static str>{self.check_global(token)?;self.global_locks.pop();Ok(())}
+ fn destroy_global_lock(&mut self,token:CrtInitialization,index:u32)->Result<(),&'static str>{
+  self.initialization(token)?;if self.global_locks.iter().any(|l|l.index==index){return Err("CRT live global lock destruction");}let p=*self.global_objects.get(&index).ok_or("CRT missing global lock")?;self.identity_range(p,24)?;self.global_objects.remove(&index);Ok(())
+ }
  fn ordinary_file_bytes(&self,p:CrtPointer,size:u32)->Result<(),&'static str>{
+  if self.global_objects.values().any(|q|q.cap==p.cap&&u64::from(p.address)<u64::from(q.address)+24&&u64::from(q.address)<u64::from(p.address)+u64::from(size)){return Err("CRT opaque global lock bytes");}
   if self.record_objects.iter().any(|r|r.cap==p.cap&&u64::from(p.address)<u64::from(r.address)+24&&u64::from(r.address)<u64::from(p.address)+u64::from(size)){return Err("CRT opaque descriptor lock bytes");}
   if p.kind==CrtRegionKind::File&&self.lock_objects.iter().any(|&at|u64::from(p.address)<u64::from(at)+56&&u64::from(at)+32<u64::from(p.address)+u64::from(size)){return Err("CRT opaque critical section bytes");}Ok(())
  }
@@ -493,6 +516,20 @@ for result in [0,1,7,u32::MAX]{
 let(mut r,init)=CrtStreamRuntime::new_initializing(1,2,0x5000,32768).unwrap();let f=r.file();let p=r.offset(f,32).unwrap();let(_,foreign)=CrtStreamRuntime::new_initializing(1,2,0x5000,32768).unwrap();
 assert!(r.construct_lock_result(foreign,p,0,1).is_err());assert!(r.construct_lock_result(init,r.offset(p,4).unwrap(),0,1).is_err());assert!(r.construct_lock_result(init,r.subrange(p,20).unwrap(),0,1).is_err());assert!(r.construct_lock_result(init,p,1,1).is_err());
 r.store(p,32,CrtValue::Pointer(f)).unwrap();assert!(r.construct_lock_result(init,p,0,1).is_err());assert_eq!(r.load(p,32).unwrap(),CrtValue::Pointer(f));assert!(r.lock_objects.is_empty());
+"#,
+        );
+    }
+
+    #[test]
+    fn global_lock_identity_cannot_be_substituted_by_file_or_record_leases() {
+        native(
+            r#"
+let(mut a,init)=CrtStreamRuntime::new_initializing(1,2,0x4000,32768).unwrap();let(mut b,other)=CrtStreamRuntime::new_initializing(1,2,0x4000,32768).unwrap();
+let p=a.map_region(0x8000,48,CrtRegionKind::Module,None).unwrap();let q=b.map_region(0x8000,48,CrtRegionKind::Module,None).unwrap();
+assert!(a.construct_global_lock(other,7,p,1).is_err());assert!(a.construct_global_lock(init,32,p,1).is_err());assert!(!a.construct_global_lock(init,7,p,0).unwrap());assert!(a.lock_global(2,7).is_err());
+a.construct_global_lock(init,7,p,1).unwrap();b.construct_global_lock(other,7,q,1).unwrap();assert!(a.construct_global_lock(init,8,a.offset(p,4).unwrap(),1).is_err());assert!(a.construct_global_lock(init,7,p,1).is_err());assert!(a.load(p,8).is_err());assert!(a.store(a.offset(p,23).unwrap(),16,CrtValue::scalar(0)).is_err());assert!(a.lock_global(3,7).is_err());
+a.construct_global_lock(init,8,a.offset(p,24).unwrap(),1).unwrap();let x=a.lock_global(2,7).unwrap();let y=a.lock_global(2,8).unwrap();let foreign=b.lock_global(2,7).unwrap();assert!(a.unlock_global(foreign).is_err());assert!(a.unlock_global(x).is_err());assert!(a.destroy_global_lock(init,7).is_err());assert!(a.end_initialization(init).is_err());a.unlock_global(y).unwrap();a.unlock_global(x).unwrap();assert!(a.unlock_global(x).is_err());a.destroy_global_lock(init,7).unwrap();assert!(a.lock_global(2,7).is_err());a.construct_global_lock(init,7,p,1).unwrap();let next=a.lock_global(2,7).unwrap();assert!(a.check_global(x).is_err());assert_ne!(next.serial,x.serial);a.unlock_global(next).unwrap();
+a.serial=u64::MAX;assert!(a.lock_global(2,7).is_err());assert!(a.global_locks.is_empty());a.destroy_global_lock(init,7).unwrap();a.destroy_global_lock(init,8).unwrap();a.end_initialization(init).unwrap();assert!(a.construct_global_lock(init,7,p,1).is_err());
 "#,
         );
     }

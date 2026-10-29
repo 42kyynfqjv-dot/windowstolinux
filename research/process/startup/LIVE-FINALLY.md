@@ -1471,3 +1471,60 @@ Earlier `a5db451` push CI 40906539904 passed; PR CI 40906552121 failed the impor
 output original-Windows fixture at its 15-second process timeout (job 123562781377).
 That failure and startup projection failure 40906539916 remain in the history.
 No claim that either historical timeout family has been generally eliminated.
+
+## Allocation manager scope and distinct global lock
+
+Review of `1055f51` retained all descriptor/FILE ownership boundaries and verified
+that projection compilation keeps overflow checks, debug assertions, every case,
+and the 15-second timeout. Startup workflow 40912897460 passed. The two full Rust
+workflows 40912908434/40912897599 remained running at this checkpoint; neither is
+reported as passed. The earlier Windows process-alive failures remain unresolved.
+
+The shared component kernel now has a separate module-global critical-section
+identity and lease, bounded to 32 indexes and 32 nested leases. A successful
+initialization outcome is explicit, not assumed from zero bytes. Storage has
+checked owner, runtime, lifetime, alignment and full 24-byte bounds. Typed aliases,
+overlapping locks, duplicate construction and opaque byte access reject. Leases
+carry runtime/thread/serial/index/storage identity; stale or foreign/out-of-order
+release, live destruction, phase transition with a lease and serial exhaustion
+reject. These leases cannot be supplied as FILE or descriptor-record authority.
+
+The original manager body `40bf60..40bfbc` now executes with the original cleanup
+funclet `40bfbf..40bfc8` and descriptor constructor on the same guest stack. Original
+instructions acquire lock 7 before scope activation, publish blocks and capacity,
+retain earlier blocks on later null allocation, set scope -2, execute cleanup,
+and exit at the explicit pre-epilog boundary `40bf4e`. Protected call/RET validation
+covers constructor and cleanup calls. A release failure preserves the held lease,
+scope write and previously published blocks; acquisition failure never activates
+the scope. Six native schedules check full two-block growth, partial allocation
+failure, acquisition failure, release failure, request zero (which the original
+strict comparison expands to one block), and immediate null allocation.
+
+These are component executions with a supplied live initialization token, owned
+frame/local extent, initialized request, global-lock initialization and declared
+API outcomes. Enter/Leave helper/API effects remain explicit contracts. Injected
+acquisition/release failures are adversarial contract failures, not new Windows
+observations or claims about a particular exception code. Actual EH4 prolog,
+registration, exception-triggered cleanup invocation and outer epilog are not
+closed by supplying this frame. This scope therefore does not enable full startup,
+formatter, ordinary CRT or rcedit. The invalid-request path, new-handler/errno,
+HeapFree failure and locale producers remain open.
+
+Independent global-lock tests check foreign runtimes, wrong initialization tokens,
+role/index/alias rejection, false initialization, unknown opaque bytes, wrong thread,
+LIFO/replay, live destruction, serial exhaustion and stale initialization. Existing
+ownership, partial-failure and address tests remain. Local verification: 182 CRT
+passed (recorded observation test separate), 181 frame/unwind and 175 root passed;
+Clippy and Python checks passed. Original manager/cleanup bytes are artifact-bound
+in the wrapper checker. Five existing recorded Windows boundaries replay; six new
+manager schedules are native-only, with zero new Windows or whole-PE pairs.
+Generated wrapper Rust SHA256 is
+`2e10d7e8e4b2239b15d0a4de7664df354899edf0d8b7e9cc699aff74ad1cb06a`;
+PE SHA256 remains
+`1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4`.
+
+Next connected scope: bind this manager's actual EH4 frame/registration/epilog and
+lock helper instructions under the existing thread ownership machinery, then call
+it from the inherited producer. Keep allocator/API effect cuts explicit. Sol can
+continue; a concrete unresolved exception-effect contract would justify a bounded
+Astra pass. Locale production and complete formatter integration remain mandatory.
