@@ -350,6 +350,66 @@ impl CrtOwnedUnwind<'_>{
  }
 }
 
+/// Adapter for the instruction-proved ordinary local body. Callback providers
+/// remain separate compiler obligations; this type grants no API admission.
+struct CrtOwnedLocalEffects<'a,'r,F,N>{
+ rt:&'a mut CrtStreamRuntime,record:&'a mut LocalRecord<'r>,machine:&'a Machine,storage:&'a mut CrtOwnedStorage,
+ rows:&'a[LocalScope],pending:Option<(i32,LocalScope)>,written:bool,notified:bool,finally:F,notification:N,
+}
+impl<F,N> CrtOwnedLocalEffects<'_,'_,F,N>
+where F:FnMut(u32,i32,&mut CrtStreamRuntime,&mut CrtOwnedStorage,&mut LocalRecord<'_>)->RegistryResult<()>,N:FnMut(u32,u32)->RegistryResult<()>{
+ fn validate_source(&mut self)->RegistryResult<()>{
+  self.record.validate_binding(self.storage.binding,&self.storage.image)?;self.storage.validate(self.rt,self.record.registry,self.machine)?;
+  if self.record.frame()?!=self.storage.id||self.rows.is_empty()||self.rows.len()>64{return Err("owned local source/row budget");}
+  let table=self.rt.resolve_absolute(self.storage.image.scope_va,CrtRegionKind::Module)?;self.rt.valid(table,16+self.rows.len()as u32*12)?;
+  for(i,row)in self.rows.iter().enumerate(){for(j,value)in [row.parent as u32,row.filter,row.handler].into_iter().enumerate(){
+   if self.rt.load(self.rt.offset(table,16+(i*12+j*4)as i64)?,32)?.known_scalar()?!=value{return Err("owned local readonly scope rows changed");}
+  }}Ok(())
+ }
+}
+impl<F,N> LocalUnwindEffects for CrtOwnedLocalEffects<'_,'_,F,N>
+where F:FnMut(u32,i32,&mut CrtStreamRuntime,&mut CrtOwnedStorage,&mut LocalRecord<'_>)->RegistryResult<()>,N:FnMut(u32,u32)->RegistryResult<()>{
+ fn install_temporary(&mut self,n:u32,h:u32)->RegistryResult<()>{self.record.install_head(n,h)}
+ fn restore_previous_head(&mut self)->RegistryResult<()>{
+  self.validate_source()?;
+  if self.pending.is_some_and(|(_,row)|row.filter==0){return Err("owned local incomplete callback");}self.record.restore_previous_head()
+ }
+ fn decode_scope(&mut self)->RegistryResult<()>{self.validate_source()}
+ fn read_try_level(&mut self)->RegistryResult<i32>{
+  self.validate_source()?;let at=self.rt.resolve_absolute(self.storage.image.record+12,CrtRegionKind::Stack)?;
+  let level=self.rt.load(at,32)?.known_scalar()? as i32;if level!=self.storage.image.try_level{return Err("owned local level cache mismatch");}Ok(level)
+ }
+ fn scope_row(&mut self,level:i32)->RegistryResult<LocalScope>{
+  if self.pending.is_some_and(|(_,row)|row.filter==0)||self.read_try_level()?!=level{return Err("owned local pending/stale row");}
+  let row=*self.rows.get(usize::try_from(level).map_err(|_|"owned local negative row")?).ok_or("owned local complete row bounds")?;
+  if row.filter==0&&!self.record.registry.module_contains_address(row.handler){return Err("owned local unbound callback code");}
+  if row.parent!= -2&&(row.parent<0||row.parent>=level){return Err("owned local nondecreasing parent");}
+  self.pending=Some((level,row));self.written=false;self.notified=false;Ok(row)
+ }
+ fn write_try_level(&mut self,parent:i32)->RegistryResult<()>{
+  let(level,row)=self.pending.ok_or("owned local parent without row")?;
+  if self.written||row.parent!=parent||self.read_try_level()?!=level{return Err("owned local parent transition");}
+  let base=self.rt.resolve_absolute(self.storage.image.record,CrtRegionKind::Stack)?;
+  self.storage.store_local_level(self.rt,self.record,self.machine,CrtValue::Pointer(base),CrtValue::scalar(parent as u32),level,parent)?;self.written=true;Ok(())
+ }
+ fn notify(&mut self,handler:u32,reason:u32)->RegistryResult<()>{
+  let(_,row)=self.pending.ok_or("owned local notification without row")?;
+  if !self.written||self.notified||row.filter!=0||row.handler!=handler||reason!=0x101||self.read_try_level()?!=row.parent{return Err("owned local notification order");}
+  (self.notification)(handler,reason)?;self.validate_source()?;self.notified=true;Ok(())
+ }
+ fn invoke_finally(&mut self,handler:u32,abnormal:u32)->RegistryResult<()>{
+  let(level,row)=self.pending.ok_or("owned local callback without row")?;
+  if !self.written||!self.notified||row.filter!=0||row.handler!=handler||abnormal!=1||self.read_try_level()?!=row.parent{return Err("owned local callback order");}
+  (self.finally)(handler,level,self.rt,self.storage,self.record)?;
+  if self.read_try_level()?!=row.parent{return Err("owned local callback changed protected cursor");}
+  self.pending=None;self.written=false;self.notified=false;Ok(())
+ }
+ fn local_unwind(&mut self,_:i32)->RegistryResult<()>{Err("owned local wrapper requires separate proof")}
+ fn check_temporary_cookie(&mut self)->RegistryResult<()>{Err("owned nested handler requires containment proof")}
+ fn reenter_local_unwind(&mut self)->RegistryResult<()>{Err("owned nested handler requires containment proof")}
+ fn write_collided_record(&mut self)->RegistryResult<()>{Err("owned collided handler requires containment proof")}
+}
+
 struct CrtOwnedGuardView<'a,'b>{owner:u64,frame:&'a CrtOwnedFrameView<'b>,bp:u32}
 impl CrtOwnedGuardView<'_,'_>{
  fn frame_pointer(&self)->u32{self.bp}

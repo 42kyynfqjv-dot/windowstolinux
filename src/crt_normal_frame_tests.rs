@@ -286,6 +286,47 @@ fn file_scope_failure(){
 }
 
 fn bytes_for_native_filter()->Vec<u8>{vec![0x8b,0x55,0xec,0x8b,0x02,0x8b,0x08,0x89,0x4d,0xe4,0x8b,0x55,0xe4,0x33,0xc0,0x81,0xfa,0x42,0x00,0x42,0xe0,0x0f,0x94,0xc0,0xc3]}
+fn owned_loop_cases(){
+ for mode in 0..13{
+  let mut m=Machine::new_dispatch_known(vec![FrameSpec{scopes:vec![]}],0,[None;10],Some(0)).unwrap();let mut r=ThreadRegistry::new(m.owner(),0x8000,0xf000,&[(0x400000,0x420000)],0x41c000).unwrap();let mut rt=runtime(&r);
+  let sp=rt.resolve_absolute(0xe000,CrtRegionKind::Stack).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(71)).unwrap();let c=CrtCpu::new(sp,71).unwrap();let binding=m.owned_binding(0).unwrap();let mut storage=initialize_main_owned(&mut rt,&mut r,&m,binding,&c).unwrap();activate_main_owned(&mut rt,&r,&m,&mut storage).unwrap();storage.scope_store(&mut rt,&r,&m,0,1).unwrap();
+  m.issue_owned_event(binding).unwrap();r.contain(storage.id).unwrap();let id=storage.id;let word=rt.resolve_absolute(storage.image.record+12,CrtRegionKind::Stack).unwrap();let marker=rt.resolve_absolute(storage.image.ebp-780,CrtRegionKind::Stack).unwrap();rt.store(marker,32,CrtValue::scalar(5)).unwrap();
+  // Independently specified conformance table; the original PE is untouched.
+  let rows=[LocalScope{parent:-2,filter:0,handler:0x401200},LocalScope{parent:0,filter:if mode==9{0x401400}else{0},handler:if mode==10{0x700000}else{0x401100}}];
+  let table=rt.map_region(storage.image.scope_va,40,CrtRegionKind::Module,None).unwrap();for(i,row)in rows.iter().enumerate(){for(j,v)in [row.parent as u32,row.filter,row.handler].into_iter().enumerate(){rt.store(rt.offset(table,16+(i*12+j*4)as i64).unwrap(),32,CrtValue::scalar(v)).unwrap();}}
+  for (at,add) in [(0x401100,3u8),(0x401200,7u8)]{let bytes=[0x8b,0x02,0x6b,0xc0,10,0x83,0xc0,add,0x89,0x02,0xc3];let p=rt.map_region(at,bytes.len()as u32,CrtRegionKind::Module,Some(&bytes)).unwrap();if mode==12&&add==3{rt.store(p,8,CrtValue::scalar(0x90)).unwrap();}}
+  if mode==1{rt.store(rt.offset(table,28).unwrap(),32,CrtValue::scalar(1)).unwrap();}
+  if mode==11{rt.store(word,32,CrtValue::Scalar{bits:0,known:0}).unwrap();}
+  let entry=LocalEntry{entry_sp:0xc000,handler:0x4027b0,cookie_address:0x41c000,cookie:0x12345678,target_level:-2};let events=std::cell::RefCell::new(Vec::new());
+  let result=r.execute_handler(id,&mut storage,|r,storage|r.execute_local(id,storage,entry,|record,storage|{
+   let mut effects=CrtOwnedLocalEffects{rt:&mut rt,record,machine:&m,storage,rows:&rows,pending:None,written:false,notified:false,
+    notification:|handler,reason|{events.borrow_mut().push(format!("N{handler:x}:{reason:x}"));if mode==2{Err("independent notification failure")}else{Ok(())}},
+    finally:|handler,level,rt:&mut CrtStreamRuntime,storage:&mut CrtOwnedStorage,record:&mut LocalRecord<'_>|{
+     assert_eq!(rt.load(word,32)?.known_scalar()? as i32,if level==1{0}else{-2});events.borrow_mut().push(format!("F{handler:x}:{level}"));
+     owned_callback_invoke(rt,storage,record,handler,marker)?;
+     if mode==3{return Err("independent cleanup failure");}
+     if mode==4{rt.store(rt.offset(table,16)?,32,CrtValue::scalar(0))?;}
+     if mode==5{rt.store(word,32,CrtValue::scalar(7))?;}
+     if mode==6{let guard=rt.resolve_absolute(storage.image.ebp-796,CrtRegionKind::Stack)?;rt.store(guard,32,CrtValue::scalar(0))?;}
+     if mode==7||mode==8{
+      record.registry.execute_local(id,storage,LocalEntry{entry_sp:0xb000,..entry},|nested,storage|{
+       let mut inner=CrtOwnedLocalEffects{rt,record:nested,machine:&m,storage,rows:&rows,pending:None,written:false,notified:false,
+        notification:|_,_|Err("nested notification should not run"),finally:|_,_,_:&mut CrtStreamRuntime,_:&mut CrtOwnedStorage,_:&mut LocalRecord<'_>|Err("nested callback should not run")};
+       // Same live cursor is already the parent's level. No duplicate cleanup.
+       owned_original_local(&mut inner,if level==1{0}else{-2},0)?;
+       if mode==8{return Err("independent nested failure");}Ok(())
+      })?;
+     }Ok(())
+    }};
+   owned_original_local(&mut effects,-2,0).map(|_|())
+  }));
+  if mode==0||mode==7||mode==9{result.unwrap();assert_eq!(storage.image.try_level,-2);assert_eq!(rt.load(word,32).unwrap(),CrtValue::scalar((-2i32)as u32));assert!(r.temporary.is_empty());assert_eq!(r.head().unwrap(),RegistryHead::Owned(id));assert_eq!(rt.load(marker,32).unwrap().known_scalar().unwrap(),if mode==9{57}else{537});
+   assert_eq!(*events.borrow(),if mode==9{vec!["N401200:101","F401200:0"]}else{vec!["N401100:101","F401100:1","N401200:101","F401200:0"]});
+  }else{assert!(result.is_err(),"loop mode {mode}");assert!(r.available().is_err());assert!(r.frames[0].completion.is_none());assert!(!r.temporary.is_empty());if mode==1||mode==10||mode==11{assert_eq!(rt.load(marker,32).unwrap(),CrtValue::scalar(5));}else{assert_eq!(storage.image.try_level,0);assert_eq!(rt.load(marker,32).unwrap(),CrtValue::scalar(if mode==2||mode==12{5}else{53}));}}
+  assert_eq!(m.phase,Phase::Cleanup);assert_eq!(m.owned_context,Some([None;10]));assert!(m.restore_owned(0x40135c,|_,_|panic!("loop is not restoration")).is_err());
+ }
+}
+
 fn owned_local_cases(){
  for mode in 0..10{
   let mut m=Machine::new_dispatch_known(vec![FrameSpec{scopes:vec![]}],0,[None;10],Some(0)).unwrap();
@@ -877,7 +918,7 @@ fn reject_normal_exception(){
   }).unwrap();
  }
 }
-fn main(){match std::env::args().nth(1).unwrap().as_str(){"owned-local"=>owned_local_cases(),"owned"=>owned_main_cases(),"path-edges"=>path_edges(),"live"=>live_dispatch(),"objects"=>captured_objects(),"handler"=>pending_handler_activation(),"pending"=>pending_normal_exception(),"pending-reject"=>reject_normal_exception(),"file"=>file_scope_normal(),"file-failure"=>file_scope_failure(),"nested"=>nested_actual(),"mutations"=>mutations(),"consumed"=>consumed_mutation(),"failure"=>body_failure(),"certificate"=>wrong_certificate(),"observed"=>observed(),_=>panic!("case")}}
+fn main(){match std::env::args().nth(1).unwrap().as_str(){"owned-loop"=>owned_loop_cases(),"owned-local"=>owned_local_cases(),"owned"=>owned_main_cases(),"path-edges"=>path_edges(),"live"=>live_dispatch(),"objects"=>captured_objects(),"handler"=>pending_handler_activation(),"pending"=>pending_normal_exception(),"pending-reject"=>reject_normal_exception(),"file"=>file_scope_normal(),"file-failure"=>file_scope_failure(),"nested"=>nested_actual(),"mutations"=>mutations(),"consumed"=>consumed_mutation(),"failure"=>body_failure(),"certificate"=>wrong_certificate(),"observed"=>observed(),_=>panic!("case")}}
 "#;
 
 fn run(case: &str) {
@@ -946,6 +987,20 @@ fn run(case: &str) {
         let inner_bytes=handler_bytes("Inner-prolog.bin","558bec6afe68d0b14100681022400064a1000000005083ec10535657a100c041003145f833c5508d45f064a300000000");
         let inner=crate::frame_proof::prove_frame(&inner_bytes,0x4010c0,0x41c000,&std::collections::BTreeSet::from([0x41b1d0]),&std::collections::BTreeSet::from([0x402210])).unwrap();
         let main_init=crate::crt_owned_frame::emit_initializer(&main,"initialize_main_owned");let inner_init=crate::crt_owned_frame::emit_initializer(&inner,"initialize_inner_owned");
+        let local_bytes=handler_bytes("owned-local-body.bin","5356578b5424108b4424148b4c2418555250515168b027400064ff3500000000a100c0410033c489442408648925000000008b4424308b58088b4c242c33198b700c83fefe0f84460000008b54243483fafe74083bf20f86350000008d34768d5cb3108b0b89480c837b04000f85c0ffffff68010100008b4308e8a1020000b9010000008b4308e8b4020000e9a1ffffff648f050000000083c4185f5e5bc3");
+        let local_proof=crate::local_unwind::prove(&local_bytes,0x402710,crate::local_unwind::Kind::Body,&crate::local_unwind::Bindings{body:0x402710,nested_handler:0x4027b0,cookie:0x41c000,notify:0x402a30,invoke:0x402a50,check_cookie:0x401990}).unwrap();
+        let mut corrupt=local_bytes.clone();corrupt[103]=0x10;assert!(crate::local_unwind::prove(&corrupt,0x402710,crate::local_unwind::Kind::Body,&crate::local_unwind::Bindings{body:0x402710,nested_handler:0x4027b0,cookie:0x41c000,notify:0x402a30,invoke:0x402a50,check_cookie:0x401990}).is_err());
+        let local_types=crate::local_unwind::EMITTED_TYPES;
+        let mut callback_source=String::new();
+        for (at,add) in [(0x401100,3u8),(0x401200,7u8)]{
+         let code=[0x8b,0x02,0x6b,0xc0,10,0x83,0xc0,add,0x89,0x02,0xc3];let g=crate::crt_stream_ir::Graph::decode(&code,at).unwrap();let body=crate::crt_stream_emit::emit_body(&g,|_,_|Err("independent cleanup callback has no imports".into()),&Default::default(),32).unwrap();callback_source.push_str(&format!("fn independent_cleanup_{at}(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->RegistryResult<CrtValue>{{let p=rt.resolve_absolute({at},CrtRegionKind::Module)?;for(i,byte)in {code:?}.into_iter().enumerate(){{if rt.load(rt.offset(p,i as i64)?,8)?.known_scalar()?!=byte as u32{{return Err(\"cleanup code changed\");}}}}{body}}}"));
+        }
+        callback_source.push_str(r#"fn owned_callback_invoke(rt:&mut CrtStreamRuntime,storage:&mut CrtOwnedStorage,record:&mut LocalRecord<'_>,target:u32,marker:CrtPointer)->RegistryResult<()>{
+record.validate_binding(storage.binding,&storage.image)?;let sp=rt.resolve_absolute(0x9800,CrtRegionKind::Stack)?;rt.store(sp,32,CrtValue::ProtectedReturn(941))?;let mut cpu=CrtCpu::new(sp,941)?;cpu.r[2]=CrtValue::Pointer(marker);cpu.entry=cpu.r;
+cpu.call_activation(rt,0x402799,0,|rt,child|match target{0x401100=>independent_cleanup_4198656(rt,child),0x401200=>independent_cleanup_4198912(rt,child),_=>Err("independent cleanup target unbound")})?;
+rt.consume_stack(sp,CrtValue::ProtectedReturn(941))?;Ok(())}"#);
+
+        let local_source=format!("fn owned_original_local(effects:&mut impl LocalUnwindEffects,target_level:i32,exception_flags:u32)->RegistryResult<Option<i32>>{{{}}}",local_proof.source);
         let owned_types=crate::crt_owned_frame::EMITTED_TYPES;
         let original_local_store=super::normal_frame::NormalScopeStoreProof::prove(&handler_bytes("local-level-store.bin","89480c"),0x402775).unwrap().emit_owned_local("original_local_level_store",0,-2);
         let main_filter=crate::selection::prove_filter(&target_filter,0x401333,&crate::selection::FilterLayout{start:main.esp_offset(),end:0,exception_pointers_offset:-20,writable_words:vec![-776,-780]},0xe0424242).unwrap();
@@ -1030,7 +1085,7 @@ if fault==1{{cpu.condition(0)?;}}
         let prefix_metadata=format!("fn owned_prefix_handler()->u32{{{}}}fn owned_prefix_temporary()->u32{{{}}}",prefix.entry,prefix.temporary_bytes);
         let context_types=crate::handler_context::EMITTED_TYPES;
         let context_check=context_proof.normal_object_check();
-        let source = format!("#![allow(dead_code)]\nmod guest_memory{{{memory}}}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{fixture}\n{file_scope}\n{context_types}\n{context_check}\n{scope_store}\n{permuted_store}\n{install}\n{handler_prolog}\n{filter_source}\n{false_filter_source}\n{normalizer_source}\n{guard_source}\n{header_source}\n{prefix_normalizer}\n{prefix_front}\n{guard_prefix}\n{prefix_caller}\n{bridge_native}\n{owned_types}\n{original_local_store}\n{main_init}\n{inner_init}\n{owned_filter}\n{owned_bridge}\n{main_filter_bytes}\n{activation}\n{owned_prolog}\n{owned_prefix}\n{owned_header}\n{owned_scope_store}\n{owned_permuted_store}\n{global_source}\n{delivery_source}\n{tail_source}\n{owned_search}\n{code_data}\n{path_edges}\n{prefix_metadata}\nfn raise_site()->CrtNormalRaiseSite{{{{{raise}}}}}\n{CASES}",
+        let source = format!("#![allow(dead_code)]\nmod guest_memory{{{memory}}}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{fixture}\n{file_scope}\n{context_types}\n{context_check}\n{scope_store}\n{permuted_store}\n{install}\n{handler_prolog}\n{filter_source}\n{false_filter_source}\n{normalizer_source}\n{guard_source}\n{header_source}\n{prefix_normalizer}\n{prefix_front}\n{guard_prefix}\n{prefix_caller}\n{bridge_native}\n{local_types}\n{owned_types}\n{local_source}\n{callback_source}\n{original_local_store}\n{main_init}\n{inner_init}\n{owned_filter}\n{owned_bridge}\n{main_filter_bytes}\n{activation}\n{owned_prolog}\n{owned_prefix}\n{owned_header}\n{owned_scope_store}\n{owned_permuted_store}\n{global_source}\n{delivery_source}\n{tail_source}\n{owned_search}\n{code_data}\n{path_edges}\n{prefix_metadata}\nfn raise_site()->CrtNormalRaiseSite{{{{{raise}}}}}\n{CASES}",
             include_str!("linker/unwind_runtime.rs").replace("//!", "//"),
             emitted_literal(include_str!("frame_proof.rs")),emitted_literal(include_str!("thread_registry.rs")),
             crate::crt_stream_runtime::EMITTED_TYPES,crate::crt_stream_cpu::EMITTED_TYPES,
@@ -1295,4 +1350,9 @@ fn instruction_path_checks_reject_unknown_flags_and_disagreeing_original_edges()
 #[test]
 fn original_local_store_writes_canonical_owned_storage_in_live_registry_lifetime() {
     run("owned-local");
+}
+
+#[test]
+fn decoded_local_loop_uses_live_storage_and_preserves_callback_failure_effects() {
+    run("owned-loop");
 }

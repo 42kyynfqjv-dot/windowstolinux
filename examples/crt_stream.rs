@@ -230,3 +230,8 @@ mod crt_owned_search;
 #[allow(dead_code)]
 #[path = "../src/handler_dispatch.rs"]
 mod handler_dispatch;
+
+#[cfg(test)]
+#[allow(dead_code)]
+#[path = "../src/local_unwind.rs"]
+mod local_unwind;

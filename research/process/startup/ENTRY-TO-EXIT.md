@@ -917,3 +917,55 @@ CI readback: all three 6a612ccf workflows (40797179466, 40797171510,
 40797171456) completed successfully. At this checkpoint 728e6df3 dedicated
 40798060349 passed and both full runs were still active. Historical timeouts
 remain unexplained.
+
+### Decoded local loop using canonical storage and native callback fixtures
+
+The unchanged 159-byte ordinary local body at VA0x402710 now runs its emitted
+`LocalUnwindEffects` control flow through `CrtOwnedLocalEffects`. Each scope read
+checks the canonical initialized level and the full bound table rows. A parent
+must decrease or be -2. The original parent store reaches live bytes/protected
+metadata before notification and cleanup. Notification and invocation validate
+the pending row, target and abnormal reason; source/table/level checks run again
+after callback effects. Failure retains reached stores and the installed
+registry temporary head. Invalid nested/collided-handler entry remains rejected.
+
+Thirteen independent native scenarios use a separately authored two-row table,
+with two native callback instruction sequences that compute a trace value from
+shared owned storage. Their expected order and values (5 -> 53 -> 537, or 57
+when a filter row skips one cleanup) are specified independently of the decoder.
+Callback bytes execute through the shared CRT emitter and protected CALL/RET,
+and changed callback code rejects before its write. The callbacks and notification
+provider are conformance fixtures, not the unchanged program's CleanupA/B or
+original notification implementation. Their module/byte/protected-call checks
+supply component evidence only, not program admission.
+
+The cases cover normal cleanup, nested no-duplicate cleanup, notification failure,
+callback failure after its write, changed table, corrupt cursor, changed guard,
+nested failure, a filter row, an out-of-module callback, unknown level and changed
+callback code. Successful nested calls restore the registry head in order; partial
+failures retain actual marker and parent writes and cannot create a handler receipt
+or Machine restoration. The changed parent-store displacement also rejects the
+compiler proof. The wrapper evidence script now extracts and hashes all 159 original
+body bytes and runs these cases on each host. The existing five recorded Windows
+wrapper comparisons and whole-PE pair count remain unchanged (zero new pairs).
+
+CRT tests passed 143/one ignored: 135 inherited, seven existing local-unwind tests
+now included through the new test module, and one new native integration test.
+The 13 new loop cases are separate from 74 owned and 10 local-store cases. Clippy,
+formatting and projection/evidence checks pass. Existing frame tests are retained;
+no decoder, API or whole-program admission policy was widened.
+
+Remaining integration: prove/bind the unchanged notification and cleanup callback
+bodies to this live adapter, back the temporary FS record with actual owned CRT
+bytes, then execute original handler guards/epilog, retire younger frames and
+issue the nonlocal continuation. The current component's temporary FS schedule is
+validated by the registry; it is not yet the original guest thread's entire byte
+state. Nested ordinary local invocations do not establish collided/nested exception
+semantics. Older-frame installation, delivery-context effects and complete startup
+remain unproved. Full rcedit/startup remains rejected.
+
+All three 728e6df3 CI workflows completed successfully. For df78665c the dedicated
+startup workflow40799674213 passed; both full runs40799681764/40799674303 had eight
+successful jobs and compiler-native-linux still comparing independent LLVM outcomes
+at the review checkpoint. Neither active work nor later passes resolve historical
+original-process or observer-build timeouts; their diagnostics remain preserved.
