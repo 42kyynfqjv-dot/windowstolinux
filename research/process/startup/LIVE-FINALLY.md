@@ -1103,3 +1103,57 @@ acceptance criteria and unresolved blockers was accepted and read back. This
 resolves the tracker write; the discarded earlier response still prevents an
 exact retrospective error/denial diagnosis. No denied optional PR comment was
 retried or sent through another route.
+
+### Original printf routing and measured formatter-state barrier
+
+`crt_printf` binds the existing wrapper/accessor certificate to shared native
+instruction emission. The original44-byte printf wrapper,16-byte iob accessor and
+6-byte options accessor execute with actual protected CALL/RET and original
+stack routing. Their numeric results acquire typed authority only from the
+instruction-proved FILE/options binding plus live object validation. FILE object
+identity is distinct from field/lock initialization. Code mutations, unknown
+options, typed vararg corruption and retired FILE storage reject.
+
+Two new connected cases pass all17 runtime arguments through these original
+bodies and return Main's original status1 when the separately supplied formatter
+result is0 or-1. They replace the printf-wrapper callback in these cases, but the
+stdio-common formatter return remains an explicit callback. No text bytes are
+fabricated or claimed as an original formatter result. Existing direct-boundary
+cases remain separate regressions. Basic options[0,0] and FILE-array storage are
+component entry premises; no whole CRT initialization is asserted.
+
+The original formatter-entry prefix and complete locale-context constructor also
+execute. The experiment reaches the unknown branch word at0x41ce7c and returns
+exactly `CRT unknown scalar bits observed`. Independent assertions check that
+the original object pointer/flags were zeroed before the error, the global stays
+unknown and no successful formatter or Main return occurs. The FILE read guard
+still rejects stdout field access without its constructed lock. The missing word
+and possible pointer objects behind0x41c230/0x41c234 require initialization,
+identity/lifetime and mutation evidence, not an assumption that image zeros or
+sampled C-locale execution describe all startup behavior.
+
+The concise current inventory is REMAINING-CALLBACKS.md. It distinguishes original
+body execution, full-body callbacks, component entry state and unresolved API /
+exception effects, including the separate integer C++ record. The next scope is
+the complete live formatter domain/driver/parser/integer/output/cleanup composition,
+not another per-accessor behavior stub. The constructor-state rejection is a
+specific observed gate and is retained rather than converted into defaults.
+
+Verification:175 root,176 frame/unwind,172 CRT tests passed; one observation test
+was separately replayed. Formatting,Clippy,artifact wrapper and projection checks
+passed.202 overlapping owned-frame scenarios include two original-printf returns,
+six new rejection scenarios and one formatter locale-state rejection (overlapping
+those six). Zero new Windows differential or whole-PE translation pairs.
+PE SHA256 remains
+`1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4`;
+printf wrapper SHA256
+`f7b8a4414c8d6e6c6168380445137bd5af31ad9d2f07ba897f02ff77d73dd874`;
+formatter entry SHA256
+`24e55c2bc2dfde4db26e4dc075aeb0d063ead5f95894ea2507a161c7bfd0cba0`;
+constructor SHA256
+`5f419899435ee3eaa1f775c62db5d720afa6772c45dd679ddaad9f197edd5cb6`;
+generated Rust SHA256
+`b08d034d74d533bf355ebb77c88f286864acba4e309b8b9d4891e18b0eb3f09f`.
+All adc3c85 CI passed:40891737061,40891728505,40891728829. New-head CI remains
+required. PR45 stays draft. Full startup/rcedit remains unsupported and historical
+Windows process-exit timeout artifacts remain preserved and unexplained.

@@ -259,6 +259,9 @@ mod restore_instruction;
 #[path = "../src/crt_main_completion.rs"]
 mod crt_main_completion;
 #[allow(dead_code)]
+#[path = "../src/crt_printf.rs"]
+mod crt_printf;
+#[allow(dead_code)]
 #[path = "../src/frame_init.rs"]
 mod frame_init;
 #[allow(dead_code)]
@@ -267,3 +270,6 @@ mod main_completion;
 #[allow(dead_code)]
 #[path = "../src/raise_call.rs"]
 mod raise_call;
+#[allow(dead_code)]
+#[path = "../src/stdio_effect.rs"]
+mod stdio_effect;

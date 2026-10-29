@@ -102,6 +102,8 @@ def check(original, observation, out, compare=None):
     (out/'handler-complete.bin').write_bytes(mapped(image, 0x402210, 350, executable=True))
     (out/'original-landing-pivot.bin').write_bytes(mapped(image,0x40135c,3,executable=True))
     (out/'original-landing-context.bin').write_bytes(mapped(image,0x40135f,57,executable=True))
+    for name,at,n in [('printf-routing',0x401520,44),('printf-iob',0x4045d8,16),('printf-options',0x401270,6),('printf-entry',0x40643e,164),('printf-context',0x4051e0,93)]:
+        (out/(name+'-live.bin')).write_bytes(mapped(image,at,n,executable=True))
     (out/'main-completion-live.bin').write_bytes(mapped(image,0x4013b7,357,executable=True))
     (out/'main-security-live.bin').write_bytes(mapped(image,0x40154c,14,executable=True))
     (out/'main-format-live.bin').write_bytes(mapped(image,0x4151a0,278))
@@ -200,6 +202,9 @@ def check(original, observation, out, compare=None):
                   inner_prolog_sha256=sha((out/'Inner-prolog.bin').read_bytes()),
                   main_activation_sha256=sha((out/'main-activate.bin').read_bytes()),
                   main_scope_header_sha256=sha((out/'Main-scope-header.bin').read_bytes()),
+                  original_printf_routing_sha256=sha((out/'printf-routing-live.bin').read_bytes()),
+                  original_printf_context_sha256=sha((out/'printf-context-live.bin').read_bytes()),
+                  original_printf_entry_sha256=sha((out/'printf-entry-live.bin').read_bytes()),
                   main_live_completion_sha256=sha((out/'main-completion-live.bin').read_bytes()),
                   main_live_security_sha256=sha((out/'main-security-live.bin').read_bytes()),
                   main_live_initializer_sha256=sha((out/'main-initial-live.bin').read_bytes()),
@@ -208,8 +213,8 @@ def check(original, observation, out, compare=None):
                   restore_sha256=sha((out/'original-restore.bin').read_bytes()),
                   restored_landing_sha256=sha((out/'original-restored-landing.bin').read_bytes()),
                   landing_context_sha256=sha((out/'original-landing-context.bin').read_bytes()),
-                  owned_frame_native_cases=194, owned_local_store_cases=10, original_notification_sha256=sha((out/'owned-notification.bin').read_bytes()), owned_local_loop_cases=13, original_cleanup_loop_cases=21, owned_local_body_sha256=sha((out/'owned-local-body.bin').read_bytes()), local_level_store_sha256=sha(local_store), original_cleanup_hashes={name:sha((out/('owned-'+name+'.bin')).read_bytes()) for name in ['CleanupA','CleanupB','CleanupC']},
-                  owned_delivery_lifetime_cases=136, cross_frame_delivery_cases=118, connected_cleanup_retirement_cases=103, native_local_stack_cases=103, native_local_loop_cases=103, live_callback_cases=103, conditional_resume_cases=61, post_global_caller_cases=53, opaque_dispatcher_cases=10, selected_bridge_cases=43, landing_pivot_cases=36, landing_context_cases=27, context_transfer_cases=23, restoration_completion_cases=17, initial_raise_rejection_cases=6, main_initialization_rejection_cases=5, main_normal_cpu_binding_cases=10, main_live_return_cases=2, main_live_failure_cases=8, original_event_return_gate_cases=11, unwind_continuation_input_cut_cases=4, cleanup_continuation_boundary_cases=2,
+                  owned_frame_native_cases=202, owned_local_store_cases=10, original_notification_sha256=sha((out/'owned-notification.bin').read_bytes()), owned_local_loop_cases=13, original_cleanup_loop_cases=21, owned_local_body_sha256=sha((out/'owned-local-body.bin').read_bytes()), local_level_store_sha256=sha(local_store), original_cleanup_hashes={name:sha((out/('owned-'+name+'.bin')).read_bytes()) for name in ['CleanupA','CleanupB','CleanupC']},
+                  owned_delivery_lifetime_cases=144, cross_frame_delivery_cases=126, connected_cleanup_retirement_cases=111, native_local_stack_cases=111, native_local_loop_cases=111, live_callback_cases=111, conditional_resume_cases=69, post_global_caller_cases=61, opaque_dispatcher_cases=10, selected_bridge_cases=51, landing_pivot_cases=44, landing_context_cases=35, context_transfer_cases=31, restoration_completion_cases=25, initial_raise_rejection_cases=6, main_initialization_rejection_cases=5, main_normal_cpu_binding_cases=18, main_live_return_cases=4, main_live_failure_cases=14, original_printf_return_cases=2, original_printf_failure_cases=6, original_formatter_locale_rejections=1, original_event_return_gate_cases=19, unwind_continuation_input_cut_cases=4, cleanup_continuation_boundary_cases=2,
                   branch_obligation_native_cases=3,
                   ordinary_call_boundary_cases=1,
                   global_wrapper_sha256=sha((out/'global-wrapper.bin').read_bytes()), unwind_caller_sha256=sha((out/'original-unwind-caller.bin').read_bytes()), local_wrapper_sha256=sha((out/'original-local-wrapper.bin').read_bytes()),
