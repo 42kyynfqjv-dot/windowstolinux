@@ -1173,12 +1173,12 @@ admission authority.
 
 All three `dbb3edd` workflows completed successfully:
 `40897169559`, `40897152314`, `40897152286`. Local verification of this review
-passed175 root,177 frame/unwind and173 CRT tests (one observation test is ignored
+passed 175 root,177 frame/unwind and 173 CRT tests (one observation test is ignored
 in the default CRT suite and separately replayed by the artifact checker),
-Clippy and formatting. The startup Python suite passed55 tests with one separate
+Clippy and formatting. The startup Python suite passed 55 tests with one separate
 skip. The added evidence regression distinguishes file-backed pointer cells from
 virtual zero fill and rejects changed mutation edges/stores. Existing owned
-scenarios remain202, not an additional202 independent Windows comparisons.
+scenarios remain 202, not an additional202 independent Windows comparisons.
 
 `formatter_binding.py` and the cross-host wrapper report now retain
 `locale_state_evidence`, with `runtime_state_proven=false` and
@@ -1202,10 +1202,10 @@ inventory, not by approval or tooling. PR45 stays draft and SUB-579 In Progress;
 full startup/rcedit and historical timeout causes remain unproved.
 
 The local projection checker retained a separate failure: its `owned` batch hit
-the unchanged15-second limit. The traceback and generated source/binary remain
+the unchanged 15-second limit. The traceback and generated source/binary remain
 under the local `live-dispatch/locale-identity-20261029/projection` evidence. A
-separately instrumented diagnostic run completed all202 cases in12.896seconds;
-no case exceeded0.2seconds in that diagnostic. This suggests aggregate timing
+separately instrumented diagnostic run completed all 202 cases in 12.896 seconds;
+no case exceeded 0.2 seconds in that diagnostic. This suggests aggregate timing
 margin needs attention, but does not identify why the first run exceeded its
 limit or turn the failed check into a pass. No retry, timeout increase or result
 suppression was added. This Linux component timing observation is distinct from
