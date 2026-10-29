@@ -2009,3 +2009,30 @@ by five previously recorded Windows wrapper comparisons. Original PE and wrapper
 Rust hashes remain unchanged above; zero new Windows observations/whole-PE pairs.
 The checker additionally binds both dispatcher getter/wrapper bodies, the actual
 PTD field-use bytes, and TLS fallback import identities.
+
+### Checked cached backend selection and dispatcher normal return
+
+Original resolver cached fast path and lookup wrapper now select the known -1
+cache route to TlsGetValue. The actual requested dynamic name is FlsGetValue,
+which remains a separate unresolved backend. Zero/cold cache, dynamic function
+pointers, unknown values and truncated/wrong-role module storage reject. The
+backend callable is now at the actual stdcall API boundary with RET4, not the
+whole402bb4 wrapper. Actual slot acquisition and cold loading remain unproved.
+
+The original dispatcher217-byte tail and common epilog now execute, returning
+numeric disposition1 for two supplied non-unwind component cases. Metadata
+address refinement uses its already-owned exact live module capability; exception
+reads require typed live Context storage. Unwind/search/dynamic-handler effects
+reject at original call sites. The return does not authorize guest resumption.
+19 PTD cases and11 handler scenarios retain prior ownership/failure tests and
+all eight forwarded arguments; complete resolver/wrapper/tail mutation tests pass.
+Local200 CRT tests and Clippy passed. No new Windows observation or whole-PE
+support is claimed. Historical original-Windows timeouts remain unexplained.
+65129fd startup40936314592 passed; Rust40936324513/40936314665 were still active
+at this inspection.
+
+Artifact replay passed with the unchanged PE/wrapper Rust hashes recorded above,
+two C++ tests, seven prior PTD checks and five previously recorded Windows wrapper
+comparisons. New original bytes for cached resolution/lookup/dispatcher tail and
+the FlsGetValue dynamic symbol are bound to the PE. Zero new Windows observations
+or whole-image pairs. Final focused and changed-code checks passed after review.

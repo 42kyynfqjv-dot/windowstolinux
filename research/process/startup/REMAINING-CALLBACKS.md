@@ -141,3 +141,13 @@ The original PTD+0x20 comparison executes, rejecting unknown data. Actual lookup
 402bb4 resolves a dynamic backend or kernel32!TlsGetValue (not UCRT FlsGetValue).
 Resolver/index/thread acquisition, lazy setter/allocate/free and termination
 remain unbound; see CXX-DISPATCH-PTD.md. No successful cleanup is inferred.
+
+Cached backend/dispatcher connection: original402bb4 now executes a checked -1
+cache route through the original402a53 fast path to TlsGetValue/RET4. Cold cache,
+dynamic pointers and unknown/truncated cache state reject. The requested dynamic
+symbol is FlsGetValue, so its ownership contract remains distinct from TLS.
+Original dispatcher branches/common epilog now return disposition1 for two
+supplied non-unwind component cases. Unwind/search/dynamic-handler calls reject;
+normal callback return grants no guest resumption. Backend API state remains an
+explicit callable cut. Next: cold resolver/module lifetime and the separately
+owned dynamic FLS backend, followed by dispatcher unwind/termination effects.

@@ -70,3 +70,37 @@ unrelated UCRT FLS slot. Then execute exception-code/flag and metadata branches
 from the actual dispatcher, retaining unknown-state rejection. Both metadata
 unwind entries still select a PTD-dependent termination path; no cleanup receipt,
 disposition or restoration authority follows from the current component.
+
+## Cached fallback and connected dispatcher checkpoint
+
+Original lookup wrapper402bb4 and resolver cached fast path402a53 now execute.
+The live module table entry at41cd1c supplies backend selection for original
+argument2. A known -1 cached failure returns null from the resolver, so original
+wrapper instructions choose kernel32!TlsGetValue. The protected API callback now
+has the actual stdcall argument/RET4 contract. Module range/kind, initialized
+cache contents and exact selector identity are checked. Cache zero enters cold
+resolution and rejects; nonzero dynamic pointers reject without invocation.
+
+The original requested dynamic symbol at415d54 is `FlsGetValue`. Thus the dynamic
+route is FLS and the fallback is TLS; neither can share state simply because the
+functions return pointer values. This checkpoint proves cached fallback selection
+under explicit live module inputs. It does not acquire a Windows TLS slot, execute
+cold module loading/GetProcAddress, or prove dynamic FLS callback identity/lifetime.
+The backend callback remains the explicit API-state/effect cut.
+
+After a valid PTD result, original dispatcher217-byte tail now executes and the
+common wrapper's original epilog returns. Metadata scalar address annotation is
+promoted to an already checked live module capability only after exact address
+and complete metadata revalidation. The exception argument must be a live Context
+object covering80 bytes; unknown fields reject when read. Two separately supplied
+non-unwind exception cases (C++ code and unrelated code) return numeric disposition1
+through original branches and protected RET. This completes a normal callback
+return, not guest exception resumption. All original calls for local unwind,
+search or guarded dynamic handlers remain rejecting effects.
+
+Tests now cover19 PTD/backend cases and11 connected handler scenarios. New cases
+include cold/dynamic/unknown cache, truncated/wrong-role cache storage, the two
+normal dispositions and an unwind request rejected at the original call. Full
+wrapper/resolver/tail byte mutations reject; original eight-argument forwarding
+checks remain active. Actual TLS state acquisition, cold resolver effects,
+dynamic FLS ownership, local unwind/termination and whole startup remain open.

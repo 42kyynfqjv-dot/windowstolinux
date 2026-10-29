@@ -293,3 +293,7 @@ mod crt_cxx_record;
 #[cfg(test)]
 #[path = "../src/crt_cxx_ptd.rs"]
 mod crt_cxx_ptd;
+
+#[cfg(test)]
+#[path = "../src/crt_cxx_lookup.rs"]
+mod crt_cxx_lookup;

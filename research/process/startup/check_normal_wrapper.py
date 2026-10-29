@@ -190,7 +190,7 @@ def check(original, observation, out, compare=None):
     for name, start, length, executable in [('HANDLER',0x414ad6,29,True),
             ('METADATA',0x41b42c,36,False),('UNWIND_MAP',0x41b41c,16,False),
             ('ACTION',0x4026fc,5,True),('COMMON',0x403002,54,True),
-            ('DISPATCH_THUNK',0x403e78,9,True),('DISPATCH_ENTRY',0x403d76,9,True),('CONTEXT_CHECK',0x402877,48,True),('DISPATCH_PTD_USE',0x403d8a,21,True)]:
+            ('DISPATCH_THUNK',0x403e78,9,True),('DISPATCH_ENTRY',0x403d76,9,True),('CONTEXT_CHECK',0x402877,48,True),('DISPATCH_PTD_USE',0x403d8a,21,True),('DISPATCH_TAIL',0x403d9f,217,True)]:
         raw = mapped(image,start,length,executable=executable)
         fixture = re.search(r'const\s+'+name+r'\s*:\s*&str\s*=\s*"([0-9a-f]+)"',cxx_source)
         if fixture is None or bytes.fromhex(fixture[1]) != raw:
@@ -206,6 +206,15 @@ def check(original, observation, out, compare=None):
     for address,name in [(0x415060,'TlsGetValue'),(0x415064,'TlsSetValue')]:
         if tuple(import_at_iat(image,address-base))!=('kernel32.dll',name):
             raise ValueError('C++ TLS fallback import changed; UCRT FLS is distinct')
+    lookup_source=(Path(__file__).resolve().parents[3]/'src/crt_cxx_lookup.rs').read_text()
+    for name,start,length in [('PREFIX',0x402a53,37),('EPILOG',0x402aca,3),('WRAPPER',0x402bb4,59)]:
+        raw=mapped(image,start,length,executable=True)
+        fixture=re.search(r'const\s+'+name+r'\s*:\s*&str\s*=\s*"([0-9a-f]+)"',lookup_source)
+        if fixture is None or bytes.fromhex(fixture[1])!=raw:
+            raise ValueError('C++ cached resolver code differs from original PE')
+        file_regions['cxx-lookup-'+name.lower()]=sha(raw)
+    if mapped(image,0x415d54,12)!=b'FlsGetValue\0':
+        raise ValueError('C++ dynamic lookup symbol changed')
     # A branch into this body is not a returning cleanup receipt. Preserve its
     # complete original bytes for independent effect analysis, not execution.
     termination = mapped(image,0x40770c,60,executable=True)

@@ -16,7 +16,7 @@ pub(crate) fn source(getter: &[u8], required: &[u8]) -> Result<String, String> {
             Ok(match target{
  Target::Import(0x415044)=>format!("cpu.call_activation(rt,{next},0,|rt,child|{{child.clobber(rt.last_os_error.map(CrtValue::scalar).unwrap_or(CrtValue::Scalar{{bits:0,known:0}}));child.finish(rt)}})?;"),
  Target::Import(0x415048)=>format!("cpu.call_activation(rt,{next},4,|rt,child|{{let p=CrtCpu::pointer(child.r[4])?;let value=rt.load(rt.offset(p,4)?,32)?;if !matches!(value,CrtValue::Scalar{{..}}){{return Err(\"C++ LastError scalar\");}}rt.last_os_error=value.known_scalar().ok();child.clobber(CrtValue::Scalar{{bits:0,known:0}});child.finish_pop(rt,4)}})?;"),
- Target::Direct(0x402bb4)=>format!("cpu.call_activation(rt,{next},0,|rt,child|lookup(rt,child))?;"),
+ Target::Direct(0x402bb4)=>format!("cpu.call_activation(rt,{next},0,|rt,child|cxx_original_lookup(rt,child,lookup))?;"),
  _=>"return Err(\"C++ PTD lazy setter/allocation/free effect unbound\");".into()})
         },
         &roles,
@@ -63,6 +63,11 @@ pub(crate) fn source(getter: &[u8], required: &[u8]) -> Result<String, String> {
         Some(0x4077ff),
     )?;
     out.push_str(&format!("fn cxx_ptd_required(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,lookup:&mut impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu)->Result<CrtValue,&'static str>)->Result<CrtValue,&'static str>{{let value=(||->Result<CrtValue,&'static str>{{{body}}})()?;if cpu.returned{{return Ok(value);}}Err(\"C++ required PTD termination effect unbound\")}}"));
+    out.push_str(&crate::crt_cxx_lookup::source(
+        &crate::crt_ptd::raw(crate::crt_cxx_lookup::PREFIX),
+        &crate::crt_ptd::raw(crate::crt_cxx_lookup::EPILOG),
+        &crate::crt_ptd::raw(crate::crt_cxx_lookup::WRAPPER),
+    )?);
     Ok(out)
 }
 #[test]
@@ -71,9 +76,10 @@ fn distinct_dispatcher_ptd_extent_and_failure_paths() {
     crate::crt_stream_callees_tests::native(
         &extra,
         r#"
-for mode in 0..14{
+for mode in 0..19{
  let mut rt=CrtStreamRuntime::new(7,9,0x8000,65536).unwrap();
  let index=rt.map_region(0x41c060,4,CrtRegionKind::Module,Some(&(if mode==8{u32::MAX}else{3u32}).to_le_bytes())).unwrap();
+ let mut cache_bytes=[0u8;12];cache_bytes[8..12].copy_from_slice(&(if mode==14{0}else if mode==15{0x401234}else{u32::MAX}).to_le_bytes());let cache=rt.map_region(0x41cd14,if mode==17{8}else{12},if mode==18{CrtRegionKind::Input}else{CrtRegionKind::Module},Some(if mode==17{&cache_bytes[..8]}else{&cache_bytes})).unwrap();if mode==16{rt.store(rt.offset(cache,8).unwrap(),32,CrtValue::Scalar{bits:0,known:0}).unwrap();}
  let ptd=rt.map_region(0x7000,if mode==1{20}else if mode==2{39}else{40},if mode==12{CrtRegionKind::Context}else{CrtRegionKind::ThreadData},None).unwrap();
  let stack=rt.map_region(0x9000,2048,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,1536).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(1)).unwrap();let mut cpu=CrtCpu::new(sp,1).unwrap();let saved=cpu.r;
  let probe=rt.map_region(0x6000,4,CrtRegionKind::Module,Some(&0u32.to_le_bytes())).unwrap();
@@ -81,15 +87,33 @@ for mode in 0..14{
  let mut other=CrtStreamRuntime::new(7,9,0x8000,65536).unwrap();let foreign=other.map_region(0x7000,40,CrtRegionKind::ThreadData,None).unwrap();
  let mut calls=0;let result=cxx_ptd_required(&mut rt,&mut cpu,&mut |rt,child|{calls+=1;let sp=CrtCpu::pointer(child.r[4])?;assert_eq!(rt.load(rt.offset(sp,4)?,32)?,CrtValue::scalar(3));rt.last_os_error=None;
  if mode==10{rt.store(probe,32,CrtValue::scalar(77))?;return Err("independent lookup failure");}
- let v=match mode{13=>CrtValue::Pointer(foreign),3=>CrtValue::scalar(ptd.address()),4=>CrtValue::Pointer(rt.offset(ptd,4)?),5=>CrtValue::Scalar{bits:0,known:0},6=>CrtValue::scalar(0),7=>CrtValue::scalar(u32::MAX),_=>CrtValue::Pointer(ptd)};child.clobber(v);child.finish(rt)});
+ let v=match mode{13=>CrtValue::Pointer(foreign),3=>CrtValue::scalar(ptd.address()),4=>CrtValue::Pointer(rt.offset(ptd,4)?),5=>CrtValue::Scalar{bits:0,known:0},6=>CrtValue::scalar(0),7=>CrtValue::scalar(u32::MAX),_=>CrtValue::Pointer(ptd)};child.clobber(v);child.finish_pop(rt,4)});
  if mode==0||mode==9{assert_eq!(result.unwrap(),CrtValue::Pointer(ptd));assert!(cpu.returned);for r in [3,5,6,7]{assert_eq!(cpu.r[r],saved[r]);}assert!(cxx_ptd_required(&mut rt,&mut cpu,&mut |_,_|panic!("replay")).is_err());}
  else{assert!(result.is_err(),"mode {}",mode);assert!(!cpu.returned);}
  if mode==10{assert_eq!(rt.load(probe,32).unwrap(),CrtValue::scalar(77));assert_eq!(rt.last_os_error,None);}else if mode==5||mode==6{assert_eq!(rt.last_os_error,None);}else{assert_eq!(rt.last_os_error,initial,"mode {}",mode);}
- assert_eq!(calls,if mode==8{0}else{1});assert_eq!(rt.load(index,32).unwrap(),CrtValue::scalar(if mode==8{u32::MAX}else{3}));
+ assert_eq!(calls,if mode==8||mode>=14{0}else{1});assert_eq!(rt.load(index,32).unwrap(),CrtValue::scalar(if mode==8{u32::MAX}else{3}));
 }
 "#,
         "cxx-ptd-effects",
     );
+    for (which, raw) in [
+        crate::crt_cxx_lookup::PREFIX,
+        crate::crt_cxx_lookup::EPILOG,
+        crate::crt_cxx_lookup::WRAPPER,
+    ]
+    .iter()
+    .enumerate()
+    {
+        for i in 0..raw.len() / 2 {
+            let mut code = [
+                crate::crt_ptd::raw(crate::crt_cxx_lookup::PREFIX),
+                crate::crt_ptd::raw(crate::crt_cxx_lookup::EPILOG),
+                crate::crt_ptd::raw(crate::crt_cxx_lookup::WRAPPER),
+            ];
+            code[which][i] ^= 1;
+            assert!(crate::crt_cxx_lookup::source(&code[0], &code[1], &code[2]).is_err());
+        }
+    }
     for (which, raw) in [GETTER, REQUIRED].iter().enumerate() {
         for i in 0..raw.len() / 2 {
             let mut b = [crate::crt_ptd::raw(GETTER), crate::crt_ptd::raw(REQUIRED)];
