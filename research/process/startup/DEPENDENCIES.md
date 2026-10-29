@@ -100,3 +100,10 @@ cases). Ordered advancement remains blocked at the earlier EH4 source: the
 original empty-scope Search proof returns ContinueSearch, but the native search
 emitter requires a GlobalUnwind action. THREAD-CHAIN.md records the exact
 reproducer and return-path integration, with no supplied success receipt.
+
+Independent Sol review of214d585 additionally confirmed that generic proved-path
+lowering requires a terminal CALL and explicitly rejects RET. The owned-search
+CALL cut uses a different storage/lifetime authority from pending normal delivery.
+Return-only support therefore needs a verified terminal RET contract and live
+normal-frame adapter together, preserving the interrupted source's suspension;
+removing the GlobalUnwind check alone is insufficient. See THREAD-CHAIN.md.

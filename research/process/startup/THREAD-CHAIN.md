@@ -235,3 +235,48 @@ constant, or promote the component receipt into selection authority. C++ source
 shape, actual capture/flag production, incoming-chain and collided effects remain
 separate. Sol can review this receipt checkpoint; the live EH4 return-path and
 ordered cursor connection remains the concrete Astra integration.
+
+## Sol review of `214d585`: precise return-path contract
+
+Independent inspection found no additional defect in the executed-handler
+component receipt. It is created after `cxx_handler_prefix` returns; target,
+metadata/dispatcher identity, owner, frame, event and child lease are checked
+through consumption. This remains a compiler-proved component target identity,
+not dynamic module acquisition or a selected-chain certificate. The 34 invocation
+cases, four effect-time lifetime cases and original 24 chain cases were rerun.
+Committed PE, generated harness and unwind-source hashes match local retained
+artifacts. These checks do not create fresh Windows or whole-PE comparisons.
+
+The earlier emitter diagnostic is an intentional interface boundary, not proof
+that deleting its rejection is safe. Three connected constraints must change:
+
+* `crt_owned_search::emit` requires a GlobalUnwind action and returns a native
+  `Result<()>` at that CALL cut. Its prefix/owner checks depend on
+  `CrtOwnedFrameView`, `CrtOwnedStorage`, `Machine` and `pair_return`.
+* `crt_stream_emit::emit_proved_path_with_store` requires a terminal CALL and its
+  return hook rejects every RET. A return-only caller needs a distinct verified
+  terminal contract; old call-cut callers must retain their rejection behavior.
+* Pending delivery instead uses `CrtLiveFrame` and `CrtNormalException` source
+  authority. Its actual source remains suspended. A completed handler RET must
+  consume only the handler's unique protected return and validate its original
+  saved registers, ESP/cleanup and local lifetime. It must not finish the
+  interrupted RaiseException call, retire the source or mint restoration rights.
+
+The bounded Astra change should lower the recorded original return path,
+including branch checks, calls, guards and epilog, through this live source
+adapter. Match every instruction/edge and effect to the proof; exclude unresolved
+calls. Keep existing CALL-cut lowering unchanged and test terminal RET versus
+CALL, changed encodings/edges, stack cleanup and unknown return state. The proof's
+ReturnDisposition constant is an expected result to verify after actual
+execution, never a replacement body or supplied success receipt.
+
+Only after original RET completes may a receipt bind its actual fresh
+registration ID and typed predecessor. Revalidate source suspension, handler
+code/owner/capture lifetime and complete child inventory at minting and at
+single-use advancement. Test wrong handler/event/lease, stale predecessor,
+skipped order, duplicate consumption, nested delivery and changed code, including
+failure after earlier visible writes. The existing C++ component receipt must
+remain unable to authorize a cursor advance merely because EAX is 1.
+
+This review changes documentation/evidence only. Original handler return-only
+execution, ordered advancement and full startup/rcedit remain unproved.
