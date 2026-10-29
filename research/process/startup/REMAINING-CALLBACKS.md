@@ -203,3 +203,13 @@ effects, including during active initialization. Its post-initialization success
 retains module/fiber/slot/PTD lifetime checks. Eleven new phase cases preserve
 cache, reference, slot and phase state across rejection. The common handler still
 uses legacy binding; next select the dynamic getter with Cached authority there.
+
+
+Common-handler cached connection: the new bound variant now calls the dynamic
+getter with fixed Cached access and no loader callback parameter. Twenty native
+cases execute original prefix/common/dispatcher/epilog and retain capture,
+fiber/slot/module ownership, replay, unknown data and changed-code rejection.
+Successful normal cases return ContinueSearch1; they do not resume the guest.
+Unwind helper4041a4, required-PTD termination4077ff, original Windows delivery and
+incoming-chain effects remain explicit rejection boundaries. See the cold
+resolver handoff for the connected instruction path and next effects to close.

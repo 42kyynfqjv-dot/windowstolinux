@@ -138,10 +138,10 @@ effects on a failing cold loader callback. Required-return replay rejects.
 All160 getter/wrapper bytes reject individual mutations. Unknown PTD fields stay
 unknown; successful FLS access supplies no field initialization proof.
 
-The C++ common handler still uses the legacy getter binding. Next route its
-protected call to the dynamic getter, preserving captured-context revalidation,
-the first PTD field read and all original dispatch/termination branches. Do not
-promote the getter result to a handler disposition or resumption receipt.
+The new common-handler variant now selects the dynamic getter with fixed Cached
+access. The legacy variant remains available for independent callback-mutation
+regressions. Both use the same instruction emitter and preserve the original
+context checks, first PTD field read and all dispatch/termination branches.
 Bind actual module/API-set/forwarder identity, loader initializer/detach effects
 and original FLS allocation before removing explicit producer assumptions. The
 legacy TLS fallback remains separately tested; this dynamic variant rejects at
@@ -180,8 +180,22 @@ slot state and initialization phase; forbidden calls leave them unchanged and
 never invoke the loader callback. The connected case count is now29 (eleven new
 phase cases). Earlier original-instruction and changed-code tests remain.
 
-Next wire the common handler's protected PTD call to this dynamic getter with
-Cached access. It still selects the legacy binding today. Preserve its actual
-captured-context checks, first PTD field read and all dispatch/termination edges.
-No new original Windows loader/FLS evidence or full startup permission follows
-from the access split. Sol can implement this bounded caller connection.
+The common-handler variant is now wired with Cached access; it accepts only
+fiber/slot capabilities, not initialization or loader callbacks. It executes the
+original handler prefix, common wrapper/thunk, captured-context validation,
+dynamic getter/guard/FLS, dispatcher body and normal epilog. Twenty connected
+cases cover C++/other exception codes and zero/nonzero initialized PTD flags,
+unknown PTD data, scalar/foreign ESP, retired capture/storage, foreign fiber,
+retired/reused slot, module unload/reload, stale PTD, changed guard, cache miss,
+unwind flags, changed owner identity, wrong context argument and lazy null.
+Success returns actual numeric disposition1 (ContinueSearch), not guest resumption.
+Replay rejects. No initialization, reference or cache state changes in these cases.
+All bound prefix/common/thunk/dispatcher bytes reject individual mutations.
+
+Original Windows delivery/capture and incoming-chain dispatch remain external
+inputs. Unwind/search calls and null-required-PTD termination remain rejected at
+the original instructions; no successful cleanup or shutdown is inferred. Next
+inspect/bind original unwind helper4041a4 and required-PTD termination4077ff using
+the existing owned exception/continuation machinery, or establish exact remaining
+external effects. This normal-disposition composition is not whole PE conversion.
+Original loader/FLS producers and full startup/rcedit remain unproved.

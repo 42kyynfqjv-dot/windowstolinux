@@ -2218,3 +2218,37 @@ Next select this getter with Cached access in the common handler, preserving
 captured-context revalidation and original dispatcher branches. That caller still
 uses its legacy binding. Actual loader/FLS acquisition, DLL/forwarder effects,
 unwind/termination, complete formatting and full startup/rcedit remain unproved.
+
+### Common handler wired to cached dynamic PTD
+
+The new common-handler variant now accepts fiber/slot capabilities and calls the
+checked dynamic getter with fixed Cached access. It accepts no loader callback or
+initialization lease. The original handler prefix, common/thunk, captured-context
+checks, PTD/FLS lookup, first PTD field read, dispatcher branches and epilog execute
+in one native component path. The legacy variant remains for independent callback
+mutation regressions. Both share the same instruction emitters.
+
+Twenty connected cases cover C++/other codes, zero/nonzero initialized PTD flags,
+unknown data, scalar/foreign ESP, retired capture/storage, foreign fiber, stale or
+reused slots, module unload/reload, stale PTD, changed guard, missing cache, unwind
+flags, changed owner identity, wrong context argument and lazy null. Successful
+normal cases return numeric ContinueSearch1 with the original protected return;
+replay rejects. No initialization, module-reference or cache state changes.
+Unknown data and unsupported unwind/search/termination calls still reject.
+All318 handler/common/thunk/dispatcher bytes reject individual mutations.
+
+Local207 CRT tests passed (one existing observation test separate), Clippy,
+format/diff and Python syntax passed. Artifact replay passed nine C++ checks,
+seven prior PTD checks and five recorded Windows wrapper comparisons. Zero new
+Windows observations or whole-PE pairs. Selected hashes/counts are in
+[evidence/cached-common-component.json](evidence/cached-common-component.json).
+Original Windows capture/delivery and incoming-chain effects remain supplied
+inputs; ContinueSearch is not a resumption receipt. Original unwind helper4041a4
+and required-PTD termination4077ff remain concrete rejection boundaries before
+full startup/rcedit or lazy-allocation exception composition can be claimed.
+
+Atfe0d0dc, pushRust40949077644 failed job123714769651 because artifact creation
+reported ECONNRESET. Subsequent comparisons were skipped; this is not a completed
+regression run. The exact failure and skipped steps are preserved in
+[evidence/upload-reset-fe0d0dc.json](evidence/upload-reset-fe0d0dc.json).
+Historical original-Windows timeouts remain preserved and unexplained.

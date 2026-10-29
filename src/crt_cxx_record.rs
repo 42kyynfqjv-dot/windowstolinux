@@ -109,6 +109,25 @@ fn common_source(
     entry: &[u8],
     tail_bytes: &[u8],
 ) -> Result<String, String> {
+    common_source_bound(common, thunk, entry, tail_bytes, false)
+}
+fn common_source_bound(
+    common: &[u8],
+    thunk: &[u8],
+    entry: &[u8],
+    tail_bytes: &[u8],
+    cached: bool,
+) -> Result<String, String> {
+    let parameters = if cached {
+        "fiber:CrtFiber,slot:CrtFlsSlot"
+    } else {
+        "lookup:&mut impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu)->Result<CrtValue,&'static str>"
+    };
+    let arguments = if cached {
+        "CrtResolverAccess::Cached,fiber,slot,&mut |_,_,_|Err(\"C++ cached handler cannot load\")"
+    } else {
+        "lookup"
+    };
     if common != crate::crt_ptd::raw(COMMON)
         || thunk != crate::crt_ptd::raw(DISPATCH_THUNK)
         || entry != crate::crt_ptd::raw(DISPATCH_ENTRY)
@@ -172,7 +191,7 @@ fn common_source(
     )?;
     Ok(format!(
         r#"
-fn cxx_common(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,owner:&CrtCpu,frame:&CrtPtdFrame,context:&CrtCxxContext,record:&CrtCxxRecord,lookup:&mut impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu)->Result<CrtValue,&'static str>)->Result<CrtValue,&'static str>{{
+fn cxx_common(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,owner:&CrtCpu,frame:&CrtPtdFrame,context:&CrtCxxContext,record:&CrtCxxRecord,{parameters})->Result<CrtValue,&'static str>{{
  cpu.validate_active(rt)?;
  let _=(||->Result<CrtValue,&'static str>{{{a}}})()?;
  // Original CLD. This component constructor guarantees DF=0, and the
@@ -186,7 +205,7 @@ fn cxx_common(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,owner:&CrtCpu,frame:&CrtP
   if rt.load(CrtCpu::pointer(cpu.r[4])?,32)?!=CrtValue::Pointer(context.context){{return Err("C++ validator context argument");}}
   cpu.call_activation(rt,0x403d84,0,|rt,child|{{context.check(rt,owner,frame)?;child.clobber(CrtValue::Scalar{{bits:0,known:0}});child.finish(rt)}})?;
   let argument=cpu.pop(rt)?;cpu.r[1]=argument;
-  cpu.call_activation(rt,0x403d8a,0,|rt,child|cxx_ptd_required(rt,child,lookup))?;
+  cpu.call_activation(rt,0x403d8a,0,|rt,child|cxx_ptd_required(rt,child,{arguments}))?;
   let _=(||->Result<CrtValue,&'static str>{{{use_ptd}}})()?;
   record.state(rt,owner,frame)?;context.check(rt,owner,frame)?;
   if CrtCpu::number(cpu.r[1])?!=record.metadata.address(){{return Err("C++ dispatcher metadata identity");}}cpu.r[1]=CrtValue::Pointer(record.metadata);
@@ -208,6 +227,22 @@ fn handler_prefix(
     dispatcher: u32,
     guard: &crate::crt_stream_callees::SecurityProof,
 ) -> Result<String, String> {
+    handler_prefix_bound(bytes, origin, metadata, dispatcher, guard, false)
+}
+fn handler_prefix_bound(
+    bytes: &[u8],
+    origin: u32,
+    metadata: u32,
+    dispatcher: u32,
+    guard: &crate::crt_stream_callees::SecurityProof,
+    cached: bool,
+) -> Result<String, String> {
+    let parameters = if cached {
+        "fiber:CrtFiber,slot:CrtFlsSlot"
+    } else {
+        "lookup:&mut impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu)->Result<CrtValue,&'static str>"
+    };
+    let arguments = if cached { "fiber,slot" } else { "lookup" };
     let end = origin.checked_add(29).ok_or("C++ handler overflow")?;
     let metadata_end = metadata
         .checked_add(36)
@@ -250,7 +285,7 @@ child.finish(rt)
     );
     Ok(format!(
         r#"
-fn cxx_handler_prefix(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,owner:&CrtCpu,frame:&CrtPtdFrame,record:&CrtCxxRecord,context:&CrtCxxContext,lookup:&mut impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu)->Result<CrtValue,&'static str>)->Result<CrtValue,&'static str>{{
+fn cxx_handler_prefix(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,owner:&CrtCpu,frame:&CrtPtdFrame,record:&CrtCxxRecord,context:&CrtCxxContext,{parameters})->Result<CrtValue,&'static str>{{
  record.state(rt,owner,frame)?;cpu.validate_active(rt)?;
  if frame.handler!={origin}||frame.low!=rt.offset(frame.bp,-28)?||record.metadata.address()!={metadata}{{return Err("C++ handler/frame binding");}}
  let sp=CrtCpu::pointer(cpu.r[4])?;
@@ -260,7 +295,7 @@ fn cxx_handler_prefix(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,owner:&CrtCpu,fra
  let _=(||->Result<CrtValue,&'static str>{{{prefix}}})()?;
  {check}
  let _=(||->Result<CrtValue,&'static str>{{{tail}}})()?;
- cxx_common(rt,cpu,owner,frame,context,record,lookup)
+ cxx_common(rt,cpu,owner,frame,context,record,{arguments})
 }}
 "#
     ))
@@ -389,4 +424,117 @@ rt.store(state,32,CrtValue::Scalar{{bits:0,known:0}}).unwrap();assert!(binding.s
     let mut cycle = map.clone();
     cycle[..4].copy_from_slice(&0i32.to_le_bytes());
     assert!(emit(&meta, 0x41b42c, &cycle, 0x41b41c).is_err());
+}
+
+#[test]
+fn common_handler_executes_cached_getter_with_owned_context_and_no_loader_authority() {
+    let security = crate::crt_stream_callees::prove_security(
+        &crate::crt_ptd::raw("3b0d00c041007501c3e97c020000"),
+        0x40154c,
+    )
+    .unwrap();
+    let extra = format!(
+        "{} {} {} {} {} {}",
+        crate::crt_ptd::helper_source(
+            &crate::crt_ptd::raw(crate::crt_ptd::PROLOG),
+            0x414268,
+            &crate::crt_ptd::raw(crate::crt_ptd::EPILOG),
+            0x414254,
+            0x41c000
+        )
+        .unwrap(),
+        emit(
+            &crate::crt_ptd::raw(METADATA),
+            0x41b42c,
+            &crate::crt_ptd::raw(UNWIND_MAP),
+            0x41b41c
+        )
+        .unwrap(),
+        handler_prefix_bound(
+            &crate::crt_ptd::raw(HANDLER),
+            0x414ad6,
+            0x41b42c,
+            0x403002,
+            &security,
+            true
+        )
+        .unwrap(),
+        common_source_bound(
+            &crate::crt_ptd::raw(COMMON),
+            &crate::crt_ptd::raw(DISPATCH_THUNK),
+            &crate::crt_ptd::raw(DISPATCH_ENTRY),
+            &crate::crt_ptd::raw(DISPATCH_TAIL),
+            true
+        )
+        .unwrap(),
+        context_source(&crate::crt_ptd::raw(CONTEXT_CHECK)).unwrap(),
+        crate::crt_cxx_ptd::dynamic_source(
+            &crate::crt_ptd::raw(crate::crt_cxx_ptd::GETTER),
+            &crate::crt_ptd::raw(crate::crt_cxx_ptd::REQUIRED)
+        )
+        .unwrap()
+    );
+    if let Some(out) = std::env::var_os("W2L_EH4_EVIDENCE") {
+        std::fs::write(
+            std::path::Path::new(&out).join("cached-common-handler.rs"),
+            format!(
+                "{}\n{}\n{}",
+                crate::crt_stream_runtime::EMITTED_TYPES,
+                crate::crt_stream_cpu::EMITTED_TYPES,
+                extra
+            ),
+        )
+        .unwrap();
+    }
+    let meta = crate::crt_ptd::raw(METADATA);
+    let map = crate::crt_ptd::raw(UNWIND_MAP);
+    let body = format!(
+        r#"
+for mode in 0..20{{
+ let(mut rt,init)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();let(m,reference)=rt.module_acquire_result(init,"independent handler dependency",0x720000).unwrap();let function=rt.module_export_result(init,m,"FlsGetValue",0x721000).unwrap();
+ let cache_root=rt.map_region(0x41cd14,12,CrtRegionKind::Module,None).unwrap();let cache=rt.offset(cache_root,8).unwrap();rt.store(cache,32,if mode==14{{CrtValue::scalar(0)}}else{{CrtValue::Function(function)}}).unwrap();
+ rt.map_region(0x415128,4,CrtRegionKind::Module,Some(&(if mode==13{{0x401bfau32}}else{{0x401bf9u32}}).to_le_bytes())).unwrap();
+ rt.map_region(0x415d4c,8,CrtRegionKind::Input,Some(&[0,0,0,0,2,0,0,0])).unwrap();rt.map_region(0x415d54,12,CrtRegionKind::Input,Some(b"FlsGetValue\0")).unwrap();rt.map_region(0x41c060,4,CrtRegionKind::Module,Some(&3u32.to_le_bytes())).unwrap();
+ let ptd=rt.map_region(0xd000,40,CrtRegionKind::ThreadData,None).unwrap();if mode!=2{{rt.store(rt.offset(ptd,32).unwrap(),32,CrtValue::scalar(if mode==18{{1}}else{{0}})).unwrap();}}
+ let fiber=rt.bind_fiber(9).unwrap();let slot=rt.bind_fls(fiber,3,if mode==19{{CrtValue::scalar(0)}}else{{CrtValue::Pointer(ptd)}}).unwrap();
+ if mode==8||mode==9{{rt.retire_fls(fiber,slot).unwrap();if mode==9{{rt.bind_fls(fiber,3,CrtValue::Pointer(ptd)).unwrap();}}}}if mode==10||mode==11{{rt.module_release_result(init,reference,true).unwrap();if mode==11{{rt.module_acquire_result(init,"independent handler dependency",0x720000).unwrap();}}}}if mode==12{{rt.retire_region(ptd).unwrap();}}rt.end_initialization(init).unwrap();
+ rt.map_region(0x41c000,4,CrtRegionKind::Module,Some(&123u32.to_le_bytes())).unwrap();rt.map_region(0x41b42c,36,CrtRegionKind::Module,Some(&{meta:?})).unwrap();rt.map_region(0x41b41c,16,CrtRegionKind::Module,Some(&{map:?})).unwrap();
+ let stack=rt.map_region(0x9000,1024,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,768).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(1)).unwrap();let mut owner=CrtCpu::new(sp,1).unwrap();owner.push(&mut rt,CrtValue::scalar(0)).unwrap();owner.r[0]=CrtValue::scalar(0x414ad6);let previous=rt.thread_head(4,5,[1,2,3]).unwrap();let mut frame=CrtPtdFrame::new(&rt,&owner,previous,0x414ad6,0x41c000).unwrap();ptd_prolog(&mut rt,&mut owner,&mut frame,0x40a33e).unwrap();let record=cxx_bind(&rt,&owner,&frame).unwrap();
+ let context_pointer=rt.map_region(0xb000,200,CrtRegionKind::Context,None).unwrap();rt.store(rt.offset(context_pointer,196).unwrap(),32,CrtValue::Pointer(frame.low)).unwrap();let mut context=CrtCxxContext::bind(&rt,&owner,&frame,context_pointer,stack).unwrap();
+ let exception=rt.map_region(0xe000,80,CrtRegionKind::Context,Some(&[0;80])).unwrap();rt.store(exception,32,CrtValue::scalar(if mode==1{{0xe0420042}}else{{0xe06d7363}})).unwrap();rt.store(rt.offset(exception,4).unwrap(),32,CrtValue::scalar(if mode==15{{2}}else{{0}})).unwrap();
+ let scratch=rt.map_region(0xa000,4096,CrtRegionKind::Stack,None).unwrap();let hs=rt.offset(scratch,3072).unwrap();rt.store(hs,32,CrtValue::ProtectedReturn(123)).unwrap();rt.store(rt.offset(hs,4).unwrap(),32,CrtValue::Pointer(exception)).unwrap();rt.store(rt.offset(hs,8).unwrap(),32,CrtValue::Pointer(rt.offset(frame.bp,-12).unwrap())).unwrap();rt.store(rt.offset(hs,12).unwrap(),32,CrtValue::Pointer(if mode==17{{rt.offset(context_pointer,4).unwrap()}}else{{context_pointer}})).unwrap();rt.store(rt.offset(hs,16).unwrap(),32,CrtValue::scalar(0x5678)).unwrap();let mut child=CrtCpu::new(hs,123).unwrap();
+ match mode{{3=>{{rt.store(rt.offset(context_pointer,196).unwrap(),32,CrtValue::scalar(frame.low.address())).unwrap();}},4=>{{rt.store(rt.offset(context_pointer,196).unwrap(),32,CrtValue::Pointer(scratch)).unwrap();}},5=>context.retire(),6=>rt.retire_region(context_pointer).unwrap(),16=>owner.return_id+=1,_=>{{}}}}
+ let(mut other,_)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();let foreign=other.bind_fiber(9).unwrap();rt.last_os_error=Some(77);let cache_bytes=rt.memory.read(cache.address(),4).unwrap().to_vec();let refs=rt.module_references.len();
+ let result=cxx_handler_prefix(&mut rt,&mut child,&owner,&frame,&record,&context,if mode==7{{foreign}}else{{fiber}},slot);
+ if mode==0||mode==1||mode==18{{assert_eq!(result.unwrap(),CrtValue::scalar(1));assert!(child.returned);assert_eq!(child.r[4],CrtValue::Pointer(rt.offset(hs,4).unwrap()));assert_eq!(owner.r[5],CrtValue::Pointer(frame.bp));assert!(cxx_handler_prefix(&mut rt,&mut child,&owner,&frame,&record,&context,fiber,slot).is_err());}}else{{assert!(result.is_err(),"mode {{mode}}");assert!(!child.returned);}}
+ assert_eq!(rt.initialization,None);assert_eq!(rt.module_references.len(),refs);assert_eq!(rt.memory.read(cache.address(),4).unwrap(),cache_bytes);assert_eq!(rt.last_os_error,if mode==19{{None}}else{{Some(77)}});
+}}
+"#
+    );
+    crate::crt_stream_callees_tests::native(&extra, &body, "cached-common-handler");
+    for (which, bytes) in [COMMON, DISPATCH_THUNK, DISPATCH_ENTRY, DISPATCH_TAIL]
+        .into_iter()
+        .enumerate()
+    {
+        for i in 0..bytes.len() / 2 {
+            let mut inputs = [
+                crate::crt_ptd::raw(COMMON),
+                crate::crt_ptd::raw(DISPATCH_THUNK),
+                crate::crt_ptd::raw(DISPATCH_ENTRY),
+                crate::crt_ptd::raw(DISPATCH_TAIL),
+            ];
+            inputs[which][i] ^= 1;
+            assert!(
+                common_source_bound(&inputs[0], &inputs[1], &inputs[2], &inputs[3], true).is_err()
+            );
+        }
+    }
+    let handler = crate::crt_ptd::raw(HANDLER);
+    for i in 0..handler.len() {
+        let mut changed = handler.clone();
+        changed[i] ^= 1;
+        assert!(
+            handler_prefix_bound(&changed, 0x414ad6, 0x41b42c, 0x403002, &security, true).is_err()
+        );
+    }
 }
