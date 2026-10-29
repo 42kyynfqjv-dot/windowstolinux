@@ -411,7 +411,7 @@ struct CrtOwnedUnwind<'a>{
  captured:Vec<CrtValue>,active:Vec<(u64,CrtPointer,CrtPointer,u64,RegistrationId)>,stack_extents:std::cell::RefCell<std::collections::BTreeMap<u64,u32>>,used:Vec<CrtPointer>,serial:u64,failed:bool,completed:bool,
 }
 struct CrtUnwindDelivery{
- epoch:u64,serial:u64,target:RegistrationId,context:CrtPointer,entry:CrtPointer,callback:u64,captured_esp:u32,snapshot:Vec<CrtValue>,
+ epoch:u64,serial:u64,target:RegistrationId,context:CrtPointer,dispatcher:CrtValue,entry:CrtPointer,callback:u64,captured_esp:u32,snapshot:Vec<CrtValue>,
 }
 impl CrtOwnedUnwind<'_>{
  fn context_words(rt:&CrtStreamRuntime,p:CrtPointer)->RegistryResult<Vec<CrtValue>>{
@@ -452,8 +452,12 @@ impl CrtOwnedUnwind<'_>{
  fn with_delivery<T,F>(&mut self,frame:&mut CrtOwnedFrameView<'_>,cpu:&mut CrtCpu,context:CrtPointer,body:F)->RegistryResult<T>
  where F:FnOnce(&mut Self,&mut CrtOwnedFrameView<'_>,&mut CrtCpu,&CrtUnwindDelivery)->RegistryResult<T>{
   let parent=frame.active;let prior_search=frame.search;
+  let mut owned_dispatcher=None;
   let result=(||{
    self.validate(frame)?;frame.registry.expected_callback(frame.storage.id)?;
+   let dispatcher=frame.rt.load(frame.rt.offset(CrtCpu::pointer(cpu.entry[4])?,16)?,32)?;
+   owned_dispatcher=match dispatcher{CrtValue::Dispatcher(t) if t.epoch==self.epoch&&t.callback==cpu.return_id=>Some(t),_=>None};
+   match dispatcher{CrtValue::Scalar{bits:0,known:u32::MAX}=>{},CrtValue::Dispatcher(t) if owned_dispatcher==Some(t)=>frame.rt.dispatcher(t)?,_=>return Err("unwind dispatcher callback/epoch identity")}
    if frame.active!=self.active.last().map(|(_,_,_,id,_)|*id).unwrap_or(self.wrapper_id){return Err("unwind parent activation changed");}
    if self.active.len()>=16||self.used.len()>=64||cpu.returned||cpu.r!=cpu.entry||cpu.return_id==0
     ||cpu.return_id==self.source.callback||cpu.return_id==self.wrapper_id
@@ -472,15 +476,16 @@ impl CrtOwnedUnwind<'_>{
    let captured_esp=snapshot[0xc4/4].known_scalar()?;
    if captured_esp<frame.registry.limit||captured_esp>frame.registry.base{return Err("unwind delivery captured stack bounds");}
    let owner=frame.rt.offset(frame.storage.entry,i64::from(frame.storage.image.record)-i64::from(frame.storage.image.entry_sp))?;
-   for(i,v)in [CrtValue::Pointer(self.source.record),CrtValue::Pointer(owner),CrtValue::Pointer(context),CrtValue::scalar(0)].into_iter().enumerate(){
+   for(i,v)in [CrtValue::Pointer(self.source.record),CrtValue::Pointer(owner),CrtValue::Pointer(context),dispatcher].into_iter().enumerate(){
     if frame.rt.load(frame.rt.offset(entry,4+i as i64*4)?,32)?!=v{return Err("unwind delivery argument provenance");}
    }
    let serial=self.serial.checked_add(1).ok_or("unwind delivery serial exhausted")?;self.serial=serial;
-   let token=CrtUnwindDelivery{epoch:self.epoch,serial,target:frame.storage.id,context,entry,callback:cpu.return_id,captured_esp,snapshot};
+   let token=CrtUnwindDelivery{epoch:self.epoch,serial,target:frame.storage.id,context,dispatcher,entry,callback:cpu.return_id,captured_esp,snapshot};
    self.active.push((serial,context,entry,cpu.return_id,frame.storage.id));self.stack_extents.get_mut().insert(serial,32);self.used.push(context);frame.active=cpu.return_id;frame.search=false;
    let value=body(self,frame,cpu,&token)?;
    self.validate_delivery(frame,cpu,&token)?;self.active.pop();self.stack_extents.get_mut().remove(&serial);Ok(value)
   })();frame.active=parent;frame.search=prior_search;
+  let result=if let Some(t)=owned_dispatcher{let retired=frame.rt.end_dispatcher(t);match result{Err(e)=>Err(e),Ok(value)=>retired.map(|_|value)}}else{result};
   if result.is_err(){self.failed=true;frame.failed=true;}result
  }
  /// Reborrow a distinct live target while keeping the selected source immutable.
@@ -527,7 +532,7 @@ impl CrtOwnedUnwind<'_>{
    ||frame.rt.tags.values().filter(|&&v|v==CrtValue::ProtectedReturn(token.callback)).count()!=1
    ||Self::context_words(frame.rt,token.context)?!=token.snapshot{return Err("unwind delivery lifetime/context changed");}
   let owner=frame.rt.offset(frame.storage.entry,i64::from(frame.storage.image.record)-i64::from(frame.storage.image.entry_sp))?;
-  for(i,v)in [CrtValue::Pointer(self.source.record),CrtValue::Pointer(owner),CrtValue::Pointer(token.context),CrtValue::scalar(0)].into_iter().enumerate(){
+  for(i,v)in [CrtValue::Pointer(self.source.record),CrtValue::Pointer(owner),CrtValue::Pointer(token.context),token.dispatcher].into_iter().enumerate(){
    if frame.rt.load(frame.rt.offset(token.entry,4+i as i64*4)?,32)?!=v{return Err("unwind delivery arguments changed");}
   }
   // A comparison snapshot has no restoration/writeback authority.
@@ -605,7 +610,7 @@ impl<'a,'b,'c> CrtOwnedDeliveryPrefix<'a,'b,'c>{
   storage.validate(rt,r,m)?;self.session.validate_parts(rt,r,m,source)?;let token=self.token;
   if token.target!=storage.id||self.session.active.last()!=Some(&(token.serial,token.context,token.entry,token.callback,token.target))||token.epoch!=self.session.epoch||self.record!=self.session.source.record||self.context!=token.context||rt.load(token.entry,32)?!=CrtValue::ProtectedReturn(token.callback)||rt.tags.values().filter(|&&v|v==CrtValue::ProtectedReturn(token.callback)).count()!=1||CrtOwnedUnwind::context_words(rt,token.context)?!=token.snapshot{return Err("delivery prefix stale lease/context");}
   let owner=rt.resolve_absolute(storage.image.record,CrtRegionKind::Stack)?;
-  for(i,v)in [CrtValue::Pointer(self.record),CrtValue::Pointer(owner),CrtValue::Pointer(self.context),CrtValue::scalar(0)].into_iter().enumerate(){if rt.load(rt.offset(token.entry,4+i as i64*4)?,32)?!=v{return Err("delivery prefix callback arguments changed");}}Ok(())
+  for(i,v)in [CrtValue::Pointer(self.record),CrtValue::Pointer(owner),CrtValue::Pointer(self.context),token.dispatcher].into_iter().enumerate(){if rt.load(rt.offset(token.entry,4+i as i64*4)?,32)?!=v{return Err("delivery prefix callback arguments changed");}}Ok(())
  }
 }
 

@@ -710,7 +710,7 @@ Fresh separate original-Windows artifact12861766580 (bda01875) corroborates the
 existing contract on Server2022/MSVC14.44.35207: at the original API continuation
 EBX changed from0xfffffffe to0 and ESI from0x4ffc40 to0 before wrapper POPs;
 EAX was0 and ESP advanced16. Search callbacks used CONTEXT0x4fed88 while unwind
-callbacks used0x4fe8c8 with the same exception-record pointer0x4fed38 and flags2.
+callbacks used0x4fe908 with the same exception-record pointer0x4fed38 and flags2.
 These numeric addresses describe that observed run only, not portable addresses.
 Observed TargetIp0x112855 is original RVA0x2855 in a load at0x110000; the native
 component uses preferred virtual-image TargetIp0x402855. This is relational

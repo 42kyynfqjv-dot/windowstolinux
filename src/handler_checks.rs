@@ -577,6 +577,17 @@ mod tests {
         }
     }
     #[test]
+    fn fourth_callback_argument_cannot_gain_context_authority() {
+        let (mut bytes, bindings) = fixture();
+        let at = bytes
+            .windows(3)
+            .position(|w| w == [0xff, 0x75, 0x10])
+            .unwrap();
+        bytes[at + 2] = 0x14; // PUSH [EBP+20], not the documented third argument.
+        assert!(prove_prefix(&bytes, 0x1000, &bindings).is_err());
+    }
+
+    #[test]
     fn wrong_call_cookie_and_installer_bindings_reject() {
         let (bytes, b) = fixture();
         for field in 0..5 {

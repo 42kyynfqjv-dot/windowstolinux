@@ -12,7 +12,7 @@ struct CrtCpu{abi:CrtAbi,r:[CrtValue;8],entry:[CrtValue;8],flags:CrtFlags,return
 impl CrtCpu{
  fn new(sp:CrtPointer,return_id:u64)->Result<Self,&'static str>{if sp.kind!=CrtRegionKind::Stack||return_id==0{return Err("CRT cpu entry authority");}let mut r=std::array::from_fn(|i|CrtValue::OpaqueSaved(i as u8));r[4]=CrtValue::Pointer(sp);Ok(Self{abi:CrtAbi::Cdecl32Forward,r,entry:r,flags:CrtFlags::unknown(),return_id,steps:0,returned:false,return_pop:0})}
  fn tick(&mut self,budget:u32)->Result<(),&'static str>{self.steps=self.steps.checked_add(1).ok_or("CRT instruction counter overflow")?;if self.steps>budget{return Err("CRT certified instruction bound exceeded");}Ok(())}
- fn bits(v:CrtValue)->Result<(u32,u32),&'static str>{match v{CrtValue::Scalar{bits,known}=>Ok((bits,known)),CrtValue::Pointer(p)=>Ok((p.address(),u32::MAX)),CrtValue::Handle(h)=>Ok((h.handle,u32::MAX)),CrtValue::OpaqueSaved(_)=>Ok((0,0)),CrtValue::ProtectedReturn(_)|CrtValue::ThreadHead(_)=>Err("CRT protected control bits")}}
+ fn bits(v:CrtValue)->Result<(u32,u32),&'static str>{match v{CrtValue::Scalar{bits,known}=>Ok((bits,known)),CrtValue::Pointer(p)=>Ok((p.address(),u32::MAX)),CrtValue::Handle(h)=>Ok((h.handle,u32::MAX)),CrtValue::OpaqueSaved(_)=>Ok((0,0)),CrtValue::Dispatcher(_)|CrtValue::ProtectedReturn(_)|CrtValue::ThreadHead(_)=>Err("CRT protected control bits")}}
  fn number(v:CrtValue)->Result<u32,&'static str>{let(b,k)=Self::bits(v)?;if k!=u32::MAX{return Err("CRT unknown scalar bits observed");}Ok(b)}
  fn pointer(v:CrtValue)->Result<CrtPointer,&'static str>{match v{CrtValue::Pointer(p)=>Ok(p),_=>Err("CRT pointer provenance")}}
  fn mask(width:u8)->Result<u32,&'static str>{match width{8=>Ok(255),16=>Ok(65535),32=>Ok(u32::MAX),_=>Err("CRT operand width")}}

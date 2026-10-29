@@ -12,7 +12,9 @@ struct CrtDescriptorId {anchor:guest_memory::Capability,generation:u64,number:u3
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 struct CrtThreadHead {anchor:guest_memory::Capability,thread:u64,registry:u64,epoch:u64,head:[u64;3]}
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
-enum CrtValue {Scalar{bits:u32,known:u32},Pointer(CrtPointer),Handle(CrtDescriptorId),ThreadHead(CrtThreadHead),OpaqueSaved(u8),ProtectedReturn(u64)}
+struct CrtDispatcherContext {anchor:guest_memory::Capability,thread:u64,epoch:u64,callback:u64,serial:u64}
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+enum CrtValue {Dispatcher(CrtDispatcherContext),Scalar{bits:u32,known:u32},Pointer(CrtPointer),Handle(CrtDescriptorId),ThreadHead(CrtThreadHead),OpaqueSaved(u8),ProtectedReturn(u64)}
 impl CrtValue {
  fn scalar(bits:u32)->Self{Self::Scalar{bits,known:u32::MAX}}
  fn known_scalar(self)->Result<u32,&'static str>{match self{Self::Scalar{bits,known:u32::MAX}=>Ok(bits),_=>Err("CRT scalar knowledge/type")}}
@@ -40,7 +42,7 @@ struct CrtRegion {pointer:CrtPointer,heap:bool,file_owner:Option<u32>}
 struct CrtDescriptor {id:CrtDescriptorId,live:bool,record:Option<CrtPointer>,record_initialized:bool}
 struct CrtStreamRuntime {
  memory:guest_memory::Space,owner:u64,thread:u64,anchor:guest_memory::Capability,
- regions:Vec<CrtRegion>,retired:Vec<CrtPointer>,tags:std::collections::BTreeMap<u32,CrtValue>,
+ dispatchers:std::collections::BTreeMap<u64,CrtDispatcherContext>,regions:Vec<CrtRegion>,retired:Vec<CrtPointer>,tags:std::collections::BTreeMap<u32,CrtValue>,
  partial:std::collections::BTreeMap<u32,(u8,u8)>,descriptors:Vec<CrtDescriptor>,
  locks:Vec<CrtLock>,descriptor_locks:Vec<CrtDescriptorLock>,serial:u64,generation:u64,errno:Option<i32>,doserrno:Option<u32>,last_os_error:Option<u32>,
  locale_generation:u64,locale_live:bool,initialization:Option<u64>,shutdown:Option<CrtShutdown>,closed:bool,lock_objects:std::collections::BTreeSet<u32>,
@@ -55,7 +57,7 @@ impl CrtStreamRuntime {
   let mut memory=guest_memory::Space::new(byte_limit,64).map_err(|_|"CRT memory budget")?;
   let anchor=memory.map(file_address,size,guest_memory::Owner::Module(owner),guest_memory::Permissions::READ_WRITE,false).map_err(|_|"CRT FILE mapping")?;
   let pointer=CrtPointer{cap:anchor,owner:guest_memory::Owner::Module(owner),base:file_address,size,address:file_address,kind:CrtRegionKind::File};
-  Ok(Self{memory,owner,thread,anchor,regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([file_address])})
+  Ok(Self{memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([file_address])})
  }
  /// Separate startup-exclusive storage authority, with no preconstructed lock.
  /// Ending it does not attest that original CRT initialization has completed.
@@ -98,6 +100,18 @@ impl CrtStreamRuntime {
  /// validate the actual live registry epoch and head identity.
  fn validate_thread_head(&self,head:CrtThreadHead)->Result<(),&'static str>{self.thread_head_transport(head)}
  fn thread_head_transport(&self,head:CrtThreadHead)->Result<(),&'static str>{if self.closed||head.anchor!=self.anchor||head.thread!=self.thread||head.registry==0||head.epoch==0{return Err("CRT foreign thread registration token");}Ok(())}
+ /// Opaque callback identity only: no numeric Windows address, byte extent or
+ /// contents are invented. The API effect proof remains a separate obligation.
+ fn new_dispatcher(&mut self,epoch:u64,callback:u64)->Result<CrtDispatcherContext,&'static str>{
+  if self.closed||epoch==0||callback==0||self.dispatchers.len()>=16{return Err("CRT dispatcher owner/budget");}
+  let serial=self.generation.checked_add(1).ok_or("CRT dispatcher identity exhausted")?;
+  let token=CrtDispatcherContext{anchor:self.anchor,thread:self.thread,epoch,callback,serial};
+  self.generation=serial;self.dispatchers.insert(serial,token);Ok(token)
+ }
+ fn dispatcher(&self,token:CrtDispatcherContext)->Result<(),&'static str>{
+  if self.closed||token.anchor!=self.anchor||token.thread!=self.thread||self.dispatchers.get(&token.serial)!=Some(&token){return Err("CRT dispatcher owner/lifetime");}Ok(())
+ }
+ fn end_dispatcher(&mut self,token:CrtDispatcherContext)->Result<(),&'static str>{self.dispatcher(token)?;self.dispatchers.remove(&token.serial);Ok(())}
  fn pointer_transport(&self,p:CrtPointer)->Result<(),&'static str>{
   let root=self.regions.iter().map(|r|r.pointer).chain(self.retired.iter().copied()).find(|r|r.cap==p.cap).ok_or("CRT foreign/unissued pointer value")?;
   if p.owner!=root.owner||p.kind!=root.kind||p.base<root.base||u64::from(p.base)+u64::from(p.size)>u64::from(root.base)+u64::from(root.size)||p.address<p.base||u64::from(p.address)>u64::from(p.base)+u64::from(p.size){return Err("CRT pointer value provenance");}Ok(())
@@ -169,7 +183,7 @@ impl CrtStreamRuntime {
   let size=match width{8=>1,16=>2,32=>4,_=>return Err("CRT load width")};self.valid(p,size)?;
   let tags=self.overlapping_tags(p.address,size);
   if !tags.is_empty(){if width!=32||tags.len()!=1||tags[0].0!=p.address{return Err("CRT partial typed-word read");}
-   match tags[0].1{CrtValue::Pointer(q)=>self.pointer_transport(q)?,CrtValue::Handle(h)=>{self.descriptor(h)?;},CrtValue::ThreadHead(head)=>self.thread_head_transport(head)?,_=>{}}
+   match tags[0].1{CrtValue::Dispatcher(token)=>self.dispatcher(token)?,CrtValue::Pointer(q)=>self.pointer_transport(q)?,CrtValue::Handle(h)=>{self.descriptor(h)?;},CrtValue::ThreadHead(head)=>self.thread_head_transport(head)?,_=>{}}
    return Ok(tags[0].1);
   }
   let(mut bits,mut known)=(0u32,0u32);for i in 0..size{let a=p.address+i;
@@ -191,6 +205,7 @@ impl CrtStreamRuntime {
    }
   }
   let bits=match value{
+   CrtValue::Dispatcher(token)=>{if width!=32||p.kind!=CrtRegionKind::Stack{return Err("CRT dispatcher transport role");}self.dispatcher(token)?;0},
    CrtValue::Scalar{bits,..}=>bits,
    CrtValue::Pointer(q)=>{if width!=32{return Err("CRT pointer store width");}self.pointer_transport(q)?;q.address},
    CrtValue::Handle(h)=>{if width!=32{return Err("CRT handle store width");}self.descriptor(h)?;h.handle},
@@ -367,6 +382,35 @@ mod tests {
             run.status.success(),
             "{}",
             String::from_utf8_lossy(&run.stderr)
+        );
+    }
+
+    #[test]
+    fn opaque_dispatcher_transport_is_scoped_and_never_exposes_bytes() {
+        native(
+            r#"
+let mut rt=CrtStreamRuntime::new(7,9,0x4000,32768).unwrap();
+let stack=rt.map_region(0x8000,128,CrtRegionKind::Stack,None).unwrap();
+let token=rt.new_dispatcher(13,701).unwrap();let value=CrtValue::Dispatcher(token);
+rt.store(stack,32,value).unwrap();rt.store(rt.offset(stack,4).unwrap(),32,value).unwrap();
+assert_eq!(rt.load(stack,32).unwrap(),value);assert!(value.known_scalar().is_err());
+assert!(rt.load(stack,8).is_err());assert!(rt.load(rt.offset(stack,1).unwrap(),32).is_err());
+assert!(rt.store(stack,16,value).is_err());
+let module=rt.map_region(0x9000,4,CrtRegionKind::Module,None).unwrap();assert!(rt.store(module,32,value).is_err());
+let mut foreign=CrtStreamRuntime::new(7,9,0x4000,32768).unwrap();foreign.map_region(0x8000,128,CrtRegionKind::Stack,None).unwrap();let other=foreign.new_dispatcher(13,701).unwrap();
+assert_eq!(other.serial,token.serial);assert_ne!(other.anchor,token.anchor);assert!(foreign.dispatcher(token).is_err());
+assert!(rt.dispatcher(CrtDispatcherContext{thread:10,..token}).is_err());
+assert!(rt.dispatcher(CrtDispatcherContext{epoch:14,..token}).is_err());
+assert!(rt.dispatcher(CrtDispatcherContext{callback:702,..token}).is_err());
+let file_lock=rt.lock(9).unwrap();let fd=rt.bind_descriptor(1,44).unwrap();let lease=rt.lock_descriptor(9,fd).unwrap();
+struct Never;impl CrtBackend for Never{fn write_once(&mut self,_:CrtDescriptorId,_:&[u8])->Result<CrtWriteResult,&'static str>{panic!("opaque token escaped to host");}}
+assert!(rt.write_once(fd,stack,4,&mut Never).is_err());rt.unlock_descriptor(lease).unwrap();rt.unlock(file_lock).unwrap();
+rt.end_dispatcher(token).unwrap();assert!(rt.load(stack,32).is_err());assert!(rt.load(rt.offset(stack,4).unwrap(),32).is_err());
+assert!(rt.store(rt.offset(stack,8).unwrap(),32,value).is_err());assert!(rt.end_dispatcher(token).is_err());
+let next=rt.new_dispatcher(13,701).unwrap();assert_ne!(next,token);assert!(rt.dispatcher(token).is_err());
+rt.store(stack,32,CrtValue::Dispatcher(next)).unwrap();assert_eq!(rt.load(stack,32).unwrap(),CrtValue::Dispatcher(next));
+for _ in 1..16{rt.new_dispatcher(13,702).unwrap();}assert!(rt.new_dispatcher(13,703).is_err());
+"#,
         );
     }
 

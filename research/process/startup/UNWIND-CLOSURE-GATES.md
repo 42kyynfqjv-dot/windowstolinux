@@ -20,11 +20,13 @@ caller execution. It grants no API certificate or whole-PE eligibility.
    CONTEXT object. Original Windows evidence in ENTRY-TO-EXIT.md/DISPATCH-COMPOSITION.md
    establishes distinct captured/delivery objects and ESP changes for a pinned
    run, not a complete native materialization rule for all admitted executions.
-2. **Dispatcher context.** Current callback packets require fourth argument0.
-   Original Windows observations include a nonzero dispatcher-context object.
-   Its identity/lifetime and any reachable reads/writes must be proved. If the
-   entire admitted instruction graph never dereferences it, an explicitly opaque
-   model may suffice; absence in sampled paths is insufficient.
+2. **Dispatcher context.** Delivery packets now admit a scoped opaque identity,
+   independently tied to runtime, thread, unwind epoch and callback. Normal
+   cleanup executes without observing its bits. The original nested handler
+   DOES dereference it on the collided path (0x4027ea/0x4027ee); that path remains
+   rejected. No dispatcher byte size/content or writable-object authority is
+   inferred from a normal callback. See DISPATCHER-EFFECTS.md for the bounded
+   evidence, actual instruction inventory and unresolved traversal effect.
 3. **Observable API footprint.** The provider writes unwind flags2 and supplies
    contexts. Source CONTEXT preservation and exact reserved record fields are
    component restrictions, not consequences proved for arbitrary RtlUnwind.

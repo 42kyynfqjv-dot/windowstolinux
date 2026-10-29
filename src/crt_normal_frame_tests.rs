@@ -380,7 +380,7 @@ fn owned_local_cases(){
 }
 
 fn owned_main_cases(){
- for mode in 0..141{
+ for mode in 0..151{
   let mut m=Machine::new_dispatch_known((0..if mode>=75{2}else{1}).map(|_|FrameSpec{scopes:vec![]}).collect(),0,[None;10],Some(0)).unwrap();
   let mut r=ThreadRegistry::new(m.owner(),0x8000,0xf000,&[(0x400000,0x420000)],0x41c000).unwrap();let mut rt=runtime(&r);
   let entry=rt.resolve_absolute(if mode==23||mode==32||mode==41||mode==76{0xe800}else{0xe000},CrtRegionKind::Stack).unwrap();rt.store(entry,32,CrtValue::ProtectedReturn(71)).unwrap();let cpu=CrtCpu::new(entry,71).unwrap();
@@ -514,6 +514,13 @@ fn owned_main_cases(){
         let owner=f.rt.resolve_absolute(if mode==78{f.storage.image.record}else{target.image.record},CrtRegionKind::Stack)?;
         for(i,v)in [CrtValue::Pointer(record),CrtValue::Pointer(owner),CrtValue::Pointer(delivery),CrtValue::scalar(0)].into_iter().enumerate(){f.rt.store(f.rt.offset(sp,4+i as i64*4)?,32,v)?;}
         let mut child=CrtCpu::new(sp,701)?;
+        let opaque=if mode>=141{
+         let t=f.rt.new_dispatcher(if mode==142{session.epoch+1}else{session.epoch},if mode==143{702}else{701})?;
+         f.rt.store(f.rt.offset(sp,16)?,32,CrtValue::Dispatcher(t))?;
+         if mode==144{f.rt.end_dispatcher(t)?;}
+         Some(t)
+        }else{None};
+
         if mode==79{f.rt.store(source_guard,32,CrtValue::scalar(0))?;}
         if mode==80{f.rt.store(target_guard,32,CrtValue::scalar(0))?;}
         if mode==82{target.binding.frame.generation+=1;}
@@ -522,6 +529,7 @@ fn owned_main_cases(){
          map_local_wrapper(f.rt)?;map_local_body(f.rt)?;map_finally_bridge(f.rt)?;if mode==105{let at=f.rt.resolve_absolute(target.image.scope_va+28,CrtRegionKind::Module)?;f.rt.store(at,32,CrtValue::scalar(1))?;}if mode==100{f.rt.store(f.rt.resolve_absolute(0x402710,CrtRegionKind::Module)?,8,CrtValue::scalar(0x90))?;}if mode==97{f.rt.store(f.rt.resolve_absolute(0x4022bd,CrtRegionKind::Module)?,8,CrtValue::scalar(0x90))?;}if mode==98{f.rt.store(f.rt.resolve_absolute(0x402860,CrtRegionKind::Module)?,8,CrtValue::scalar(0x90))?;}map_original_cleanups(f.rt)?;map_original_notification(f.rt)?;
          let nested=original_nested_handler_bytes();f.rt.map_region(0x4027b0,nested.len()as u32,CrtRegionKind::Module,Some(&nested))?;
          f.rt.store(f.rt.resolve_absolute(0x41c948,CrtRegionKind::Module)?,32,CrtValue::scalar(5))?;
+         if mode==149{f.rt.store(f.rt.resolve_absolute(0x4022bd,CrtRegionKind::Module)?,8,CrtValue::scalar(0x90))?;}
          if mode==119||mode==122||mode==123{let p=f.rt.resolve_absolute(target.image.ebp-32,CrtRegionKind::Stack)?;f.rt.store(p,32,if mode==123{CrtValue::Scalar{bits:0,known:0}}else{CrtValue::scalar(if mode==122{2}else{3})})?;}
          if mode==120{f.rt.store(f.rt.resolve_absolute(0x401000,CrtRegionKind::Module)?,8,CrtValue::scalar(0x90))?;}
          if mode==121{f.rt.store(f.rt.resolve_absolute(0x415184,CrtRegionKind::Module)?,32,CrtValue::scalar(0x401020))?;}
@@ -532,12 +540,34 @@ fn owned_main_cases(){
          let result=f.with_handler_target(target,|source,target|{
           session.with_target_delivery(source,target,&mut child,delivery,|session,t,child,token|{
            reached+=1;assert_eq!(owned_delivery_prefix_helpers::execute(session,t,child,token)?,0x4022bd);
-           original_unwind_caller(t,child,session,token,mode-90,source_guard)?;session.validate_delivery(t,child,token)
+           original_unwind_caller(t,child,session,token,mode-90,source_guard)?;
+           if mode>=141{
+            let opaque=opaque.ok_or("test missing opaque input")?;
+            assert_eq!(token.dispatcher,CrtValue::Dispatcher(opaque));
+            if mode==145{t.rt.store(t.rt.offset(sp,16)?,32,CrtValue::scalar(0))?;}
+            if mode==146{
+             let nsp=t.rt.resolve_absolute(0x9800,CrtRegionKind::Stack)?;let mut nested=delivery_cpu(t,nsp,702,record,nested_context)?;
+             t.rt.store(t.rt.offset(nsp,16)?,32,CrtValue::Dispatcher(opaque))?;
+             return session.with_delivery(t,&mut nested,nested_context,|_,_,_,_|panic!("borrowed parent dispatcher accepted"));
+            }
+            if mode==147{
+             assert!(CrtCpu::number(token.dispatcher).is_err());assert!(CrtCpu::pointer(token.dispatcher).is_err());
+             assert!(t.rt.load(t.rt.offset(sp,16)?,8).is_err());
+            }
+            if mode==148{return Err("independent failure after cleanup effects");}
+            if mode==150{
+             let mut fault=CrtCpu::new(sp,701)?;
+             assert_eq!(original_collided_dispatcher_write(t.rt,&mut fault),Err("CRT protected control bits"));
+             return Err("collided dispatcher effect requires writable contract");
+            }
+           }
+           session.validate_delivery(t,child,token)
           })?;
           let disposition=handler_original_epilog(source.rt,&mut child)?.known_scalar()?;
           if disposition!=1||!child.returned{return Err("connected original handler return");}
           Ok(CrtHandlerExit{anchor:source.rt.anchor,id:target.id,event:source.machine.event,disposition,completion_generation:source.registry.generation.checked_add(1).ok_or("handler completion generation overflow")?})
          });
+         if let Some(t)=opaque{if ![142,143].contains(&mode){assert!(f.rt.dispatcher(t).is_err(),"dispatcher lease survived callback");}}
          let(exit,completion)=result?;
          if mode>=124{
           target.retire_completed(f.rt,f.registry,f.machine,completion,exit)?;
@@ -563,7 +593,7 @@ fn owned_main_cases(){
          if mode==83{t.rt.store(t.rt.offset(context,0xb8)?,32,CrtValue::scalar(7))?;}
          if mode==84{t.rt.store(t.rt.offset(delivery,0xb8)?,32,CrtValue::scalar(8))?;}
          if mode==88{t.rt.store(t.rt.offset(actual_pair,4)?,32,CrtValue::Pointer(delivery))?;}
-         if mode==89{let mut forged=CrtUnwindDelivery{epoch:token.epoch,serial:token.serial,target:input.id,context:token.context,entry:token.entry,callback:token.callback,captured_esp:token.captured_esp,snapshot:token.snapshot.clone()};return session.validate_delivery(t,child,&mut forged);}
+         if mode==89{let mut forged=CrtUnwindDelivery{epoch:token.epoch,serial:token.serial,target:input.id,context:token.context,dispatcher:token.dispatcher,entry:token.entry,callback:token.callback,captured_esp:token.captured_esp,snapshot:token.snapshot.clone()};return session.validate_delivery(t,child,&mut forged);}
          if mode==85{t.write_u32(-28,0xface)?;marker=Some(target_local);return Err("independent target failure after write");}
          if mode==77||mode==86{
           let nsp=t.rt.resolve_absolute(if mode==86{0x9fc0}else{0x9800},CrtRegionKind::Stack)?;let mut nested=delivery_cpu(t,nsp,702,record,nested_context)?;
@@ -615,6 +645,12 @@ fn owned_main_cases(){
        assert_eq!(CrtOwnedUnwind::context_words(f.rt,context)?,captured_before);
        Ok(None)
       }));
+      if (142..=146).contains(&mode)||mode==148||mode==149||mode==150{
+       assert!(result.is_err(),"opaque dispatcher negative {mode}");if mode==149{assert_eq!(result,Err("unwind caller code changed"));}assert!(view.failed);
+       assert!(view.storage.resume_ticket.is_none());assert_eq!(view.machine.owned_context,saved);
+       let expected=if [145,146,148,150].contains(&mode){1298}else{5};
+       assert_eq!(view.rt.load(view.rt.resolve_absolute(0x41c948,CrtRegionKind::Module).unwrap(),32).unwrap(),CrtValue::scalar(expected),"opaque mode {mode} result {result:?}");continue;
+      }
       if mode>=124{
        if mode==124||mode==127||mode>=132{assert_eq!(result.unwrap(),CrtValue::scalar(0));assert!(!view.failed);assert!(view.storage.resume_ticket.is_none());for reg in [3,5,6,7]{assert_eq!(c.r[reg],before_wrapper[reg]);}assert!(c.flags.zf.is_none());assert!(c.r[1].known_scalar().is_err());assert!(input.validate_prefix_source(&view).is_err());}
        else{assert!(result.is_err());assert!(view.failed);assert_ne!(result.unwrap_err(),"RtlUnwind requires owned continuation and effect contract");}
@@ -630,7 +666,7 @@ fn owned_main_cases(){
         if [134,135,137,138,140].contains(&mode){assert!(post.is_err());assert_eq!(view.storage.image.try_level,0);continue;}
         let mut post=post.unwrap();
         let transferred=owned_post_global_caller(&mut view,&mut c,&mut post);
-        if mode==132||mode==139{assert_eq!(transferred.unwrap(),CrtValue::scalar(0x40135c));assert_eq!(view.storage.image.try_level,-2);assert!(view.storage.post_authority.is_none());assert!(post.validate(&view,&c).is_err());if mode==139{assert!(owned_post_global_caller(&mut view,&mut c,&mut post).is_err());assert_eq!(view.storage.image.try_level,-2);}assert!(!c.returned);assert_eq!(view.machine.phase,Phase::Cleanup);}
+        if mode==132||mode==139||mode==141||mode==147{assert_eq!(transferred.unwrap(),CrtValue::scalar(0x40135c));assert_eq!(view.storage.image.try_level,-2);assert!(view.storage.post_authority.is_none());assert!(post.validate(&view,&c).is_err());if mode==139{assert!(owned_post_global_caller(&mut view,&mut c,&mut post).is_err());assert_eq!(view.storage.image.try_level,-2);}assert!(!c.returned);assert_eq!(view.machine.phase,Phase::Cleanup);}
         else{assert!(transferred.is_err());assert_eq!(view.storage.image.try_level,0);}
        }
        assert_eq!(view.registry.target_ready().unwrap(),view.storage.id);assert!(!view.machine.frames[1].live);assert_eq!(view.rt.load(view.rt.resolve_absolute(0x41c948,CrtRegionKind::Module).unwrap(),32).unwrap(),CrtValue::scalar(1298));assert_eq!(view.machine.owned_context,saved);continue;
@@ -1192,6 +1228,12 @@ rt.consume_stack(sp,CrtValue::ProtectedReturn(941))?;Ok(())}"#);
 
         let nested_bytes=handler_bytes("owned-nested-handler.bin","8b4c2404f7410406000000b80100000074338b4424088b480833c8e87cedffff558b6818ff700cff7010ff7014e82effffff83c40c5d8b4424088b5424108902b803000000c3");
         callback_source.push_str(&format!("fn original_nested_handler_bytes()->Vec<u8>{{vec!{nested_bytes:?}}}"));
+        // Actual collided-path loads and store, independently sliced from original bytes.
+        let collided=&nested_bytes[0x36..0x40];
+        assert_eq!(collided,&[0x8b,0x44,0x24,8,0x8b,0x54,0x24,16,0x89,2]);
+        let graph=crate::crt_stream_ir::Graph::decode_linear_fragment(collided,0x4027e6).unwrap();
+        let body=crate::crt_stream_emit::emit_linear_fragment(&graph,&Default::default()).unwrap();
+        callback_source.push_str(&format!("fn original_collided_dispatcher_write(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->RegistryResult<CrtValue>{{{body}}}"));
         let mut mappings=String::from("fn map_original_cleanups(rt:&mut CrtStreamRuntime)->RegistryResult<()>{");
         let mut cases=String::new();
         for(name,at,hex)in [("CleanupA",0x401000,"8b4c24048b0103c003c003c003c083c001890183410407c3"),("CleanupB",0x401020,"8b4c24048b0103c003c003c003c083c00289018341040bc3"),("CleanupC",0x401040,"8b4c24048b0103c003c003c003c083c00389018341040dc3")]{

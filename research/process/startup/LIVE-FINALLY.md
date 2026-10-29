@@ -624,3 +624,33 @@ recorded wrapper observations remain separate; no new Windows or whole-PE pair.
 The next instruction boundary is selected transfer/landing. API admission still
 needs the separate real delivery/context and effect contract below; conditional
 phase success does not close it.
+
+### Opaque delivery identity and collided-path rejection
+
+The delivery packet can now carry a callback-scoped opaque dispatcher token
+instead of requiring scalar zero. Its arena/thread/epoch/callback identity is
+checked on each use; scope exit revokes aliases even after a failed callback.
+Normal original cleanup, wrapper POP/RET and the selected caller execute through
+the still-unexecuted transfer boundary with that token. No numeric address,
+object contents or API-effect certificate is fabricated.
+
+The independent original-byte audit found the nested handler's actual collided
+store through the fourth argument at 0x4027ee. A generated negative case executes
+its original loads/store and rejects the opaque dereference, preserving previous
+cleanup effects. The retained Windows observer has zero nested-handler hits;
+its injected observer-cleanup failure is not guest unwind evidence. The exact
+remaining contract and next evidence gate are in [DISPATCHER-EFFECTS.md](DISPATCHER-EFFECTS.md).
+
+Local validation: root 175 passed; CRT 158 passed/one separately replayed original
+observation test; artifact-bound normal wrapper and projection checks passed.
+There are 151 owned-frame scenarios, including 10 new opaque-dispatcher scenarios.
+Subgroup counts overlap (94 delivery,76 cross-frame,61 callback/loop,19 conditional
+resume,11 post-global caller). The 38 finally cases and five recorded original
+wrapper observations remain separate. These add zero Windows differential pairs
+and zero whole-PE pairs. Local unchanged PE SHA256 remains
+`1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4`;
+generated Rust is `d9a314efb61009a4524f3462902f1130bd72b37cab718abe6704d23ab4d9ae89`.
+
+All three prior-checkpoint 9ca97bb2 workflows passed:40826135827,40826128227,
+40826128242. That success does not resolve retained Windows process-exit timeouts.
+Fresh publication CI must be checked separately. Full startup/rcedit is unsupported.
