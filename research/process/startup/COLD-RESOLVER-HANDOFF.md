@@ -163,11 +163,25 @@ Sol can resume substantive review and the bounded original comparator/lookup
 connection. Escalate only a concrete loader/forwarder or concurrency uncertainty. Unwind/termination, original
 startup, rcedit, ordinary CRT and historical Windows timeouts remain unresolved.
 
-A concrete caller-phase boundary remains: the new dynamic getter requires the
-explicit startup-initialization lease, while the existing common-handler fixture
-uses a normal runtime. That lease must not be invented for a post-startup call.
-Before routing the caller, separate read-only cached lookup/FLS authority from
-cold load/publication authority, or prove a real initializing caller domain.
-A cached call after initialization must not gain permission to publish or load;
-a missing cache then needs a justified loader contract or rejection. This is a
-bounded Sol design/implementation question, not evidence of full startup closure.
+The caller-phase boundary is now explicit in CrtResolverAccess. Cached carries
+no initialization token. Initializing carries the existing exact runtime/thread
+lease and revalidates it. The resolver validates initialization before entering
+its cold branch; each loader effect rechecks the lease, and cache exchanges
+retain their existing exclusive-storage checks. A cached caller cannot reach a
+load or publication even while the runtime is initializing. There is no implicit
+upgrade from runtime phase or a cache miss.
+
+The getter and lookup share this access parameter. Cached calls can execute after
+initialization ends, preserving module/export, fiber/slot and full-range checks.
+New cases validate post-initialization success, cache miss during/after init,
+stale/reused slot, stale module, foreign/retired fiber, expired/foreign init lease,
+failed cache sentinel and stale PTD. Tests snapshot cache bytes/tags, references,
+slot state and initialization phase; forbidden calls leave them unchanged and
+never invoke the loader callback. The connected case count is now29 (eleven new
+phase cases). Earlier original-instruction and changed-code tests remain.
+
+Next wire the common handler's protected PTD call to this dynamic getter with
+Cached access. It still selects the legacy binding today. Preserve its actual
+captured-context checks, first PTD field read and all dispatch/termination edges.
+No new original Windows loader/FLS evidence or full startup permission follows
+from the access split. Sol can implement this bounded caller connection.

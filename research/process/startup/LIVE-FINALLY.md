@@ -2188,3 +2188,33 @@ recorded Windows wrapper comparisons. Zero new Windows observations or whole-PE
 pairs. Original-byte and generated-source hashes are preserved in
 [evidence/dispatcher-dynamic-component.json](evidence/dispatcher-dynamic-component.json)
 and enforced across hosts by the checker.
+
+### Cached-call authority separated from initialization
+
+The connected dynamic getter now accepts explicit Cached or Initializing access.
+Cached carries no token and can run after initialization; it rejects at the
+original cold branch before module lookup, loader calls or publication. It cannot
+upgrade because the runtime is initializing. Initializing revalidates the exact
+existing lease, and loader effects still require it. Cache exchanges retain their
+exclusive initialized-storage checks. The split does not create a fresh lease.
+
+Eleven new phase cases (29 connected getter cases total) cover cached success after
+initialization, misses during/after initialization, stale slot/module/PTD, foreign
+or retired fiber, expired/foreign initialization and failed cache sentinel. Tests
+snapshot cache bytes/tags, module reference count, slot state and phase; rejected
+calls preserve them and never invoke a loader. Original protected return, unknown
+PTD bytes, LastError and changed-code checks remain enabled.
+
+Local206 CRT tests passed, one existing observation test separate, plus Clippy,
+format/diff and Python syntax. Artifact replay passed eight C++ checks, seven prior
+PTD checks and five recorded Windows wrapper comparisons. Zero new Windows
+observations or whole-PE pairs. Selected hashes/counts are in
+[evidence/dispatcher-dynamic-component.json](evidence/dispatcher-dynamic-component.json).
+All three046b5d1 CI workflows passed. At inspection,d1dc07e startup40947458582
+passed and both full Rust40947469429/40947458637 remained active. Historical
+original-Windows timeouts remain preserved and unexplained.
+
+Next select this getter with Cached access in the common handler, preserving
+captured-context revalidation and original dispatcher branches. That caller still
+uses its legacy binding. Actual loader/FLS acquisition, DLL/forwarder effects,
+unwind/termination, complete formatting and full startup/rcedit remain unproved.

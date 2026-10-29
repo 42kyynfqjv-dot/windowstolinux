@@ -344,7 +344,7 @@ def check(original, observation, out, compare=None):
                   main_scope_header_sha256=sha((out/'Main-scope-header.bin').read_bytes()),
                   locale_state_evidence=locale_state_evidence(image),
                   dispatcher_dynamic_source_sha256=sha((out/'dynamic-dispatcher-ptd.rs').read_bytes()),
-                  dispatcher_dynamic_native_cases=18, dispatcher_dynamic_new_windows_pairs=0,
+                  dispatcher_dynamic_native_cases=29, dispatcher_dynamic_new_windows_pairs=0,
                   dynamic_fls_source_sha256=sha((out/'dynamic-fls-component.rs').read_bytes()),
                   dynamic_fls_native_cases=19, dynamic_fls_new_windows_pairs=0,
                   cold_resolver_source_sha256=sha((out/'cold-resolver-component.rs').read_bytes()),

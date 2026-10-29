@@ -161,8 +161,8 @@ fn cold_resolution_has_atomic_publication_and_owned_loader_dependencies() {
 pub(crate) const WIDE_COMPARE:&str="8bff558bec8b551085d2750433c05dc38b4d0c8b45085683ea01741c0f1f40000fb7306685f67410663b31750b83c00283c10283ea0175e80fb7000fb7092bc15e5dc3";
 
 /// Mechanically execute the complete resolver and load helper under an explicit
-/// startup-exclusive component domain. Loader API effects remain a checked cut;
-/// the error-87 comparison/retry path is rejected until its helper is lifted.
+/// component domain. Cached access grants no initialization authority; cold
+/// effects require a live initialization lease. Loader API effects remain a cut.
 pub(crate) fn cold_source(resolver: &[u8], load: &[u8]) -> Result<String, String> {
     cold_source_with_compare(resolver, load, &crate::crt_ptd::raw(WIDE_COMPARE))
 }
@@ -177,7 +177,16 @@ fn cold_source_with_compare(
     if resolver != crate::crt_ptd::raw(COLD_FULL) || load != crate::crt_ptd::raw(LOAD_HELPER) {
         return Err("C++ cold original code binding".into());
     }
-    let mut out = String::new();
+    let mut out = String::from(
+        r#"
+#[derive(Clone,Copy)]
+enum CrtResolverAccess {Cached,Initializing(CrtInitialization)}
+impl CrtResolverAccess {
+ fn check(self,rt:&CrtStreamRuntime)->Result<(),&'static str>{if rt.closed{return Err("CRT resolver closed runtime");}match self{Self::Cached=>Ok(()),Self::Initializing(token)=>rt.initialization(token)}}
+ fn initialization(self,rt:&CrtStreamRuntime)->Result<CrtInitialization,&'static str>{match self{Self::Cached=>Err("CRT cached access cannot initialize"),Self::Initializing(token)=>{rt.initialization(token)?;Ok(token)}}}
+}
+"#,
+    );
     for (bytes, origin, name) in [
         (resolver, 0x402a53, "cxx_cold_resolver"),
         (load, 0x402af3, "cxx_load_helper"),
@@ -194,12 +203,12 @@ fn cold_source_with_compare(
             |pc, target| {
                 let next = pc + graph.nodes[&pc].length;
                 Ok(match target {
-                Target::Direct(0x402af3)=>format!("cpu.call_activation(rt,{next},0,|rt,child|cxx_load_helper(rt,child,init,api))?;"),
-                Target::Direct(0x4078e0)=>format!("let sp=CrtCpu::pointer(cpu.r[4])?;let slot=rt.offset(sp,4)?;if rt.load(slot,32)?.known_scalar()?!=0x415d18{{return Err(\"C++ retry prefix address\");}}let prefix=rt.resolve_absolute(0x415d18,CrtRegionKind::Input)?;for (i,b) in [97u8,0,112,0,105,0,45,0,109,0,115,0,45,0].iter().enumerate(){{if rt.load(rt.offset(prefix,i as i64)?,8)?.known_scalar()?!=u32::from(*b){{return Err(\"C++ retry prefix bytes\");}}}}rt.store(slot,32,CrtValue::Pointer(prefix))?;cpu.call_activation(rt,{next},0,|rt,child|cxx_compare_prefix(rt,child,init,api))?;"),
+                Target::Direct(0x402af3)=>format!("cpu.call_activation(rt,{next},0,|rt,child|cxx_load_helper(rt,child,access,api))?;"),
+                Target::Direct(0x4078e0)=>format!("let sp=CrtCpu::pointer(cpu.r[4])?;let slot=rt.offset(sp,4)?;if rt.load(slot,32)?.known_scalar()?!=0x415d18{{return Err(\"C++ retry prefix address\");}}let prefix=rt.resolve_absolute(0x415d18,CrtRegionKind::Input)?;for (i,b) in [97u8,0,112,0,105,0,45,0,109,0,115,0,45,0].iter().enumerate(){{if rt.load(rt.offset(prefix,i as i64)?,8)?.known_scalar()?!=u32::from(*b){{return Err(\"C++ retry prefix bytes\");}}}}rt.store(slot,32,CrtValue::Pointer(prefix))?;cpu.call_activation(rt,{next},0,|rt,child|cxx_compare_prefix(rt,child,access,api))?;"),
                 Target::Import(0x415044)=>format!("cpu.call_activation(rt,{next},0,|rt,child|{{child.clobber(rt.last_os_error.map(CrtValue::scalar).unwrap_or(CrtValue::Scalar{{bits:0,known:0}}));child.finish(rt)}})?;"),
                 Target::Import(iat @ (0x415074|0x415070|0x41506c))=>{
                     let pop=match iat{0x415074=>12,0x415070=>8,_=>4};
-                    format!("cpu.call_activation(rt,{next},{pop},|rt,child|cxx_loader_effect(rt,child,init,{iat},api))?;")
+                    format!("cpu.call_activation(rt,{next},{pop},|rt,child|cxx_loader_effect(rt,child,access,{iat},api))?;")
                 },
                 _=>"return Err(\"C++ cold prefix comparator/loader effect unbound\");".into()
             })
@@ -209,6 +218,7 @@ fn cold_source_with_compare(
             |_, _| Err("C++ cold thread effect".into()),
             |pc, _| {
                 Ok(match pc{
+            0x402a78=>"access.initialization(rt)?;".into(),
             0x4078e0=>"let sp=CrtCpu::pointer(cpu.r[4])?;if rt.load(rt.offset(sp,12)?,32)?.known_scalar()?>260{return Err(\"C++ prefix comparison count bound\");}".into(),
             0x402a68=>"match cpu.r[0]{CrtValue::Function(f)=>rt.function_identity(f,None)?,CrtValue::Scalar{bits:0|u32::MAX,known:u32::MAX}=>{},_=>return Err(\"C++ function cache authority\")}".into(),
             0x402a8d=>"match cpu.r[6]{CrtValue::Module(m)=>rt.module_identity(m)?,CrtValue::Scalar{bits:0|u32::MAX,known:u32::MAX}=>{},_=>return Err(\"C++ module cache authority\")}".into(),
@@ -223,11 +233,11 @@ fn cold_source_with_compare(
             },
             None,
         )?;
-        out.push_str(&format!("fn {name}(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,init:CrtInitialization,api:&mut impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu,u32)->Result<CrtValue,&'static str>)->Result<CrtValue,&'static str>{{rt.initialization(init)?;{body}}}"));
+        out.push_str(&format!("fn {name}(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,access:CrtResolverAccess,api:&mut impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu,u32)->Result<CrtValue,&'static str>)->Result<CrtValue,&'static str>{{access.check(rt)?;{body}}}"));
     }
     out.push_str(r#"
-fn cxx_loader_effect(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,init:CrtInitialization,iat:u32,api:&mut impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu,u32)->Result<CrtValue,&'static str>)->Result<CrtValue,&'static str>{
- rt.initialization(init)?;let sp=CrtCpu::pointer(cpu.r[4])?;
+fn cxx_loader_effect(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,access:CrtResolverAccess,iat:u32,api:&mut impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu,u32)->Result<CrtValue,&'static str>)->Result<CrtValue,&'static str>{
+ let init=access.initialization(rt)?;let sp=CrtCpu::pointer(cpu.r[4])?;
  let arg=rt.load(rt.offset(sp,4)?,32)?;
  let symbol=if iat==0x415070{
   let CrtValue::Module(module)=arg else{return Err("C++ GetProcAddress module authority");};rt.module_identity(module)?;
@@ -297,7 +307,7 @@ for scenario in 0..17 {
  let stack=rt.map_region(0x9000,4096,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,3072).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(1)).unwrap();
  let mut cpu=CrtCpu::new(sp,1).unwrap();cpu.r[1]=CrtValue::Scalar{bits:0,known:0};let end=rt.offset(list,4).unwrap();cpu.push(&mut rt,CrtValue::Pointer(end)).unwrap();cpu.push(&mut rt,CrtValue::Pointer(list)).unwrap();cpu.push(&mut rt,CrtValue::Pointer(symbol)).unwrap();cpu.push(&mut rt,CrtValue::scalar(0)).unwrap();
  let retained=if matches!(scenario,3|10|11){Some(rt.module_acquire_result(init,"independent alpha identity",0x700000).unwrap())}else{None};let mut acquisitions=Vec::new();let mut calls=Vec::new();
- let result=cpu.call_activation(&mut rt,0x1234,0,|rt,child|cxx_cold_resolver(rt,child,init,&mut |rt,cpu,iat|{
+ let result=cpu.call_activation(&mut rt,0x1234,0,|rt,child|cxx_cold_resolver(rt,child,CrtResolverAccess::Initializing(init),&mut |rt,cpu,iat|{
   calls.push(iat);let sp=CrtCpu::pointer(cpu.r[4])?;
   let value=match iat{
    0x415074=>{
@@ -327,7 +337,7 @@ for scenario in 0..17 {
   0|3|13=>{let CrtValue::Function(f)=result.unwrap()else{panic!()};rt.function_identity(f,Some("FlsGetValue")).unwrap();assert_eq!(rt.load(function_cell,32).unwrap(),CrtValue::Function(f));assert_eq!(rt.module_references.len(),1);cpu.discard(&mut rt,16).unwrap();cpu.finish(&mut rt).unwrap();
    assert_eq!(calls,if scenario==3{vec![0x415074,0x41506c,0x415070]}else if scenario==13{vec![0x415074,0x415074,0x415070]}else{vec![0x415074,0x415070]});
    rt.store(sp,32,CrtValue::ProtectedReturn(2)).unwrap();let mut cached=CrtCpu::new(sp,2).unwrap();cached.r[1]=CrtValue::Scalar{bits:0,known:0};let end=rt.offset(list,4).unwrap();cached.push(&mut rt,CrtValue::Pointer(end)).unwrap();cached.push(&mut rt,CrtValue::Pointer(list)).unwrap();cached.push(&mut rt,CrtValue::Pointer(symbol)).unwrap();cached.push(&mut rt,CrtValue::scalar(0)).unwrap();
-   let hit=cached.call_activation(&mut rt,0x1234,0,|rt,child|cxx_cold_resolver(rt,child,init,&mut |_,_,_|panic!("cached hit invoked loader"))).unwrap();assert_eq!(hit,CrtValue::Function(f));cached.discard(&mut rt,16).unwrap();cached.finish(&mut rt).unwrap();
+   let hit=cached.call_activation(&mut rt,0x1234,0,|rt,child|cxx_cold_resolver(rt,child,CrtResolverAccess::Initializing(init),&mut |_,_,_|panic!("cached hit invoked loader"))).unwrap();assert_eq!(hit,CrtValue::Function(f));cached.discard(&mut rt,16).unwrap();cached.finish(&mut rt).unwrap();
   },
   1|2|14|16=>{assert_eq!(result.unwrap(),CrtValue::scalar(0));assert_eq!(rt.load(module_cell,32).unwrap(),CrtValue::scalar(u32::MAX));assert_eq!(rt.load(function_cell,32).unwrap(),CrtValue::scalar(u32::MAX));assert_eq!(calls.len(),if scenario==2||scenario==14{2}else{1});},
   5=>{assert_eq!(result.unwrap(),CrtValue::scalar(0));assert_eq!(rt.load(function_cell,32).unwrap(),CrtValue::scalar(u32::MAX));assert_eq!(rt.module_references.len(),1);},
@@ -429,7 +439,7 @@ for (left,right,count,expected) in cases {
  let b=rt.map_region(0x6000,((right.len()*2).max(1))as u32,CrtRegionKind::Input,if right.is_empty(){None}else{Some(&right_bytes)}).unwrap();
  let stack=rt.map_region(0x9000,256,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,192).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(1)).unwrap();let mut cpu=CrtCpu::new(sp,1).unwrap();
  cpu.push(&mut rt,CrtValue::scalar(count)).unwrap();cpu.push(&mut rt,CrtValue::Pointer(b)).unwrap();cpu.push(&mut rt,CrtValue::Pointer(a)).unwrap();
- let result=cpu.call_activation(&mut rt,0x1111,0,|rt,c|cxx_compare_prefix(rt,c,init,&mut |_,_,_|panic!("comparator called API")));
+ let result=cpu.call_activation(&mut rt,0x1111,0,|rt,c|cxx_compare_prefix(rt,c,CrtResolverAccess::Initializing(init),&mut |_,_,_|panic!("comparator called API")));
  match expected{Some(n)=>{assert_eq!(result.unwrap(),CrtValue::scalar(n));cpu.discard(&mut rt,12).unwrap();cpu.finish(&mut rt).unwrap();},None=>assert!(result.is_err())}
 }
 "#,
@@ -486,7 +496,7 @@ pub(crate) fn dynamic_source(wrapper: &[u8], guard: &[u8]) -> Result<String, Str
             let next = pc + graph.nodes[&pc].length;
             Ok(match t {
                 Target::Direct(0x402a53) => format!(
-                    r#"let sp=CrtCpu::pointer(cpu.r[4])?;let names=rt.resolve_absolute(0x415d4c,CrtRegionKind::Input)?;if rt.load(names,32)?.known_scalar()?!=0||rt.load(rt.offset(names,4)?,32)?.known_scalar()?!=2{{return Err("C++ module index list");}}let symbol=rt.resolve_absolute(0x415d54,CrtRegionKind::Input)?;for(i,b)in b"FlsGetValue\0".iter().enumerate(){{if rt.load(rt.offset(symbol,i as i64)?,8)?.known_scalar()?!=u32::from(*b){{return Err("C++ dynamic symbol bytes");}}}}for(offset,address,value)in [(4,0x415d54,symbol),(8,0x415d4c,names),(12,0x415d54,rt.offset(names,8)?)]{{let p=rt.offset(sp,offset)?;if rt.load(p,32)?.known_scalar()?!=address{{return Err("C++ lookup pointer immediate");}}rt.store(p,32,CrtValue::Pointer(value))?;}}cpu.call_activation(rt,{next},0,|rt,c|cxx_cold_resolver(rt,c,init,api))?;"#
+                    r#"let sp=CrtCpu::pointer(cpu.r[4])?;let names=rt.resolve_absolute(0x415d4c,CrtRegionKind::Input)?;if rt.load(names,32)?.known_scalar()?!=0||rt.load(rt.offset(names,4)?,32)?.known_scalar()?!=2{{return Err("C++ module index list");}}let symbol=rt.resolve_absolute(0x415d54,CrtRegionKind::Input)?;for(i,b)in b"FlsGetValue\0".iter().enumerate(){{if rt.load(rt.offset(symbol,i as i64)?,8)?.known_scalar()?!=u32::from(*b){{return Err("C++ dynamic symbol bytes");}}}}for(offset,address,value)in [(4,0x415d54,symbol),(8,0x415d4c,names),(12,0x415d54,rt.offset(names,8)?)]{{let p=rt.offset(sp,offset)?;if rt.load(p,32)?.known_scalar()?!=address{{return Err("C++ lookup pointer immediate");}}rt.store(p,32,CrtValue::Pointer(value))?;}}cpu.call_activation(rt,{next},0,|rt,c|cxx_cold_resolver(rt,c,access,api))?;"#
                 ),
                 Target::Import(0x415128) => format!(
                     r#"let cell=rt.resolve_absolute(0x415128,CrtRegionKind::Module)?;if rt.load(cell,32)?.known_scalar()?!=0x401bf9{{return Err("C++ live guard target unbound");}}let CrtValue::Function(f)=cpu.r[1] else{{return Err("C++ guard function authority");}};rt.function_identity(f,Some("FlsGetValue"))?;if cpu.r[6]!=CrtValue::Function(f){{return Err("C++ guard target mismatch");}}cpu.call_activation(rt,{next},0,|rt,c|cxx_lookup_guard(rt,c))?;guarded=Some(f);"#
@@ -508,7 +518,7 @@ pub(crate) fn dynamic_source(wrapper: &[u8], guard: &[u8]) -> Result<String, Str
             ))
         },
     )?;
-    Ok(format!("fn cxx_lookup_guard(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->Result<CrtValue,&'static str>{{{guard_body}}}fn cxx_dynamic_lookup(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,init:CrtInitialization,fiber:CrtFiber,slot:CrtFlsSlot,api:&mut impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu,u32)->Result<CrtValue,&'static str>)->Result<CrtValue,&'static str>{{rt.initialization(init)?;let mut guarded:Option<CrtFunction>=None;{body}}}"))
+    Ok(format!("fn cxx_lookup_guard(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->Result<CrtValue,&'static str>{{{guard_body}}}fn cxx_dynamic_lookup(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,access:CrtResolverAccess,fiber:CrtFiber,slot:CrtFlsSlot,api:&mut impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu,u32)->Result<CrtValue,&'static str>)->Result<CrtValue,&'static str>{{access.check(rt)?;let mut guarded:Option<CrtFunction>=None;{body}}}"))
 }
 
 #[test]
@@ -559,7 +569,7 @@ for scenario in 0..19{
  rt.last_os_error=Some(123);
  let stack=rt.map_region(0x9000,2048,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,1536).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(1)).unwrap();let mut cpu=CrtCpu::new(sp,1).unwrap();cpu.r[1]=CrtValue::Scalar{bits:0,known:0};cpu.push(&mut rt,CrtValue::scalar(if scenario==15{4}else{3})).unwrap();
  let mut api_calls=0;
- let result=cpu.call_activation(&mut rt,0x1111,0,|rt,c|cxx_dynamic_lookup(rt,c,init,if scenario==5{foreign}else{fiber},slot,&mut |rt,c,iat|{assert!(scenario>=16);api_calls+=1;let result=match iat{0x415074=>{let(module,_)=rt.module_acquire_result(init,"independent executable module",0x700000)?;if scenario==17{rt.store(guard,32,CrtValue::scalar(0x401bfa))?;}if scenario==18{rt.retire_fls(fiber,slot)?;}CrtValue::Module(module)},0x415070=>CrtValue::Function(rt.module_export_result(init,m,"FlsGetValue",0x701000)?),_=>panic!()};c.clobber(result);c.finish_pop(rt,if iat==0x415074{12}else{8})}));
+ let result=cpu.call_activation(&mut rt,0x1111,0,|rt,c|cxx_dynamic_lookup(rt,c,CrtResolverAccess::Initializing(init),if scenario==5{foreign}else{fiber},slot,&mut |rt,c,iat|{assert!(scenario>=16);api_calls+=1;let result=match iat{0x415074=>{let(module,_)=rt.module_acquire_result(init,"independent executable module",0x700000)?;if scenario==17{rt.store(guard,32,CrtValue::scalar(0x401bfa))?;}if scenario==18{rt.retire_fls(fiber,slot)?;}CrtValue::Module(module)},0x415070=>CrtValue::Function(rt.module_export_result(init,m,"FlsGetValue",0x701000)?),_=>panic!()};c.clobber(result);c.finish_pop(rt,if iat==0x415074{12}else{8})}));
  if scenario<=2||scenario==16{
   assert_eq!(api_calls,if scenario==16{2}else{0});assert_eq!(result.unwrap(),if scenario==1{CrtValue::scalar(0)}else if scenario==2{CrtValue::scalar(u32::MAX)}else{CrtValue::Pointer(ptd)});assert_eq!(rt.last_os_error,None);assert!(rt.load(rt.offset(ptd,32).unwrap(),32).unwrap().known_scalar().is_err());cpu.discard(&mut rt,4).unwrap();cpu.finish(&mut rt).unwrap();
  }else{assert!(result.is_err(),"scenario {scenario}");assert_eq!(rt.last_os_error,Some(123));if scenario>=17{assert_eq!(api_calls,2);assert_eq!(rt.module_references.len(),2);}}

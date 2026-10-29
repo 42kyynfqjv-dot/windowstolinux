@@ -11,12 +11,12 @@ pub(crate) fn dynamic_source(getter: &[u8], required: &[u8]) -> Result<String, S
 }
 fn emit_source(getter: &[u8], required: &[u8], dynamic: bool) -> Result<String, String> {
     let parameters = if dynamic {
-        "init:CrtInitialization,fiber:CrtFiber,slot:CrtFlsSlot,api:&mut impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu,u32)->Result<CrtValue,&'static str>"
+        "access:CrtResolverAccess,fiber:CrtFiber,slot:CrtFlsSlot,api:&mut impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu,u32)->Result<CrtValue,&'static str>"
     } else {
         "lookup:&mut impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu)->Result<CrtValue,&'static str>"
     };
     let arguments = if dynamic {
-        "init,fiber,slot,api"
+        "access,fiber,slot,api"
     } else {
         "lookup"
     };
@@ -25,11 +25,7 @@ fn emit_source(getter: &[u8], required: &[u8], dynamic: bool) -> Result<String, 
     } else {
         "cxx_original_lookup"
     };
-    let entry = if dynamic {
-        "rt.initialization(init)?;"
-    } else {
-        ""
-    };
+    let entry = if dynamic { "access.check(rt)?;" } else { "" };
     if getter != crate::crt_ptd::raw(GETTER) || required != crate::crt_ptd::raw(REQUIRED) {
         return Err("C++ PTD original code binding".into());
     }
@@ -179,26 +175,32 @@ fn dispatcher_getter_connects_dynamic_fls_without_losing_error_or_lifetime_check
     crate::crt_stream_callees_tests::native(
         &extra,
         r#"
-for mode in 0..18 {
+for mode in 0..29 {
  let(mut rt,init)=CrtStreamRuntime::new_initializing(23,45,0x8000,65536).unwrap();
  let index=rt.map_region(0x41c060,4,CrtRegionKind::Module,Some(&(if mode==14{u32::MAX}else{7u32}).to_le_bytes())).unwrap();if mode==13{rt.store(index,32,CrtValue::Scalar{bits:0,known:0}).unwrap();}
  let (m,reference)=rt.module_acquire_result(init,"unrelated dispatcher dependency",0x710000).unwrap();let f=rt.module_export_result(init,m,if mode==16{"WrongFunction"}else{"FlsGetValue"},0x711000).unwrap();
- let cache_root=rt.map_region(0x41cd14,12,CrtRegionKind::Module,None).unwrap();let cache=rt.offset(cache_root,8).unwrap();rt.store(cache,32,if mode==17{CrtValue::scalar(0)}else{CrtValue::Function(f)}).unwrap();
+ let cache_root=rt.map_region(0x41cd14,12,CrtRegionKind::Module,None).unwrap();let cache=rt.offset(cache_root,8).unwrap();rt.store(cache,32,if matches!(mode,17|19|20){CrtValue::scalar(0)}else if mode==26{CrtValue::scalar(u32::MAX)}else{CrtValue::Function(f)}).unwrap();
  let guard=rt.map_region(0x415128,4,CrtRegionKind::Module,Some(&0x401bf9u32.to_le_bytes())).unwrap();
  rt.map_region(0x415d4c,8,CrtRegionKind::Input,Some(&[0,0,0,0,2,0,0,0])).unwrap();rt.map_region(0x415d54,12,CrtRegionKind::Input,Some(b"FlsGetValue\0")).unwrap();
  let ptd=rt.map_region(0x7000,if mode==1{20}else if mode==2{39}else{40},CrtRegionKind::ThreadData,None).unwrap();let fiber=rt.bind_fiber(45).unwrap();let slot=rt.bind_fls(fiber,7,if mode==3{CrtValue::scalar(0)}else if mode==4{CrtValue::scalar(u32::MAX)}else{CrtValue::Pointer(ptd)}).unwrap();
- let(mut other,_)=CrtStreamRuntime::new_initializing(23,45,0x8000,65536).unwrap();let foreign=other.bind_fiber(45).unwrap();
+ let(mut other,other_init)=CrtStreamRuntime::new_initializing(23,45,0x8000,65536).unwrap();let foreign=other.bind_fiber(45).unwrap();
  match mode{
-  5=>{rt.retire_fls(fiber,slot).unwrap();},6=>{rt.retire_fls(fiber,slot).unwrap();rt.bind_fls(fiber,7,CrtValue::Pointer(ptd)).unwrap();},
-  8|9=>{rt.module_release_result(init,reference,true).unwrap();if mode==9{rt.module_acquire_result(init,"unrelated dispatcher dependency",0x710000).unwrap();}},
-  10=>{rt.retire_region(ptd).unwrap();},11=>{rt.store(guard,32,CrtValue::scalar(0x401bfa)).unwrap();},12=>{rt.fls_set(fiber,slot,7,CrtValue::Pointer(ptd),false,Some(8)).unwrap();},
+  28=>{rt.retire_fls(fiber,slot).unwrap();rt.retire_fiber(fiber).unwrap();},
+  5|21=>{rt.retire_fls(fiber,slot).unwrap();},6=>{rt.retire_fls(fiber,slot).unwrap();rt.bind_fls(fiber,7,CrtValue::Pointer(ptd)).unwrap();},
+  8|9|22=>{rt.module_release_result(init,reference,true).unwrap();if mode==9{rt.module_acquire_result(init,"unrelated dispatcher dependency",0x710000).unwrap();}},
+  10|27=>{rt.retire_region(ptd).unwrap();},11=>{rt.store(guard,32,CrtValue::scalar(0x401bfa)).unwrap();},12=>{rt.fls_set(fiber,slot,7,CrtValue::Pointer(ptd),false,Some(8)).unwrap();},
   17=>{let cells=rt.map_region(0x41cd08,12,CrtRegionKind::Module,Some(&[0;12])).unwrap();rt.bind_loader_cell(init,cells,false).unwrap();rt.bind_loader_cell(init,cache,true).unwrap();let name=rt.map_region(0x6500,4,CrtRegionKind::Input,Some(&[97,0,0,0])).unwrap();let table=rt.map_region(0x415c80,12,CrtRegionKind::Module,None).unwrap();rt.store(table,32,CrtValue::Pointer(name)).unwrap();},_=>{}
  }
+ if mode>=18&&mode!=20{rt.end_initialization(init).unwrap();}
+ let access=if matches!(mode,18|19|20|21|22|23|26|27|28){CrtResolverAccess::Cached}else{CrtResolverAccess::Initializing(if mode==25{other_init}else{init})};
+ if mode==20{rt.bind_loader_cell(init,cache,true).unwrap();}
+ let cache_before=rt.memory.read(cache.address(),4).unwrap().to_vec();let tag_before=rt.tags.get(&cache.address()).copied();let refs_before=rt.module_references.len();let fls_before=rt.fls.clone();let phase_before=rt.initialization;
  let probe=rt.map_region(0x6600,4,CrtRegionKind::Module,Some(&0u32.to_le_bytes())).unwrap();rt.last_os_error=if mode==15{None}else{Some(55)};let initial=rt.last_os_error;
  let stack=rt.map_region(0x9000,4096,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,3072).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(1)).unwrap();let mut cpu=CrtCpu::new(sp,1).unwrap();cpu.r[1]=CrtValue::Scalar{bits:0,known:0};let saved=cpu.r;
- let result=cxx_ptd_required(&mut rt,&mut cpu,init,if mode==7{foreign}else{fiber},slot,&mut |rt,_,iat|{assert_eq!(mode,17);assert_eq!(iat,0x415074);rt.store(probe,32,CrtValue::scalar(77))?;rt.last_os_error=Some(99);Err("independent loader failure with earlier effects")});
- if mode==0||mode==15{assert_eq!(result.unwrap(),CrtValue::Pointer(ptd));assert!(cpu.returned);for r in [3,5,6,7]{assert_eq!(cpu.r[r],saved[r]);}assert!(rt.load(rt.offset(ptd,16).unwrap(),32).unwrap().known_scalar().is_err());assert!(cxx_ptd_required(&mut rt,&mut cpu,init,fiber,slot,&mut |_,_,_|panic!("replay effect")).is_err());}
+ let result=cxx_ptd_required(&mut rt,&mut cpu,access,if mode==7||mode==23{foreign}else{fiber},slot,&mut |rt,_,iat|{assert_eq!(mode,17);assert_eq!(iat,0x415074);rt.store(probe,32,CrtValue::scalar(77))?;rt.last_os_error=Some(99);Err("independent loader failure with earlier effects")});
+ if mode==0||mode==15||mode==18{assert_eq!(result.unwrap(),CrtValue::Pointer(ptd));assert!(cpu.returned);for r in [3,5,6,7]{assert_eq!(cpu.r[r],saved[r]);}assert!(rt.load(rt.offset(ptd,16).unwrap(),32).unwrap().known_scalar().is_err());assert!(cxx_ptd_required(&mut rt,&mut cpu,access,fiber,slot,&mut |_,_,_|panic!("replay effect")).is_err());}
  else{assert!(result.is_err(),"mode {mode}");assert!(!cpu.returned);}
+ if mode>=18{assert_eq!(rt.memory.read(cache.address(),4).unwrap(),cache_before);assert_eq!(rt.tags.get(&cache.address()).copied(),tag_before);assert_eq!(rt.module_references.len(),refs_before);assert_eq!(rt.fls,fls_before);assert_eq!(rt.initialization,phase_before);if mode==20{assert!(access.initialization(&rt).is_err());}else{assert!(rt.exchange_module_word(cache,CrtValue::scalar(0)).is_err());}}
  assert_eq!(rt.last_os_error,if mode==3{None}else if mode==17{Some(99)}else{initial},"mode {mode}");if mode==17{assert_eq!(rt.load(probe,32).unwrap(),CrtValue::scalar(77));}
 }
 "#,

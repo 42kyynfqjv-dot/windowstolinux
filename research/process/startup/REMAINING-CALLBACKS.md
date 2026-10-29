@@ -195,3 +195,11 @@ native cases retain the original LastError routing, protected returns, 40-byte
 root check and rejection of unbound lazy/termination effects. Captured fiber/slot
 inputs and loader effects remain explicit. The C++ common handler still selects
 the legacy getter; connecting that protected caller is the next bounded step.
+
+
+Caller authority split: the dynamic getter now accepts explicit Cached or
+Initializing access. Cached has no lease and cannot enter cold resolution or API
+effects, including during active initialization. Its post-initialization success
+retains module/fiber/slot/PTD lifetime checks. Eleven new phase cases preserve
+cache, reference, slot and phase state across rejection. The common handler still
+uses legacy binding; next select the dynamic getter with Cached authority there.
