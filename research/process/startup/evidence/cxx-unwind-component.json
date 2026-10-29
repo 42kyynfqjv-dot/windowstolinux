@@ -1,0 +1,30 @@
+{
+  "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "rust_sha256": "bf5d3d377c0a894e7de001f85ce1f5938765b132d4ddf343e8e52a0be938d82e",
+  "unwind_binding_source_sha256": "065fad6cf9b6f035084be0f63130393351b7e684f89327edb6a8dfce676c9fe0",
+  "unwind_native_cases": 24,
+  "unwind_new_windows_pairs": 0,
+  "unwind_binding_rust_tests": 1,
+  "kind": "Registered original C++ unwind component with supplied PTD and completed-event registry; not whole-PE conversion",
+  "rust_crt_tests_passed": 210,
+  "existing_observation_test_separate": true,
+  "byte_mutations_rejected": 415,
+  "recorded_wrapper_pairs": 5,
+  "new_windows_observations": 0,
+  "full_pe_pairs": 0,
+  "source_regions": {
+    "cxx-unwind-wrapper": "83c68fec8501e46f8d7482c05d3addaec2cbad1def4972a31edd262aa30a91e5",
+    "cxx-unwind-body": "045adce61e331658d454052b97aa93a92854253a1170e6b5d149f328523e683e",
+    "cxx-unwind-scope": "46a2b67fc23396f9d0e806fcb6a6d4bf07e45fdbbd6d83f7cb7017b02ed1d5e8",
+    "cxx-unwind-bridge": "104c111040bc24041757a63efec6c29f23c432c48d648eeb8414f84ed268a236",
+    "cxx-unwind-notice_prefix": "57bbf076c42773b5a2026ab6dfdcaed1efb054d62e04608a524992a9501a0517",
+    "cxx-unwind-notice_tail": "b924bf20557c8dd755a060af55fd4e2d19f5e80a265c3c28ab54f2a621485ea2"
+  },
+  "remaining": [
+    "actual PTD acquisition binding",
+    "pending-exception registry phase",
+    "terminate40770c/abort4077ff effects",
+    "exceptional funclet delivery"
+  ],
+  "reproduction": "python3 research/process/startup/check_normal_wrapper.py ORIGINAL OBSERVED NEW_OUTPUT"
+}

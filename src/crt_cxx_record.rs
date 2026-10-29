@@ -542,7 +542,7 @@ for mode in 0..20{{
 pub(crate) const UNWIND_STATE_GET: &str =
     "558bec8b45108b4d08817804800000007f060fbe41085dc38b41085dc3";
 pub(crate) const UNWIND_STATE_SET: &str = "558bec8b45088b4d108948085dc3";
-fn unwind_state_source(get: &[u8], set: &[u8]) -> Result<String, String> {
+pub(crate) fn unwind_state_source(get: &[u8], set: &[u8]) -> Result<String, String> {
     if get != crate::crt_ptd::raw(UNWIND_STATE_GET) || set != crate::crt_ptd::raw(UNWIND_STATE_SET)
     {
         return Err("C++ original unwind state helpers".into());

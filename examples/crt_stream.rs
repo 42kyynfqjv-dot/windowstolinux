@@ -297,3 +297,7 @@ mod crt_cxx_ptd;
 #[cfg(test)]
 #[path = "../src/crt_cxx_lookup.rs"]
 mod crt_cxx_lookup;
+
+#[cfg(test)]
+#[path = "../src/crt_cxx_unwind.rs"]
+mod crt_cxx_unwind;

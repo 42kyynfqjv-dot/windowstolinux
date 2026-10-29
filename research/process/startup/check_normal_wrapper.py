@@ -196,6 +196,13 @@ def check(original, observation, out, compare=None):
         if fixture is None or bytes.fromhex(fixture[1]) != raw:
             raise ValueError('C++ record/handler evidence differs from original PE')
         file_regions['ptd-cxx-'+name.lower()] = sha(raw)
+    unwind_source=(Path(__file__).resolve().parents[3]/'src/crt_cxx_unwind.rs').read_text()
+    for name,start,length,executable in [('WRAPPER',0x4041a4,24,True),('BODY',0x4041bc,238,True),('SCOPE',0x41b298,40,False),('BRIDGE',0x404380,76,True),('NOTICE_PREFIX',0x402a20,12,True),('NOTICE_TAIL',0x402a3b,20,True)]:
+        raw=mapped(image,start,length,executable=executable)
+        fixture=re.search(r'const\s+'+name+r'\s*:\s*&str\s*=\s*"([0-9a-f]+)"',unwind_source)
+        if fixture is None or bytes.fromhex(fixture[1])!=raw:
+            raise ValueError('C++ unwind frame/action original bytes differ')
+        file_regions['cxx-unwind-'+name.lower()]=sha(raw)
     cxx_ptd_source=(Path(__file__).resolve().parents[3]/'src/crt_cxx_ptd.rs').read_text()
     for name,start,length in [('REQUIRED',0x4028c3,14),('GETTER',0x4028d1,146)]:
         raw=mapped(image,start,length,executable=True)
@@ -268,8 +275,13 @@ def check(original, observation, out, compare=None):
                              env=env,capture_output=True,timeout=180)
     (out/'cxx-record-components.stdout').write_bytes(cxx_run.stdout)
     (out/'cxx-record-components.stderr').write_bytes(cxx_run.stderr)
-    if cxx_run.returncode or b'10 passed' not in cxx_run.stdout:
+    if cxx_run.returncode or b'11 passed' not in cxx_run.stdout:
         raise ValueError('original C++ owned record component failed')
+    unwind_run=subprocess.run(['cargo','test','--locked','--example','crt_stream','original_cxx_unwind_registers_eh4_preserves_pending_action_and_counter_failures'],env=env,capture_output=True,timeout=180)
+    (out/'cxx-unwind-native.stdout').write_bytes(unwind_run.stdout)
+    (out/'cxx-unwind-native.stderr').write_bytes(unwind_run.stderr)
+    if unwind_run.returncode or b'1 passed' not in unwind_run.stdout:
+        raise ValueError('C++ registered unwind native cases failed')
     for test in ['allocation_manager_registers_and_retires_original_eh4_under_startup_authority',
                  'inherited_producer_calls_original_manager_with_live_eh4_registration']:
         result = subprocess.run(['cargo','test','--locked','--example','crt_stream',test],
@@ -343,6 +355,8 @@ def check(original, observation, out, compare=None):
                   main_activation_sha256=sha((out/'main-activate.bin').read_bytes()),
                   main_scope_header_sha256=sha((out/'Main-scope-header.bin').read_bytes()),
                   locale_state_evidence=locale_state_evidence(image),
+                  unwind_binding_source_sha256=sha((out/'cxx-unwind-connected.rs').read_bytes()),
+                  unwind_native_cases=24, unwind_new_windows_pairs=0, unwind_binding_rust_tests=1,
                   unwind_state_source_sha256=sha((out/'unwind-state-live.rs').read_bytes()),
                   unwind_state_native_cases=12, unwind_state_new_windows_pairs=0,
                   cached_common_source_sha256=sha((out/'cached-common-handler.rs').read_bytes()),
@@ -385,7 +399,7 @@ def check(original, observation, out, compare=None):
         previous = json.loads(compare.read_text())
         if previous['locale_state_evidence'] != result['locale_state_evidence']:
             raise ValueError('wrapper cross-host locale evidence differs')
-        for key in ['unwind_state_source_sha256', 'cached_common_source_sha256', 'dispatcher_dynamic_source_sha256', 'dynamic_fls_source_sha256', 'cold_resolver_source_sha256', 'live_finally_hashes', 'original_notification_sha256', 'original_cleanup_hashes', 'owned_local_body_sha256', 'local_level_store_sha256', 'pe_sha256', 'helper_sha256', 'epilog_sha256', 'handler_scope_store_sha256', 'handler_prolog_sha256', 'handler_installer_sha256', 'event_normalizer_sha256', 'guard_validator_sha256', 'security_check_sha256', 'scope_header_sha256', 'prefix_sha256', 'context_helper_sha256', 'filter_bridge_sha256', 'main_filter_sha256', 'main_prolog_sha256', 'inner_prolog_sha256', 'main_activation_sha256', 'main_scope_header_sha256', 'main_scope_table_sha256', 'complete_handler_sha256', 'global_wrapper_sha256', 'observation_sha256', 'vectors_sha256', 'rust_sha256', 'file_scope_code_sha256', 'file_scope_imports']:
+        for key in ['unwind_binding_source_sha256', 'unwind_state_source_sha256', 'cached_common_source_sha256', 'dispatcher_dynamic_source_sha256', 'dynamic_fls_source_sha256', 'cold_resolver_source_sha256', 'live_finally_hashes', 'original_notification_sha256', 'original_cleanup_hashes', 'owned_local_body_sha256', 'local_level_store_sha256', 'pe_sha256', 'helper_sha256', 'epilog_sha256', 'handler_scope_store_sha256', 'handler_prolog_sha256', 'handler_installer_sha256', 'event_normalizer_sha256', 'guard_validator_sha256', 'security_check_sha256', 'scope_header_sha256', 'prefix_sha256', 'context_helper_sha256', 'filter_bridge_sha256', 'main_filter_sha256', 'main_prolog_sha256', 'inner_prolog_sha256', 'main_activation_sha256', 'main_scope_header_sha256', 'main_scope_table_sha256', 'complete_handler_sha256', 'global_wrapper_sha256', 'observation_sha256', 'vectors_sha256', 'rust_sha256', 'file_scope_code_sha256', 'file_scope_imports']:
             if previous[key] != result[key]:
                 raise ValueError('wrapper cross-host provenance differs: '+key)
         result['matching_windows_native_report'] = str(compare)

@@ -222,3 +222,12 @@ state failures and the signed-byte/full-word boundary. The state write precedes
 its action; it creates no cleanup receipt. The enclosing EH4 unwind body and
 terminate/abort path remain rejected. See [DEPENDENCIES.md](DEPENDENCIES.md) for
 the current connected paths and next cohesive frame/counter/action gate.
+
+
+Registered unwind connection: wrapper4041a4/body4041bc now executes its actual
+EH4 frame, PTD counter and state traversal. The action bridge/notification writes
+also execute; termination remains rejected with earlier effects preserved.
+The PTD provider and completed-event normal registry remain explicit component
+inputs. Pending-exception entry, terminate/abort and exceptional funclets are the
+next connected gates. See [CXX-UNWIND.md](CXX-UNWIND.md) for24 native scenarios,
+original-byte checks and zero new Windows/whole-PE pairs.

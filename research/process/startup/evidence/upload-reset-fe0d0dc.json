@@ -48,7 +48,11 @@
     "run": 40949077644,
     "head": "fe0d0dccf32a9ed0a5bf45cf830ca02bfc107e26",
     "attempt": 2,
-    "observed_status": "in_progress",
-    "scope": "Only failed compiler-native-linux job retried through normal GitHub API. Attempt1 remains failed evidence; retry does not validate newer heads."
+    "observed_status": "completed",
+    "scope": "Only failed compiler-native-linux job retried through normal GitHub API. Attempt1 remains failed evidence; retry does not validate newer heads.",
+    "conclusion": "success",
+    "rerun_job": 123720191590,
+    "started_at": "2026-10-29T20:42:25Z",
+    "completed_at": "2026-10-29T20:50:19Z"
   }
 }

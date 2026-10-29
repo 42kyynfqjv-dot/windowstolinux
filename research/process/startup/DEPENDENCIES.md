@@ -11,7 +11,7 @@ It is not whole-image conversion evidence. rcedit remains a later independent ga
 | Entry and module/thread startup | Selected initialization components | Actual header-entry composition, loader effects, incoming thread/handler chain, module and FLS producers |
 | Main, RaiseException, delivery | Main/handler/restore slices and owned activation machinery | Original delivery/context acquisition and incoming-chain containment; no replacement of saved exception context by call registers |
 | Normal C++ handler | Prefix414ad6, common403002, thunk403e78, dispatcher403d76, checked context/guard, dynamic PTD/FLS getter and normal epilog form one component path | Bound module/function, live fiber/index/slot and captured delivery inputs. Normal return is ContinueSearch1, not resumed guest execution |
-| C++ unwind | Original state read4043e9 and state write404406 now execute on the same checked live record | Wrapper4041a4 and EH4 body4041bc still unbound: own its registration/frame, PTD+18 counter, metadata traversal, pending action, callbacks and exceptional exits |
+| C++ unwind | Wrapper4041a4/body4041bc register their original EH4 frame, execute state helpers, counter and traversal, and retire normally for state-1; pending actions reach original bridge/notification writes | Checked PTD provider and completed-event registry are supplied. Action4026fc reaches unbound terminate40770c; exceptional funclets and pending-exception registry phase remain rejected. See [component contract](CXX-UNWIND.md) |
 | Required-PTD / terminate / abort | Static targets and original normal getter null/sentinel branches are bound | Required-PTD null reaches4077ff. This needs signal query40cbcf/40cafd, lock/EH4 effects, encoded signal callback, flags41c128, signal22, fast-fail/debug and exit effects; never substitute successful cleanup |
 | printf and output | Wrapper/accessors, owned FILE/lock, low-I/O and writer components | Actual locale/FILE initialization, complete formatter driver/parser/destruction, callback/exception paths and physical stream composition |
 | Return and exit | Main report/epilog and shutdown components | Original exit registrations, flush/close/error/status and process termination from the same live entry state |
@@ -36,18 +36,19 @@ step cannot authorize resumption.
 
 ## Next cohesive implementation gate
 
-Integrate original4041a4/4041bc using the existing owned frame/continuation system:
-EH4 metadata41b298 and actual registration/epilog, signed state traversal, full
-map bounds, PTD+18 increment/decrement, pending action ownership and actual action
-calls. Include nested delivery, stale aliases, wrong counter/storage, action failure
-and nonreturning termination cases. Do not bypass the EH4 prolog or infer a
-no-exception domain from successful normal cases. The actual map's actions jump
-to40770c, whose PTD+12 callback and eventual abort behavior remain external gates.
+The registered unwind component now has24 independent native scenarios and
+original bridge/notification writes. It preserves pending action ownership across
+the pre-action state write and rejects at terminate40770c. Empty-state returns
+balance the counter and retire the original frame. No cleanup receipt follows
+an unexecuted action. Details and supplied-state limits are in
+[CXX-UNWIND.md](CXX-UNWIND.md).
 
-This is the next meaningful composition, rather than another scalar helper.
-A bounded Astra High pass is appropriate if the EH4 child-frame and pending-action
-ownership cannot be established using the reviewed shared machinery. Sol can
-review this checkpoint and collect the exact original metadata/effect evidence.
+Connect the existing original cached PTD getter, then establish the activation
+contract for entering this body during a pending exception rather than the
+completed-event fixture. Close terminate40770c's PTD+12 callback/guard and
+abort4077ff signal/lock/exit effects; retain rejection for exceptional funclets
+until their delivery and cleanup are justified. This is a connected frame and
+terminal-effect gate, not a claim that the whole PE now translates.
 
 ## Objective whole-program acceptance
 
@@ -64,6 +65,6 @@ At the preceding checkpoint, fe0d0dc push run40949077644 attempt1 failed artifac
 creation with ECONNRESET, leaving later comparisons skipped. Its exact job/steps
 remain in [upload-reset-fe0d0dc.json](evidence/upload-reset-fe0d0dc.json).
 Only failed job123714769651 was explicitly retried through GitHub's normal API;
-run attempt2 is a labeled infrastructure retry of the *old* commit. It neither
+Run attempt2 completed successfully, including rerun Linux job123720191590. This is a labeled infrastructure retry of the *old* commit. It neither
 erases attempt1 nor validates newer heads. Historical original-Windows process
 exit timeouts remain separate and unexplained.

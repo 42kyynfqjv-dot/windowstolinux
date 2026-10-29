@@ -1264,7 +1264,43 @@ fn manager_registered(){for mode in 0..5{
  });
  if mode==1||mode==2{assert!(result.is_err());}else{result.unwrap();assert_eq!(r.head,previous);}
 }}
-fn main(){match std::env::args().nth(1).unwrap().as_str(){"manager-inherited"=>inherited_registered_manager(),"manager"=>manager_registered(),"live-finally"=>live_finally_cases(),"owned-loop"=>owned_loop_cases(),"owned-local"=>owned_local_cases(),"owned"=>{main_initial_rejections();initial_raise_rejections();owned_main_cases()},"path-edges"=>path_edges(),"live"=>live_dispatch(),"objects"=>captured_objects(),"handler"=>pending_handler_activation(),"pending"=>pending_normal_exception(),"pending-reject"=>reject_normal_exception(),"file"=>file_scope_normal(),"file-failure"=>file_scope_failure(),"nested"=>nested_actual(),"mutations"=>mutations(),"consumed"=>consumed_mutation(),"failure"=>body_failure(),"certificate"=>wrong_certificate(),"observed"=>observed(),_=>panic!("case")}}
+fn cxx_registered_unwind(){for mode in 0..24{
+ let(m,mut r,main,mut permit)=fixture_with_extra(&[(0x410000,0x420000)]);let previous=r.head;let mut rt=runtime(&r);
+ let metadata=rt.map_region(0x41b42c,36,CrtRegionKind::Module,Some(&cxx_meta_bytes())).unwrap();rt.map_region(0x41b41c,16,CrtRegionKind::Module,Some(&cxx_map_bytes())).unwrap();let scope=rt.map_region(0x41b298,40,CrtRegionKind::Module,Some(&cxx_scope_bytes())).unwrap();
+ let ptd=rt.map_region(0x6000,if mode==8{28}else{40},if mode==7{CrtRegionKind::Module}else{CrtRegionKind::ThreadData},None).unwrap();let count=rt.offset(ptd,24).unwrap();rt.store(count,32,if mode==3{CrtValue::Scalar{bits:0,known:0}}else{CrtValue::scalar(if mode==4{i32::MAX as u32}else{2})}).unwrap();
+ let mut owner=cpu(&mut rt,0xe800,701);owner.return_pop=0;owner.push(&mut rt,CrtValue::scalar(if mode==19{64}else{0})).unwrap();owner.r[0]=CrtValue::scalar(0x414ad6);let predecessor=rt.thread_head(23,24,[0,0,0]).unwrap();let mut frame=CrtPtdFrame::new(&rt,&owner,predecessor,0x414ad6,0x41c000).unwrap();ptd_prolog(&mut rt,&mut owner,&mut frame,0x40a33e).unwrap();let record=cxx_bind(&rt,&owner,&frame).unwrap();let state=rt.offset(frame.bp,-4).unwrap();rt.store(state,32,CrtValue::scalar(match mode{1|15=>0,2=>1,_=>u32::MAX})).unwrap();
+ let notice=rt.map_region(0x41c070,if mode==15{12}else{16},CrtRegionKind::Module,None).unwrap();
+ let mut calls=0;let mut child_returned=false;
+ let result=r.with_normal_calls(&m,&mut permit,&main,|epoch|{
+  let mut parent=cpu(&mut rt,0xd000,81);let mut outer=if mode==14{Some(CrtNormalBinding::bind(&rt,&parent,epoch,epilog_run_layout())?)}else{None};if let Some(b)=&mut outer{start(&mut rt,&mut parent,epoch,b,82)?;}
+  let mut c=cpu(&mut rt,if mode==19{0xbf00}else{0xc000},71);c.return_pop=0;let saved=c.r;
+  for(offset,value)in [(4,CrtValue::Pointer(rt.offset(frame.bp,-12)?)),(8,CrtValue::scalar(0)),(12,CrtValue::Pointer(metadata))]{let p=rt.offset(CrtCpu::pointer(c.r[4])?,offset)?;rt.store(p,32,value)?;}
+  if mode==5{rt.store(metadata,32,CrtValue::scalar(0))?;}if mode==6{rt.store(scope,32,CrtValue::scalar(0))?;}
+  if mode==17{rt.store(count,32,CrtValue::Pointer(frame.bp))?;}
+  if mode==20{rt.store(rt.resolve_absolute(0xbfb8,CrtRegionKind::Stack)?,32,CrtValue::ProtectedReturn(999))?;}
+  if mode==22{rt.store(state,32,CrtValue::Scalar{bits:0,known:0})?;}
+  if mode==23{rt.store(rt.offset(CrtCpu::pointer(c.r[4])?,12)?,32,CrtValue::Pointer(rt.offset(metadata,4)?))?;}
+  let value=cxx_unwind_wrapper(&mut rt,&mut c,epoch,&owner,&frame,&record,&mut |rt,child|{
+   calls+=1;
+   if mode==16{rt.store(rt.offset(notice,4)?,32,CrtValue::scalar(17))?;return Err("independent provider failure after write");}
+   if mode==18{rt.store(scope,32,CrtValue::scalar(0))?;}
+   if mode==21&&calls==3{rt.store(rt.resolve_absolute(0xbfb4,CrtRegionKind::Stack)?,32,CrtValue::scalar(0))?;}
+   if calls==2{match mode{9=>rt.retire_region(ptd)?,10=>rt.store(count,32,CrtValue::scalar(91))?,11=>rt.store(CrtCpu::pointer(owner.entry[4])?,32,CrtValue::ProtectedReturn(999))?,12=>{let other=rt.map_region(0x6100,40,CrtRegionKind::ThreadData,None)?;rt.store(rt.offset(other,24)?,32,CrtValue::scalar(3))?;child.clobber(CrtValue::Pointer(other));return child.finish(rt);},13=>{let guard=rt.resolve_absolute(0xbfb4,CrtRegionKind::Stack)?;rt.store(guard,32,CrtValue::scalar(0))?;},_=>{}}}
+   child.clobber(CrtValue::Pointer(ptd));child.finish(rt)
+  });
+  child_returned=c.returned;
+  if mode==0||mode==14||mode==19{value?;assert!(c.returned);assert_eq!(rt.load(count,32)?,CrtValue::scalar(2));assert_eq!(calls,3);for i in [3,5,6,7]{assert_eq!(c.r[i],saved[i]);}if let Some(b)=&mut outer{parent.r[0]=CrtValue::scalar(0);epilog_run(&mut rt,&mut parent,epoch,b)?;}Ok(())}else{let err=value.unwrap_err();if mode==1||mode==2{assert_eq!(err,"C++ original action jumps to unbound terminate40770c");assert_eq!(rt.load(state,32)?,CrtValue::scalar(u32::MAX));assert_eq!(rt.load(count,32)?,CrtValue::scalar(3));assert!(epoch.state().is_err());assert_eq!(rt.load(rt.offset(notice,4)?,32)?,CrtValue::scalar(0x4026fc));assert_eq!(rt.load(rt.offset(notice,8)?,32)?,CrtValue::scalar(0x103));assert_eq!(rt.load(rt.offset(notice,12)?,32)?,CrtValue::Pointer(frame.bp));}Err(err)}
+ });
+ if mode==0||mode==14||mode==19{result.unwrap();assert_eq!(r.head,previous);}else{assert!(result.is_err(),"mode {mode}");assert!(!child_returned);}
+ if mode==10{assert_eq!(rt.load(count,32).unwrap(),CrtValue::scalar(91));}
+ if mode==15{assert_eq!(rt.load(rt.offset(notice,8).unwrap(),32).unwrap(),CrtValue::scalar(0x103));assert_eq!(rt.load(rt.offset(notice,4).unwrap(),32).unwrap(),CrtValue::scalar(0x4026fc));assert_eq!(rt.load(state,32).unwrap(),CrtValue::scalar(u32::MAX));assert_eq!(rt.load(count,32).unwrap(),CrtValue::scalar(3));}
+ if mode==16{assert_eq!(rt.load(rt.offset(notice,4).unwrap(),32).unwrap(),CrtValue::scalar(17));assert_eq!(rt.load(count,32).unwrap(),CrtValue::scalar(2));}
+ if mode==21{assert_eq!(rt.load(count,32).unwrap(),CrtValue::scalar(2));}
+ if mode==20||mode==22||mode==23{assert_eq!(calls,0);}
+ if mode==5||mode==6{assert_eq!(calls,0);assert_eq!(rt.load(count,32).unwrap(),CrtValue::scalar(2));}
+ if mode==3||mode==4||mode==7||mode==8{assert_eq!(calls,1);}
+}}
+fn main(){match std::env::args().nth(1).unwrap().as_str(){"cxx-unwind"=>cxx_registered_unwind(),"manager-inherited"=>inherited_registered_manager(),"manager"=>manager_registered(),"live-finally"=>live_finally_cases(),"owned-loop"=>owned_loop_cases(),"owned-local"=>owned_local_cases(),"owned"=>{main_initial_rejections();initial_raise_rejections();owned_main_cases()},"path-edges"=>path_edges(),"live"=>live_dispatch(),"objects"=>captured_objects(),"handler"=>pending_handler_activation(),"pending"=>pending_normal_exception(),"pending-reject"=>reject_normal_exception(),"file"=>file_scope_normal(),"file-failure"=>file_scope_failure(),"nested"=>nested_actual(),"mutations"=>mutations(),"consumed"=>consumed_mutation(),"failure"=>body_failure(),"certificate"=>wrong_certificate(),"observed"=>observed(),_=>panic!("case")}}
 "#;
 
 fn run(case: &str) {
@@ -1599,12 +1635,19 @@ if fault==1{{cpu.condition(0)?;}}
         let inherited_registered=crate::crt_standard_handles_tests::inherited_source_for(Some("let n=rt.load(rt.offset(sp,4)?,32)?.known_scalar()?;allocations.push(n);registered_allocation(rt,child,e,init)"));
         let allocator_native=format!("{} {}",crate::crt_standard_handles_tests::errno_source(),crate::crt_standard_handles_tests::allocator_source_with_errno(Some("let ptd=rt.resolve_absolute(0x6ff0,CrtRegionKind::ThreadData)?;errno_routed(rt,child,|_|Ok(CrtValue::Pointer(ptd)))")));
         let manager_native=format!("{}\n{}\n{}\nfn manager_return_move(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->RegistryResult<CrtValue>{{{move_body}}}",crate::crt_standard_handles_tests::manager_source_with_allocator(Some("let errno=rt.resolve_absolute(0x7000,CrtRegionKind::ThreadData)?;let mut requests=vec![];let result=calloc_original(rt,child,init,true,Some(false),if available{(1,1)}else{(0,usize::MAX)},true,errno,&mut requests,&mut |_,_|Err(\"startup handler not bound\"))?;if let CrtValue::Pointer(p)=result{*allocated=Some(p);}Ok(result)")),manager_p.emit("manager_prolog").unwrap(),manager_e.emit("manager_epilog").unwrap());
+        let cxx_unwind=crate::crt_cxx_unwind::source(&bytes_hex(crate::crt_cxx_unwind::WRAPPER),&bytes_hex(crate::crt_cxx_unwind::BODY),&super::tests::bytes(),&bytes_hex(crate::crt_cxx_unwind::SCOPE)).unwrap();
+        let cxx_action=crate::crt_cxx_unwind::action_source([&bytes_hex(crate::crt_cxx_unwind::BRIDGE),&bytes_hex(crate::crt_cxx_unwind::NOTICE_PREFIX),&bytes_hex(crate::crt_cxx_unwind::NOTICE_TAIL),&bytes_hex(crate::crt_cxx_record::ACTION)]).unwrap();
+        let cxx_state=crate::crt_cxx_record::unwind_state_source(&bytes_hex(crate::crt_cxx_record::UNWIND_STATE_GET),&bytes_hex(crate::crt_cxx_record::UNWIND_STATE_SET)).unwrap();
+        let cxx_record=crate::crt_cxx_record::emit(&bytes_hex(crate::crt_cxx_record::METADATA),0x41b42c,&bytes_hex(crate::crt_cxx_record::UNWIND_MAP),0x41b41c).unwrap();
+        let cxx_owner=crate::crt_ptd::helper_source(&bytes_hex(crate::crt_ptd::PROLOG),0x414268,&bytes_hex(crate::crt_ptd::EPILOG),0x414254,0x41c000).unwrap();
+        if let Ok(path)=std::env::var("W2L_EH4_EVIDENCE"){std::fs::write(std::path::Path::new(&path).join("cxx-unwind-connected.rs"),format!("{cxx_unwind}\n{cxx_action}")).unwrap();}
+        let cxx_data=format!("fn cxx_meta_bytes()->Vec<u8>{{vec!{:?}}}fn cxx_map_bytes()->Vec<u8>{{vec!{:?}}}fn cxx_scope_bytes()->Vec<u8>{{vec!{:?}}}",bytes_hex(crate::crt_cxx_record::METADATA),bytes_hex(crate::crt_cxx_record::UNWIND_MAP),bytes_hex(crate::crt_cxx_unwind::SCOPE));
         let source = format!("#![allow(dead_code)]\nmod guest_memory{{{memory}}}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{fixture}\n{printf_native}\n{printf_entry_native}\n{printf_native_map}\n{completion_live}\n{main_initial_live}\n{main_initial_map}\n{initial_raise_types}\n{initial_raise_init}\n{initial_raise}\n{initial_raise_map}\n{file_scope}\n{context_types}\n{context_check}\n{scope_store}\n{permuted_store}\n{install}\n{handler_prolog}\n{filter_source}\n{false_filter_source}\n{normalizer_source}\n{guard_source}\n{header_source}\n{prefix_normalizer}\n{prefix_front}\n{guard_prefix}\n{prefix_caller}\n{bridge_native}\n{local_types}\n{owned_types}\n{local_source}\n{callback_source}\n{finally_source}\n{finally_cases}\n{original_local_store}\n{main_init}\n{inner_init}\n{owned_filter}\n{owned_bridge}\n{main_filter_bytes}\n{activation}\n{owned_prolog}\n{owned_prefix}\n{delivery_prefix}
 {inner_data}
 {unwind_caller}
 {stack_source}
 {native_loop}\n{owned_header}\n{owned_scope_store}\n{owned_permuted_store}\n{global_source}\n{delivery_source}\n{tail_source}\n{owned_search}
-{post_global}\n{code_data}\n{path_edges}\n{prefix_metadata}\nfn raise_site()->CrtNormalRaiseSite{{{{{raise}}}}}\n{allocator_native}\n{manager_native}\n{inherited_registered}\n{CASES}",
+{post_global}\n{code_data}\n{path_edges}\n{prefix_metadata}\nfn raise_site()->CrtNormalRaiseSite{{{{{raise}}}}}\n{allocator_native}\n{manager_native}\n{inherited_registered}\n{cxx_unwind}\n{cxx_action}\n{cxx_state}\n{cxx_record}\n{cxx_owner}\n{cxx_data}\n{CASES}",
             include_str!("linker/unwind_runtime.rs").replace("//!", "//"),
             emitted_literal(include_str!("frame_proof.rs")),emitted_literal(include_str!("thread_registry.rs")),
             crate::crt_stream_runtime::EMITTED_TYPES,crate::crt_stream_cpu::EMITTED_TYPES,
@@ -1889,4 +1932,9 @@ fn allocation_manager_registers_and_retires_original_eh4_under_startup_authority
 #[test]
 fn inherited_producer_calls_original_manager_with_live_eh4_registration() {
     run("manager-inherited");
+}
+
+#[test]
+fn original_cxx_unwind_registers_eh4_preserves_pending_action_and_counter_failures() {
+    run("cxx-unwind");
 }
