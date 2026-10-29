@@ -2,7 +2,8 @@
 
 Current live-field boundary: [original finally/dispatcher effects](LIVE-FINALLY.md)
 connects Inner initialization and original cleanup bodies to canonical owned
-storage, preserving partial effects on failure. Guard/epilog/retirement and
+storage, preserving partial effects on failure. The handler tail and younger-frame
+retirement now execute under explicit component cuts; original caller-state and
 full entry-to-exit admission remain open; no new whole-PE pairs.
 
 Current normal-call integration: [original FILE scope](FILE-SCOPE.md) connects

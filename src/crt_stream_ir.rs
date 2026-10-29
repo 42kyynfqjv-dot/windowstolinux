@@ -413,6 +413,44 @@ impl Graph {
             successors,
         })
     }
+    /// Explicit straight-line component cut. This is not whole-function admission.
+    #[allow(dead_code)]
+    pub fn decode_linear_fragment(code: &[u8], origin: u32) -> Result<Self, String> {
+        let end = origin
+            .checked_add(u32::try_from(code.len()).map_err(|_| "CRT fragment extent")?)
+            .ok_or("CRT fragment overflow")?;
+        if origin == 0 || code.is_empty() || code.len() > 1024 {
+            return Err("CRT fragment bounds".into());
+        }
+        let mut decoder = Decoder::with_ip(32, code, u64::from(origin), DecoderOptions::NONE);
+        let mut nodes = BTreeMap::new();
+        while decoder.can_decode() {
+            let i = decoder.decode();
+            if i.is_invalid() {
+                return Err("CRT fragment instruction".into());
+            }
+            let pc = i.ip() as u32;
+            let at = (pc - origin) as usize;
+            let node = Self::decode_instruction(&code[at..at + i.len()], pc)?;
+            if node.successors != [pc + node.length]
+                || matches!(
+                    node.op,
+                    Op::Call(_)
+                        | Op::FsRead(_)
+                        | Op::FsWrite(_)
+                        | Op::FsPush
+                        | Op::Ordinary(Operation::Jump(_))
+                )
+            {
+                return Err("CRT fragment control/effect boundary".into());
+            }
+            if nodes.len() >= 128 {
+                return Err("CRT fragment instruction budget".into());
+            }
+            nodes.insert(pc, node);
+        }
+        Ok(Self { origin, end, nodes })
+    }
     pub fn decode(code: &[u8], origin: u32) -> Result<Self, String> {
         Self::decode_with_tables(code, origin, &[])
     }
@@ -728,5 +766,32 @@ mod tests {
         ] {
             assert!(Graph::decode(c, 0x1000).is_err(), "{c:?}");
         }
+    }
+}
+
+#[cfg(test)]
+mod linear_fragment_tests {
+    #[test]
+    fn explicit_cut_does_not_relax_complete_graph_or_accept_control_effects() {
+        use super::Graph;
+        let code = [0x55, 0x8b, 0xec, 0x83, 0xec, 0x1c];
+        assert!(Graph::decode(&code, 0x1000).is_err());
+        let graph = Graph::decode_linear_fragment(&code, 0x1000).unwrap();
+        assert_eq!(graph.end, 0x1006);
+        assert_eq!(graph.nodes.len(), 3);
+        for code in [
+            &[0xc3][..],
+            &[0xeb, 0][..],
+            &[0xe8, 0, 0, 0, 0][..],
+            &[0x64, 0xa1, 0, 0, 0, 0][..],
+            &[0x0f][..],
+        ] {
+            assert!(
+                Graph::decode_linear_fragment(code, 0x1000).is_err(),
+                "accepted {code:x?}"
+            );
+        }
+        assert!(Graph::decode_linear_fragment(&[0x90], u32::MAX).is_err());
+        assert!(Graph::decode_linear_fragment(&[0x90; 129], 0x1000).is_err());
     }
 }

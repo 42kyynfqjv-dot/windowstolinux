@@ -228,10 +228,57 @@ pub(crate) fn emit_body_with_thread(
         |_, _| Ok(None),
     )
 }
+/// A straight-line original instruction cut returns to the compiler-owned
+/// component boundary without executing RET or consuming a continuation.
+#[allow(dead_code)]
+pub(crate) fn emit_linear_fragment(
+    graph: &Graph,
+    roles: &BTreeMap<u32, String>,
+) -> Result<String, String> {
+    if graph.nodes.is_empty() || graph.nodes.len() > 128 {
+        return Err("CRT fragment instruction budget".into());
+    }
+    for (&pc, node) in &graph.nodes {
+        if node.successors != [pc + node.length] {
+            return Err("CRT fragment requires one original fallthrough".into());
+        }
+    }
+    emit_body_with_exit(
+        graph,
+        |_, _| Err("CRT fragment call unbound".into()),
+        roles,
+        128,
+        |_, _| Err("CRT fragment thread effect unbound".into()),
+        |_, _| Ok(String::new()),
+        |_, _| Err("CRT fragment cannot return".into()),
+        Some(graph.end),
+    )
+}
 /// Proof-bound bookkeeping precedes the original instruction; it cannot replace
 /// arbitrary instructions. Only an independently validated special return ABI
 /// may override RET. Ordinary callers retain exact protected-return checks.
 pub(crate) fn emit_body_with_hooks(
+    graph: &Graph,
+    call: impl FnMut(u32, Target) -> Result<String, String>,
+    roles: &BTreeMap<u32, String>,
+    step_budget: u32,
+    thread: impl FnMut(u32, &Op) -> Result<String, String>,
+    before: impl FnMut(u32, &Op) -> Result<String, String>,
+    return_hook: impl FnMut(u32, u16) -> Result<Option<String>, String>,
+) -> Result<String, String> {
+    emit_body_with_exit(
+        graph,
+        call,
+        roles,
+        step_budget,
+        thread,
+        before,
+        return_hook,
+        None,
+    )
+}
+#[allow(clippy::too_many_arguments)]
+fn emit_body_with_exit(
     graph: &Graph,
     mut call: impl FnMut(u32, Target) -> Result<String, String>,
     roles: &BTreeMap<u32, String>,
@@ -239,19 +286,23 @@ pub(crate) fn emit_body_with_hooks(
     mut thread: impl FnMut(u32, &Op) -> Result<String, String>,
     mut before: impl FnMut(u32, &Op) -> Result<String, String>,
     mut return_hook: impl FnMut(u32, u16) -> Result<Option<String>, String>,
+    exit: Option<u32>,
 ) -> Result<String, String> {
     if graph
         .nodes
         .values()
         .flat_map(|n| &n.successors)
-        .any(|target| !graph.nodes.contains_key(target))
+        .any(|target| !graph.nodes.contains_key(target) && Some(*target) != exit)
     {
         return Err("CRT emit unresolved external control edge".into());
     }
     if step_budget == 0 || step_budget > 4_000_000 {
         return Err("CRT emit instruction bound".into());
     }
-    let mut source=format!("let mut pc={}u32;let mut local_steps=0u32;loop{{if local_steps>={step_budget}{{return Err(\"CRT original graph instruction bound\");}}local_steps+=1;cpu.tick(u32::MAX)?;match pc{{",graph.origin);
+    let terminal = exit
+        .map(|exit| format!("if pc=={exit}{{return Ok(cpu.r[0]);}}"))
+        .unwrap_or_default();
+    let mut source=format!("let mut pc={}u32;let mut local_steps=0u32;loop{{{terminal}if local_steps>={step_budget}{{return Err(\"CRT original graph instruction bound\");}}local_steps+=1;cpu.tick(u32::MAX)?;match pc{{",graph.origin);
     for (&pc, node) in &graph.nodes {
         let mut out = before(pc, &node.op)?;
         let mut controlled = false;

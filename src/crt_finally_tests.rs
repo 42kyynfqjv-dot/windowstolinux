@@ -61,6 +61,7 @@ pub(crate) fn emit() -> String {
     );
     let mut out = String::from(crate::funclet::LIVE_EFFECTS);
     out.push_str(crate::crt_finally_fields::EMITTED_TYPES);
+    out.push_str(&format!("fn older_entry_cut(entry_sp:u32,cookie:u32,saved:[Option<u32>;8],predecessor:RegistryHead)->RegistryResult<FrameImage<RegistryHead>>{{{}}}",frame.initializer_body()));
     out.push_str(&crate::crt_owned_frame::emit_initializer(
         &frame,
         "initialize_inner_scalars_owned",
@@ -131,6 +132,31 @@ pub(crate) fn emit() -> String {
         out.push_str(&format!("({at},&{code:?}),"));
     }
     out.push_str("]}");
+    for (name, at, hex) in [
+        ("handler_saved_entry", 0x402210, "558bec83ec1c538b5d085657"),
+        ("handler_disposition_init", 0x402222, "c745f401000000"),
+        ("handler_original_epilog", 0x4022e0, "8b45f45f5e5b8be55dc3"),
+    ] {
+        let code = bytes(&format!("{name}.bin"), hex);
+        let graph = if name == "handler_original_epilog" {
+            crate::crt_stream_ir::Graph::decode(&code, at)
+        } else {
+            crate::crt_stream_ir::Graph::decode_linear_fragment(&code, at)
+        }
+        .unwrap();
+        let body = if name != "handler_original_epilog" {
+            crate::crt_stream_emit::emit_linear_fragment(&graph, &Default::default()).unwrap()
+        } else {
+            crate::crt_stream_emit::emit_body(
+                &graph,
+                |_, _| Err("handler boundary has no imports".into()),
+                &Default::default(),
+                32,
+            )
+            .unwrap()
+        };
+        out.push_str(&format!("fn {name}(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->RegistryResult<CrtValue>{{let p=rt.resolve_absolute({at},CrtRegionKind::Module)?;for(i,b)in {code:?}.into_iter().enumerate(){{if rt.load(rt.offset(p,i as i64)?,8)?.known_scalar()?!=b as u32{{return Err(\"handler boundary bytes changed\");}}}}{body}}}fn map_{name}(rt:&mut CrtStreamRuntime)->RegistryResult<()>{{rt.map_region({at},{},CrtRegionKind::Module,Some(&{code:?}))?;Ok(())}}",code.len()));
+    }
     out.push_str(BACKEND);
     out
 }
@@ -193,11 +219,12 @@ fn original_finally_effects(rt:&mut CrtStreamRuntime,record:&mut LocalRecord<'_>
 
 pub(crate) const CASES: &str = r#"
 fn live_finally_cases(){
- for mode in 0..26{
-  let mut m=Machine::new_dispatch_known(vec![FrameSpec{scopes:vec![]}],0,[None;10],Some(0)).unwrap();let mut r=ThreadRegistry::new(m.owner(),0x8000,0xf000,&[(0x400000,0x420000)],0x41c000).unwrap();let mut rt=runtime(&r);
-  let sp=rt.resolve_absolute(0xe000,CrtRegionKind::Stack).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(71)).unwrap();let c=CrtCpu::new(sp,71).unwrap();let binding=m.owned_binding(0).unwrap();
-  let mut storage=initialize_inner_scalars_owned(&mut rt,&mut r,&m,binding,&c).unwrap();m.issue_owned_event(binding).unwrap();r.contain(storage.id).unwrap();let id=storage.id;
-  map_finally_original(&mut rt).unwrap();map_original_cleanups(&mut rt).unwrap();map_original_notification(&mut rt).unwrap();
+ for mode in 0..36{
+  let mut m=Machine::new_dispatch_known((0..if mode>=31{2}else{1}).map(|_|FrameSpec{scopes:vec![]}).collect(),0,[None;10],Some(0)).unwrap();let mut r=ThreadRegistry::new(m.owner(),0x8000,0xf000,&[(0x400000,0x420000)],0x41c000).unwrap();let mut rt=runtime(&r);
+  let older=if mode>=31{let b=m.owned_binding(0).unwrap();let image=older_entry_cut(0xe800,0x12345678,[None;8],r.head().unwrap()).unwrap();Some(r.install_frame(b,&image).unwrap())}else{None};
+  let sp=rt.resolve_absolute(0xe000,CrtRegionKind::Stack).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(71)).unwrap();let c=CrtCpu::new(sp,71).unwrap();let binding=m.owned_binding(if mode>=31{1}else{0}).unwrap();
+  let mut storage=initialize_inner_scalars_owned(&mut rt,&mut r,&m,binding,&c).unwrap();m.issue_owned_event(binding).unwrap();r.contain(older.unwrap_or(storage.id)).unwrap();let id=storage.id;
+  map_handler_saved_entry(&mut rt).unwrap();map_handler_disposition_init(&mut rt).unwrap();map_handler_original_epilog(&mut rt).unwrap();map_finally_original(&mut rt).unwrap();map_original_cleanups(&mut rt).unwrap();map_original_notification(&mut rt).unwrap();
   let nested=original_nested_handler_bytes();rt.map_region(0x4027b0,nested.len()as u32,CrtRegionKind::Module,Some(&nested)).unwrap();
   let trace=rt.resolve_absolute(0x41c948,CrtRegionKind::Module).unwrap();let local=rt.resolve_absolute(storage.image.ebp-28,CrtRegionKind::Stack).unwrap();let cursor=rt.resolve_absolute(storage.image.ebp-32,CrtRegionKind::Stack).unwrap();
   let seed=if mode==1{u32::MAX}else{5};rt.store(trace,32,CrtValue::scalar(seed)).unwrap();
@@ -220,7 +247,8 @@ fn live_finally_cases(){
    if mode==20{let at=rt.resolve_absolute(s.image.ebp-48,CrtRegionKind::Stack)?;rt.store(at,32,CrtValue::scalar(0))?;}
    if mode==21{rt.store(rt.resolve_absolute(0x40154c,CrtRegionKind::Module)?,8,CrtValue::scalar(0x90))?;}
    let sp=rt.resolve_absolute(0x9800,CrtRegionKind::Stack)?;rt.store(sp,32,CrtValue::ProtectedReturn(946))?;
-   let mut cpu=CrtCpu::new(sp,946)?;cpu.r[5]=CrtValue::Pointer(rt.resolve_absolute(s.image.ebp,CrtRegionKind::Stack)?);cpu.entry=cpu.r;
+   let mut cpu=CrtCpu::new(sp,946)?;let exception=rt.map_region(0x7000,80,CrtRegionKind::Context,Some(&[0;80]))?;rt.store(rt.offset(sp,4)?,32,CrtValue::Pointer(exception))?;
+   handler_saved_entry(&mut rt,&mut cpu)?;handler_disposition_init(&mut rt,&mut cpu)?;assert_eq!(cpu.steps,8);assert!(!cpu.returned);
    if mode==22{rt.store(rt.resolve_absolute(0x9900,CrtRegionKind::Stack)?,32,CrtValue::ProtectedReturn(946))?;}
    if mode==23{rt.consume_stack(sp,CrtValue::ProtectedReturn(946))?;}
    for(at,b)in finally_original_regions(){let at=rt.resolve_absolute(at,CrtRegionKind::Module)?;for(i,expected)in b.iter().enumerate(){if rt.load(rt.offset(at,i as i64)?,8)?.known_scalar()?!=u32::from(*expected){return Err("postcleanup original code changed");}}}
@@ -230,11 +258,26 @@ fn live_finally_cases(){
     original_inner_guard_call(view,child,0x40226e)?;child.finish(view.rt)
    })?;}
    original_inner_guard_call(&mut view,&mut cpu,0x40226e)?;
-   assert_eq!(cpu.r[4],CrtValue::Pointer(sp));assert_eq!(cpu.r[5],cpu.entry[5]);
-   rt.consume_stack(sp,CrtValue::ProtectedReturn(946))?;Ok(())
+   // Guard completion restores its own call stack, leaving the actual handler
+   // saves live for the original epilog. No supplied packet replaces POPs.
+   let bp=CrtCpu::pointer(cpu.r[5])?;
+   if mode==26{rt.store(rt.offset(bp,-36)?,32,CrtValue::scalar(0))?;}
+   if mode==27{rt.store(rt.resolve_absolute(0x4022e0,CrtRegionKind::Module)?,8,CrtValue::scalar(0x90))?;}
+   if mode==28{rt.store(rt.offset(bp,-12)?,32,CrtValue::Scalar{bits:0,known:0})?;}
+   if mode==29{rt.store(rt.offset(bp,-12)?,32,CrtValue::scalar(2))?;}
+   if mode==30{rt.store(rt.resolve_absolute(0x9900,CrtRegionKind::Stack)?,32,CrtValue::ProtectedReturn(946))?;}
+   if rt.tags.values().filter(|&&v|v==CrtValue::ProtectedReturn(cpu.return_id)).count()!=1{return Err("handler epilog return alias");}
+   let disposition=handler_original_epilog(&mut rt,&mut cpu)?.known_scalar()?;
+   if disposition>1{return Err("unsupported handler disposition");}
+   assert!(cpu.returned);assert_eq!(disposition,1);assert_eq!(cpu.r[4],CrtValue::Pointer(rt.offset(sp,4)?));assert_eq!(cpu.r[5],cpu.entry[5]);Ok(CrtHandlerExit{anchor:rt.anchor,id:s.id,event:m.event,disposition,completion_generation:r.generation.checked_add(1).ok_or("handler completion generation overflow")?})
   }));
   let read=|rt:&CrtStreamRuntime,p|rt.load(p,32).unwrap().known_scalar().unwrap();
-  if mode<=1||mode==24{result.unwrap();let expected=if mode==1{0xffffff12}else{1298};assert_eq!(read(&rt,trace),expected);assert_eq!(read(&rt,local),118);assert_eq!(read(&rt,cursor),u32::MAX);assert_eq!(read(&rt,rt.resolve_absolute(0x41c94c,CrtRegionKind::Module).unwrap()),118);assert_eq!(read(&rt,rt.resolve_absolute(0x41c958,CrtRegionKind::Module).unwrap()),u32::MAX);assert_eq!(storage.image.try_level,-2);assert!(r.temporary.is_empty());}
+  if mode<=1||mode==24||mode>=31{let(mut exit,completion)=result.unwrap();if mode>=31{
+    if mode==32{exit.event+=1;}if mode==33{exit.disposition=0;}if mode==34{m.current=0;}if mode==35{exit.completion_generation-=1;}
+    let retired=storage.retire_completed(&mut rt,&mut r,&mut m,completion,exit);
+    if mode==31{retired.unwrap();assert_eq!(r.target_ready().unwrap(),older.unwrap());assert!(!m.frames[1].live);assert!(rt.load(sp,32).unwrap().known_scalar().is_err());assert!(storage.validate_storage(&rt,&r,&m).is_err());let mut expired=c;assert!(expired.finish(&mut rt).is_err());}else{assert!(retired.is_err());assert!(m.frames[1].live);assert!(r.frames[1].linked);assert!(r.available().is_err());}
+    continue;
+   }else{assert!(r.retire_frame(completion,&storage.image).is_err());}let expected=if mode==1{0xffffff12}else{1298};assert_eq!(read(&rt,trace),expected);assert_eq!(read(&rt,local),118);assert_eq!(read(&rt,cursor),u32::MAX);assert_eq!(read(&rt,rt.resolve_absolute(0x41c94c,CrtRegionKind::Module).unwrap()),118);assert_eq!(read(&rt,rt.resolve_absolute(0x41c958,CrtRegionKind::Module).unwrap()),u32::MAX);assert_eq!(storage.image.try_level,-2);assert!(r.temporary.is_empty());}
   else{assert!(result.is_err(),"finally case {mode}");assert!(r.available().is_err());assert!(r.frames[0].completion.is_none());
    if mode>=20{assert_eq!(read(&rt,trace),1298);assert_eq!(read(&rt,local),118);assert_eq!(storage.image.try_level,-2);assert!(r.temporary.is_empty());}
    if mode==4{assert_eq!(read(&rt,trace),81);assert_eq!(read(&rt,local),100);assert_eq!(read(&rt,cursor),0);}

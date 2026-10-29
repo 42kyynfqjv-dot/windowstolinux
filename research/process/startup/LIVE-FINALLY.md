@@ -130,3 +130,58 @@ used as exceptional retirement authority. Routine review and CI can remain on So
 Two additional nested-call cases execute the same original guard through a live
 child activation and reject an aliased child return, respectively. These exercise
 shared call ownership; they do not claim nested Windows exception delivery.
+
+## Original handler tail and checked retirement
+
+The connected component now executes the original handler save block
+`[0x402210,0x40221c)`, original disposition initializer
+`[0x402222,0x402229)`, and original return epilog
+`[0x4022e0,0x4022ea)`. POPs and frame teardown restore the values actually saved
+by the original save instructions. A checked straight-line instruction-cut API
+returns to its component boundary without executing RET or consuming a protected
+continuation; complete-function graph decoding retains its closed-edge rules.
+A regression rejects return, jump, call, FS and malformed cuts.
+
+The initializer/cleanup/guard/epilog assembly still has explicit intervening-body
+and entry cuts. It is not execution of every original handler instruction.
+The epilog's disposition and protected return must be valid before the assembly
+issues a non-Clone `CrtHandlerExit`. Completion of a callback alone cannot replace
+this executed-tail authority.
+
+`CrtOwnedStorage::retire_completed` requires matching event/runtime/registration,
+the live single-use handler-completion receipt, disposition ContinueSearch (1),
+TryLevel -2 and a completed younger-frame machine boundary. It validates physical
+source words, unlinks and retires the registry frame, retires the matching machine
+frame, and consumes the abandoned frame's initialized words and protected tags.
+A failure poisons the registry. The selected frame cannot be retired.
+
+The corpus now has 36 native component scenarios (4 successful and 32 rejected or
+failing). Added cases corrupt the saved ESI, epilog bytes, disposition knowledge
+or value, and root return identity; exercise successful younger retirement and
+stale-event/wrong-disposition/wrong-machine/wrong-completion-generation rejection; and verify the abandoned
+CPU cannot use its old protected return. The younger-frame case supplies an
+independently located older registration as an explicit entry cut: it does not
+prove acquisition or initialization of original Main's live storage. Existing
+nested guard cases retain their component-only meaning. There are 155 CRT tests
+passing plus the separately executed vector-dependent test; one new test function
+checks fragment boundaries. No new whole-PE Windows/ELF pairs.
+
+Next bind the actual dispatch caller state and exception-handler control path
+across the intervening instructions, with original older-frame acquisition and
+captured/delivery ownership, before treating the component exit as a complete
+original handler. The normal-return Inner epilog is still excluded from exceptional
+retirement. RtlUnwind completion, selected continuation and full startup/rcedit
+remain unsupported.
+
+The exit token also binds the immediately ensuing registry completion generation.
+An exit from an earlier handler invocation cannot authorize a later completion on
+the same frame/event. Both exit and completion are consumed by retirement.
+
+CI reconciliation: all three aa6a9d4b workflows succeeded. For 16951511 startup
+40807719740 succeeded; full 40807728976 failed imported-output original Windows
+`hello` execution (job 123230560030), with stdout Hello, empty stderr, alive after
+15 seconds, then killed/reaped1. Artifact12868966896 SHA256
+`8d423144595dbc8b33a7ecd02b06e56b02f9b1c11272b78d631f11004abb66f8`
+preserves the launch and observer evidence. The same PE is
+`30a0afa2dba23697256b96df129e62a9cc7c099edf68bfcb87eaf125fc3757e3`.
+This cause remains unresolved; the parallel run's result does not erase it.

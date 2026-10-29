@@ -88,6 +88,8 @@ fn require_original_notification(rt:&CrtStreamRuntime,storage:&CrtOwnedStorage,t
     ))
 }
 pub(crate) const EMITTED_TYPES: &str = r#"
+/// Issued only after the bound original handler epilog returned normally.
+struct CrtHandlerExit {anchor:guest_memory::Capability,id:RegistrationId,event:u64,disposition:u32,completion_generation:u64}
 struct CrtOwnedStorage {
  anchor:guest_memory::Capability,identity:RegistryIdentity,binding:OwnedFrameBinding,id:RegistrationId,event:u64,
  entry:CrtPointer,return_id:u64,image:FrameImage<RegistryHead>,ordinary:std::collections::BTreeSet<i32>,
@@ -128,6 +130,17 @@ impl CrtOwnedStorage {
   for(p,value)in writes{rt.store(p,32,value)?;}
   let id=r.install_frame(binding,&image)?;
   Ok(Self{anchor:rt.anchor,identity:r.identity,binding,id,event:m.event,entry,return_id:cpu.return_id,image,ordinary:ordinary.iter().copied().collect(),protected,input:None,pair_return:None,unwind_epoch:None})
+ }
+ fn retire_completed(&mut self,rt:&mut CrtStreamRuntime,r:&mut ThreadRegistry,m:&mut Machine,completion:HandlerCompletion,exit:CrtHandlerExit)->RegistryResult<()>{
+  let result=(||{
+   self.validate_storage(rt,r,m)?;
+   if exit.anchor!=self.anchor||exit.id!=self.id||exit.event!=m.event||exit.disposition!=1||exit.completion_generation!=completion.generation||completion.frame!=self.id||completion.identity!=r.identity||r.frames[r.frame_index(self.id)?].completion!=Some(completion.generation)||self.image.try_level!= -2{return Err("owned retirement completion authority");}
+   if !m.explicit_dispatch||m.phase!=Phase::Cleanup||m.current==m.selected||m.owned_binding(m.current).ok()!=Some(self.binding)||m.frames[m.current].cursor!=m.frames[m.current].scopes.len(){return Err("owned retirement machine boundary");}
+   let mut words=Vec::new();for at in (self.image.esp..=self.image.entry_sp).step_by(4){let p=rt.resolve_absolute(at,CrtRegionKind::Stack)?;words.push((p,rt.load(p,32)?));}
+   r.unlink_head(self.id)?;r.retire_frame(completion,&self.image)?;
+   m.retire_dispatched(self.binding).map_err(|_|"owned machine retirement phase")?;
+   for(p,v)in words{rt.consume_stack(p,v)?;}Ok(())
+  })();if let Err(e)=result{r.block(e);}result
  }
  fn validate(&self,rt:&CrtStreamRuntime,r:&ThreadRegistry,m:&Machine)->RegistryResult<()>{
   self.validate_storage(rt,r,m)?;

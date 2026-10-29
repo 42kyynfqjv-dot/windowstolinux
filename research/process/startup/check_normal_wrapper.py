@@ -85,7 +85,10 @@ def check(original, observation, out, compare=None):
                                      ('inner-finally-0',0x40117f,33,True),
                                      ('finally-dispatch',0x401060,93,True),
                                      ('finally-dispatch-table',0x415180,24,False),
-                                     ('Inner-scope-table',0x41b1d0,40,False)]:
+                                     ('Inner-scope-table',0x41b1d0,40,False),
+                                     ('handler_saved_entry',0x402210,12,True),
+                                     ('handler_disposition_init',0x402222,7,True),
+                                     ('handler_original_epilog',0x4022e0,10,True)]:
         raw=mapped(image,at,size,executable=executable)
         (out/(name+'.bin')).write_bytes(raw)
         finally_regions[name]=sha(raw)
@@ -189,7 +192,7 @@ def check(original, observation, out, compare=None):
                   observation_sha256=sha((observation/'report.json').read_bytes()),
                   vectors_sha256=sha(vector_bytes), rust_sha256=source_hash, command=command,
                   comparisons=5, whole_pe_translation_pairs=0,
-                  live_finally_native_cases=26, live_finally_windows_pairs=0, live_finally_hashes=finally_regions,
+                  live_finally_native_cases=36, live_finally_windows_pairs=0, live_finally_hashes=finally_regions,
                   file_scope_code_sha256=file_regions, file_scope_imports=file_imports,
                   file_scope_native_test_functions=3,
                   live_dispatch_native_cases=37, live_dispatch_windows_original_pairs=0,
