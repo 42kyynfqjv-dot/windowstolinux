@@ -895,3 +895,64 @@ whole-PE translations or full startup/rcedit admission are claimed.
 Local verification: 175 root and 158 CRT tests passed; one recorded-observation
 test is separately replayed. Formatting/Clippy and artifact/projection checks passed. Historical Windows
 timeout diagnostics remain intact. Generated Rust SHA256: `4774b4c88150ef243f930b3b17249480c40de315088fa570925d7d572780a684`.
+
+### Original initial RaiseException event reaches the normal-return gate
+
+The initial event adapter now consumes a `RaiseCallProof` for the complete
+original Inner prolog, initializers and four argument pushes, followed by the
+actual indirect CALL at `0x401117`. The generated caller registers and known flag
+bits come from that instruction proof, not the supplied exception CONTEXT. Live
+frame identity, initialized arguments, unchanged CALL bytes, slot extent and fresh
+return identity are checked before event issuance. The artifact checker verifies
+that the original IAT cell binds kernel32!RaiseException. IAT/code values are
+compiler bindings, not application-name/hash dispatch.
+
+The adapter issues the existing `OwnedExceptionEvent` once and retains the
+suspended API CALL as source-owned storage. The connected experiment exposed an
+unretired API CALL token: Main's pivot correctly rejected it as foreign abandoned
+control state. Retirement now validates that exact source slot and unique return
+identity and consumes it only after the source's original cleanup/handler epilog
+and registry retirement succeed. The pivot rejection was not relaxed.
+
+One connected path now carries that same event through the existing live dispatch,
+cleanup, original Restore and continuation stores. At the selected restoration
+boundary the adapter calls `begin_restoration`, executes checked Machine
+restoration and calls `finish`. This invalidates captured aliases and mints the
+existing single-use normal-call permit. `NormalReturnSession` accepts the event
+and original Main frame. The test deliberately stops at that linked normal-return
+session; dropping the unfinished session blocks the machine/registry. No reporting,
+normal epilog, CRT exit or process termination success is inferred from that cut.
+
+A second connected case expires the captured lifetime before restoration and must
+reject without minting a permit. Six independent issue negatives cover changed
+CALL bytes, unknown argument bytes, a protected CALL-slot collision, returned CPU,
+changed entry registers and a pointer in the null argument-array word. They leave
+event issuance, CPU registers and generation unchanged. Premature restoration,
+premature finish, repeated issuance, stale captured aliases and permit replay
+checks accompany the connected path. These overlap 185 owned-frame scenarios;
+the six issue negatives run separately. The original normal-return plan is tested
+as a gate, not claimed as newly executed epilog instructions.
+
+Local verification: 175 root and 158 CRT tests passed, plus the separately replayed
+recorded observation; formatting, Clippy and artifact/projection checkers passed.
+The initial artifact replay failed when /tmp filled: linker signal 7 and then
+ENOSPC, including sandbox startup failure. Sources/logs were preserved; only
+100 rebuildable numbered task test binaries were removed to recover 887010360
+bytes. Final checks used TMPDIR=/workspace/w2l-build-tmp and passed. This diagnosed
+local capacity failure does not explain historical Windows process-exit timeouts.
+Unchanged PE SHA256 remains
+`1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4`;
+generated Rust SHA256 is
+`760df4891509e69d9af5188a80397f0b691f41e7d783389486e5d25e533d5f99`.
+Zero new Windows differential pairs and zero whole-PE translations.
+
+The concrete next scope is Main's original pre-call initialization and post-restore
+report/epilog on this live storage. The current Main initializer covers its prolog
+and saved ESP, while the original path additionally initializes CONTEXT through
+0x402370, stores GetModuleHandleW(NULL), invokes its nested source, then reports
+at 0x401466 and returns through 0x401500–0x40151b. Those live words and API effects
+must be initialized/proved rather than supplied expected report arguments. Keep
+all actual Windows delivery, incoming-handler containment and collided-unwind
+assumptions explicit. This component event represents the bounded closed,
+same-thread delivery contract; it is not OS-captured-register acquisition. Full
+startup/rcedit and ordinary third-party compatibility remain unsupported.

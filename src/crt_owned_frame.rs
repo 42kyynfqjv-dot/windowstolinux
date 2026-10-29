@@ -158,13 +158,76 @@ fn require_original_notification(rt:&CrtStreamRuntime,storage:&CrtOwnedStorage,t
             .ok_or("notification call depth overflow")?
     ))
 }
+/// Initial event binding from the complete instruction-proved caller fragment.
+pub(crate) fn emit_initial_raise(
+    frame: &ProvenFrame,
+    call: &[u8],
+    iat: u32,
+    event_code: u32,
+) -> Result<String, String> {
+    let proof = super::raise_call::prove_call(frame, call, frame.end(), iat, event_code)?;
+    let registers = proof
+        .registers()
+        .iter()
+        .map(|r| {
+            Ok(match r {
+                super::frame_proof::GuestRegister::Unknown => {
+                    "CrtValue::Scalar{bits:0,known:0}".to_string()
+                }
+                super::frame_proof::GuestRegister::Scalar(n) => format!("CrtValue::scalar({n})"),
+                super::frame_proof::GuestRegister::EntryRegister(i) => format!("cpu.entry[{i}]"),
+                super::frame_proof::GuestRegister::StackOffset(o) => {
+                    format!("CrtValue::Pointer(rt.offset(storage.entry,{o})?)")
+                }
+                _ => return Err("initial raise unsupported register expression".to_string()),
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?
+        .join(",");
+    let (mask, bits) = proof.known_flags();
+    let flags = [1, 64, 128, 2048].map(|b| {
+        if mask & b != 0 {
+            format!("Some({})", bits & b != 0)
+        } else {
+            "None".into()
+        }
+    });
+    let scope = frame.scope_va();
+    let handler = frame.handler_va();
+    let esp = frame.esp_offset();
+    let level = frame.try_level();
+    let pc = proof.call_pc();
+    let next = proof.next_pc();
+    let caller = proof.caller_sp_offset();
+    let callee = proof.callee_sp_offset();
+    Ok(format!(
+        r#"
+fn issue_initial_raise(rt:&mut CrtStreamRuntime,r:&ThreadRegistry,m:&mut Machine,storage:&mut CrtOwnedStorage,cpu:&mut CrtCpu)->RegistryResult<OwnedExceptionEvent>{{
+ storage.validate_storage(rt,r,m)?;if storage.image.scope_va!={scope}||storage.image.handler_va!={handler}||i64::from(storage.image.esp)-i64::from(storage.image.ebp)!={esp}||storage.image.try_level!={level}{{return Err("initial raise frame proof binding");}}m.check_raise_binding(storage.binding).map_err(|_|"initial raise phase")?;
+ if cpu.entry[4]!=CrtValue::Pointer(storage.entry)||cpu.return_id!=storage.return_id||cpu.r!=cpu.entry||cpu.returned{{return Err("initial raise original entry");}}
+ let at=rt.resolve_absolute({pc},CrtRegionKind::Module)?;for(i,b)in {call:?}.into_iter().enumerate(){{if rt.load(rt.offset(at,i as i64)?,8)?.known_scalar()?!=b as u32{{return Err("initial raise changed call");}}}}
+ for(i,n)in [{event_code}u32,0,0,0].into_iter().enumerate(){{let p=rt.offset(storage.entry,{caller}+i as i64*4)?;if rt.load(p,32)?.known_scalar()?!=n{{return Err("initial raise live arguments");}}}}
+ let regs=[{registers}];let sp=rt.offset(storage.entry,{callee})?;rt.valid(sp,4)?;
+ if !rt.overlapping_tags(sp.address(),4).is_empty(){{return Err("initial raise CALL occupied");}}
+ let generation=rt.generation.checked_add(1).filter(|n|*n<1u64<<63).ok_or("initial raise generation")?;let id=generation|(1u64<<63);
+ if rt.tags.values().any(|v|*v==CrtValue::ProtectedReturn(id)){{return Err("initial raise CALL collision");}}
+ let event=OwnedExceptionEvent::from_raise(m,r,storage.binding,&storage.image,RaiseSite{{instruction:{pc},return_ip:{next},iat:{iat},code:{event_code},caller_sp_offset:{caller},callee_sp_offset:{callee}}},256)?;
+ rt.store(sp,32,CrtValue::ProtectedReturn(id))?;storage.raise_call=Some((sp,id));rt.generation=generation;cpu.r=regs;cpu.r[4]=CrtValue::Pointer(sp);cpu.flags=CrtFlags{{cf:{cf},zf:{zf},sf:{sf},of:{of}}};Ok(event)
+}}
+"#,
+        cf = flags[0],
+        zf = flags[1],
+        sf = flags[2],
+        of = flags[3]
+    ))
+}
 pub(crate) const EMITTED_TYPES: &str = r#"
 /// Issued only after the bound original handler epilog returned normally.
 struct CrtHandlerExit {anchor:guest_memory::Capability,id:RegistrationId,event:u64,disposition:u32,completion_generation:u64}
 struct CrtOwnedStorage {
  anchor:guest_memory::Capability,identity:RegistryIdentity,binding:OwnedFrameBinding,id:RegistrationId,event:u64,
  entry:CrtPointer,return_id:u64,image:FrameImage<RegistryHead>,ordinary:std::collections::BTreeSet<i32>,
- protected:std::collections::BTreeMap<i32,CrtValue>,input:Option<(Option<CrtPointer>,CrtPointer,CrtPointer,u32)>,pair_return:Option<(CrtPointer,u64)>,unwind_epoch:Option<u64>,resume_ticket:Option<u64>,post_unwind:Option<(u64,u64,u64)>,post_authority:Option<u64>,selected_cut:Option<(u64,u32,u64,CrtPointer)>,selected_jump:Option<u64>,prepared_context:Option<u64>,restored_landing:Option<u64>,
+ protected:std::collections::BTreeMap<i32,CrtValue>,input:Option<(Option<CrtPointer>,CrtPointer,CrtPointer,u32)>,pair_return:Option<(CrtPointer,u64)>,unwind_epoch:Option<u64>,resume_ticket:Option<u64>,post_unwind:Option<(u64,u64,u64)>,post_authority:Option<u64>,selected_cut:Option<(u64,u32,u64,CrtPointer)>,selected_jump:Option<u64>,prepared_context:Option<u64>,restored_landing:Option<u64>,raise_call:Option<(CrtPointer,u64)>,
 }
 impl RegistryFrameStorage for CrtOwnedStorage{fn registry_image(&self)->&FrameImage<RegistryHead>{&self.image}}
 impl CrtOwnedStorage {
@@ -201,17 +264,20 @@ impl CrtOwnedStorage {
   // No external callback occurs before final registry installation.
   for(p,value)in writes{rt.store(p,32,value)?;}
   let id=r.install_frame(binding,&image)?;
-  Ok(Self{anchor:rt.anchor,identity:r.identity,binding,id,event:m.event,entry,return_id:cpu.return_id,image,ordinary:ordinary.iter().copied().collect(),protected,input:None,pair_return:None,unwind_epoch:None,resume_ticket:None,post_unwind:None,post_authority:None,selected_cut:None,selected_jump:None,prepared_context:None,restored_landing:None})
+  Ok(Self{anchor:rt.anchor,identity:r.identity,binding,id,event:m.event,entry,return_id:cpu.return_id,image,ordinary:ordinary.iter().copied().collect(),protected,input:None,pair_return:None,unwind_epoch:None,resume_ticket:None,post_unwind:None,post_authority:None,selected_cut:None,selected_jump:None,prepared_context:None,restored_landing:None,raise_call:None})
  }
  fn retire_completed(&mut self,rt:&mut CrtStreamRuntime,r:&mut ThreadRegistry,m:&mut Machine,completion:HandlerCompletion,exit:CrtHandlerExit)->RegistryResult<()>{
   let result=(||{
    self.validate_storage(rt,r,m)?;
    if exit.anchor!=self.anchor||exit.id!=self.id||exit.event!=m.event||exit.disposition!=1||exit.completion_generation!=completion.generation||completion.frame!=self.id||completion.identity!=r.identity||r.frames[r.frame_index(self.id)?].completion!=Some(completion.generation)||self.image.try_level!= -2{return Err("owned retirement completion authority");}
    if !m.explicit_dispatch||m.phase!=Phase::Cleanup||m.current==m.selected||m.owned_binding(m.current).ok()!=Some(self.binding)||m.frames[m.current].cursor!=m.frames[m.current].scopes.len(){return Err("owned retirement machine boundary");}
+   if let Some((slot,id))=self.raise_call{
+    if slot!=rt.offset(self.entry,i64::from(self.image.esp)-i64::from(self.image.entry_sp)-4)?||rt.load(slot,32)?!=CrtValue::ProtectedReturn(id)||rt.tags.values().filter(|&&v|v==CrtValue::ProtectedReturn(id)).count()!=1{return Err("owned abandoned RaiseException CALL identity");}
+   }
    let mut words=Vec::new();for at in (self.image.esp..=self.image.entry_sp).step_by(4){let p=rt.resolve_absolute(at,CrtRegionKind::Stack)?;words.push((p,rt.load(p,32)?));}
    r.unlink_head(self.id)?;r.retire_frame(completion,&self.image)?;
    m.retire_dispatched(self.binding).map_err(|_|"owned machine retirement phase")?;
-   for(p,v)in words{rt.consume_stack(p,v)?;}Ok(())
+   for(p,v)in words{rt.consume_stack(p,v)?;}if let Some((slot,id))=self.raise_call.take(){rt.consume_stack(slot,CrtValue::ProtectedReturn(id))?;}Ok(())
   })();if let Err(e)=result{r.block(e);}result
  }
  fn validate(&self,rt:&CrtStreamRuntime,r:&ThreadRegistry,m:&Machine)->RegistryResult<()>{

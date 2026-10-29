@@ -254,3 +254,7 @@ mod crt_finally_tests;
 #[allow(dead_code)]
 #[path = "../src/restore_instruction.rs"]
 mod restore_instruction;
+
+#[allow(dead_code)]
+#[path = "../src/raise_call.rs"]
+mod raise_call;

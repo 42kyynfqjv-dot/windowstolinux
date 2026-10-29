@@ -530,7 +530,8 @@ fn owned_context_transfer(frame:&mut CrtOwnedFrameView<'_>,cpu:&mut CrtCpu,prepa
 /// Consume instruction-derived live restoration once. Actual OS event acquisition
 /// and its CapturedContext lifetime remain separately required for normal return.
 pub(crate) const RESTORATION_COMPLETION: &str = r#"
-fn complete_owned_restoration(frame:&mut CrtOwnedFrameView<'_>,cpu:&CrtCpu,landing:CrtRestoredLanding)->RegistryResult<[Option<u32>;10]>{let result=(||{
+fn complete_owned_restoration(frame:&mut CrtOwnedFrameView<'_>,cpu:&CrtCpu,landing:CrtRestoredLanding)->RegistryResult<[Option<u32>;10]>{complete_owned_restoration_event(frame,cpu,landing,None)}
+fn complete_owned_restoration_event(frame:&mut CrtOwnedFrameView<'_>,cpu:&CrtCpu,landing:CrtRestoredLanding,mut event:Option<&mut OwnedExceptionEvent>)->RegistryResult<[Option<u32>;10]>{let result=(||{
  frame.validate()?;
  let owner=frame.owner_frame()?;let sp=frame.rt.resolve_absolute(frame.storage.image.esp,CrtRegionKind::Stack)?;
  if landing.anchor!=frame.rt.anchor||landing.event!=frame.machine.event||landing.source!=frame.storage.id||frame.storage.restored_landing!=Some(landing.id)||landing.registers!=cpu.r||cpu.returned||cpu.r[4]!=CrtValue::Pointer(sp)||cpu.r[5]!=CrtValue::Pointer(owner)||frame.storage.prepared_context.is_some()||frame.storage.selected_jump.is_some()||frame.storage.input.is_some()||frame.storage.pair_return.is_some()||frame.storage.image.try_level!= -2||landing.target!=frame.rt.resolve_absolute(0x4013a5,CrtRegionKind::Module)?||frame.registry.target_ready()?!=landing.source||frame.machine.current!=frame.machine.selected||frame.machine.frames.iter().skip(frame.machine.selected+1).any(|f|f.live){return Err("restoration stale transfer/lifetime");}
@@ -542,6 +543,8 @@ fn complete_owned_restoration(frame:&mut CrtOwnedFrameView<'_>,cpu:&CrtCpu,landi
  let binding=frame.storage.binding;
  frame.storage.restored_landing=None;
  frame.machine.finish_selected_dispatch(binding).map_err(|_|"restoration selected cleanup incomplete")?;
- frame.machine.restore_owned(landing.target.address(),|lease,_|{lease.bind_storage(binding)?;Ok(projection)}).map_err(|_|"restoration owned transition")
+ if let Some(e)=event.as_deref_mut(){e.begin_restoration(frame.machine,frame.registry)?;}
+ let restored=frame.machine.restore_owned(landing.target.address(),|lease,_|{lease.bind_storage(binding)?;Ok(projection)}).map_err(|_|"restoration owned transition")?;
+ if let Some(e)=event{e.finish(frame.machine,frame.registry)?;}Ok(restored)
  })();if result.is_err(){frame.failed=true;}result}
 "#;
