@@ -14,6 +14,14 @@ struct CrtThreadHead {anchor:guest_memory::Capability,thread:u64,registry:u64,ep
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 struct CrtDispatcherContext {anchor:guest_memory::Capability,thread:u64,epoch:u64,callback:u64,serial:u64}
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
+struct CrtModule {anchor:guest_memory::Capability,handle:u32,generation:u64}
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+struct CrtModuleReference {module:CrtModule,serial:u64}
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+struct CrtFunction {module:CrtModule,address:u32,serial:u64}
+struct CrtLoadedModule {identity:String,generation:u64,certain:bool}
+struct CrtExport {function:CrtFunction,symbol:String}
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
 struct CrtHeap {anchor:guest_memory::Capability,exceptions:Option<bool>}
 /// An explicitly bound, stationary fiber context. This is not a guessed TLS
 /// index or proof that original FlsAlloc/callback initialization has run.
@@ -22,7 +30,7 @@ struct CrtFiber {anchor:guest_memory::Capability,thread:u64,serial:u64}
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 struct CrtFlsSlot {fiber:CrtFiber,index:u32,serial:u64}
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
-enum CrtValue {Heap(CrtHeap),Dispatcher(CrtDispatcherContext),Scalar{bits:u32,known:u32},Pointer(CrtPointer),Handle(CrtDescriptorId),ThreadHead(CrtThreadHead),OpaqueSaved(u8),ProtectedReturn(u64)}
+enum CrtValue {Module(CrtModule),Function(CrtFunction),Heap(CrtHeap),Dispatcher(CrtDispatcherContext),Scalar{bits:u32,known:u32},Pointer(CrtPointer),Handle(CrtDescriptorId),ThreadHead(CrtThreadHead),OpaqueSaved(u8),ProtectedReturn(u64)}
 impl CrtValue {
  fn scalar(bits:u32)->Self{Self::Scalar{bits,known:u32::MAX}}
  fn known_scalar(self)->Result<u32,&'static str>{match self{Self::Scalar{bits,known:u32::MAX}=>Ok(bits),_=>Err("CRT scalar knowledge/type")}}
@@ -56,6 +64,7 @@ trait CrtBackend {
 struct CrtRegion {pointer:CrtPointer,heap:bool,file_owner:Option<u32>}
 struct CrtDescriptor {id:CrtDescriptorId,live:bool,record:Option<CrtPointer>,record_initialized:bool}
 struct CrtStreamRuntime {
+ loader_cells:std::collections::BTreeMap<u32,(CrtPointer,bool)>,modules:std::collections::BTreeMap<u32,CrtLoadedModule>,module_references:std::collections::BTreeMap<u64,CrtModuleReference>,exports:std::collections::BTreeMap<u64,CrtExport>,
  fiber:Option<CrtFiber>,fls:std::collections::BTreeMap<u32,(CrtFlsSlot,CrtValue)>,
  heap:Option<CrtHeap>,memory:guest_memory::Space,owner:u64,thread:u64,anchor:guest_memory::Capability,
  dispatchers:std::collections::BTreeMap<u64,CrtDispatcherContext>,regions:Vec<CrtRegion>,retired:Vec<CrtPointer>,tags:std::collections::BTreeMap<u32,CrtValue>,
@@ -73,7 +82,66 @@ impl CrtStreamRuntime {
   let mut memory=guest_memory::Space::new(byte_limit,64).map_err(|_|"CRT memory budget")?;
   let anchor=memory.map(file_address,size,guest_memory::Owner::Module(owner),guest_memory::Permissions::READ_WRITE,false).map_err(|_|"CRT FILE mapping")?;
   let pointer=CrtPointer{cap:anchor,owner:guest_memory::Owner::Module(owner),base:file_address,size,address:file_address,kind:CrtRegionKind::File};
-  Ok(Self{fiber:None,fls:std::collections::BTreeMap::new(),heap:None,memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],global_objects:std::collections::BTreeMap::new(),global_locks:vec![],record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,canonical_errno:false,errno_cell:None,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([file_address])})
+  Ok(Self{loader_cells:std::collections::BTreeMap::new(),modules:std::collections::BTreeMap::new(),module_references:std::collections::BTreeMap::new(),exports:std::collections::BTreeMap::new(),fiber:None,fls:std::collections::BTreeMap::new(),heap:None,memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],global_objects:std::collections::BTreeMap::new(),global_locks:vec![],record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,canonical_errno:false,errno_cell:None,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([file_address])})
+ }
+ /// Apply an independently established successful executable-module load.
+ /// This records reference effects only; it does not attest DllMain/TLS effects.
+ fn module_acquire_result(&mut self,init:CrtInitialization,identity:&str,handle:u32)->Result<(CrtModule,CrtModuleReference),&'static str>{
+  self.initialization(init)?;
+  if self.closed||handle==0||handle==u32::MAX||identity.is_empty()||identity.len()>256||self.module_references.len()>=256{return Err("CRT module acquisition bounds");}
+  let serial=self.serial.checked_add(1).ok_or("CRT module serial")?;
+  let generation=if let Some(m)=self.modules.get(&handle){
+   if !m.certain||m.identity!=identity{return Err("CRT module identity/effects uncertain");}m.generation
+  }else{if self.modules.len()>=64{return Err("CRT module budget");}serial};
+  let module=CrtModule{anchor:self.anchor,handle,generation};
+  self.modules.entry(handle).or_insert_with(||CrtLoadedModule{identity:identity.into(),generation,certain:true});
+  let reference=CrtModuleReference{module,serial};self.module_references.insert(serial,reference);self.serial=serial;Ok((module,reference))
+ }
+ fn module_identity(&self,module:CrtModule)->Result<(),&'static str>{
+  let m=self.modules.get(&module.handle).ok_or("CRT unloaded module")?;
+  if self.closed||module.anchor!=self.anchor||m.generation!=module.generation||!m.certain||!self.module_references.values().any(|r|r.module==module){return Err("CRT module owner/generation/lifetime");}Ok(())
+ }
+ /// The independently established release outcome consumes exactly one owned
+ /// acquisition. An unclosed failure invalidates lifetime knowledge rather
+ /// than guessing that no detach or reference effect occurred.
+ fn module_release_result(&mut self,init:CrtInitialization,reference:CrtModuleReference,success:bool)->Result<(),&'static str>{
+  self.initialization(init)?;self.module_identity(reference.module)?;
+  if self.module_references.get(&reference.serial)!=Some(&reference){return Err("CRT module reference replay/owner");}
+  if !success{self.modules.get_mut(&reference.module.handle).unwrap().certain=false;return Err("CRT failed release effects unclosed");}
+  self.module_references.remove(&reference.serial);
+  if !self.module_references.values().any(|r|r.module==reference.module){self.modules.remove(&reference.module.handle);self.exports.retain(|_,e|e.function.module!=reference.module);}
+  Ok(())
+ }
+ /// A named, separately justified function export. Variable and ordinal
+ /// results, forwarded-owner assumptions, and host addresses are not calls.
+ fn module_export_result(&mut self,init:CrtInitialization,module:CrtModule,symbol:&str,address:u32)->Result<CrtFunction,&'static str>{
+  self.initialization(init)?;self.module_identity(module)?;
+  if symbol.is_empty()||symbol.len()>256||!symbol.is_ascii()||symbol.as_bytes().contains(&0)||address==0||address==u32::MAX||self.exports.len()>=256{return Err("CRT export bounds/kind");}
+  let serial=self.serial.checked_add(1).ok_or("CRT export serial")?;
+  let function=CrtFunction{module,address,serial};self.exports.insert(serial,CrtExport{function,symbol:symbol.into()});self.serial=serial;Ok(function)
+ }
+ fn function_identity(&self,function:CrtFunction,symbol:Option<&str>)->Result<(),&'static str>{
+  self.module_identity(function.module)?;let e=self.exports.get(&function.serial).ok_or("CRT unknown export")?;
+  if e.function!=function||symbol.is_some_and(|s|s!=e.symbol){return Err("CRT export owner/symbol");}Ok(())
+ }
+ fn loader_value(&self,value:CrtValue)->Result<(),&'static str>{match value{
+  CrtValue::Module(m)=>self.module_identity(m),CrtValue::Function(f)=>self.function_identity(f,None),
+  CrtValue::Scalar{bits:0|u32::MAX,known:u32::MAX}=>Ok(()),_=>Err("CRT loader cache type/unknown")}}
+ /// Serialized full-word XCHG in the explicit startup-exclusive domain.
+ /// The runtime is not shared; no host callback runs between read and write.
+ /// General concurrent guest publication needs a separate interleaving proof.
+ fn bind_loader_cell(&mut self,init:CrtInitialization,p:CrtPointer,function:bool)->Result<(),&'static str>{
+  self.initialization(init)?;if self.closed||p.kind!=CrtRegionKind::Module||p.address%4!=0||self.loader_cells.len()>=128||self.loader_cells.contains_key(&p.address){return Err("CRT loader cell role/alignment/budget");}
+  let old=self.load(p,32)?;self.loader_cell_value(function,old)?;self.loader_cells.insert(p.address,(p,function));Ok(())
+ }
+ fn loader_cell_value(&self,function:bool,v:CrtValue)->Result<(),&'static str>{
+  self.loader_value(v)?;if matches!(v,CrtValue::Module(_))&&function||matches!(v,CrtValue::Function(_))&&!function{return Err("CRT module/export cache kind");}Ok(())
+ }
+ fn exchange_module_word(&mut self,p:CrtPointer,value:CrtValue)->Result<CrtValue,&'static str>{
+  if self.closed||self.initialization.is_none()||p.kind!=CrtRegionKind::Module||p.address%4!=0{return Err("CRT exchange exclusive module word");}
+  let &(bound,function)=self.loader_cells.get(&p.address).ok_or("CRT unbound loader cache")?;
+  if bound!=p{return Err("CRT loader cell lifetime/alias");}self.loader_cell_value(function,value)?;let old=self.load(p,32)?;self.loader_cell_value(function,old)?;
+  self.store(p,32,value)?;Ok(old)
  }
  fn bind_fiber(&mut self,thread:u64)->Result<CrtFiber,&'static str>{
   if self.closed||thread!=self.thread||self.fiber.is_some(){return Err("CRT fiber context already bound/foreign");}
@@ -278,7 +346,7 @@ impl CrtStreamRuntime {
   let size=match width{8=>1,16=>2,32=>4,_=>return Err("CRT load width")};self.valid(p,size)?;self.ordinary_file_bytes(p,size)?;
   let tags=self.overlapping_tags(p.address,size);
   if !tags.is_empty(){if width!=32||tags.len()!=1||tags[0].0!=p.address{return Err("CRT partial typed-word read");}
-   match tags[0].1{CrtValue::Heap(h)=>self.heap_identity(h)?,CrtValue::Dispatcher(token)=>self.dispatcher(token)?,CrtValue::Pointer(q)=>self.pointer_transport(q)?,CrtValue::Handle(h)=>{self.descriptor(h)?;},CrtValue::ThreadHead(head)=>self.thread_head_transport(head)?,_=>{}}
+   match tags[0].1{CrtValue::Module(m)=>self.module_identity(m)?,CrtValue::Function(f)=>self.function_identity(f,None)?,CrtValue::Heap(h)=>self.heap_identity(h)?,CrtValue::Dispatcher(token)=>self.dispatcher(token)?,CrtValue::Pointer(q)=>self.pointer_transport(q)?,CrtValue::Handle(h)=>{self.descriptor(h)?;},CrtValue::ThreadHead(head)=>self.thread_head_transport(head)?,_=>{}}
    return Ok(tags[0].1);
   }
   let(mut bits,mut known)=(0u32,0u32);for i in 0..size{let a=p.address+i;
@@ -301,6 +369,8 @@ impl CrtStreamRuntime {
    }
   }
   let bits=match value{
+   CrtValue::Module(m)=>{if width!=32||!matches!(p.kind,CrtRegionKind::Stack|CrtRegionKind::Module){return Err("CRT module transport role/width");}self.module_identity(m)?;m.handle},
+   CrtValue::Function(f)=>{if width!=32||!matches!(p.kind,CrtRegionKind::Stack|CrtRegionKind::Module){return Err("CRT export transport role/width");}self.function_identity(f,None)?;f.address},
    CrtValue::Heap(h)=>{if width!=32{return Err("CRT heap handle width");}self.heap_identity(h)?;0},
    CrtValue::Dispatcher(token)=>{if width!=32||p.kind!=CrtRegionKind::Stack{return Err("CRT dispatcher transport role");}self.dispatcher(token)?;0},
    CrtValue::Scalar{bits,..}=>bits,

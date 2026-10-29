@@ -2060,3 +2060,43 @@ comparisons, with the same PE and wrapper Rust hashes above. Zero new Windows
 observations or whole-image pairs. 9fc5c1f workflows40938216500/40938203406 and
 startup40938203420 remained active at inspection, without a completed-failure
 conclusion. Historical Windows timeouts remain preserved and unexplained.
+
+### Owned cold resolver and checked publication
+
+The original 160-byte cold resolver and 75-byte load helper now execute as native
+components with module/reference/export identity and lifetime checks. Original
+word exchanges return the previous value without changing flags, under an
+explicit startup-exclusive component contract and registered typed cache cells.
+Successful load/release callbacks must produce the matching reference change;
+scalar addresses, stale generations, incorrect symbols, replay, unknown or partial
+cache storage and foreign ownership reject. Prior effects survive later failure.
+The original error-87 comparator/retry branch, actual DLL initialization/detach,
+API-set/forwarder dependencies and dynamic FLS invocation remain unresolved.
+See [COLD-RESOLVER-HANDOFF.md](COLD-RESOLVER-HANDOFF.md).
+
+Local validation passed 203 CRT tests (one existing observation test separate),
+175 root tests, Clippy, format/diff and Python syntax. Artifact replay passed five
+C++ checks, seven existing PTD checks and five previously recorded Windows wrapper
+comparisons. Thirteen new scripted resolver scenarios and independent
+registry/exchange negatives are native component evidence, with zero new Windows
+loader observations or whole-PE pairs. All 235 bytes in the two bound bodies are
+individually mutation-tested. PE SHA256 remains
+1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4.
+The updated generated wrapper source SHA256 is
+1d4353871658ac3470ff65cd4be5703d8bea347fed26ef5413801ba861ef5300;
+cold component source SHA256 is
+88e743efc4b25a472b008bd5aadf31ed1b88cf1352e21a3481179c9d81153a81.
+These source hashes must match fresh cross-host CI before making that claim.
+Durable selected evidence: [cold-resolver-component.json](evidence/cold-resolver-component.json).
+
+Completed predecessor CI: all three 9fc5c1f runs passed. At5c3c2b5, startup
+40939350184 and push Rust40939350110 passed; PR Rust40939364543 failed the
+original-Windows imported hello process wait at15 seconds, job123678335203.
+The prior launch controls for the same PE passed; that does not explain the later
+hang. Uploaded artifact12926905477 has GitHub-reported ZIP SHA256
+389e4eaaa6274596210bd0718fe51043eeb0be1b5d44ba10f71c029d6fbb837c.
+Its storage download returned Forbidden, so only logs/metadata were inspected;
+no local ZIP verification or process-state interpretation is claimed. The exact
+log evidence is preserved in
+[windows-hello-5c3c2b5.json](evidence/windows-hello-5c3c2b5.json).
+Historical Windows timeouts, ordinary startup and rcedit remain unresolved.

@@ -1,0 +1,15 @@
+{
+  "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "rust_sha256": "1d4353871658ac3470ff65cd4be5703d8bea347fed26ef5413801ba861ef5300",
+  "cold_resolver_source_sha256": "88e743efc4b25a472b008bd5aadf31ed1b88cf1352e21a3481179c9d81153a81",
+  "cold_resolver_scripted_cases": 13,
+  "cold_resolver_new_windows_pairs": 0,
+  "cxx_record_rust_tests": 5,
+  "comparisons": 5,
+  "whole_pe_translation_pairs": 0,
+  "scope": "Linux native component replay against recorded Windows wrapper boundaries; explicit loader effects; no fresh Windows loader observations",
+  "root_tests": 175,
+  "crt_tests": 203,
+  "crt_ignored": 1,
+  "changed_body_bytes_rejected": 235
+}

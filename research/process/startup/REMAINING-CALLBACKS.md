@@ -159,3 +159,14 @@ hole after backend return was fixed by post-call context validation; mutation an
 retirement now reject before dispatcher continuation, preserving earlier effects.
 Next bounded Astra scope is shared module/function authority plus original cold
 resolver/publication integration, not an unqualified scalar function-pointer call.
+
+
+Cold resolver ownership connection: the complete original resolver/load helper
+now execute with typed module/reference/export lifetimes and checked, serialized
+word publication. Thirteen native scripted outcomes plus independent lifetime,
+replay, alias, flags and corruption checks exercise this boundary. Actual loader
+callbacks, API-set/forwarder dependencies and concurrency remain unproved; the
+error-87 prefix helper and dynamic FLS invocation still reject. See
+[COLD-RESOLVER-HANDOFF.md](COLD-RESOLVER-HANDOFF.md) for the exact contract and next
+Sol-sized comparator/lookup connection. This does not supply original Windows
+loader evidence or full startup admission.

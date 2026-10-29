@@ -1,15 +1,61 @@
 # Cold resolver: measured ownership and publication gate
 
-The cached path remains implemented; cold resolution and dynamic FLS invocation
-remain rejected. This document records a code-level integration boundary, not a
-claim of module loading or new application compatibility.
+The cached path remains implemented. The original cold resolver and load helper
+now execute as checked native components with explicit loader API effects.
+Whole-image cold resolution and dynamic FLS invocation remain rejected. This is
+not a native DLL loader or new application compatibility claim.
+
+## Implemented ownership and publication boundary
+
+Module values now carry runtime identity and module generation. Acquisitions have
+separate single-use reference receipts; exported functions carry module lifetime,
+export identity, exact case-sensitive symbol and guest address. Releasing one
+reference keeps borrowed module/export values live while another owned reference
+exists. Final release invalidates them. Reload at the same handle creates a new
+generation. Unclosed release failure poisons lifetime knowledge. Scalar addresses,
+foreign-runtime tokens, stale receipts and stale exports cannot create authority.
+GetProcAddress may return data or forwarded exports in Windows; this component
+only accepts separately justified named function results. It does not establish
+forwarder dependencies or the actual Windows module identity.
+
+Shared IR/emission now supports the observed memory/register 32-bit XCHG form.
+Execution requires a live, explicitly bound module-cache word and startup-exclusive
+runtime state. It checks the complete initialized range, alignment, exact storage
+capability and module-versus-function role, reads before writing, returns the old
+value, and leaves flags unchanged. Partial, foreign, stale, unbound and unknown
+cells reject before publication. This serialized component has no callback between
+its read and write. It does not prove concurrent guest publication equivalent or
+that an actual original process is exclusively initializing.
+
+The 160-byte resolver and 75-byte load helper are decoded mechanically. Original
+branches, calls, error tests, exchanges and returns execute with checked storage.
+Load/export/release callbacks are still explicit effect cuts. Their argument
+bounds/types and returned lifetime authority are checked, and successful load and
+release must show the matching one-reference change. A numerical success result
+alone fails. Earlier effects are preserved on later rejection. The error-87
+prefix-comparison/retry branch still rejects at its original helper call.
+
+Thirteen scripted native scenarios cover fresh success, failed load, error 87,
+retained-reference publication, failure after acquisition, absent export, scalar
+export forgery, unload during lookup, wrong symbol, unknown LastError, false load
+success, false release success and failure reported after acquisition. The retained
+reference case supplies a serialized callback publication, not evidence of actual
+thread races. Independent registry/exchange tests use a different module and
+symbol, covering unload/reload, replay, foreign runtime, aliasing, partial access,
+truncated/unknown storage, expired initialization, flags and failed-release poison.
+All 235 bytes of the two bound bodies are individually mutation-tested.
+
+The checker records cold-resolver generated-source SHA256 and compares it across
+hosts. These are component executions with scripted API results. There are zero
+new original-Windows loader observations or whole-PE comparison pairs.
+
 
 ## New reproducible evidence
 
 The artifact checker binds the entire160-byte original resolver402a53..402af3,
 75-byte load helper402af3..402b3e, and module API import identities. A Rust test
-independently decodes their calls and memory exchanges. The current shared IR
-rejects all four memory XCHG instructions; the test preserves that barrier:
+independently decodes their calls and memory exchanges. All four memory XCHG instructions now lift under the restricted runtime
+publication contract above:
 
 | Address | Original effect |
 | --- | --- |
@@ -29,9 +75,9 @@ FlsGetValue; the static fallback remains TlsGetValue. This is not UCRT slot stat
 A successful module publication racing with an already populated cache has a
 FreeLibrary path. Numeric HMODULE equality alone does not prove ownership of the
 same acquired reference. Nor does a function-address scalar prove that its module
-remains loaded. The current CrtValue domain has no module/function lifetime
-capabilities, and CrtStreamRuntime Module storage is not a module-loader object.
-Adding a call target or a plain scalar XCHG would leave these obligations open.
+remains loaded. The new CrtValue module/function capabilities are distinct from Module memory
+storage. Actual loader effects, API-set/forwarder identity and concurrent
+publication remain obligations beyond these reference and storage checks.
 
 ## Reviewed defect fixed before this integration
 
@@ -45,41 +91,31 @@ at the same guest address, preserving the distinction between address and lifeti
 This is protection around the component's explicit API-effect cut; it is not
 proof of original Windows delivery or arbitrary DLL callback effects.
 
-## Cohesive next implementation scope (bounded Astra High)
+## Next connected implementation scope
 
-1. Define shared process/module acquisition references and exported-function
-   capabilities, including runtime identity, module generation, symbol/backend,
-   live acquired references and invalidation. Map guest numeric values to checked
-   authority; never invoke host addresses or treat arbitrary integers as functions.
-2. Bind a documented built-in module/API subset. LoadLibraryExW, GetProcAddress,
-   FreeLibrary and dynamic FlsGetValue require exact success/error and lifecycle
-   contracts. Unknown modules/exports reject. Real DLL initialization/TLS callbacks
-   cannot be assumed harmless or removed from observable effects. Retain the
-   original flags800/error87/prefix/retry decision and compare helper instructions.
-3. Add full-word memory XCHG semantics under a reviewed atomic or explicit
-   exclusive-initialization contract. Preserve read-before-write, old value,
-   unchanged flags, ownership, publication ordering and earlier effects on later
-   failure. A single-thread component is not evidence that shared cache writes
-   can ignore concurrency or module-reference cleanup.
-4. Execute the original cold resolver/load helper and lookup wrapper through the
-   new contracts into the existing PTD/dispatcher path. Prove cache ownership on
-   reuse and reject stale functions after unload/reload, wrong runtime, alias or
-   incomplete initialization. Keep TLS and FLS index/thread/fiber lifetimes distinct.
-5. Test fresh cache, module/lookup failures, unknown errors, fallback decisions,
-   duplicate acquisition/publication, losing-reference cleanup, stale function
-   reuse, foreign runtime, changed code and callback mutation/failure. Couple tests
-   to original instructions. New Windows observations remain necessary for new
-   differential claims; existing recorded boundaries are not cold-loader evidence.
+Sol can review the implementation and CI, then lift original prefix comparator
+4078e0 and finish the flags800/error87 retry decision with independent strings,
+length and encoding cases. Keep the supplied loader effects explicit.
 
-Primary contracts to apply during implementation are Microsoft Learn
+Next bind the checked function result through the original indirect-call guard
+and lookup wrapper into the distinct dispatcher PTD backend. This requires actual
+module/API-set/forwarder lifetime evidence and a live FLS index/fiber owner; a
+function token alone is not an API-effect certificate. Unknown exports and loader
+initialization/detach/TLS callbacks stay rejected. Actual loading and concurrent
+module publication require a separately justified contract, not broader defaults.
+Unwind/termination and original Windows delivery remain separate unresolved gates.
+
+Primary contracts read for this implementation are Microsoft Learn
 [LoadLibraryExW](https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-loadlibraryexw),
 [GetProcAddress](https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-getprocaddress),
 [FreeLibrary](https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-freelibrary),
 and [FlsGetValue](https://learn.microsoft.com/en-us/windows/win32/api/fibersapi/nf-fibersapi-flsgetvalue),
-plus the x86 instruction contract for implicitly locked memory XCHG. These links
-are contract requirements, not a claim that every loader behavior is closed.
+plus the x86 instruction contract for implicitly locked memory XCHG. The documented executable-load reference increment, final-release unload and
+DllMain detach, exact export-name spelling, function-or-variable result, and
+flags800 search behavior informed this boundary. The links do not close all
+loader behavior. Memory XCHG uses the observed word/flag semantics; concurrent
+atomic equivalence is outside the component domain.
 
-Astra is justified for the connected module/function lifetime and publication
-contract; Sol can review and run routine evidence afterward. This does not call
-for another sequence of isolated accessor models. Unwind/termination, original
+Sol can resume substantive review and the bounded original comparator/lookup
+connection. Escalate only a concrete loader/forwarder or concurrency uncertainty. Unwind/termination, original
 startup, rcedit, ordinary CRT and historical Windows timeouts remain unresolved.

@@ -12,7 +12,7 @@ struct CrtCpu{abi:CrtAbi,r:[CrtValue;8],entry:[CrtValue;8],flags:CrtFlags,return
 impl CrtCpu{
  fn new(sp:CrtPointer,return_id:u64)->Result<Self,&'static str>{if sp.kind!=CrtRegionKind::Stack||return_id==0{return Err("CRT cpu entry authority");}let mut r=std::array::from_fn(|i|CrtValue::OpaqueSaved(i as u8));r[4]=CrtValue::Pointer(sp);Ok(Self{abi:CrtAbi::Cdecl32Forward,r,entry:r,flags:CrtFlags::unknown(),return_id,steps:0,returned:false,return_pop:0})}
  fn tick(&mut self,budget:u32)->Result<(),&'static str>{self.steps=self.steps.checked_add(1).ok_or("CRT instruction counter overflow")?;if self.steps>budget{return Err("CRT certified instruction bound exceeded");}Ok(())}
- fn bits(v:CrtValue)->Result<(u32,u32),&'static str>{match v{CrtValue::Scalar{bits,known}=>Ok((bits,known)),CrtValue::Pointer(p)=>Ok((p.address(),u32::MAX)),CrtValue::Handle(h)=>Ok((h.handle,u32::MAX)),CrtValue::OpaqueSaved(_)=>Ok((0,0)),CrtValue::Heap(_)|CrtValue::Dispatcher(_)|CrtValue::ProtectedReturn(_)|CrtValue::ThreadHead(_)=>Err("CRT protected control bits")}}
+ fn bits(v:CrtValue)->Result<(u32,u32),&'static str>{match v{CrtValue::Module(m)=>Ok((m.handle,u32::MAX)),CrtValue::Function(f)=>Ok((f.address,u32::MAX)),CrtValue::Scalar{bits,known}=>Ok((bits,known)),CrtValue::Pointer(p)=>Ok((p.address(),u32::MAX)),CrtValue::Handle(h)=>Ok((h.handle,u32::MAX)),CrtValue::OpaqueSaved(_)=>Ok((0,0)),CrtValue::Heap(_)|CrtValue::Dispatcher(_)|CrtValue::ProtectedReturn(_)|CrtValue::ThreadHead(_)=>Err("CRT protected control bits")}}
  fn number(v:CrtValue)->Result<u32,&'static str>{let(b,k)=Self::bits(v)?;if k!=u32::MAX{return Err("CRT unknown scalar bits observed");}Ok(b)}
  fn pointer(v:CrtValue)->Result<CrtPointer,&'static str>{match v{CrtValue::Pointer(p)=>Ok(p),_=>Err("CRT pointer provenance")}}
  fn mask(width:u8)->Result<u32,&'static str>{match width{8=>Ok(255),16=>Ok(65535),32=>Ok(u32::MAX),_=>Err("CRT operand width")}}
@@ -97,7 +97,7 @@ impl CrtCpu{
  }
  fn condition(&self,kind:u8)->Result<bool,&'static str>{let z=||self.flags.zf.ok_or("CRT unknown ZF");let c=||self.flags.cf.ok_or("CRT unknown CF");let s=||self.flags.sf.ok_or("CRT unknown SF");let o=||self.flags.of.ok_or("CRT unknown OF");Ok(match kind{0=>z()?,1=>!z()?,2=>c()?,3=>!c()?&&!z()?,4=>c()?||z()?,5=>!c()?,6=>s()?!=o()?,7=>z()?||(s()?!=o()?),8=>!z()?&&(s()?==o()?),9=>s()?==o()?,10=>s()?,11=>!s()?,_=>return Err("CRT condition kind")})}
  fn binary(&mut self,rt:&CrtStreamRuntime,kind:u8,a:CrtValue,b:CrtValue,width:u8)->Result<CrtValue,&'static str>{
-  if kind==0{return Ok(b);}let mask=Self::mask(width)?;
+  if kind==0{return Ok(b);}for v in [a,b]{match v{CrtValue::Module(m)=>rt.module_identity(m)?,CrtValue::Function(f)=>rt.function_identity(f,None)?,_=>{}}}let mask=Self::mask(width)?;
   if width==32&&kind==8{if let(CrtValue::Heap(x),CrtValue::Heap(y))=(a,b){if x!=y{return Err("CRT distinct opaque heap comparison");}rt.heap_identity(x)?;self.flags=CrtFlags{cf:Some(false),of:Some(false),zf:Some(false),sf:None};return Ok(CrtValue::Scalar{bits:0,known:0});}}
 
   if matches!(kind,3|4|5|8){let(x,kx)=Self::bits(a)?;let(y,ky)=Self::bits(b)?;let(bits,known)=match kind{3=>(x^y,kx&ky),4|8=>(x&y,(kx&ky)|(kx&!x)|(ky&!y)),5=>(x|y,(kx&ky)|(kx&x)|(ky&y)),_=>unreachable!()};let bits=bits&mask;let known=(known&mask)|!mask;let sign=1u32<<(width-1);self.flags=CrtFlags{cf:Some(false),of:Some(false),zf:if bits&known&mask!=0{Some(false)}else if known==u32::MAX{Some(true)}else{None},sf:if known&sign!=0{Some(bits&sign!=0)}else{None}};return Ok(CrtValue::Scalar{bits,known});}

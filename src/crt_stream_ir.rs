@@ -22,6 +22,10 @@ pub(crate) enum SignedCondition {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum Op {
     Ordinary(Operation),
+    Exchange {
+        address: graph::Address,
+        register: Reg,
+    },
     Call(Target),
     IndirectCall(Operand),
     SignedMove {
@@ -213,6 +217,21 @@ fn extended(i: &Instruction, raw: &[u8], tables: &[JumpTable<'_>]) -> Result<Op,
         return Err("CRT IR: instruction prefix".into());
     }
     Ok(match i.mnemonic() {
+        Mnemonic::Xchg
+            if i.code() == Code::Xchg_rm32_r32
+                && i.op0_kind() == OpKind::Memory
+                && i.op1_kind() == OpKind::Register =>
+        {
+            let Operand::Memory(address, 32) = operand_from_move(i, 0)? else {
+                return Err("CRT XCHG word address".into());
+            };
+            let register = full(i.op1_register())?;
+            if register.index == 4 {
+                return Err("CRT XCHG stack register".into());
+            }
+            Op::Exchange { address, register }
+        }
+
         Mnemonic::Inc if i.code() == Code::Inc_rm8 && i.op0_kind() == OpKind::Register => {
             let mut copy = *i;
             copy.set_code(Code::Setne_rm8);
