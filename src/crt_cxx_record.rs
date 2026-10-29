@@ -376,6 +376,7 @@ child.finish(rt)
     );
     Ok(format!(
         r#"
+fn cxx_handler_identity()->[u32;3]{{[{origin},{metadata},{dispatcher}]}}
 fn cxx_handler_prefix(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,owner:&CrtCpu,frame:&CrtPtdFrame,record:&CrtCxxRecord,context:&CrtCxxContext,{epoch_parameter}{parameters})->Result<CrtValue,&'static str>{{
  {preflight}record.state(rt,owner,frame)?;cpu.validate_active(rt)?;
  if frame.handler!={origin}||frame.low!=rt.offset(frame.bp,-28)?||record.metadata.address()!={metadata}{{return Err("C++ handler/frame binding");}}
@@ -756,11 +757,11 @@ pub(crate) fn invocation_source() -> &'static str {
 const INVOCATION: &str = r#"
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 enum CxxInvocationPhase{Pending,Active,Consumed,ResultTaken,Failed}
-struct CxxInvocationReturn{handler:CrtNormalHandlerReturn,lease:u64}
+struct CxxInvocationReturn{handler:CrtNormalHandlerReturn,lease:u64,executed:[u32;3],owner:u64,bp:CrtPointer}
 struct CrtCxxInvocation{
  anchor:guest_memory::Capability,identity:RegistryIdentity,epoch:u64,event:u64,parent:NormalFrameId,
  owner:u64,bp:CrtPointer,metadata:CrtPointer,exception:CrtPointer,context:CrtPointer,esp:CrtPointer,
- flags:u32,phase:CxxInvocationPhase,lease:Option<u64>,
+ flags:u32,phase:CxxInvocationPhase,lease:Option<u64>,target:[u32;3],
 }
 impl CrtCxxInvocation{
  fn bind_unwind(event:&CrtNormalException,rt:&CrtStreamRuntime,epoch:&NormalCallEpoch<'_>,owner:&CrtCpu,frame:&CrtPtdFrame,record:&CrtCxxRecord,context:&CrtCxxContext,exception:CrtPointer)->RegistryResult<Self>{
@@ -768,11 +769,12 @@ impl CrtCxxInvocation{
   if event.delivery!=CrtNormalDelivery::Pending||epoch.delivery.is_some(){return Err("C++ invocation nested/active delivery unbound");}
   let value=Self{anchor:rt.anchor,identity:event.identity,epoch:event.epoch,event:event.generation,parent:event.frame,
    owner:owner.return_id,bp:frame.bp,metadata:record.metadata,exception,context:context.context,esp:context.esp,
-   flags:2|u32::from(event.noncontinuable),phase:CxxInvocationPhase::Pending,lease:None};
+   flags:2|u32::from(event.noncontinuable),phase:CxxInvocationPhase::Pending,lease:None,target:cxx_handler_identity()};
   value.objects(event.code,rt,owner,frame,record,context)?;Ok(value)
  }
  fn objects(&self,code:u32,rt:&CrtStreamRuntime,owner:&CrtCpu,frame:&CrtPtdFrame,record:&CrtCxxRecord,context:&CrtCxxContext)->RegistryResult<()>{
   context.check(rt,owner,frame)?;record.state(rt,owner,frame)?;
+  if self.target!=cxx_handler_identity()||frame.handler!=self.target[0]||record.metadata.address()!=self.target[1]{return Err("C++ invocation executed handler identity");}
   if rt.anchor!=self.anchor||rt.owner!=self.identity.owner||rt.thread!=self.identity.instance||owner.return_id!=self.owner
    ||frame.bp!=self.bp||record.metadata!=self.metadata||context.context!=self.context||context.esp!=self.esp
    ||self.exception.kind!=CrtRegionKind::Context||self.exception.address()%4!=0
@@ -811,12 +813,13 @@ fn cxx_invoke_unwind(event:&mut CrtNormalException,invocation:&mut CrtCxxInvocat
   invocation.objects(code,rt,owner,frame,record,context)?;Ok(value)
  });
  match result{
-  Ok(receipt)=>{invocation.phase=CxxInvocationPhase::Consumed;Ok(CxxInvocationReturn{handler:receipt,lease:invocation.lease.ok_or("C++ invocation missing return lease")?})},
+  Ok(receipt)=>{invocation.phase=CxxInvocationPhase::Consumed;Ok(CxxInvocationReturn{handler:receipt,lease:invocation.lease.ok_or("C++ invocation missing return lease")?,executed:cxx_handler_identity(),owner:owner.return_id,bp:frame.bp})},
   Err(error)=>{invocation.phase=CxxInvocationPhase::Failed;Err(error)}
  }
 }
 fn cxx_take_invocation_result(event:&mut CrtNormalException,invocation:&mut CrtCxxInvocation,receipt:CxxInvocationReturn,rt:&CrtStreamRuntime,interrupted:&CrtCpu,epoch:&mut NormalCallEpoch<'_>,binding:&CrtNormalBinding,owner:&CrtCpu,frame:&CrtPtdFrame,record:&CrtCxxRecord,context:&CrtCxxContext)->RegistryResult<u32>{
  let result=(||{
+  if receipt.executed!=invocation.target||receipt.executed!=cxx_handler_identity()||receipt.owner!=invocation.owner||receipt.bp!=invocation.bp{return Err("C++ receipt executed target/owner mismatch");}
   if invocation.phase!=CxxInvocationPhase::Consumed||invocation.lease!=Some(receipt.lease)
    ||event.identity!=invocation.identity||event.epoch!=invocation.epoch||event.generation!=invocation.event||event.frame!=invocation.parent{return Err("C++ invocation foreign/stale return authority");}
   invocation.objects(event.code,rt,owner,frame,record,context)?;

@@ -201,3 +201,37 @@ predecessors, expired owners/captures, unretired children and changed code. Chec
 original dispositions and emitted state together; no externally supplied success
 Boolean. This remains a bounded Astra High integration. Full startup/rcedit is
 unsupported and historical Windows timeouts remain unexplained.
+
+## Executed-handler receipt checkpoint
+
+The original C++ prefix emitter now exposes its proved entry, metadata and
+common-dispatch target identity. Invocation binds that identity before execution;
+the return receipt is minted only after the connected original prefix/common/
+unwind path completes and includes the actual identity, owner, frame and lease.
+Consumption checks these fields again, including the current live handler.
+Four added cases reject wrong receipt target, owner or frame and a changed live
+handler after return. All 34 invocation cases assert reaching their intended
+boundary. Existing duplicate, nested-event and changed-code checks remain.
+
+This is an executed-handler component receipt, not a selected-registration
+receipt. No chain node is invented for the legacy supplied owner. It still
+cannot advance an ordered search cursor or resume the guest.
+
+A reproducible compiler gate now identifies the first blocked connection. Using
+the unchanged original EH4 handler/table with Search at TryLevel=-2,
+`handler_dispatch::prove_dispatch` proves ReturnDisposition(value=1), while
+`crt_owned_search::emit` rejects with `owned search: no global boundary`.
+The current emitter requires a GlobalUnwind action and lowers only the selected
+handler path. The native harness asserts both the original disposition proof
+and that precise rejection. This is a compiler-boundary diagnostic, not a new
+Windows observation or native whole-handler result.
+
+Next bounded integration: lower the already proved return-only EH4 path through
+its actual prefix, guard and epilog on the live normal frame; mint the first
+registration-bound disposition only after those instructions return. Then wire
+the single-use cursor advance to the checked C++ predecessor and original C++
+execution. Do not skip that EH4 source, manufacture its return from the proof's
+constant, or promote the component receipt into selection authority. C++ source
+shape, actual capture/flag production, incoming-chain and collided effects remain
+separate. Sol can review this receipt checkpoint; the live EH4 return-path and
+ordered cursor connection remains the concrete Astra integration.

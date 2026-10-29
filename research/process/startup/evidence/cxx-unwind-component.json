@@ -1,7 +1,7 @@
 {
   "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
-  "rust_sha256": "a1376a5d70f3abc89eb4b2710ffa443864b88c67096992fcdef22925a968275f",
-  "unwind_binding_source_sha256": "ac16aa1903e90a6fb3dee07052d004fe7aa67fe7f479113096e1d5825f5f1aef",
+  "rust_sha256": "a2386c6c45d7d724e2744009528aa9f5691c2ec5d80bc2987b57e27290a7ad73",
+  "unwind_binding_source_sha256": "0b1ff9343211301d646e52c8a46d831fcd795ef33cf481ad97f98daa959fbfba",
   "unwind_native_cases": 24,
   "unwind_new_windows_pairs": 0,
   "unwind_binding_rust_tests": 1,
@@ -52,7 +52,7 @@
   "positive_assertion_review": "Live handler and receipt tests now require successful callback/result explicitly before an intentionally rejected outer component boundary.",
   "prefix_stack_alias_preflight": "Parent stack alias rejects before prefix register or call-identity changes.",
   "prior_root_tests_passed": 175,
-  "bound_cxx_invocation_native_cases": 30,
+  "bound_cxx_invocation_native_cases": 34,
   "bound_cxx_invocation_new_windows_pairs": 0,
   "bound_capture_contract": {
     "record_bytes": 80,
@@ -81,5 +81,13 @@
     "defect": "Stale C++ predecessor could be installed after binding but before original FS effect; checks now run at C++/EH4 installation and restoration.",
     "reproducer": "shared_chain_rechecks_owner_at_original_fs_effect: mode0 returned Ok before correction; four cases require exact rejection afterward",
     "test_audit": "24 original cases now assert intended error classes; delivery setup cannot bypass result checks; protected predecessor overwrite is labeled store rejection."
-  }
+  },
+  "executed_handler_receipt": {
+    "identity": "proved handler entry, metadata and common-dispatch target, plus owner/frame and child lease",
+    "minting": "only after connected original prefix/common/unwind completes",
+    "new_negative_cases": 4,
+    "selection_authority": false,
+    "ordered_advance": false
+  },
+  "ordered_dispatch_gate": "Original EH4 Search at TryLevel=-2 proves ReturnDisposition(1); crt_owned_search::emit rejects this path with owned search: no global boundary. Native harness asserts both facts; first registration cannot be skipped."
 }

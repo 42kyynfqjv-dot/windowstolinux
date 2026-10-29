@@ -93,3 +93,10 @@ Only failed job123714769651 was explicitly retried through GitHub's normal API;
 Run attempt2 completed successfully, including rerun Linux job123720191590. This is a labeled infrastructure retry of the *old* commit. It neither
 erases attempt1 nor validates newer heads. Historical original-Windows process
 exit timeouts remain separate and unexplained.
+
+The executed C++ component receipt now retains proved handler/metadata/dispatch
+identity and live owner/frame through single-use consumption (34 invocation
+cases). Ordered advancement remains blocked at the earlier EH4 source: the
+original empty-scope Search proof returns ContinueSearch, but the native search
+emitter requires a GlobalUnwind action. THREAD-CHAIN.md records the exact
+reproducer and return-path integration, with no supplied success receipt.
