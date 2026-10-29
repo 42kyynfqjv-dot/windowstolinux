@@ -1856,3 +1856,37 @@ registers after RET: original ECX retains the numeric caller continuation, while
 the consumed protected token cannot be pushed again as control authority. The
 independent differently-sized-frame cases assert both the precise numeric PC and
 absence of remaining protected-return values in registers.
+
+## Sol review: lazy FLS setter and canonical errno invalidation
+
+Reviewed a182104 continuation relocation/restoration and TLS→FLS provenance.
+Found and fixed canonical errno surviving FLS slot retirement: mutation/retirement
+now invalidates the binding/cache, without modifying the original PTD bytes.
+A stale-generation/wrong-fiber/wrong-index setter rejects before effects. Failed
+setter outcomes conservatively make slot knowledge unknown; undocumented failure
+atomicity is not assumed.
+
+Original lazy40a1ee..40a296 and setter thunk40806d now execute on the connected
+getter stack through the first setter outcome. Failure returns null and restores
+the outer LastError; success preserves the -1 sentinel, then rejects at actual
+calloc407cf0. Unknown LastError can be saved/restored as unknown scalar state.
+Seven focused tests cover these paths and prior continuation/ownership cases.
+No new Windows observations or translated program pairs; original artifacts remain
+unchanged, and the normal registry/exception cut remains explicit.
+
+Inspected actual handler414ad6: guard(record-16) XOR(record+12), call40154c,
+metadata41b42c, JMP403002. Metadata's first word is19930522, count2, unwind-map
+pointer41b41c. This is a distinct three-word record/state protocol. The registry's
+reserved Cxx kind has no admission implementation and explicitly rejects through
+check_image; its existing independent negative test still protects that gate.
+See PTD-FLS.md. A bounded Astra High pass is justified for the shared C++ metadata,
+state/cleanup and continuation adapter; routine verification remains on Sol.
+The existing EH4 certificate must not be repurposed by changing addresses.
+
+Local verification: 198 CRT passed (one existing observation test separate),
+183 frame/unwind and175 root passed; seven focused PTD tests, Clippy/format/diff
+and57 Python tests passed (one skipped). Artifact-bound replay retains five older
+Windows boundary comparisons and zero new whole-PE pairs. Wrapper Rust SHA256:
+`4747748b1b1f775de195605cf2ca2e466d027c97978540abfc229708e17be489`.
+Historical Windows timeouts remain unresolved, including case16. New checkpoint
+CI must pass independently; no merge or formal approval is submitted.

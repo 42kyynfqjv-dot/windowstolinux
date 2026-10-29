@@ -104,14 +104,15 @@ pub(crate) fn source() -> String {
   Ok(match target{
    Target::Direct(0x414268)=>"frame=Some(CrtPtdFrame::new(rt,cpu,previous,0x414ad6,0x41c000)?);ptd_prolog(rt,cpu,frame.as_mut().unwrap(),0x40a33e)?;".into(),
    Target::Direct(0x414254)=>"ptd_epilog(rt,cpu,frame.as_mut().ok_or(\"PTD missing frame\")?,0x40a3b8)?;".into(),
-   Target::Import(0x415044)=>format!("cpu.call_activation(rt,{next},0,|rt,child|{{let value=rt.last_error()?;child.clobber(CrtValue::scalar(value));child.finish(rt)}})?;"),
-   Target::Import(0x415048)=>format!("cpu.call_activation(rt,{next},4,|rt,child|{{let sp=CrtCpu::pointer(child.r[4])?;let value=rt.load(rt.offset(sp,4)?,32)?.known_scalar()?;rt.last_os_error=Some(value);child.clobber(CrtValue::Scalar{{bits:0,known:0}});child.finish_pop(rt,4)}})?;"),
+   Target::Import(0x415044)=>format!("cpu.call_activation(rt,{next},0,|rt,child|{{let value=rt.last_os_error.map(CrtValue::scalar).unwrap_or(CrtValue::Scalar{{bits:0,known:0}});child.clobber(value);child.finish(rt)}})?;"),
+   Target::Import(0x415048)=>format!("cpu.call_activation(rt,{next},4,|rt,child|{{let sp=CrtCpu::pointer(child.r[4])?;let value=rt.load(rt.offset(sp,4)?,32)?;if !matches!(value,CrtValue::Scalar{{..}}){{return Err(\"LastError scalar type\");}}rt.last_os_error=value.known_scalar().ok();child.clobber(CrtValue::Scalar{{bits:0,known:0}});child.finish_pop(rt,4)}})?;"),
    Target::Direct(0x408061)=>format!("frame.as_ref().ok_or(\"PTD missing frame\")?.live(rt,cpu)?;cpu.call_activation(rt,{next},4,|rt,child|{{ptd_fls_thunk(rt,child,fiber,slot)}})?;"),
    Target::Direct(0x408054)=>"return Err(\"PTD dynamic FlsGetValue2 effect unbound\");".into(),
-   Target::Direct(0x40a1ee)=>"return Err(\"PTD lazy acquisition/recursive errno unbound\");".into(),
+   Target::Direct(0x40a1ee)=>format!("cpu.call_activation(rt,{next},0,|rt,child|lazy(rt,child))?;"),
    _=>return Err("PTD unexpected call target".into())})
  },&roles,4096,|_,_|Err("PTD getter direct FS unbound".into()),|_,_|Ok(String::new()),|_,pop|{if pop!=0{return Err("PTD getter RET cleanup".into());}Ok(Some("if !frame.as_ref().is_some_and(|f|f.phase==2){return Err(\"PTD incomplete epilog\");}return cpu.finish(rt);".into()))}).unwrap();
-    source.push_str(&format!("fn ptd_get(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,previous:CrtThreadHead,fiber:CrtFiber,slot:CrtFlsSlot)->Result<CrtValue,&'static str>{{rt.check_fiber(fiber)?;rt.validate_thread_head(previous)?;let mut frame:Option<CrtPtdFrame>=None;{body}}}"));
+    source.push_str(&format!("fn ptd_get_with_lazy(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,previous:CrtThreadHead,fiber:CrtFiber,slot:CrtFlsSlot,mut lazy:impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu)->Result<CrtValue,&'static str>)->Result<CrtValue,&'static str>{{rt.check_fiber(fiber)?;rt.validate_thread_head(previous)?;let mut frame:Option<CrtPtdFrame>=None;{body}}}"));
+    source.push_str("fn ptd_get(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,previous:CrtThreadHead,fiber:CrtFiber,slot:CrtFlsSlot)->Result<CrtValue,&'static str>{ptd_get_with_lazy(rt,cpu,previous,fiber,slot,|_,_|Err(\"PTD lazy acquisition/recursive errno unbound\"))}");
     source
 }
 
@@ -273,5 +274,58 @@ for mode in 0..3{let sentinel=mode==1;
 }
 "#,
         "ptd-errno-connected",
+    );
+}
+
+pub(crate) const LAZY:&str="8bff57ff15445041006affff3570c141008bf8e867deffff85c0750b57ff154850410033c05fc3535668640300006a01e8cddaffff8bf0595985f6752033db53ff3570c14100e834deffff53e811dbffff5957ff154850410033c0eb4756ff3570c14100e816deffff85c0751733db53ff3570c14100e804deffff56e8e1daffff59eb176834d1410056e8eafdffff6a00e8ccdaffff83c40c8bde57ff15485041008bc35e5b5fc3";
+pub(crate) const SET_THUNK: &str = "8bff558bec5dff25a4504100";
+fn lazy_source() -> String {
+    let thunk = raw(SET_THUNK);
+    assert_eq!(&thunk[6..], &[0xff, 0x25, 0xa4, 0x50, 0x41, 0]);
+    let pre = crt_stream_emit::emit_linear_fragment(
+        &Graph::decode_linear_fragment(&thunk[..6], 0x40806d).unwrap(),
+        &Default::default(),
+    )
+    .unwrap();
+    let graph = Graph::decode(&raw(LAZY), 0x40a1ee).unwrap();
+    let roles = BTreeMap::from([(0x41c170, "CrtRegionKind::Module".into())]);
+    let body=crt_stream_emit::emit_body(&graph,|pc,target|{
+ let next=pc+graph.nodes[&pc].length;
+ Ok(match target{
+ Target::Import(0x415044)=>format!("cpu.call_activation(rt,{next},0,|rt,child|{{child.clobber(rt.last_os_error.map(CrtValue::scalar).unwrap_or(CrtValue::Scalar{{bits:0,known:0}}));child.finish(rt)}})?;"),
+ Target::Import(0x415048)=>format!("cpu.call_activation(rt,{next},4,|rt,child|{{let p=rt.offset(CrtCpu::pointer(child.r[4])?,4)?;let value=rt.load(p,32)?;if !matches!(value,CrtValue::Scalar{{..}}){{return Err(\"LastError scalar\");}}rt.last_os_error=value.known_scalar().ok();child.clobber(CrtValue::Scalar{{bits:0,known:0}});child.finish_pop(rt,4)}})?;"),
+ Target::Direct(0x40806d)=>format!("cpu.call_activation(rt,{next},8,|rt,child|{{let cpu=&mut *child;let _=(||->Result<CrtValue,&'static str>{{{pre}}})()?;let sp=CrtCpu::pointer(child.r[4])?;let index=rt.load(rt.offset(sp,4)?,32)?.known_scalar()?;let value=rt.load(rt.offset(sp,8)?,32)?;let success=rt.fls_set(fiber,slot,index,value,set_success,None)?;child.clobber(CrtValue::scalar(u32::from(success)));child.finish_pop(rt,8)}})?;"),
+ Target::Direct(0x407cf0)=>"return Err(\"PTD lazy calloc/recursive errno unbound\");".into(),
+ Target::Direct(0x407d50)|Target::Direct(0x40a067)=>"return Err(\"PTD free/initializer effect unbound\");".into(),
+ _=>return Err("unexpected lazy PTD call".into())})},&roles,4096).unwrap();
+    format!("fn ptd_lazy(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,fiber:CrtFiber,slot:CrtFlsSlot,set_success:bool)->Result<CrtValue,&'static str>{{{body}}}")
+}
+#[test]
+fn original_lazy_setter_preserves_failure_return_and_success_sentinel() {
+    let extra = format!("{} {}", source(), lazy_source());
+    crate::crt_stream_callees_tests::native(
+        &extra,
+        r#"
+for initial_error in [Some(765),None]{for success in [false,true]{
+ let mut rt=CrtStreamRuntime::new(7,9,0x8000,65536).unwrap();rt.map_region(0x41c000,4,CrtRegionKind::Module,Some(&0x12345678u32.to_le_bytes())).unwrap();rt.map_region(0x41d130,1,CrtRegionKind::Module,Some(&[0])).unwrap();rt.map_region(0x41c170,4,CrtRegionKind::Module,Some(&7u32.to_le_bytes())).unwrap();let fiber=rt.bind_fiber(9).unwrap();let slot=rt.bind_fls(fiber,7,CrtValue::scalar(0)).unwrap();let stack=rt.map_region(0x9000,1024,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,768).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(1)).unwrap();let mut cpu=CrtCpu::new(sp,1).unwrap();let previous=rt.thread_head(17,8,[1,4,12]).unwrap();rt.last_os_error=initial_error;
+ let result=ptd_get_with_lazy(&mut rt,&mut cpu,previous,fiber,slot,|rt,child|ptd_lazy(rt,child,fiber,slot,success));
+ if success{assert!(result.unwrap_err().contains("calloc"));assert!(!cpu.returned);assert_eq!(rt.fls_get(fiber,slot,7).unwrap(),CrtValue::scalar(u32::MAX));}
+ else{assert_eq!(result.unwrap(),CrtValue::scalar(0));assert!(cpu.returned);assert_eq!(rt.last_os_error,initial_error);assert!(rt.fls_get(fiber,slot,7).is_err());}
+}}
+"#,
+        "ptd-lazy",
+    );
+}
+
+#[test]
+fn fls_mutation_invalidates_errno_and_rejects_stale_setter_before_effects() {
+    crate::crt_stream_callees_tests::native(
+        "",
+        r#"
+let mut rt=CrtStreamRuntime::new(7,9,0x8000,65536).unwrap();let p=rt.map_region(0x7000,32,CrtRegionKind::ThreadData,None).unwrap();let cell=rt.offset(p,16).unwrap();rt.store(cell,32,CrtValue::scalar(31)).unwrap();let f=rt.bind_fiber(9).unwrap();let slot=rt.bind_fls(f,7,CrtValue::Pointer(p)).unwrap();rt.bind_errno_cell(cell).unwrap();rt.retire_fls(f,slot).unwrap();assert!(rt.errno_cell.is_none());assert_eq!(rt.errno,None);assert_eq!(rt.load(cell,32).unwrap(),CrtValue::scalar(31));
+let next=rt.bind_fls(f,7,CrtValue::Pointer(p)).unwrap();rt.bind_errno_cell(cell).unwrap();rt.last_os_error=Some(91);assert!(rt.fls_set(f,slot,7,CrtValue::scalar(u32::MAX),true,None).is_err());assert_eq!(rt.errno,Some(31));assert_eq!(rt.last_os_error,Some(91));assert!(rt.fls_set(f,next,8,CrtValue::scalar(0),true,None).is_err());assert!(rt.fls_set(CrtFiber{thread:10,..f},next,7,CrtValue::scalar(0),true,None).is_err());assert_eq!(rt.errno,Some(31));
+rt.fls_set(f,next,7,CrtValue::scalar(u32::MAX),true,None).unwrap();assert!(rt.errno_cell.is_none());assert_eq!(rt.errno,None);assert_eq!(rt.fls_get(f,next,7).unwrap(),CrtValue::scalar(u32::MAX));rt.fls_set(f,next,7,CrtValue::scalar(0),false,Some(8)).unwrap();assert_eq!(rt.last_os_error,Some(8));assert!(rt.fls_get(f,next,7).is_err());
+"#,
+        "fls-set-lifetime",
     );
 }

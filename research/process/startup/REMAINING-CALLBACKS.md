@@ -102,3 +102,10 @@ unsupported until unchanged-binary entry-to-exit evidence passes.
 
 See [PTD-FLS.md](PTD-FLS.md) for the independently checked stack layout,
 slot/fiber lifetime and unknown-state tests, and explicit remaining API cuts.
+
+The lazy getter now executes its first setter/failed-return path; successful
+sentinel installation rejects at unbound calloc, preserving effects. Canonical
+errno is invalidated on FLS mutation/slot retirement. Actual handler414ad6 uses
+three-word record/state and metadata41b42c (19930522); the registry only implements
+EH4 validation despite reserving a Cxx enum. A shared C++ state/unwind adapter and
+recursive allocation/initializer contracts are the next concrete integration gate.

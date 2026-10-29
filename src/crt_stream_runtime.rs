@@ -95,8 +95,14 @@ impl CrtStreamRuntime {
   // zero LastError. The original getter saves/restores it around this call.
   self.last_os_error=None;Ok(value)
  }
+ /// Apply an independently supplied setter outcome. Failure leaves value
+ /// knowledge unknown; the public BOOL contract cannot certify atomicity.
+ fn fls_set(&mut self,f:CrtFiber,slot:CrtFlsSlot,index:u32,value:CrtValue,success:bool,last_error:Option<u32>)->Result<bool,&'static str>{
+  self.check_fiber(f)?;if slot.fiber!=f||slot.index!=index||self.fls.get(&index).map(|x|x.0)!=Some(slot){return Err("CRT FLS setter owner/index/lifetime");}self.fls_value(value)?;
+  self.fls.insert(index,(slot,if success{value}else{CrtValue::Scalar{bits:0,known:0}}));self.errno_cell=None;self.errno=None;self.last_os_error=last_error;Ok(success)
+ }
  fn retire_fls(&mut self,f:CrtFiber,slot:CrtFlsSlot)->Result<(),&'static str>{
-  self.check_fiber(f)?;if slot.fiber!=f||self.fls.get(&slot.index).map(|x|x.0)!=Some(slot){return Err("CRT stale FLS retirement");}self.fls.remove(&slot.index);Ok(())
+  self.check_fiber(f)?;if slot.fiber!=f||self.fls.get(&slot.index).map(|x|x.0)!=Some(slot){return Err("CRT stale FLS retirement");}self.fls.remove(&slot.index);self.errno_cell=None;self.errno=None;Ok(())
  }
  fn retire_fiber(&mut self,f:CrtFiber)->Result<(),&'static str>{self.check_fiber(f)?;if !self.fls.is_empty(){return Err("CRT live FLS slots/callback effects");}self.fiber=None;self.errno_cell=None;self.errno=None;Ok(())}
  /// Separate startup-exclusive storage authority, with no preconstructed lock.

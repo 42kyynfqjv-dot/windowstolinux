@@ -105,3 +105,39 @@ semantic decision is how the different record/continuation ABI participates in
 live registry delivery and recursive initialization, not another arbitrary opcode.
 Historical Windows timeouts remain unresolved. The separately diagnosed aggregate
 projection budget remains subject to its unchanged deadline and full case set.
+
+## Connected lazy-setter checkpoint
+
+The original lazy body `40a1ee..40a296` is now lifted. Its initial GetLastError,
+FlsSetValue thunk, conditional failure return and outer getter epilog execute on
+the same owned stack/fiber. Supplied setter failure returns null through original
+instructions; supplied success leaves the initializing -1 sentinel visible, then
+rejects at the unbound calloc call. Successful allocation/initialization is still
+unsupported. LastError knowledge may be unknown: moves and stack saves preserve
+that unknown value, while branches still require known conditions. No default zero
+is manufactured simply to save and restore an unknown DWORD.
+
+The setter's BOOL/LastError effects are explicit component outcomes. Success
+stores the supplied value. Failure conservatively loses knowledge of the slot's
+value; it does not assert undocumented failure atomicity. Stale/wrong fiber/index
+reject before effects. Mutation and retirement invalidate canonical errno binding,
+fixing the reviewed gap where a retired slot left its old PTD errno cell active.
+Seven focused Rust tests now include both setter outcomes with known/unknown
+LastError, preserved sentinel on later rejection and stale setter rejection.
+The artifact checker binds lazy-body and setter-thunk bytes/import identities.
+
+Registry inspection establishes a more precise next boundary. Handler414ad6
+loads guard at record-16, XORs with record+12, calls40154c, loads metadata41b42c
+and jumps403002. Metadata starts with19930522 and has two state/unwind entries;
+its first nine words are19930522,2,41b41c,0,0,0,0,0,1. The actual record holds
+previous/handler/state in three words, whereas the live EH4 adapter requires an
+encoded table word and a separate fourth level word. A reserved Cxx enum exists,
+but `NormalCallEpoch::check_image` rejects it; there is no implemented C++ record
+admission. Its existing negative test enforces this distinction. A shared C++
+metadata/cleanup-state contract must precede registry insertion. The observed
+magic is evidence of the different protocol, not proof of all its semantics.
+
+Sol review preserved the continuation single-use checks, ECX numeric-PC result,
+unknown-pointer rejection and TLS→FLS provenance correction. The next hard scope
+is this C++ record/state/cleanup adapter plus recursive allocation initialization;
+changing EH4 constants or treating the enum as implemented would be unsound.
