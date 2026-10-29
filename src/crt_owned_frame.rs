@@ -30,6 +30,63 @@ pub(crate) fn emit_activation(
     }
     Ok(format!("fn {name}(rt:&mut CrtStreamRuntime,r:&ThreadRegistry,m:&Machine,storage:&mut CrtOwnedStorage)->RegistryResult<()>{{if storage.image.scope_va!={}||storage.image.handler_va!={}||i64::from(storage.image.esp)-i64::from(storage.image.ebp)!={}{{return Err(\"activation original frame binding\");}}if !r.module_contains_address({origin}){{return Err(\"activation instruction module\");}}storage.scope_store(rt,r,m,{},{level})}}",proof.scope_va(),proof.handler_va(),proof.esp_offset(),proof.try_level()))
 }
+/// Bind the instruction-proved ordinary notification to live CRT module words.
+/// Entry and callback containment remain separate caller proofs.
+pub(crate) fn emit_notification(
+    code: &[u8],
+    origin: u32,
+    binding: super::unwind_bridges::NotificationBinding,
+    continuation: u32,
+) -> Result<String, String> {
+    let proof = super::unwind_bridges::prove_notification(code, origin, binding)?;
+    let record_base = binding
+        .target_word
+        .checked_sub(4)
+        .ok_or("notification record underflow")?;
+    if binding.action_word
+        != record_base
+            .checked_add(8)
+            .ok_or("notification record overflow")?
+        || binding.frame_word
+            != record_base
+                .checked_add(12)
+                .ok_or("notification record overflow")?
+        || record_base.checked_add(16).is_none()
+        || continuation == 0
+    {
+        return Err("notification contiguous live record/continuation".into());
+    }
+    Ok(format!(
+        r#"fn map_original_notification(rt:&mut CrtStreamRuntime)->RegistryResult<()>{{rt.map_region({record_base},16,CrtRegionKind::Module,None)?;rt.map_region({origin},{length},CrtRegionKind::Module,Some(&{code:?}))?;Ok(())}}
+fn original_notify_invoke(rt:&mut CrtStreamRuntime,storage:&mut CrtOwnedStorage,record:&mut LocalRecord<'_>,cpu:&mut CrtCpu,target:u32,reason:u32)->RegistryResult<()>{{
+record.validate_binding(storage.binding,&storage.image)?;let target=rt.resolve_absolute(target,CrtRegionKind::Module)?;let frame=rt.resolve_absolute(storage.image.ebp,CrtRegionKind::Stack)?;
+let p=rt.resolve_absolute({origin},CrtRegionKind::Module)?;for(i,byte)in {code:?}.into_iter().enumerate(){{if rt.load(rt.offset(p,i as i64)?,8)?.known_scalar()?!=byte as u32{{return Err("original notification bytes changed");}}}}
+let sp=CrtCpu::pointer(cpu.r[4])?;let entry=CrtCpu::pointer(cpu.entry[4])?;
+if cpu.returned||cpu.return_id==0||sp.cap!=storage.entry.cap||entry.cap!=sp.cap||sp.address()>entry.address()||sp.address()>=storage.image.esp||cpu.r[0]!=CrtValue::Pointer(target)||cpu.r[5]!=CrtValue::Pointer(frame)||!record.registry.module_contains_address({continuation})||rt.load(entry,32)?!=CrtValue::ProtectedReturn(cpu.return_id)||rt.tags.values().filter(|&&v|v==CrtValue::ProtectedReturn(cpu.return_id)).count()!=1{{return Err("notification live caller authority");}}
+let low=rt.offset(sp,-{scratch})?;rt.valid(low,{scratch})?;record.registry.range(low.address(),u64::from(sp.address()))?;
+if rt.overlapping_tags(low.address(),{scratch}).iter().any(|(_,v)|matches!(v,CrtValue::ProtectedReturn(_)|CrtValue::OpaqueSaved(_)|CrtValue::ThreadHead(_)))||record.registry.temporary.iter().any(|t|u64::from(low.address())<t.high&&u64::from(t.low)<u64::from(sp.address())){{return Err("notification private stack alias");}}cpu.push(rt,CrtValue::scalar(reason))?;
+cpu.call_activation(rt,{continuation},4,|rt,cpu|{{let registers=cpu.r.map(BridgeValue::Capability);let argument=BridgeValue::Scalar(reason);let mut store=|at:u32,value:&BridgeValue<CrtValue>|->RegistryResult<()>{{
+let expected=match at{{{target_word}=>BridgeValue::Capability(CrtValue::Pointer(target)),{action_word}=>BridgeValue::Scalar(reason),{frame_word}=>BridgeValue::Capability(CrtValue::Pointer(frame)),_=>return Err("notification word role")}};
+if *value!=expected||reason!=0x101{{return Err("notification original value authority");}}let value=match value{{BridgeValue::Scalar(v)=>CrtValue::scalar(*v),BridgeValue::Capability(v)=>*v,_=>return Err("notification unbound value")}};rt.store(rt.resolve_absolute(at,CrtRegionKind::Module)?,32,value)}};
+let result=(||->RegistryResult<BridgeExit<CrtValue>>{{type T=CrtValue;{body}}})();let BridgeExit::Return{{registers,cleanup}}=result? else{{return Err("notification nonlocal exit");}};
+if cleanup!=4||registers[4]!=BridgeValue::PrivateStack(0){{return Err("notification original ABI");}}for(i,v)in registers.into_iter().enumerate(){{if i!=4{{cpu.r[i]=match v{{BridgeValue::Capability(v)=>v,BridgeValue::Scalar(v)=>CrtValue::scalar(v),_=>return Err("notification register knowledge")}};}}}}cpu.finish_pop(rt,4)
+}})?;require_original_notification(rt,storage,target.address(),reason)
+}}
+fn require_original_notification(rt:&CrtStreamRuntime,storage:&CrtOwnedStorage,target:u32,reason:u32)->RegistryResult<()>{{let frame=rt.resolve_absolute(storage.image.ebp,CrtRegionKind::Stack)?;let target=rt.resolve_absolute(target,CrtRegionKind::Module)?;for(at,v)in [({target_word},CrtValue::Pointer(target)),({action_word},CrtValue::scalar(reason)),({frame_word},CrtValue::Pointer(frame))]{{if rt.load(rt.resolve_absolute(at,CrtRegionKind::Module)?,32)?!=v{{return Err("notification live result changed");}}}}Ok(())}}
+"#,
+        length = code.len(),
+        code = code,
+        body = proof.body(),
+        target_word = binding.target_word,
+        action_word = binding.action_word,
+        frame_word = binding.frame_word,
+        record_base = record_base,
+        scratch = proof
+            .temporary_bytes
+            .checked_add(8)
+            .ok_or("notification call depth overflow")?
+    ))
+}
 pub(crate) const EMITTED_TYPES: &str = r#"
 struct CrtOwnedStorage {
  anchor:guest_memory::Capability,identity:RegistryIdentity,binding:OwnedFrameBinding,id:RegistrationId,event:u64,
@@ -383,7 +440,7 @@ struct CrtOwnedLocalEffects<'a,'r,F,N>{
  rows:&'a[LocalScope],temporary:Option<CrtOwnedTemporary>,pending:Option<(i32,LocalScope)>,written:bool,notified:bool,finally:F,notification:N,
 }
 impl<F,N> CrtOwnedLocalEffects<'_,'_,F,N>
-where F:FnMut(u32,i32,&mut CrtStreamRuntime,&mut CrtOwnedStorage,&mut LocalRecord<'_>)->RegistryResult<()>,N:FnMut(u32,u32)->RegistryResult<()>{
+where F:FnMut(u32,i32,&mut CrtStreamRuntime,&mut CrtOwnedStorage,&mut LocalRecord<'_>)->RegistryResult<()>,N:FnMut(u32,u32,&mut CrtStreamRuntime,&mut CrtOwnedStorage,&mut LocalRecord<'_>)->RegistryResult<()>{
  fn validate_source(&mut self)->RegistryResult<()>{
   self.temporary.as_ref().ok_or("owned temporary bytes absent")?.validate(self.rt,self.record)?;
   self.record.validate_binding(self.storage.binding,&self.storage.image)?;self.storage.validate(self.rt,self.record.registry,self.machine)?;
@@ -395,7 +452,7 @@ where F:FnMut(u32,i32,&mut CrtStreamRuntime,&mut CrtOwnedStorage,&mut LocalRecor
  }
 }
 impl<F,N> LocalUnwindEffects for CrtOwnedLocalEffects<'_,'_,F,N>
-where F:FnMut(u32,i32,&mut CrtStreamRuntime,&mut CrtOwnedStorage,&mut LocalRecord<'_>)->RegistryResult<()>,N:FnMut(u32,u32)->RegistryResult<()>{
+where F:FnMut(u32,i32,&mut CrtStreamRuntime,&mut CrtOwnedStorage,&mut LocalRecord<'_>)->RegistryResult<()>,N:FnMut(u32,u32,&mut CrtStreamRuntime,&mut CrtOwnedStorage,&mut LocalRecord<'_>)->RegistryResult<()>{
  fn install_temporary(&mut self,n:u32,h:u32)->RegistryResult<()>{
   if n!=40||self.temporary.is_some(){return Err("owned temporary layout/replay");}
   self.storage.validate(self.rt,self.record.registry,self.machine)?;
@@ -426,7 +483,7 @@ where F:FnMut(u32,i32,&mut CrtStreamRuntime,&mut CrtOwnedStorage,&mut LocalRecor
  fn notify(&mut self,handler:u32,reason:u32)->RegistryResult<()>{
   let(_,row)=self.pending.ok_or("owned local notification without row")?;
   if !self.written||self.notified||row.filter!=0||row.handler!=handler||reason!=0x101||self.read_try_level()?!=row.parent{return Err("owned local notification order");}
-  (self.notification)(handler,reason)?;self.validate_source()?;self.notified=true;Ok(())
+  (self.notification)(handler,reason,self.rt,self.storage,self.record)?;self.validate_source()?;self.notified=true;Ok(())
  }
  fn invoke_finally(&mut self,handler:u32,abnormal:u32)->RegistryResult<()>{
   let(level,row)=self.pending.ok_or("owned local callback without row")?;

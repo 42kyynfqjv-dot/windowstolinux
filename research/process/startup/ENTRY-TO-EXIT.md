@@ -1020,3 +1020,48 @@ the live byte source. The current component handler receipt must not be presente
 as proof of those unexecuted instructions. Older-frame pre-event installation,
 full API/delivery effects and nonlocal control remain admission gates. Full startup
 and rcedit remain rejected; no formal approval or merge was submitted.
+
+### Original notification connected to the live cleanup adapter
+
+`crt_owned_frame::emit_notification` now binds the complete unchanged notification
+routine at VA0x402a30 through the existing instruction proof. The compiler binds
+its three contiguous module fields and continuation; complete record arithmetic
+is checked. The runtime accepts a live caller CPU rather than choosing a test
+stack or return identity. It checks caller/owner/target identity, preflights the
+proof-derived private stack extent, and rejects protected or temporary-record
+aliases before pushes. The proven body writes actual typed target/frame pointers
+and abnormal reason into the module record, preserves its original register
+packet and returns through checked caller state with the original RET4.
+This is a bounded ordinary-cleanup notification (reason0x101), not a general
+exception/selected-transfer notification contract.
+
+The loop adapter now supplies live runtime/storage/LocalRecord authority to its
+notification provider. Original-cleanup scenarios execute the original notification
+and require its live typed result before invoking CleanupA/B/C. Successful native
+notification writes remain when a later provider fails. Changed notification
+bytes, scalar alias in the stored target, scalar call target, expired protected
+caller return and protected scratch overlap reject. The count is 21 original
+cleanup/record/notification scenarios: 16 inherited plus five new negatives;
+13 authored-callback scenarios remain separate. CRT143passed/one ignored, Clippy,
+formatting and wrapper/projection evidence checks passed. The ignored test remains
+explicitly replayed against five recorded Windows vectors by the evidence runner.
+No new whole-PE pair is claimed. Generated Rust SHA256:
+`4403f352fe32a2e43768fa8c5f77108910fbda1883d38e85b60d76c6c4ed9aca`.
+
+The finally funclets remain an actual instruction boundary. Inner/Outer routines
+call the original dispatcher and some subsequently store global observations.
+Their local/cursor fields are EBP-28/-32 in those frames. Main's EBP-28 is a guard;
+it must not be lent to those funclets. Next bind an actual Inner frame/initializer,
+its ordinary fields, complete dispatcher data/trace effects and the post-call
+stores, using native live access or a proof that preserves every reached write on
+failure. Reusing only CleanupA/B/C, dropping post-call stores, or granting a
+completion from the current provider would be incorrect. Then original handler
+guards/epilog and younger-frame retirement can feed the nonlocal continuation.
+The original notification's projected private push/pop lowering is bounded by
+its proof and valid private stack; it is not yet the full original helper/caller
+stack composition. Startup/rcedit stays rejected.
+
+All three e21cb9f9 workflows completed successfully. f8eb1484 dedicated40801824625
+passed; full40801830704 and40801824608 remained active at this checkpoint.
+Historical original-process and observer-build timeout evidence is unchanged
+and its causes remain unresolved. PR45 is still draft; SUB-579 remains In Progress.

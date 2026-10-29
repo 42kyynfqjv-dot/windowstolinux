@@ -287,13 +287,14 @@ fn file_scope_failure(){
 
 fn bytes_for_native_filter()->Vec<u8>{vec![0x8b,0x55,0xec,0x8b,0x02,0x8b,0x08,0x89,0x4d,0xe4,0x8b,0x55,0xe4,0x33,0xc0,0x81,0xfa,0x42,0x00,0x42,0xe0,0x0f,0x94,0xc0,0xc3]}
 fn owned_loop_cases(){
- for case in 0..29{
+ for case in 0..34{
   let original=case>=13;let mode=if case>=23{case-10}else if original{case-13}else{case};
   let mut m=Machine::new_dispatch_known(vec![FrameSpec{scopes:vec![]}],0,[None;10],Some(0)).unwrap();let mut r=ThreadRegistry::new(m.owner(),0x8000,0xf000,&[(0x400000,0x420000)],0x41c000).unwrap();let mut rt=runtime(&r);
   let sp=rt.resolve_absolute(0xe000,CrtRegionKind::Stack).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(71)).unwrap();let c=CrtCpu::new(sp,71).unwrap();let binding=m.owned_binding(0).unwrap();let mut storage=initialize_main_owned(&mut rt,&mut r,&m,binding,&c).unwrap();activate_main_owned(&mut rt,&r,&m,&mut storage).unwrap();storage.scope_store(&mut rt,&r,&m,0,if mode==18{2}else{1}).unwrap();
   m.issue_owned_event(binding).unwrap();r.contain(storage.id).unwrap();let id=storage.id;let word=rt.resolve_absolute(storage.image.record+12,CrtRegionKind::Stack).unwrap();let marker=rt.resolve_absolute(storage.image.ebp-780,CrtRegionKind::Stack).unwrap();rt.store(marker,32,CrtValue::scalar(5)).unwrap();rt.store(rt.offset(marker,4).unwrap(),32,CrtValue::scalar(0)).unwrap();
   let nested_bytes=original_nested_handler_bytes();rt.map_region(0x4027b0,nested_bytes.len()as u32,CrtRegionKind::Module,Some(&nested_bytes)).unwrap();
-  map_original_cleanups(&mut rt).unwrap();
+  map_original_cleanups(&mut rt).unwrap();map_original_notification(&mut rt).unwrap();
+  if mode==20{let p=rt.resolve_absolute(0x402a30,CrtRegionKind::Module).unwrap();rt.store(p,8,CrtValue::scalar(0x90)).unwrap();}
   if mode==16{let p=rt.resolve_absolute(0xbfd8,CrtRegionKind::Stack).unwrap();rt.store(p,32,CrtValue::ProtectedReturn(999)).unwrap();}
   if mode==17{let p=rt.resolve_absolute(0x401020,CrtRegionKind::Module).unwrap();rt.store(p,8,CrtValue::scalar(0x90)).unwrap();}
   // Independently specified conformance table; the original PE is untouched.
@@ -306,9 +307,10 @@ fn owned_loop_cases(){
   let entry=LocalEntry{entry_sp:0xc000,handler:0x4027b0,cookie_address:0x41c000,cookie:0x12345678,target_level:-2};let events=std::cell::RefCell::new(Vec::new());
   let result=r.execute_handler(id,&mut storage,|r,storage|r.execute_local(id,storage,entry,|record,storage|{
    let mut effects=CrtOwnedLocalEffects{rt:&mut rt,record,machine:&m,storage,rows:&rows,temporary:None,pending:None,written:false,notified:false,
-    notification:|handler,reason|{events.borrow_mut().push(format!("N{handler:x}:{reason:x}"));if mode==2{Err("independent notification failure")}else{Ok(())}},
+    notification:|handler,reason,rt:&mut CrtStreamRuntime,storage:&mut CrtOwnedStorage,record:&mut LocalRecord<'_>|{if original{fixture_notify_invoke(rt,storage,record,handler,reason,mode)?;}events.borrow_mut().push(format!("N{handler:x}:{reason:x}"));if mode==2{Err("independent notification failure")}else{Ok(())}},
     finally:|handler,level,rt:&mut CrtStreamRuntime,storage:&mut CrtOwnedStorage,record:&mut LocalRecord<'_>|{
      assert_eq!(rt.load(word,32)?.known_scalar()? as i32,if level==2{1}else if level==1{0}else{-2});events.borrow_mut().push(format!("F{handler:x}:{level}"));
+     if mode==19{let p=rt.resolve_absolute(0x41c074,CrtRegionKind::Module)?;rt.store(p,32,CrtValue::scalar(handler))?;}
      if original{original_cleanup_invoke(rt,storage,record,handler,marker)?;}else{owned_callback_invoke(rt,storage,record,handler,marker)?;}
      if mode==3{return Err("independent cleanup failure");}
      if mode==4{rt.store(rt.offset(table,16)?,32,CrtValue::scalar(0))?;}
@@ -319,7 +321,7 @@ fn owned_loop_cases(){
      if mode==7||mode==8||mode==15{
       record.registry.execute_local(id,storage,LocalEntry{entry_sp:0xb000,..entry},|nested,storage|{
        let mut inner=CrtOwnedLocalEffects{rt,record:nested,machine:&m,storage,rows:&rows,temporary:None,pending:None,written:false,notified:false,
-        notification:|_,_|Err("nested notification should not run"),finally:|_,_,_:&mut CrtStreamRuntime,_:&mut CrtOwnedStorage,_:&mut LocalRecord<'_>|Err("nested callback should not run")};
+        notification:|_,_,_:&mut CrtStreamRuntime,_:&mut CrtOwnedStorage,_:&mut LocalRecord<'_>|Err("nested notification should not run"),finally:|_,_,_:&mut CrtStreamRuntime,_:&mut CrtOwnedStorage,_:&mut LocalRecord<'_>|Err("nested callback should not run")};
        // Same live cursor is already the parent's level. No duplicate cleanup.
        owned_original_local(&mut inner,if level==2{1}else if level==1{0}else{-2},0)?;
        if mode==8{return Err("independent nested failure");}Ok(())
@@ -331,7 +333,14 @@ fn owned_loop_cases(){
   }));
   if mode==0||mode==7||mode==9||mode==15||mode==18{result.unwrap();assert_eq!(storage.image.try_level,-2);assert_eq!(rt.load(word,32).unwrap(),CrtValue::scalar((-2i32)as u32));assert!(r.temporary.is_empty());assert_eq!(r.head().unwrap(),RegistryHead::Owned(id));assert_eq!(rt.load(marker,32).unwrap().known_scalar().unwrap(),if mode==18{21281}else if original{if mode==9{81}else{1313}}else if mode==9{57}else{537});
    assert_eq!(*events.borrow(),if mode==18{vec!["N401040:101","F401040:2","N401020:101","F401020:1","N401000:101","F401000:0"]}else if original{if mode==9{vec!["N401000:101","F401000:0"]}else{vec!["N401020:101","F401020:1","N401000:101","F401000:0"]}}else if mode==9{vec!["N401200:101","F401200:0"]}else{vec!["N401100:101","F401100:1","N401200:101","F401200:0"]});
-  }else{assert!(result.is_err(),"loop mode {mode}");assert!(r.available().is_err());assert!(r.frames[0].completion.is_none());assert!(!r.temporary.is_empty());if mode==1||mode==10||mode==11||mode==16{assert_eq!(rt.load(marker,32).unwrap(),CrtValue::scalar(5));}else{assert_eq!(storage.image.try_level,0);assert_eq!(rt.load(marker,32).unwrap(),CrtValue::scalar(if mode==2||mode==12||mode==17{5}else if original{82}else{53}));}}
+  }else{assert!(result.is_err(),"loop mode {mode}");assert!(r.available().is_err());assert!(r.frames[0].completion.is_none());assert!(!r.temporary.is_empty());if mode==1||mode==10||mode==11||mode==16{assert_eq!(rt.load(marker,32).unwrap(),CrtValue::scalar(5));}else{assert_eq!(storage.image.try_level,0);assert_eq!(rt.load(marker,32).unwrap(),CrtValue::scalar(if mode==2||mode==12||mode==17||mode>=19{5}else if original{82}else{53}));}}
+  if original{
+   let action=rt.resolve_absolute(0x41c078,CrtRegionKind::Module).unwrap();
+   if mode==1||mode==16||mode>=20{assert!(rt.load(action,32).unwrap().known_scalar().is_err());}
+   else{assert_eq!(rt.load(action,32).unwrap(),CrtValue::scalar(0x101));let target=rt.resolve_absolute(0x41c074,CrtRegionKind::Module).unwrap();
+    if mode==19{assert_eq!(rt.load(target,32).unwrap(),CrtValue::scalar(0x401020));}else{assert!(matches!(rt.load(target,32).unwrap(),CrtValue::Pointer(_)));}
+   }
+  }
   assert_eq!(m.phase,Phase::Cleanup);assert_eq!(m.owned_context,Some([None;10]));assert!(m.restore_owned(0x40135c,|_,_|panic!("loop is not restoration")).is_err());
  }
 }
@@ -1020,10 +1029,19 @@ rt.consume_stack(sp,CrtValue::ProtectedReturn(941))?;Ok(())}"#);
         }
         mappings.push_str("Ok(())}");callback_source.push_str(&mappings);
         callback_source.push_str(&format!(r#"fn original_cleanup_invoke(rt:&mut CrtStreamRuntime,storage:&mut CrtOwnedStorage,record:&mut LocalRecord<'_>,target:u32,trace:CrtPointer)->RegistryResult<()>{{
-record.validate_binding(storage.binding,&storage.image)?;rt.valid(trace,8)?;
+record.validate_binding(storage.binding,&storage.image)?;require_original_notification(rt,storage,target,0x101)?;rt.valid(trace,8)?;
 for offset in [0,4]{{let at=rt.offset(trace,offset)?;let relative=i32::try_from(i64::from(at.address())-i64::from(storage.image.ebp)).map_err(|_|"cleanup trace offset")?;if trace.cap!=storage.entry.cap||!storage.ordinary.contains(&relative){{return Err("cleanup trace ordinary ownership");}}}}
 let sp=rt.resolve_absolute(0x9800,CrtRegionKind::Stack)?;rt.store(sp,32,CrtValue::ProtectedReturn(942))?;let mut cpu=CrtCpu::new(sp,942)?;cpu.push(rt,CrtValue::Pointer(trace))?;
 cpu.call_activation(rt,0x402799,0,|rt,child|match target{{{cases}_=>Err("original cleanup target unbound")}})?;cpu.discard(rt,4)?;rt.consume_stack(sp,CrtValue::ProtectedReturn(942))?;Ok(())}}"#));
+        let notification_code=handler_bytes("owned-notification.bin","5351bb70c041008b4c240c894b08894304896b0c55515058595d595bc20400");
+        callback_source.push_str(crate::unwind_bridges::EMITTED_TYPES);
+        callback_source.push_str(&crate::crt_owned_frame::emit_notification(&notification_code,0x402a30,crate::unwind_bridges::NotificationBinding{target_word:0x41c074,action_word:0x41c078,frame_word:0x41c07c},0x40278e).unwrap());
+        callback_source.push_str(r#"fn fixture_notify_invoke(rt:&mut CrtStreamRuntime,storage:&mut CrtOwnedStorage,record:&mut LocalRecord<'_>,target:u32,reason:u32,fault:usize)->RegistryResult<()>{
+let sp=rt.resolve_absolute(0x9800,CrtRegionKind::Stack)?;rt.store(sp,32,CrtValue::ProtectedReturn(943))?;let mut caller=CrtCpu::new(sp,943)?;caller.r[0]=CrtValue::Pointer(rt.resolve_absolute(target,CrtRegionKind::Module)?);caller.r[5]=CrtValue::Pointer(rt.resolve_absolute(storage.image.ebp,CrtRegionKind::Stack)?);caller.entry=caller.r;
+if fault==21{caller.r[0]=CrtValue::scalar(target);}
+if fault==22{rt.consume_stack(sp,CrtValue::ProtectedReturn(943))?;}
+if fault==23{rt.store(rt.offset(sp,-8)?,32,CrtValue::ProtectedReturn(944))?;}
+original_notify_invoke(rt,storage,record,&mut caller,target,reason)?;assert_eq!(caller.r[4],CrtValue::Pointer(sp));rt.consume_stack(sp,CrtValue::ProtectedReturn(943))?;Ok(())}"#);
         let local_source=format!("fn owned_original_local(effects:&mut impl LocalUnwindEffects,target_level:i32,exception_flags:u32)->RegistryResult<Option<i32>>{{{}}}",local_proof.source);
         let owned_types=crate::crt_owned_frame::EMITTED_TYPES;
         let original_local_store=super::normal_frame::NormalScopeStoreProof::prove(&handler_bytes("local-level-store.bin","89480c"),0x402775).unwrap().emit_owned_local("original_local_level_store",0,-2);
