@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 
@@ -135,6 +136,15 @@ def check(original, observation, out, compare=None):
     if tuple(import_at_iat(image, 0x4150ac-base)) != ('kernel32.dll', 'InitializeCriticalSectionEx'):
         raise ValueError('original FILE construction import changed')
     file_regions = {'file-construction-thunk': sha(construction_thunk)}
+    standard = mapped(image, 0x4085e7, 176, executable=True)
+    test_source = (Path(__file__).resolve().parents[3]/'src/crt_standard_handles_tests.rs').read_text()
+    fixture = re.search(r'let bytes:Vec<u8>="([0-9a-f]+)"', test_source)
+    if fixture is None or bytes.fromhex(fixture[1]) != standard:
+        raise ValueError('standard-handle test fixture differs from original PE')
+    for va, name in [(0x41507c, 'GetStdHandle'), (0x4150bc, 'GetFileType')]:
+        if tuple(import_at_iat(image, va-base)) != ('kernel32.dll', name):
+            raise ValueError('standard-handle original import changed')
+    file_regions['standard-handle-initializer'] = sha(standard)
     for name, start, end in [('file-wrapper', 0x404668, 0x4046a8),
                              ('file-lock', 0x404634, 0x404648),
                              ('file-unlock', 0x404648, 0x40465c),
@@ -144,6 +154,13 @@ def check(original, observation, out, compare=None):
         file_regions[name] = sha(raw)
     env = dict(os.environ, W2L_EH4_CODE=str(out.resolve()), W2L_EH4_EVIDENCE=str(out.resolve()),
                W2L_EH4_VECTORS=str((observation/'normal-wrapper-vectors.txt').resolve()))
+    standard_run = subprocess.run(['cargo','test','--locked','--example','crt_stream',
+        'original_standard_handles_preserve_inheritance_and_classify_api_results'],
+        env=env, capture_output=True, timeout=180)
+    (out/'standard-handles.stdout').write_bytes(standard_run.stdout)
+    (out/'standard-handles.stderr').write_bytes(standard_run.stderr)
+    if standard_run.returncode or b'1 passed' not in standard_run.stdout:
+        raise ValueError('standard-handle component check failed')
     command = ['cargo', 'test', '--locked', '--example', 'crt_stream',
                'original_windows_wrapper_state_matches_native_normal_lifecycle', '--', '--ignored']
     run = subprocess.run(command, env=env, capture_output=True, timeout=180)
@@ -208,6 +225,7 @@ def check(original, observation, out, compare=None):
                   main_activation_sha256=sha((out/'main-activate.bin').read_bytes()),
                   main_scope_header_sha256=sha((out/'Main-scope-header.bin').read_bytes()),
                   locale_state_evidence=locale_state_evidence(image),
+                  standard_handle_component_cases=25, standard_handle_new_windows_pairs=0,
                   original_printf_routing_sha256=sha((out/'printf-routing-live.bin').read_bytes()),
                   original_printf_context_sha256=sha((out/'printf-context-live.bin').read_bytes()),
                   original_printf_entry_sha256=sha((out/'printf-entry-live.bin').read_bytes()),

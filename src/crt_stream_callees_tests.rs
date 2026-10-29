@@ -16,7 +16,7 @@ fn security() -> Vec<u8> {
     // Unchanged authored PE at RVA154c; failure remains the external JMP target.
     raw("3b0d00c041007501c3e97c020000")
 }
-fn native(extra: &str, body: &str, name: &str) {
+pub(super) fn native(extra: &str, body: &str, name: &str) {
     let memory = include_str!("guest_memory.rs")
         .split("#[cfg(test)]")
         .next()

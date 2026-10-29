@@ -1281,3 +1281,45 @@ The construction-thunk hash is
 `01565efe983e9c4227f23d12a585198bbaed33e7ed2081e0d04fe375ba1bd5ad`.
 The previous implementation's local projection timeout remains retained; this
 changed-head pass does not establish its cause.
+
+### Original standard-handle initializer execution
+
+Independent review of `1ca0c21` found no new escape in successful lock ownership,
+opaque-byte protection or preservation of writes before a later failed lock.
+Its startup inventory workflow 40905043369 passed; full workflows 40905052442 and
+40905045688 were still running at this checkpoint.
+
+The next low-I/O dependency now executes the complete original 176-byte graph at
+`4085e7..408697` through the shared decoder, typed storage and native emitter in
+`crt_standard_handles_tests.rs`. The artifact checker binds every fixture byte
+and both actual IAT slots (`GetStdHandle`, `GetFileType`) to the retained PE.
+This is test-only component execution with explicit API outcomes and pre-owned
+records, not new production admission or a Windows API replacement.
+
+Five independent positive cases cover disk, character, pipe, an adversarial
+high-bit scalar return and zero type. The original code tests the full result
+for zero before selecting on AL; it marks character and pipe flags differently.
+It preserves a preexisting inherited handle and does not query it. A null handle
+from GetStdHandle skips GetFileType, sets the detached sentinel and updates the
+corresponding FILE field through the actual typed table. Zero GetFileType can
+mean a valid unknown type or an API error: [Microsoft documents both](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfiletype).
+This original body treats both alike without querying GetLastError; the tests do
+not invent an error code. The high-bit case is adversarial arithmetic evidence,
+not a claim of a current OS return or platform support.
+
+Four negative classes, each executed across the five schedules, cover unknown type information,
+a scalar replacing table-pointer authority, a foreign-runtime handle and a
+truncated table target. Later rejection preserves earlier detached-handle/FILE
+writes and the original flags store; it cannot promote unknown information into
+an initialized descriptor. The tests also check callee-saved registers and
+protected stdcall cleanup. Repeated early failures do not add distinct coverage. The five positive plus 20 negative runs are 25 native
+component executions, with zero fresh Windows observations or whole-PE pairs.
+
+Default CRT verification passed 175 tests with one recorded-observation test
+separate; formatting and Clippy passed. Root and frame behavior is unchanged
+from the reviewed 175/178 checks. This component still assumes block allocation,
+inherited-handle input and initialized table ownership. Next connect the actual
+preceding allocation/inheritance producers and bind the resulting records to
+FILE initialization on the same owner; retain handle lifetime/alias/failure
+contracts and the separate locale producer gate. The full formatter callback
+remains explicit. Both timeout histories remain preserved and unresolved.

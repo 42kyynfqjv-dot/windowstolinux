@@ -273,3 +273,7 @@ mod raise_call;
 #[allow(dead_code)]
 #[path = "../src/stdio_effect.rs"]
 mod stdio_effect;
+
+#[cfg(test)]
+#[path = "../src/crt_standard_handles_tests.rs"]
+mod crt_standard_handles_tests;
