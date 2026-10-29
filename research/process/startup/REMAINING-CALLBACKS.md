@@ -257,3 +257,10 @@ child authority. Fourteen native cases preserve parent suspension, negative
 ownership/guard/context checks and actual result1. The remaining cut is handler
 invocation/delivery acquisition, not common-entry EAX. Terminate/abort and incoming
 chain effects remain unresolved; no whole-PE pairs are added.
+
+Same-event C++ invocation: a private binding now ties supplied unwind record/
+context/owner to the pending RaiseException event and invokes the actual prefix.
+A lease-bound receipt revalidates capture lifetime at consumption. Thirty native
+cases cover mismatches, post-return retirement, replay, active nested delivery,
+flags, full bounds and aliases. Actual Windows record/flag production and C++
+registration selection remain supplied; no Windows/whole-PE comparisons are added.

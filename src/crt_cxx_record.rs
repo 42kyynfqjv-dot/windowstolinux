@@ -324,7 +324,7 @@ fn handler_prefix_mode(
     };
     let epoch_argument = if delivery { "epoch," } else { "" };
     let preflight = if delivery {
-        "epoch.state()?;if epoch.delivery.is_none(){return Err(\"C++ prefix requires delivery child authority\");}let entry=CrtCpu::pointer(cpu.entry[4])?;epoch.delivery_range(rt.offset(entry,-4)?.address(),u64::from(entry.address())+20)?;"
+        "epoch.state()?;if epoch.delivery.is_none(){return Err(\"C++ prefix requires delivery child authority\");}let entry=CrtCpu::pointer(cpu.entry[4])?;epoch.delivery_range(rt.offset(entry,-4)?.address(),u64::from(entry.address())+4)?;epoch.delivery_arguments(entry.address(),20)?;"
     } else {
         ""
     };
@@ -748,3 +748,81 @@ for(count,value,expected)in [(128u32,255u32,u32::MAX),(129,255,255),(2,128,0xfff
         }
     }
 }
+/// Supplied unwind-delivery input, bound to one suspended event. This does not
+/// acquire a Windows CONTEXT or produce RtlUnwind's delivery flags.
+pub(crate) fn invocation_source() -> &'static str {
+    INVOCATION
+}
+const INVOCATION: &str = r#"
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+enum CxxInvocationPhase{Pending,Active,Consumed,ResultTaken,Failed}
+struct CxxInvocationReturn{handler:CrtNormalHandlerReturn,lease:u64}
+struct CrtCxxInvocation{
+ anchor:guest_memory::Capability,identity:RegistryIdentity,epoch:u64,event:u64,parent:NormalFrameId,
+ owner:u64,bp:CrtPointer,metadata:CrtPointer,exception:CrtPointer,context:CrtPointer,esp:CrtPointer,
+ flags:u32,phase:CxxInvocationPhase,lease:Option<u64>,
+}
+impl CrtCxxInvocation{
+ fn bind_unwind(event:&CrtNormalException,rt:&CrtStreamRuntime,epoch:&NormalCallEpoch<'_>,owner:&CrtCpu,frame:&CrtPtdFrame,record:&CrtCxxRecord,context:&CrtCxxContext,exception:CrtPointer)->RegistryResult<Self>{
+  event.validate_pending(rt,epoch)?;
+  if event.delivery!=CrtNormalDelivery::Pending||epoch.delivery.is_some(){return Err("C++ invocation nested/active delivery unbound");}
+  let value=Self{anchor:rt.anchor,identity:event.identity,epoch:event.epoch,event:event.generation,parent:event.frame,
+   owner:owner.return_id,bp:frame.bp,metadata:record.metadata,exception,context:context.context,esp:context.esp,
+   flags:2|u32::from(event.noncontinuable),phase:CxxInvocationPhase::Pending,lease:None};
+  value.objects(event.code,rt,owner,frame,record,context)?;Ok(value)
+ }
+ fn objects(&self,code:u32,rt:&CrtStreamRuntime,owner:&CrtCpu,frame:&CrtPtdFrame,record:&CrtCxxRecord,context:&CrtCxxContext)->RegistryResult<()>{
+  context.check(rt,owner,frame)?;record.state(rt,owner,frame)?;
+  if rt.anchor!=self.anchor||rt.owner!=self.identity.owner||rt.thread!=self.identity.instance||owner.return_id!=self.owner
+   ||frame.bp!=self.bp||record.metadata!=self.metadata||context.context!=self.context||context.esp!=self.esp
+   ||self.exception.kind!=CrtRegionKind::Context||self.exception.address()%4!=0
+   ||u64::from(self.exception.address())<u64::from(self.context.address())+716&&u64::from(self.context.address())<u64::from(self.exception.address())+80{
+   return Err("C++ invocation foreign owner/context or alias");
+  }
+  rt.valid(self.exception,80)?;rt.valid(self.context,716)?;
+  for(offset,value)in [(0,code),(4,self.flags),(8,0),(16,0)]{
+   if rt.load(rt.offset(self.exception,offset)?,32)?.known_scalar()?!=value{return Err("C++ invocation event record mismatch");}
+  }Ok(())
+ }
+ fn pending(&self,event:&CrtNormalException,rt:&CrtStreamRuntime,epoch:&NormalCallEpoch<'_>,owner:&CrtCpu,frame:&CrtPtdFrame,record:&CrtCxxRecord,context:&CrtCxxContext)->RegistryResult<()>{
+  event.validate_pending(rt,epoch)?;
+  if self.phase!=CxxInvocationPhase::Pending||event.delivery!=CrtNormalDelivery::Pending
+   ||event.identity!=self.identity||event.epoch!=self.epoch||event.generation!=self.event||event.frame!=self.parent
+   ||self.flags!=2|u32::from(event.noncontinuable){return Err("C++ invocation stale event/phase");}
+  self.objects(event.code,rt,owner,frame,record,context)
+ }
+}
+fn cxx_invoke_unwind(event:&mut CrtNormalException,invocation:&mut CrtCxxInvocation,rt:&mut CrtStreamRuntime,interrupted:&CrtCpu,epoch:&mut NormalCallEpoch<'_>,binding:&CrtNormalBinding,dispatcher:&mut CrtCpu,owner:&CrtCpu,frame:&CrtPtdFrame,record:&CrtCxxRecord,context:&CrtCxxContext,fiber:CrtFiber,slot:CrtFlsSlot,continuation:u32)->RegistryResult<CxxInvocationReturn>{
+ let start=(||{
+  invocation.pending(event,rt,epoch,owner,frame,record,context)?;
+  let sp=CrtCpu::pointer(dispatcher.r[4])?;
+  for(i,value)in [CrtValue::Pointer(invocation.exception),CrtValue::Pointer(rt.offset(frame.bp,-12)?),CrtValue::Pointer(invocation.context)].into_iter().enumerate(){
+   if rt.load(rt.offset(sp,i as i64*4)?,32)?!=value{return Err("C++ invocation dispatcher argument mismatch");}
+  }Ok(())
+ })();
+ if let Err(error)=start{invocation.phase=CxxInvocationPhase::Failed;return Err(error);}
+ invocation.phase=CxxInvocationPhase::Active;let code=event.code;
+ let result=event.execute_child_handler(rt,interrupted,epoch,binding,dispatcher,continuation,|rt,cpu,child|{
+  let grant=child.delivery.ok_or("C++ invocation missing delivery grant")?;
+  if invocation.phase!=CxxInvocationPhase::Active||grant.event!=invocation.event||grant.parent!=invocation.parent||child.generation!=invocation.epoch||child.registry.identity!=invocation.identity{return Err("C++ invocation foreign child grant");}
+  if invocation.lease.is_some(){return Err("C++ invocation repeated child lease");}invocation.lease=Some(grant.lease);
+  invocation.objects(code,rt,owner,frame,record,context)?;
+  let value=cxx_handler_prefix(rt,cpu,owner,frame,record,context,child,fiber,slot)?;
+  invocation.objects(code,rt,owner,frame,record,context)?;Ok(value)
+ });
+ match result{
+  Ok(receipt)=>{invocation.phase=CxxInvocationPhase::Consumed;Ok(CxxInvocationReturn{handler:receipt,lease:invocation.lease.ok_or("C++ invocation missing return lease")?})},
+  Err(error)=>{invocation.phase=CxxInvocationPhase::Failed;Err(error)}
+ }
+}
+fn cxx_take_invocation_result(event:&mut CrtNormalException,invocation:&mut CrtCxxInvocation,receipt:CxxInvocationReturn,rt:&CrtStreamRuntime,interrupted:&CrtCpu,epoch:&mut NormalCallEpoch<'_>,binding:&CrtNormalBinding,owner:&CrtCpu,frame:&CrtPtdFrame,record:&CrtCxxRecord,context:&CrtCxxContext)->RegistryResult<u32>{
+ let result=(||{
+  if invocation.phase!=CxxInvocationPhase::Consumed||invocation.lease!=Some(receipt.lease)
+   ||event.identity!=invocation.identity||event.epoch!=invocation.epoch||event.generation!=invocation.event||event.frame!=invocation.parent{return Err("C++ invocation foreign/stale return authority");}
+  invocation.objects(event.code,rt,owner,frame,record,context)?;
+  event.take_handler_result(receipt.handler,rt,interrupted,epoch,binding)
+ })();
+ match result{Ok(value)=>{invocation.phase=CxxInvocationPhase::ResultTaken;Ok(value)},Err(error)=>{invocation.phase=CxxInvocationPhase::Failed;event.delivery=CrtNormalDelivery::Failed;epoch.fail(error)}}
+}
+
+"#;

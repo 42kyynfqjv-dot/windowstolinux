@@ -70,7 +70,7 @@ struct RegistryNormalFrame {
  plan:NormalFramePlan,next:usize,saved:[Option<u32>;8],installed:bool,unlinked:bool,
 }
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
-struct DeliveryChildAuthority {event:u64,lease:u64,parent:NormalFrameId,floor:usize,ceiling:u64}
+struct DeliveryChildAuthority {event:u64,lease:u64,parent:NormalFrameId,floor:usize,ceiling:u64,arguments_high:u64}
 struct NormalEpochState {
  generation:u64,event:u64,selected:RegistrationId,previous:RegistryHead,next_unwind:usize,
  context:[Option<u32>;10],frames:Vec<RegistryNormalFrame>,issued:usize,pending_exception:Option<u64>,delivery:Option<DeliveryChildAuthority>,
@@ -368,6 +368,13 @@ impl NormalCallEpoch<'_> {
     return Err("delivery child stack aliases live frame/arguments");
    }
   }Ok(())
+ }
+ /// Read extent of the already checked dispatcher arguments; it grants no
+ /// allocation, cleanup or store authority above the child stack ceiling.
+ fn delivery_arguments(&self,entry:u32,bytes:u32)->RegistryResult<()>{
+  self.state()?;let grant=self.delivery.ok_or("delivery arguments missing grant")?;
+  let high=u64::from(entry)+u64::from(bytes);self.registry.range(entry,high)?;
+  if high>grant.arguments_high{return Err("delivery argument read exceeds supplied call");}Ok(())
  }
  fn fail<T>(&mut self,error:&'static str)->RegistryResult<T>{self.registry.fail(error)}
  fn top(&self,id:NormalFrameId)->RegistryResult<&RegistryNormalFrame>{

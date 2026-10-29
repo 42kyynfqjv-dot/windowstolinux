@@ -138,15 +138,47 @@ checks cover every prefix byte in this delivery emitter mode. Adjacent live-hand
 and handler-receipt tests now also explicitly require success before testing
 invalid consumption or returning an intentionally rejecting outer fixture.
 
-The supplied boundary is now original handler invocation: the C++ owner/context,
-exception bytes, module/export/fiber/slot and interrupted-frame fixture. The C++ context binds its
-owner activation; a producer must still bind that invocation and its exception/
-context objects to the same pending event and live C++ registration. Address
-equality alone cannot supply that relation. Actual
-Windows delivery acquisition, nested/collided-unwind effects and incoming-chain
-containment remain unproved. The 14 added native cases include no fresh Windows
-observations or whole-PE pairs. Normal returns preserve suspension; they authorize
-no guest resumption.
+## Same-event invocation and captured lifetime
+
+`CrtCxxInvocation::bind_unwind` now binds the pending event identity, epoch,
+interrupted registration, runtime/thread, original C++ owner and metadata, exception
+record and captured context. It validates the exception code against the issued
+RaiseException and preserves its noncontinuable bit. The current supplied delivery
+domain is exactly unwind flag2 plus that bit, null chain and zero parameters;
+collided/other flags reject. This is an input contract for already supplied unwind
+delivery, not an implementation of how Windows acquires or mutates those objects.
+
+Both full object ranges (80-byte record, 716-byte x86 CONTEXT), their disjoint
+ownership and the fields actually read must be valid. Unknown context fields are
+not initialized by the adapter. The typed captured ESP remains distinct from the
+interrupted CALL registers. Dispatcher argument capabilities must match the bound
+record, C++ establisher and context before the protected call begins. The adapter
+then invokes the original prefix directly; it accepts no replacement callback.
+
+The child grant now distinguishes its existing write/allocation ceiling from
+read access to the already validated caller-owned arguments. The latter has its
+own bounded upper extent derived from the supplied dispatcher stack check; it
+grants no cleanup or stores above the frame ceiling. Parent alias checks remain.
+
+An invocation starts pending, becomes active under the matching child lease and
+returns a lease-bound receipt only after original handler completion and live
+object revalidation. Consuming the receipt revalidates event/owner/capture lifetime
+again, then delegates to the existing single-use handler-result protocol. A stale
+capture, wrong lease, replay or nested phase cannot authorize result consumption.
+Earlier original effects survive later rejection; no rollback is synthesized.
+
+Thirty native cases cover required-success paths, noncontinuable-bit preservation,
+input/event mismatches, active nested phase, duplicate invocation, duplicate result,
+record/context replacement or retirement, truncation, unknown fields, collided
+flags, argument aliases and failure ordering, including retirement after callback
+return. Existing original-byte mutation checks remain. These checks add zero fresh
+Windows observations or whole-PE comparisons.
+
+Remaining supplied producers are the actual Windows delivery/flag transition,
+captured objects, and original C++ registration selection and invocation. Binding
+one supplied invocation to an event does not prove that the selected handler is
+correct for the Windows thread chain. Module/FLS acquisition, nested/collided
+unwind and incoming-chain containment remain unproved.
 
 Then execute terminate40770c's own EH4 frame and PTD+12 callback/guard contract,
 followed by abort4077ff's signal/lock/debug/exit dependencies. Cleanup exceptions

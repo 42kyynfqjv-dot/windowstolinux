@@ -472,7 +472,7 @@ impl CrtNormalException {
   let result=(||{
    let value=dispatcher.call_activation(rt,continuation,0,|rt,child|{
     let grant=DeliveryChildAuthority{event:self.generation,lease,parent:self.frame,floor,
-     ceiling:u64::from(CrtCpu::pointer(child.entry[4])?.address())+4};
+     ceiling:u64::from(CrtCpu::pointer(child.entry[4])?.address())+4,arguments_high:u64::from(CrtCpu::pointer(child.entry[4])?.address())+20};
     epoch.registry.normal_epoch.as_mut().ok_or("delivery child expired epoch")?.delivery=Some(grant);
     let value={let mut borrowed=NormalCallEpoch{registry:&mut *epoch.registry,generation:epoch.generation,delivery:Some(grant)};
      let value=body(rt,child,&mut borrowed)?;

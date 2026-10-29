@@ -342,6 +342,7 @@ def check(original, observation, out, compare=None):
         ('delivery-cached-unwind', 'original_cached_unwind_executes_under_pending_delivery_child_authority'),
         ('dispatcher-delivery-unwind', 'original_common_dispatcher_calls_registered_unwind_under_pending_delivery'),
         ('prefix-delivery-unwind', 'original_prefix_produces_dispatcher_metadata_under_pending_delivery'),
+        ('bound-cxx-invocation', 'original_cxx_invocation_binds_pending_event_and_captured_objects'),
     ]:
         delivery = subprocess.run(['cargo','test','--locked','--example','crt_stream',test],env=env,capture_output=True,timeout=180)
         (out/(label+'.stdout')).write_bytes(delivery.stdout)
@@ -372,7 +373,7 @@ def check(original, observation, out, compare=None):
                   main_scope_header_sha256=sha((out/'Main-scope-header.bin').read_bytes()),
                   locale_state_evidence=locale_state_evidence(image),
                   unwind_binding_source_sha256=sha((out/'cxx-unwind-connected.rs').read_bytes()),
-                  prefix_delivery_unwind_native_cases=14, prefix_delivery_new_windows_pairs=0, dispatcher_delivery_unwind_native_cases=8, dispatcher_delivery_new_windows_pairs=0, delivery_child_native_cases=14, delivery_cached_unwind_native_cases=4, delivery_new_windows_pairs=0,
+                  bound_cxx_invocation_native_cases=30, bound_cxx_invocation_new_windows_pairs=0, prefix_delivery_unwind_native_cases=14, prefix_delivery_new_windows_pairs=0, dispatcher_delivery_unwind_native_cases=8, dispatcher_delivery_new_windows_pairs=0, delivery_child_native_cases=14, delivery_cached_unwind_native_cases=4, delivery_new_windows_pairs=0,
                   unwind_native_cases=24, cached_unwind_native_cases=14, cached_unwind_new_windows_pairs=0, unwind_new_windows_pairs=0, unwind_binding_rust_tests=1,
                   unwind_state_source_sha256=sha((out/'unwind-state-live.rs').read_bytes()),
                   unwind_state_native_cases=12, unwind_state_new_windows_pairs=0,

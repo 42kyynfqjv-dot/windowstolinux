@@ -1,12 +1,12 @@
 {
   "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
-  "rust_sha256": "fade3058c624559b23aad8158887baaac7af728f2ac0036ab6031633578b0f77",
-  "unwind_binding_source_sha256": "d6986926e1da65808edb5e6f4423a3697c31c8619014264c9c8a76cbc9e9415e",
+  "rust_sha256": "929966ea2fa617e99988edb80b22217e3e94955e4fb962a400403580ac85b557",
+  "unwind_binding_source_sha256": "ac16aa1903e90a6fb3dee07052d004fe7aa67fe7f479113096e1d5825f5f1aef",
   "unwind_native_cases": 24,
   "unwind_new_windows_pairs": 0,
   "unwind_binding_rust_tests": 1,
-  "kind": "Original prefix/common/dispatcher unwind under scoped pending-delivery child authority; supplied handler invocation/context/module/FLS acquisition; not whole-PE conversion",
-  "rust_crt_tests_passed": 215,
+  "kind": "Same-event supplied C++ invocation with live captured-object/result lifetime through original prefix/common/unwind; not whole-PE conversion",
+  "rust_crt_tests_passed": 216,
   "existing_observation_test_separate": true,
   "byte_mutations_rejected": 415,
   "recorded_wrapper_pairs": 5,
@@ -21,7 +21,7 @@
     "cxx-unwind-notice_tail": "b924bf20557c8dd755a060af55fd4e2d19f5e80a265c3c28ab54f2a621485ea2"
   },
   "remaining": [
-    "original handler invocation and same-event captured delivery acquisition",
+    "actual C++ thread-chain registration selection and Windows capture/unwind-flag producer",
     "actual module/export/fiber/slot acquisition",
     "Windows delivery/incoming-chain and nested/collided-unwind effects",
     "terminate40770c/abort4077ff effects",
@@ -51,5 +51,14 @@
   "prefix_delivery_new_windows_pairs": 0,
   "positive_assertion_review": "Live handler and receipt tests now require successful callback/result explicitly before an intentionally rejected outer component boundary.",
   "prefix_stack_alias_preflight": "Parent stack alias rejects before prefix register or call-identity changes.",
-  "prior_root_tests_passed": 175
+  "prior_root_tests_passed": 175,
+  "bound_cxx_invocation_native_cases": 30,
+  "bound_cxx_invocation_new_windows_pairs": 0,
+  "bound_capture_contract": {
+    "record_bytes": 80,
+    "context_bytes": 716,
+    "unwind_flags": "2 plus original noncontinuable bit; supplied, never synthesized",
+    "argument_extent": "read-only validation separate from child write/frame ceiling",
+    "receipt": "same event and child lease; live captures revalidated at consumption; no resumption authority"
+  }
 }
