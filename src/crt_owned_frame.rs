@@ -156,7 +156,7 @@ struct CrtHandlerExit {anchor:guest_memory::Capability,id:RegistrationId,event:u
 struct CrtOwnedStorage {
  anchor:guest_memory::Capability,identity:RegistryIdentity,binding:OwnedFrameBinding,id:RegistrationId,event:u64,
  entry:CrtPointer,return_id:u64,image:FrameImage<RegistryHead>,ordinary:std::collections::BTreeSet<i32>,
- protected:std::collections::BTreeMap<i32,CrtValue>,input:Option<(Option<CrtPointer>,CrtPointer,CrtPointer,u32)>,pair_return:Option<(CrtPointer,u64)>,unwind_epoch:Option<u64>,resume_ticket:Option<u64>,
+ protected:std::collections::BTreeMap<i32,CrtValue>,input:Option<(Option<CrtPointer>,CrtPointer,CrtPointer,u32)>,pair_return:Option<(CrtPointer,u64)>,unwind_epoch:Option<u64>,resume_ticket:Option<u64>,post_unwind:Option<(u64,u64,u64)>,post_authority:Option<u64>,
 }
 impl RegistryFrameStorage for CrtOwnedStorage{fn registry_image(&self)->&FrameImage<RegistryHead>{&self.image}}
 impl CrtOwnedStorage {
@@ -193,7 +193,7 @@ impl CrtOwnedStorage {
   // No external callback occurs before final registry installation.
   for(p,value)in writes{rt.store(p,32,value)?;}
   let id=r.install_frame(binding,&image)?;
-  Ok(Self{anchor:rt.anchor,identity:r.identity,binding,id,event:m.event,entry,return_id:cpu.return_id,image,ordinary:ordinary.iter().copied().collect(),protected,input:None,pair_return:None,unwind_epoch:None,resume_ticket:None})
+  Ok(Self{anchor:rt.anchor,identity:r.identity,binding,id,event:m.event,entry,return_id:cpu.return_id,image,ordinary:ordinary.iter().copied().collect(),protected,input:None,pair_return:None,unwind_epoch:None,resume_ticket:None,post_unwind:None,post_authority:None})
  }
  fn retire_completed(&mut self,rt:&mut CrtStreamRuntime,r:&mut ThreadRegistry,m:&mut Machine,completion:HandlerCompletion,exit:CrtHandlerExit)->RegistryResult<()>{
   let result=(||{
@@ -551,8 +551,39 @@ impl CrtUnwindResumeCut{
    for(offset,value)in [(0,self.code),(4,2),(8,0),(16,0)]{if frame.rt.load(frame.rt.offset(self.record,offset)?,32)?.known_scalar()?!=value{return Err("unwind resume record changed");}}
    let owner=frame.rt.resolve_absolute(frame.storage.image.record,CrtRegionKind::Stack)?;
    for(i,v)in [CrtValue::Pointer(owner),CrtValue::scalar(self.target),CrtValue::Pointer(self.record),CrtValue::scalar(0)].into_iter().enumerate(){if frame.rt.load(frame.rt.offset(self.api_sp,i as i64*4)?,32)?!=v{return Err("unwind resume arguments changed");}}
-   cpu.discard(frame.rt,16)?;let sp=cpu.r[4];cpu.r=[CrtValue::Scalar{bits:0,known:0};8];cpu.r[4]=sp;cpu.r[0]=CrtValue::scalar(0);cpu.flags=CrtFlags::unknown();frame.storage.resume_ticket=None;Ok(())
+   cpu.discard(frame.rt,16)?;let sp=cpu.r[4];cpu.r=[CrtValue::Scalar{bits:0,known:0};8];cpu.r[4]=sp;cpu.r[0]=CrtValue::scalar(0);cpu.flags=CrtFlags::unknown();frame.storage.resume_ticket=None;frame.storage.post_unwind=Some((self.epoch,self.wrapper_id,self.ticket));Ok(())
   })();if result.is_err(){frame.failed=true;}result
+ }
+}
+
+/// Phase-specific authority; the old search token stays suspended.
+struct CrtOwnedPostUnwind<'a>{source:&'a CrtOwnedPrefixInput,epoch:u64,ticket:u64,stored:bool,complete:bool}
+impl<'a>CrtOwnedPostUnwind<'a>{
+ fn bind(frame:&mut CrtOwnedFrameView<'_>,cpu:&CrtCpu,source:&'a CrtOwnedPrefixInput,scope:i32)->RegistryResult<Self>{
+  let result=(||{
+   source.validate_source_fields(frame,2)?;cpu.validate_active(frame.rt)?;
+   let(epoch,wrapper,ticket)=frame.storage.post_unwind.ok_or("post unwind missing wrapper receipt")?;
+   let entry=CrtCpu::pointer(cpu.entry[4])?;let bp=frame.rt.offset(entry,-4)?;let owner=frame.owner_frame()?;
+   if frame.storage.post_authority.is_some()||frame.storage.unwind_epoch!=Some(epoch)||frame.active!=source.callback||cpu.return_id!=source.callback||cpu.entry!=source.entry||frame.rt.tags.values().any(|&v|v==CrtValue::ProtectedReturn(wrapper))||frame.registry.target_ready()?!=frame.storage.id||frame.machine.current!=frame.machine.selected||frame.storage.image.try_level!=scope||cpu.r[5]!=CrtValue::Pointer(bp)||cpu.r[4]!=CrtValue::Pointer(frame.rt.offset(bp,-40)?)||cpu.r[6]!=CrtValue::Pointer(owner)||cpu.r[7]!=CrtValue::scalar(scope as u32){return Err("post unwind returned wrapper/handler state");}
+   let table=frame.rt.resolve_absolute(frame.storage.image.scope_va,CrtRegionKind::Module)?;
+   let row_offset=u32::try_from(scope).ok().and_then(|n|n.checked_mul(12)).and_then(|n|n.checked_add(16)).ok_or("post unwind scope offset")?;
+   let row=frame.rt.offset(table,i64::from(row_offset))?;frame.rt.valid(row,12)?;
+   if frame.rt.load(frame.rt.offset(bp,-20)?,32)?!=CrtValue::Pointer(row){return Err("post unwind selected row provenance");}
+   if frame.rt.load(frame.rt.offset(bp,-8)?,32)?!=CrtValue::Pointer(table)||frame.rt.load(frame.rt.offset(bp,-16)?,32)?!=CrtValue::Pointer(owner){return Err("post unwind handler saved packet");}
+   frame.storage.post_unwind=None;frame.storage.post_authority=Some(ticket);Ok(Self{source,epoch,ticket,stored:false,complete:false})
+  })();if result.is_err(){frame.failed=true;}result
+ }
+ fn validate(&self,frame:&CrtOwnedFrameView<'_>,cpu:&CrtCpu)->RegistryResult<()>{
+  self.source.validate_source_fields(frame,2)?;cpu.validate_active(frame.rt)?;
+  if self.complete||frame.storage.unwind_epoch!=Some(self.epoch)||frame.storage.post_authority!=Some(self.ticket)||frame.active!=self.source.callback||cpu.return_id!=self.source.callback||cpu.entry!=self.source.entry||frame.registry.target_ready()?!=frame.storage.id||frame.machine.current!=frame.machine.selected{return Err("post unwind stale/consumed authority");}Ok(())
+ }
+ fn store_scope(&mut self,frame:&mut CrtOwnedFrameView<'_>,cpu:&CrtCpu,value:CrtValue,before:i32,after:i32)->RegistryResult<()>{
+  self.validate(frame,cpu)?;if self.stored||value!=CrtValue::scalar(after as u32){return Err("post unwind scope write authority");}
+  frame.store_level_operand(cpu.r[0],value,before,after)?;self.stored=true;Ok(())
+ }
+ fn transfer_cut(&mut self,frame:&mut CrtOwnedFrameView<'_>,cpu:&CrtCpu,landing:u32)->RegistryResult<CrtValue>{
+  self.validate(frame,cpu)?;if !self.stored||frame.storage.image.try_level!= -2||cpu.r[1].known_scalar()?!=landing||cpu.r[2]!=CrtValue::Pointer(frame.owner_frame()?){return Err("post unwind transfer arguments");}
+  self.complete=true;frame.storage.post_authority=None;Ok(CrtValue::scalar(landing))
  }
 }
 

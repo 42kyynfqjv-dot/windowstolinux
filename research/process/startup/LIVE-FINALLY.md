@@ -589,3 +589,38 @@ original delivery and saved-state acquisition contract, including independent
 multi-frame original evidence. Conditional context/footprint inputs cannot be
 silently promoted to that certificate. Selected handler cleanup/transfer and OS
 entry-to-exit composition remain gates; full startup/rcedit stays unsupported.
+
+## Selected caller after the returned global wrapper
+
+Applying the conditional resume cut now leaves a phase marker. After the actual
+wrapper RET, `CrtOwnedPostUnwind::bind` consumes it once and checks that the wrapper
+return identity is gone, the original handler return remains live, captured
+objects still match, younger frames are retired and selected-source state is
+ready. It also checks the actual saved table/owner packet and the selected row
+pointer. The old search token stays suspended; post-return access uses distinct
+phase authority and a single-use ticket.
+
+The compiler lowers the original selected caller after GlobalUnwind through its
+existing independent dispatch proof. Original branch predicates are checked
+against that proof. For the frozen Main path, equal TryLevel skips the local
+unwind call; any proof requiring a new local effect still rejects emission until
+bound. Original PUSH/MOV/CALL/ADD instructions then disable the selected scope,
+run the guard with real arguments and load the landing target from the bound row.
+The protected TryLevel MOV updates bytes and metadata once via the existing store
+hook. The path stops at the actual selected-transfer CALL, not an executed jump
+or guest restoration. Machine remains in Cleanup and the handler return is live.
+
+Nine added cases cover normal caller execution, changed code, resurrected wrapper
+return, expired handler return, changed landing metadata, wrong selected scope,
+wrong owner save, consumed phase replay and a counterfeit row object containing
+the correct numeric landing address. That last case requires the original table
+capability/offset rather than accepting equal numbers. Compile-time changed
+caller bytes also reject. Negative paths preserve completed younger cleanup;
+post-store replay leaves the original-2write intact without another store.
+Counts overlap:141 owned-frame,84 delivery,66 cross-frame,51 connected native
+callback/loop/stack,17 conditional-resume and9 selected-caller scenarios. Five
+recorded wrapper observations remain separate; no new Windows or whole-PE pair.
+
+The next instruction boundary is selected transfer/landing. API admission still
+needs the separate real delivery/context and effect contract below; conditional
+phase success does not close it.

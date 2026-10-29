@@ -119,7 +119,17 @@ pub(crate) fn emit_proved_path(
     path: &[PathStep<'_>],
     call: impl FnMut(u32, Target) -> Result<String, String>,
     roles: &BTreeMap<u32, String>,
+    before: impl FnMut(u32, &Op) -> Result<String, String>,
+) -> Result<String, String> {
+    emit_proved_path_with_store(path, call, roles, before, |_, _, _| Ok(None))
+}
+#[allow(dead_code)]
+pub(crate) fn emit_proved_path_with_store(
+    path: &[PathStep<'_>],
+    call: impl FnMut(u32, Target) -> Result<String, String>,
+    roles: &BTreeMap<u32, String>,
     mut before: impl FnMut(u32, &Op) -> Result<String, String>,
+    store: impl FnMut(u32, &Address, u8) -> Result<Option<String>, String>,
 ) -> Result<String, String> {
     if path.is_empty() || path.len() > 2048 {
         return Err("CRT path: instruction budget".into());
@@ -160,7 +170,7 @@ pub(crate) fn emit_proved_path(
         end,
         nodes,
     };
-    emit_body_with_hooks(
+    emit_body_with_store(
         &graph,
         call,
         roles,
@@ -195,6 +205,8 @@ pub(crate) fn emit_proved_path(
             Ok(code)
         },
         |_, _| Err("CRT path: unproved return".into()),
+        None,
+        store,
     )
 }
 /// Lexical lowering for a certified caller with its own typed lifecycle token.
