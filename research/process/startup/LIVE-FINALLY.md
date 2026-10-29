@@ -40,8 +40,8 @@ arithmetic and fixed original data, not the emitted Rust.
 
 ## Evidence and failure boundaries
 
-Twenty native component scenarios cover two complete ordinary cleanup paths and
-18 rejected/failing paths: changed finally/Dispatch-table/cleanup bytes; failure
+Twenty-six native component scenarios cover three complete ordinary cleanup/guard paths and
+23 rejected/failing paths: changed finally/Dispatch-table/cleanup bytes; failure
 after trace, first image output or private callback writes; pointer-as-local,
 unknown cursor, protected scratch, corrupt guard, stale event, duplicate outputs,
 code/metadata/cookie aliases, aliased local/cursor, protected frame offset and
@@ -55,7 +55,7 @@ Compared with the previous 143, this includes eight inherited dispatch/funclet
 tests exposed in this target and three new test functions; these are not eleven
 new independent proofs. The evidence checker explicitly runs the ignored test
 against five recorded original Windows observations. It additionally executes
-all 20 finally scenarios on each host and compares extracted PE-region and
+all 26 finally scenarios on each host and compares extracted PE-region and
 emitted-Rust hashes. Those scenarios are component executions, **zero new
 Windows-versus-ELF whole-program pairs**.
 
@@ -103,3 +103,30 @@ That is diagnostic state, not a demonstrated cause. The PE SHA-256 is
 `5406895aa3d7208e10967e09eba072b72a72ffb30f6edb31bcc9634765ef5f2f`.
 The failure and earlier original-process/compiler-build timeouts remain unresolved;
 no retries were hidden or timeout thresholds changed.
+
+
+## Connected post-cleanup guard review
+
+The original guard validator and security-check instruction proofs now run after
+successful Inner local cleanup, against its live table header and -48 guard.
+The shared guard emitter supports an owned ordinary call as well as the deferred
+prefix-call form. The guard call's root CPU is still an explicit component
+entry; this does not prove the original handler reached this call site.
+
+Four additional cases corrupt the guard after cleanup, change security-check
+code, alias the active root protected return, or expire that return. All retain
+the completed trace/local/output writes and TryLevel -2, while preventing handler
+completion. The alias case initially reproduced acceptance: CrtOwnedFrameView's
+call boundary checked the root value but not its unique occurrence. Both that
+boundary and bridge preflight now reject duplicate return tokens.
+
+The original Inner normal-return epilog at 0x40115c restores FS and returns to its
+normal caller. Its inventory explicitly excludes exceptional cleanup; executing
+it here would misrepresent the nonlocal unwind. The remaining gate is the actual
+exception-handler epilog/dispatch completion and justified source-frame retirement,
+with captured/delivery context and predecessor ownership intact. No normal RET is
+used as exceptional retirement authority. Routine review and CI can remain on Sol.
+
+Two additional nested-call cases execute the same original guard through a live
+child activation and reject an aliased child return, respectively. These exercise
+shared call ownership; they do not claim nested Windows exception delivery.

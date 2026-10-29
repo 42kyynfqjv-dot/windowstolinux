@@ -27,6 +27,10 @@ impl GuardProof {
     pub fn owned_prefix_call(&self, name: &str) -> String {
         self.emit_call(name, true, true)
     }
+    #[allow(dead_code)] // Post-cleanup checked CRT call; legacy slices use projections.
+    pub fn owned_call(&self, name: &str) -> String {
+        self.emit_call(name, false, true)
+    }
     fn emit_call(&self, name: &str, deferred: bool, owned: bool) -> String {
         let (frame_type, guard_type) = if owned {
             ("CrtOwnedFrameView<'_>", "CrtOwnedGuardView")

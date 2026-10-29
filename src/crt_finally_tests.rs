@@ -65,11 +65,29 @@ pub(crate) fn emit() -> String {
         &frame,
         "initialize_inner_scalars_owned",
     ));
+    let guard=bytes("original-guard-validator.bin","558bec568b7508578b7d0c8b0683f8fe740d8b4e0403cf330c38e85df3ffff8b46088b4e0c03cf330c385f5e5de94af3ffff");
+    let security = bytes(
+        "original-security-check.bin",
+        "3b0d00c041007501c3e97c020000",
+    );
+    let proof = crate::handler_guard::prove_guard(
+        &guard,
+        0x4021d0,
+        &security,
+        0x40154c,
+        0x41c000,
+        [-2, 0, -48, 0],
+        &frame,
+    )
+    .unwrap();
+    out.push_str(&proof.owned_call("original_inner_guard_call"));
     let mut regions = vec![
         (0x4010c0, complete),
         (0x401060, dispatch.clone()),
         (0x415180, table),
         (0x41b1d0, scope),
+        (0x4021d0, guard),
+        (0x40154c, security),
     ];
     let globals = BTreeMap::from([(0x41c94c, 0usize), (0x41c958, 1)]);
     for (name, at, hex) in [
@@ -175,7 +193,7 @@ fn original_finally_effects(rt:&mut CrtStreamRuntime,record:&mut LocalRecord<'_>
 
 pub(crate) const CASES: &str = r#"
 fn live_finally_cases(){
- for mode in 0..20{
+ for mode in 0..26{
   let mut m=Machine::new_dispatch_known(vec![FrameSpec{scopes:vec![]}],0,[None;10],Some(0)).unwrap();let mut r=ThreadRegistry::new(m.owner(),0x8000,0xf000,&[(0x400000,0x420000)],0x41c000).unwrap();let mut rt=runtime(&r);
   let sp=rt.resolve_absolute(0xe000,CrtRegionKind::Stack).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(71)).unwrap();let c=CrtCpu::new(sp,71).unwrap();let binding=m.owned_binding(0).unwrap();
   let mut storage=initialize_inner_scalars_owned(&mut rt,&mut r,&m,binding,&c).unwrap();m.issue_owned_event(binding).unwrap();r.contain(storage.id).unwrap();let id=storage.id;
@@ -196,12 +214,29 @@ fn live_finally_cases(){
     notification:|target,reason,rt:&mut CrtStreamRuntime,s:&mut CrtOwnedStorage,record:&mut LocalRecord<'_>|fixture_notify_invoke(rt,s,record,target,reason,0),
     finally:|target,_,rt:&mut CrtStreamRuntime,s:&mut CrtOwnedStorage,record:&mut LocalRecord<'_>|{
      if mode==12{let old=s.event;s.event+=1;let result=original_finally_effects(rt,record,&m,s,target,0);s.event=old;return result;}
-     original_finally_effects(rt,record,&m,s,target,mode)
+     original_finally_effects(rt,record,&m,s,target,if mode>=20{0}else{mode})
     }};owned_original_local(&mut effects,-2,0).map(|_|())
+  }).and_then(|_|{
+   if mode==20{let at=rt.resolve_absolute(s.image.ebp-48,CrtRegionKind::Stack)?;rt.store(at,32,CrtValue::scalar(0))?;}
+   if mode==21{rt.store(rt.resolve_absolute(0x40154c,CrtRegionKind::Module)?,8,CrtValue::scalar(0x90))?;}
+   let sp=rt.resolve_absolute(0x9800,CrtRegionKind::Stack)?;rt.store(sp,32,CrtValue::ProtectedReturn(946))?;
+   let mut cpu=CrtCpu::new(sp,946)?;cpu.r[5]=CrtValue::Pointer(rt.resolve_absolute(s.image.ebp,CrtRegionKind::Stack)?);cpu.entry=cpu.r;
+   if mode==22{rt.store(rt.resolve_absolute(0x9900,CrtRegionKind::Stack)?,32,CrtValue::ProtectedReturn(946))?;}
+   if mode==23{rt.consume_stack(sp,CrtValue::ProtectedReturn(946))?;}
+   for(at,b)in finally_original_regions(){let at=rt.resolve_absolute(at,CrtRegionKind::Module)?;for(i,expected)in b.iter().enumerate(){if rt.load(rt.offset(at,i as i64)?,8)?.known_scalar()?!=u32::from(*expected){return Err("postcleanup original code changed");}}}
+   let mut view=CrtOwnedFrameView{rt:&mut rt,registry:r,machine:&m,storage:s,active:946,depth:0,calls:0,failed:false};
+   if mode>=24{view.call(&mut cpu,0x40226e,|view,child|{
+    if mode==25{let alias=view.rt.resolve_absolute(0x9900,CrtRegionKind::Stack)?;view.rt.store(alias,32,CrtValue::ProtectedReturn(child.return_id))?;}
+    original_inner_guard_call(view,child,0x40226e)?;child.finish(view.rt)
+   })?;}
+   original_inner_guard_call(&mut view,&mut cpu,0x40226e)?;
+   assert_eq!(cpu.r[4],CrtValue::Pointer(sp));assert_eq!(cpu.r[5],cpu.entry[5]);
+   rt.consume_stack(sp,CrtValue::ProtectedReturn(946))?;Ok(())
   }));
   let read=|rt:&CrtStreamRuntime,p|rt.load(p,32).unwrap().known_scalar().unwrap();
-  if mode<=1{result.unwrap();let expected=if mode==1{0xffffff12}else{1298};assert_eq!(read(&rt,trace),expected);assert_eq!(read(&rt,local),118);assert_eq!(read(&rt,cursor),u32::MAX);assert_eq!(read(&rt,rt.resolve_absolute(0x41c94c,CrtRegionKind::Module).unwrap()),118);assert_eq!(read(&rt,rt.resolve_absolute(0x41c958,CrtRegionKind::Module).unwrap()),u32::MAX);assert_eq!(storage.image.try_level,-2);assert!(r.temporary.is_empty());}
+  if mode<=1||mode==24{result.unwrap();let expected=if mode==1{0xffffff12}else{1298};assert_eq!(read(&rt,trace),expected);assert_eq!(read(&rt,local),118);assert_eq!(read(&rt,cursor),u32::MAX);assert_eq!(read(&rt,rt.resolve_absolute(0x41c94c,CrtRegionKind::Module).unwrap()),118);assert_eq!(read(&rt,rt.resolve_absolute(0x41c958,CrtRegionKind::Module).unwrap()),u32::MAX);assert_eq!(storage.image.try_level,-2);assert!(r.temporary.is_empty());}
   else{assert!(result.is_err(),"finally case {mode}");assert!(r.available().is_err());assert!(r.frames[0].completion.is_none());
+   if mode>=20{assert_eq!(read(&rt,trace),1298);assert_eq!(read(&rt,local),118);assert_eq!(storage.image.try_level,-2);assert!(r.temporary.is_empty());}
    if mode==4{assert_eq!(read(&rt,trace),81);assert_eq!(read(&rt,local),100);assert_eq!(read(&rt,cursor),0);}
    if mode==5{assert_eq!(read(&rt,trace),1298);assert_eq!(read(&rt,local),118);assert_eq!(read(&rt,cursor),u32::MAX);assert_eq!(read(&rt,rt.resolve_absolute(0x41c94c,CrtRegionKind::Module).unwrap()),118);assert_eq!(read(&rt,rt.resolve_absolute(0x41c958,CrtRegionKind::Module).unwrap()),0);}
    if mode==6{assert_eq!(read(&rt,trace),5);assert_eq!(read(&rt,local),100);assert_eq!(read(&rt,rt.resolve_absolute(0x9600,CrtRegionKind::Stack).unwrap()),81);}

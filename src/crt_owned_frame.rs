@@ -209,7 +209,7 @@ impl CrtOwnedFrameView<'_>{
   self.validate()?;let sp=CrtCpu::pointer(cpu.r[4])?;
   if bytes==0||bytes>256||cpu.returned||cpu.return_id!=self.active||cpu.r[4]!=cpu.entry[4]
    ||sp.cap!=self.storage.entry.cap||sp.address()>=self.storage.image.esp
-   ||self.rt.load(sp,32)?!=CrtValue::ProtectedReturn(cpu.return_id){return Err("owned bridge entry/scratch alias");}
+   ||self.rt.load(sp,32)?!=CrtValue::ProtectedReturn(cpu.return_id)||self.rt.tags.values().filter(|&&v|v==CrtValue::ProtectedReturn(cpu.return_id)).count()!=1{return Err("owned bridge entry/scratch alias");}
   let low=self.rt.offset(sp,-i64::from(bytes))?;self.rt.valid(low,bytes)?;self.registry.range(low.address(),u64::from(sp.address()))?;
   if self.rt.overlapping_tags(low.address(),bytes).iter().any(|(_,v)|matches!(v,CrtValue::ProtectedReturn(_)|CrtValue::OpaqueSaved(_)|CrtValue::ThreadHead(_))){return Err("owned bridge protected scratch");}Ok(())
  }
@@ -220,7 +220,7 @@ impl CrtOwnedFrameView<'_>{
    if self.depth>=32||self.calls>=4096||cpu.returned||cpu.return_id!=self.active
     ||sp.cap!=self.storage.entry.cap||sp.address()>CrtCpu::pointer(cpu.entry[4])?.address()
     ||sp.address()>=self.storage.image.esp||!self.registry.module_contains_address(continuation)
-    ||self.rt.load(CrtCpu::pointer(cpu.entry[4])?,32)?!=CrtValue::ProtectedReturn(cpu.return_id){return Err("owned filter call activation/scratch");}
+    ||self.rt.load(CrtCpu::pointer(cpu.entry[4])?,32)?!=CrtValue::ProtectedReturn(cpu.return_id)||self.rt.tags.values().filter(|&&v|v==CrtValue::ProtectedReturn(cpu.return_id)).count()!=1{return Err("owned filter call activation/scratch");}
    self.registry.range(self.rt.offset(sp,-4)?.address(),u64::from(sp.address()))?;
    let parent=self.active;self.depth+=1;self.calls+=1;
    let value=cpu.call_activation(self.rt,continuation,0,|rt,child|{
