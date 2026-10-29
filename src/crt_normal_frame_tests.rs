@@ -286,6 +286,40 @@ fn file_scope_failure(){
 }
 
 fn bytes_for_native_filter()->Vec<u8>{vec![0x8b,0x55,0xec,0x8b,0x02,0x8b,0x08,0x89,0x4d,0xe4,0x8b,0x55,0xe4,0x33,0xc0,0x81,0xfa,0x42,0x00,0x42,0xe0,0x0f,0x94,0xc0,0xc3]}
+fn owned_local_cases(){
+ for mode in 0..10{
+  let mut m=Machine::new_dispatch_known(vec![FrameSpec{scopes:vec![]}],0,[None;10],Some(0)).unwrap();
+  let mut r=ThreadRegistry::new(m.owner(),0x8000,0xf000,&[(0x400000,0x420000)],0x41c000).unwrap();let mut rt=runtime(&r);
+  let sp=rt.resolve_absolute(0xe000,CrtRegionKind::Stack).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(71)).unwrap();let mut c=CrtCpu::new(sp,71).unwrap();
+  let binding=m.owned_binding(0).unwrap();let mut storage=initialize_main_owned(&mut rt,&mut r,&m,binding,&c).unwrap();activate_main_owned(&mut rt,&r,&m,&mut storage).unwrap();m.issue_owned_event(binding).unwrap();r.contain(storage.id).unwrap();
+  let id=storage.id;let base=rt.resolve_absolute(storage.image.record,CrtRegionKind::Stack).unwrap();let word=rt.offset(base,12).unwrap();c.r[0]=CrtValue::Pointer(base);c.r[1]=CrtValue::scalar((-2i32)as u32);
+  let entry=LocalEntry{entry_sp:0xc000,handler:0x4027b0,cookie_address:0x41c000,cookie:0x12345678,target_level:-2};
+  if mode==2{c.r[0]=CrtValue::scalar(base.address());}
+  if mode==3{let p=rt.resolve_absolute(storage.image.ebp-796,CrtRegionKind::Stack).unwrap();rt.store(p,32,CrtValue::scalar(0)).unwrap();}
+  if mode==4{rt.store(word,32,CrtValue::scalar(1)).unwrap();}
+  let before=m.owned_context;
+  let result=r.execute_handler(id,&mut storage,|r,storage|r.execute_local(id,storage,entry,|local,storage|{
+   if mode!=1{local.install_head(40,entry.handler)?;}
+   if mode==5{local.restore_previous_head()?;}
+   if mode==9{
+    return local.registry.execute_local(id,storage,LocalEntry{entry_sp:0xb000,..entry},|nested,storage|{
+     nested.install_head(40,entry.handler)?;original_local_level_store(&mut rt,nested,&m,storage,&c)?;assert_eq!(rt.load(word,32)?,CrtValue::scalar((-2i32)as u32));nested.restore_previous_head()
+    }).and_then(|_|local.restore_previous_head());
+   }
+   let mut foreign=runtime(local.registry);let memory=if mode==8{&mut foreign}else{&mut rt};
+   original_local_level_store(memory,local,&m,storage,&c)?;
+   assert_eq!(rt.load(word,32)?,CrtValue::scalar((-2i32)as u32));assert_eq!(storage.image.try_level,-2);
+   if mode==6{return Err("independent failure after live cleanup store");}
+   if mode==7{original_local_level_store(&mut rt,local,&m,storage,&c)?;}
+   local.restore_previous_head()
+  }));
+  if mode==0||mode==9{assert!(result.is_ok());storage.validate_storage(&rt,&r,&m).unwrap();assert_eq!(r.head().unwrap(),RegistryHead::Owned(id));}
+  else{assert!(result.is_err(),"local mode {mode}");assert!(r.available().is_err());}
+  let expected=if mode==0||mode==6||mode==7||mode==9{(-2i32)as u32}else if mode==4{1}else{0};assert_eq!(rt.load(word,32).unwrap(),CrtValue::scalar(expected));
+  assert_eq!(m.owned_context,before);assert_eq!(m.phase,Phase::Cleanup);assert!(m.restore_owned(0x40135c,|_,_|panic!("local write is not restoration")).is_err());
+ }
+}
+
 fn owned_main_cases(){
  for mode in 0..74{
   let mut m=Machine::new_dispatch_known(vec![FrameSpec{scopes:vec![]}],0,[None;10],Some(0)).unwrap();
@@ -843,7 +877,7 @@ fn reject_normal_exception(){
   }).unwrap();
  }
 }
-fn main(){match std::env::args().nth(1).unwrap().as_str(){"owned"=>owned_main_cases(),"path-edges"=>path_edges(),"live"=>live_dispatch(),"objects"=>captured_objects(),"handler"=>pending_handler_activation(),"pending"=>pending_normal_exception(),"pending-reject"=>reject_normal_exception(),"file"=>file_scope_normal(),"file-failure"=>file_scope_failure(),"nested"=>nested_actual(),"mutations"=>mutations(),"consumed"=>consumed_mutation(),"failure"=>body_failure(),"certificate"=>wrong_certificate(),"observed"=>observed(),_=>panic!("case")}}
+fn main(){match std::env::args().nth(1).unwrap().as_str(){"owned-local"=>owned_local_cases(),"owned"=>owned_main_cases(),"path-edges"=>path_edges(),"live"=>live_dispatch(),"objects"=>captured_objects(),"handler"=>pending_handler_activation(),"pending"=>pending_normal_exception(),"pending-reject"=>reject_normal_exception(),"file"=>file_scope_normal(),"file-failure"=>file_scope_failure(),"nested"=>nested_actual(),"mutations"=>mutations(),"consumed"=>consumed_mutation(),"failure"=>body_failure(),"certificate"=>wrong_certificate(),"observed"=>observed(),_=>panic!("case")}}
 "#;
 
 fn run(case: &str) {
@@ -913,6 +947,7 @@ fn run(case: &str) {
         let inner=crate::frame_proof::prove_frame(&inner_bytes,0x4010c0,0x41c000,&std::collections::BTreeSet::from([0x41b1d0]),&std::collections::BTreeSet::from([0x402210])).unwrap();
         let main_init=crate::crt_owned_frame::emit_initializer(&main,"initialize_main_owned");let inner_init=crate::crt_owned_frame::emit_initializer(&inner,"initialize_inner_owned");
         let owned_types=crate::crt_owned_frame::EMITTED_TYPES;
+        let original_local_store=super::normal_frame::NormalScopeStoreProof::prove(&handler_bytes("local-level-store.bin","89480c"),0x402775).unwrap().emit_owned_local("original_local_level_store",0,-2);
         let main_filter=crate::selection::prove_filter(&target_filter,0x401333,&crate::selection::FilterLayout{start:main.esp_offset(),end:0,exception_pointers_offset:-20,writable_words:vec![-776,-780]},0xe0424242).unwrap();
         let owned_filter=format!("fn owned_main_filter(frame:&mut CrtOwnedFrameView<'_>,cpu:&mut CrtCpu)->RegistryResult<CrtValue>{{ if cpu.r[5]!=CrtValue::Pointer(frame.owner_frame()?){{return Err(\"owned filter EBP binding\");}} {} }}",main_filter.live_body());
         let owned_bridge=format!("fn owned_filter_bridge<F>(frame:&mut CrtOwnedFrameView<'_>,cpu:&mut CrtCpu,target:CrtPointer,expected:&[u8],mut invoke:F)->RegistryResult<CrtValue> where F:FnMut(&mut CrtOwnedFrameView<'_>,&mut CrtCpu)->RegistryResult<CrtValue>{{ {} }}",bridge.filter_native().unwrap());
@@ -995,7 +1030,7 @@ if fault==1{{cpu.condition(0)?;}}
         let prefix_metadata=format!("fn owned_prefix_handler()->u32{{{}}}fn owned_prefix_temporary()->u32{{{}}}",prefix.entry,prefix.temporary_bytes);
         let context_types=crate::handler_context::EMITTED_TYPES;
         let context_check=context_proof.normal_object_check();
-        let source = format!("#![allow(dead_code)]\nmod guest_memory{{{memory}}}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{fixture}\n{file_scope}\n{context_types}\n{context_check}\n{scope_store}\n{permuted_store}\n{install}\n{handler_prolog}\n{filter_source}\n{false_filter_source}\n{normalizer_source}\n{guard_source}\n{header_source}\n{prefix_normalizer}\n{prefix_front}\n{guard_prefix}\n{prefix_caller}\n{bridge_native}\n{owned_types}\n{main_init}\n{inner_init}\n{owned_filter}\n{owned_bridge}\n{main_filter_bytes}\n{activation}\n{owned_prolog}\n{owned_prefix}\n{owned_header}\n{owned_scope_store}\n{owned_permuted_store}\n{global_source}\n{delivery_source}\n{tail_source}\n{owned_search}\n{code_data}\n{path_edges}\n{prefix_metadata}\nfn raise_site()->CrtNormalRaiseSite{{{{{raise}}}}}\n{CASES}",
+        let source = format!("#![allow(dead_code)]\nmod guest_memory{{{memory}}}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{fixture}\n{file_scope}\n{context_types}\n{context_check}\n{scope_store}\n{permuted_store}\n{install}\n{handler_prolog}\n{filter_source}\n{false_filter_source}\n{normalizer_source}\n{guard_source}\n{header_source}\n{prefix_normalizer}\n{prefix_front}\n{guard_prefix}\n{prefix_caller}\n{bridge_native}\n{owned_types}\n{original_local_store}\n{main_init}\n{inner_init}\n{owned_filter}\n{owned_bridge}\n{main_filter_bytes}\n{activation}\n{owned_prolog}\n{owned_prefix}\n{owned_header}\n{owned_scope_store}\n{owned_permuted_store}\n{global_source}\n{delivery_source}\n{tail_source}\n{owned_search}\n{code_data}\n{path_edges}\n{prefix_metadata}\nfn raise_site()->CrtNormalRaiseSite{{{{{raise}}}}}\n{CASES}",
             include_str!("linker/unwind_runtime.rs").replace("//!", "//"),
             emitted_literal(include_str!("frame_proof.rs")),emitted_literal(include_str!("thread_registry.rs")),
             crate::crt_stream_runtime::EMITTED_TYPES,crate::crt_stream_cpu::EMITTED_TYPES,
@@ -1255,4 +1290,9 @@ fn owned_main_frame_storage_executes_original_filter_and_rejects_other_owners() 
 #[test]
 fn instruction_path_checks_reject_unknown_flags_and_disagreeing_original_edges() {
     run("path-edges");
+}
+
+#[test]
+fn original_local_store_writes_canonical_owned_storage_in_live_registry_lifetime() {
+    run("owned-local");
 }

@@ -868,3 +868,52 @@ All three 6a612ccf workflows are being checked; the dedicated startup workflow
 40797171456 has passed. Full runs 40797179466 and 40797171510 were still active at
 the review checkpoint. Prior original case-27 timeout evidence remains preserved
 and unresolved; no retries or timeout thresholds changed.
+
+### Canonical owned storage inside registry cleanup
+
+The registry's handler and local-cleanup executors now accept a
+`RegistryFrameStorage` interface that exposes immutable frame metadata. Existing
+FrameImage users retain the same behavior. CrtOwnedStorage implements that
+interface, so the same executor can lend the canonical storage mutably to the
+callback while validating its registration at entry and exit. There is no cloned
+image or projection writeback, and no change to unlink/retirement authority.
+
+The original local body's MOV at VA0x402775 (`89 48 0c`) now has a live owned
+lowering through the existing exact scope-store proof. It requires an installed,
+active LocalRecord for this registration and the enclosing handler lifetime.
+Before writing it checks the actual source, cookie, protected fields, known
+before value, typed establisher and proven after value. It writes actual record+12
+bytes and canonical protected metadata together. The existing selected-scope
+store delegates to the same mutation, preserving its prior checks.
+
+Ten independent native scenarios exercise this exact fragment inside actual
+registry handler/local lifetimes: normal, nested, before FS installation, after
+FS restoration, scalar address alias, changed guard, changed live level, replay,
+foreign runtime and failure after the write. The nested case uses the same
+canonical storage in two scoped local executors. Partial failure retains both
+the actual -2 word and its matching metadata; no completion or restoration is
+issued. Machine context remains unknown and premature restoration rejects.
+These tests supply explicit local-entry/FS commands and a store-fragment entry;
+they do not yet execute the whole original local loop, cleanup callback, guard or
+epilog, and the target frame is not retired as a younger frame.
+
+Evidence extraction now reads the three store bytes from the unchanged PE and
+binds their hash across hosts. There are 10 new local-store component scenarios,
+separate from the inherited 74 owned scenarios and five recorded Windows wrapper
+comparisons. Local verification passed 135 CRT tests/one ignored, 171 frame tests,
+Clippy, formatting and the wrapper/projection checks. Generated Rust SHA256:
+`d1151d74e4507cf7dc22c2943b899254ee9ee730bc212b8b698ea37bc50cbb6b`.
+Zero new whole-PE translation pairs are claimed.
+
+The next connected step is to use this canonical storage in the decoded
+`LocalUnwindEffects` loop instead of `OriginalLocal`'s FrameMemory-only writer.
+Bind the live scope row and original parent transition, then notification and
+actual cleanup callback, temporary FS restoration, handler guards/epilog and
+retirement. Only those completed effects can feed the checked continuation
+boundary. Older-frame installation and complete API/context effects remain
+separate admission requirements. Full startup and rcedit remain rejected.
+
+CI readback: all three 6a612ccf workflows (40797179466, 40797171510,
+40797171456) completed successfully. At this checkpoint 728e6df3 dedicated
+40798060349 passed and both full runs were still active. Historical timeouts
+remain unexplained.

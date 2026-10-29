@@ -80,6 +80,9 @@ impl NormalScopeStoreProof {
     pub(crate) fn emit(&self, name: &str) -> String {
         format!("fn {name}(frame:&mut CrtLiveFrame<'_,'_>,cpu:&CrtCpu)->RegistryResult<()>{{frame.store_level_operand(cpu.r[{}],cpu.r[{}])}}",self.base,self.source)
     }
+    pub(crate) fn emit_owned_local(&self, name: &str, before: i32, after: i32) -> String {
+        format!("fn {name}(rt:&mut CrtStreamRuntime,local:&mut LocalRecord<'_>,machine:&Machine,storage:&mut CrtOwnedStorage,cpu:&CrtCpu)->RegistryResult<()>{{storage.store_local_level(rt,local,machine,cpu.r[{}],cpu.r[{}],{before},{after})}}",self.base,self.source)
+    }
     pub(crate) fn emit_owned(&self, name: &str, before: i32, after: i32) -> String {
         format!("fn {name}(frame:&mut CrtOwnedFrameView<'_>,cpu:&CrtCpu)->RegistryResult<()>{{frame.store_level_operand(cpu.r[{}],cpu.r[{}],{before},{after})}}",self.base,self.source)
     }

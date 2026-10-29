@@ -60,6 +60,8 @@ def check(original, observation, out, compare=None):
     (out/'epilog.bin').write_bytes(epilog)
     scope_store = mapped(image, 0x402355, 3, executable=True)
     (out/'handler-scope-store.bin').write_bytes(scope_store)
+    local_store=mapped(image,0x402775,3,executable=True)
+    (out/'local-level-store.bin').write_bytes(local_store)
     (out/'handler-prolog.bin').write_bytes(mapped(image, 0x402210, 6, executable=True))
     (out/'handler-installer.bin').write_bytes(mapped(image, 0x402263, 15, executable=True))
     (out/'event-normalizer.bin').write_bytes(mapped(image, 0x414a1b, 119, executable=True))
@@ -123,6 +125,10 @@ def check(original, observation, out, compare=None):
     (out/'owned-main-cargo.stdout').write_bytes(owned_run.stdout)
     (out/'owned-main-cargo.stderr').write_bytes(owned_run.stderr)
     if owned_run.returncode or b'1 passed' not in owned_run.stdout: raise ValueError('owned Main live storage checks failed')
+    local_run=subprocess.run(['cargo','test','--locked','--example','crt_stream','original_local_store_writes_canonical_owned_storage_in_live_registry_lifetime'],env=env,capture_output=True,timeout=180)
+    (out/'owned-local-cargo.stdout').write_bytes(local_run.stdout)
+    (out/'owned-local-cargo.stderr').write_bytes(local_run.stderr)
+    if local_run.returncode or b'1 passed' not in local_run.stdout: raise ValueError('owned local live write checks failed')
     edges_run=subprocess.run(['cargo','test','--locked','--example','crt_stream','instruction_path_checks_reject_unknown_flags_and_disagreeing_original_edges'],env=env,capture_output=True,timeout=180)
     (out/'path-edge-cargo.stdout').write_bytes(edges_run.stdout)
     (out/'path-edge-cargo.stderr').write_bytes(edges_run.stderr)
@@ -149,7 +155,7 @@ def check(original, observation, out, compare=None):
                   inner_prolog_sha256=sha((out/'Inner-prolog.bin').read_bytes()),
                   main_activation_sha256=sha((out/'main-activate.bin').read_bytes()),
                   main_scope_header_sha256=sha((out/'Main-scope-header.bin').read_bytes()),
-                  owned_frame_native_cases=74,
+                  owned_frame_native_cases=74, owned_local_store_cases=10, local_level_store_sha256=sha(local_store),
                   owned_delivery_lifetime_cases=17, unwind_continuation_input_cut_cases=4, cleanup_continuation_boundary_cases=2,
                   branch_obligation_native_cases=3,
                   ordinary_call_boundary_cases=1,
@@ -166,7 +172,7 @@ def check(original, observation, out, compare=None):
                   scope='Live registry fixture; body EAX/flags inputs; original stack/FS/saved-state restoration only')
     if compare:
         previous = json.loads(compare.read_text())
-        for key in ['pe_sha256', 'helper_sha256', 'epilog_sha256', 'handler_scope_store_sha256', 'handler_prolog_sha256', 'handler_installer_sha256', 'event_normalizer_sha256', 'guard_validator_sha256', 'security_check_sha256', 'scope_header_sha256', 'prefix_sha256', 'context_helper_sha256', 'filter_bridge_sha256', 'main_filter_sha256', 'main_prolog_sha256', 'inner_prolog_sha256', 'main_activation_sha256', 'main_scope_header_sha256', 'main_scope_table_sha256', 'complete_handler_sha256', 'global_wrapper_sha256', 'observation_sha256', 'vectors_sha256', 'rust_sha256', 'file_scope_code_sha256', 'file_scope_imports']:
+        for key in ['local_level_store_sha256', 'pe_sha256', 'helper_sha256', 'epilog_sha256', 'handler_scope_store_sha256', 'handler_prolog_sha256', 'handler_installer_sha256', 'event_normalizer_sha256', 'guard_validator_sha256', 'security_check_sha256', 'scope_header_sha256', 'prefix_sha256', 'context_helper_sha256', 'filter_bridge_sha256', 'main_filter_sha256', 'main_prolog_sha256', 'inner_prolog_sha256', 'main_activation_sha256', 'main_scope_header_sha256', 'main_scope_table_sha256', 'complete_handler_sha256', 'global_wrapper_sha256', 'observation_sha256', 'vectors_sha256', 'rust_sha256', 'file_scope_code_sha256', 'file_scope_imports']:
             if previous[key] != result[key]:
                 raise ValueError('wrapper cross-host provenance differs: '+key)
         result['matching_windows_native_report'] = str(compare)

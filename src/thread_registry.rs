@@ -36,6 +36,8 @@ struct HandlerCompletion {identity:RegistryIdentity,frame:RegistrationId,generat
 #[derive(Clone,Debug)]
 struct Containment {identity:RegistryIdentity,target:RegistrationId,younger:Vec<RegistrationId>}
 impl Containment {fn younger(&self)->&[RegistrationId]{&self.younger}fn target(&self)->RegistrationId{self.target}}
+trait RegistryFrameStorage {fn registry_image(&self)->&FrameImage<RegistryHead>;}
+impl RegistryFrameStorage for FrameImage<RegistryHead>{fn registry_image(&self)->&FrameImage<RegistryHead>{self}}
 struct ThreadRegistry {
  identity:RegistryIdentity,limit:u32,base:u32,bound:Vec<(u32,u32)>,cookie_address:u32,
  head:RegistryHead,frames:Vec<RegistryFrame>,temporary:Vec<RegistryTemporary>,
@@ -190,16 +192,16 @@ impl ThreadRegistry {
  }
  /// Executes the compiler-proved original callback, including post-cleanup
  /// guard/epilog effects. A Boolean cannot manufacture the completion token.
- fn execute_handler<T>(&mut self,id:RegistrationId,image:&mut FrameImage<RegistryHead>,body:impl FnOnce(&mut Self,&mut FrameImage<RegistryHead>)->RegistryResult<T>)->RegistryResult<(T,HandlerCompletion)>{
+ fn execute_handler<T,S:RegistryFrameStorage>(&mut self,id:RegistrationId,image:&mut S,body:impl FnOnce(&mut Self,&mut S)->RegistryResult<T>)->RegistryResult<(T,HandlerCompletion)>{
   self.available()?;
-  let start=(||{self.expected_callback(id)?;self.validate_frame(id,image)?;if self.handlers.contains(&id)||self.handlers.len()>=16{return Err("registry recursive handler outside contract");}Ok((self.head,self.temporary.len(),self.borrowed_depth))})();
+  let start=(||{self.expected_callback(id)?;self.validate_frame(id,image.registry_image())?;if self.handlers.contains(&id)||self.handlers.len()>=16{return Err("registry recursive handler outside contract");}Ok((self.head,self.temporary.len(),self.borrowed_depth))})();
   let(head,depth,borrowed)=match start{Ok(v)=>v,Err(e)=>return self.fail(e)};
   self.handlers.push(id);
   let result=body(self,image);
   match result{Err(e)=>return self.fail(e),Ok(value)=>{
    if let Err(e)=self.available(){return Err(e);}
    if self.head!=head||self.temporary.len()!=depth||self.borrowed_depth!=borrowed||self.handlers.last()!=Some(&id){return self.fail("registry callback head/lifetime mismatch");}
-   if let Err(e)=self.validate_frame(id,image){return self.fail(e);}
+   if let Err(e)=self.validate_frame(id,image.registry_image()){return self.fail(e);}
    self.handlers.pop();let generation=match self.next_id(){Ok(t)=>t.generation,Err(e)=>return self.fail(e)};
    let index=self.frame_index(id)?;self.frames[index].completion=Some(generation);
    Ok((value,HandlerCompletion{identity:self.identity,frame:id,generation}))
@@ -236,10 +238,10 @@ impl ThreadRegistry {
    self.head=previous;self.borrowed_depth-=1;Ok(value)
   }}
  }
- fn execute_local<T>(&mut self,id:RegistrationId,image:&mut FrameImage<RegistryHead>,entry:LocalEntry,body:impl FnOnce(&mut LocalRecord<'_>,&mut FrameImage<RegistryHead>)->RegistryResult<T>)->RegistryResult<T>{
+ fn execute_local<T,S:RegistryFrameStorage>(&mut self,id:RegistrationId,image:&mut S,entry:LocalEntry,body:impl FnOnce(&mut LocalRecord<'_>,&mut S)->RegistryResult<T>)->RegistryResult<T>{
   self.available()?;
   let start=(||{
-   self.expected_callback(id)?;self.validate_frame(id,image)?;
+   self.expected_callback(id)?;self.validate_frame(id,image.registry_image())?;
    if self.handlers.last()!=Some(&id)||self.temporary.len()>=16{return Err("registry local callback lifetime/budget");}
    let index=self.frame_index(id)?;let frame=&self.frames[index];
    if entry.cookie_address!=self.cookie_address||entry.cookie!=frame.cookie||!self.module_contains_address(entry.handler)
@@ -260,7 +262,7 @@ impl ThreadRegistry {
    self.available()?;
    let Some(last)=self.temporary.last()else{return self.fail("registry missing temporary completion");};
    if last.id!=token||!last.installed||!last.restored||self.head!=previous{return self.fail("registry original MOV/POP FS not completed");}
-   if let Err(e)=self.validate_frame(id,image){return self.fail(e);}
+   if let Err(e)=self.validate_frame(id,image.registry_image()){return self.fail(e);}
    self.temporary.pop();Ok(value)
   }}
  }

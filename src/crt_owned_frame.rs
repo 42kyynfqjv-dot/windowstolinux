@@ -36,6 +36,7 @@ struct CrtOwnedStorage {
  entry:CrtPointer,return_id:u64,image:FrameImage<RegistryHead>,ordinary:std::collections::BTreeSet<i32>,
  protected:std::collections::BTreeMap<i32,CrtValue>,input:Option<(Option<CrtPointer>,CrtPointer,CrtPointer,u32)>,pair_return:Option<(CrtPointer,u64)>,unwind_epoch:Option<u64>,
 }
+impl RegistryFrameStorage for CrtOwnedStorage{fn registry_image(&self)->&FrameImage<RegistryHead>{&self.image}}
 impl CrtOwnedStorage {
  fn initialize(rt:&mut CrtStreamRuntime,r:&mut ThreadRegistry,m:&Machine,binding:OwnedFrameBinding,cpu:&CrtCpu,image:FrameImage<RegistryHead>,ordinary:&[i32])->RegistryResult<Self>{
   m.check_raise_binding(binding).map_err(|_|"owned initializer event phase")?;
@@ -104,6 +105,21 @@ impl CrtOwnedStorage {
    }
   }Ok(())
  }
+ fn store_level(&mut self,rt:&mut CrtStreamRuntime,r:&ThreadRegistry,m:&Machine,base:CrtValue,value:CrtValue,before:i32,after:i32)->RegistryResult<()>{
+  self.validate(rt,r,m)?;let owner=rt.offset(self.entry,i64::from(self.image.ebp)-i64::from(self.image.entry_sp))?;
+  if base!=CrtValue::Pointer(rt.offset(owner,-16)?)||self.image.try_level!=before
+   ||value.known_scalar()?!=after as u32||after< -2||after== -1{return Err("owned original scope store operands/state");}
+  let key=i32::try_from(i64::from(self.image.record)+12-i64::from(self.image.entry_sp)).map_err(|_|"owned scope word offset")?;
+  if self.protected.get(&key)!=Some(&CrtValue::scalar(before as u32)){return Err("owned original scope store role");}
+  rt.store(rt.offset(self.entry,i64::from(key))?,32,value)?;
+  self.protected.insert(key,value);self.image.words.insert(key,FrameWord::Scalar(after as u32));self.image.try_level=after;self.validate(rt,r,m)
+
+ }
+ fn store_local_level(&mut self,rt:&mut CrtStreamRuntime,local:&mut LocalRecord<'_>,m:&Machine,base:CrtValue,value:CrtValue,before:i32,after:i32)->RegistryResult<()>{
+  local.validate_binding(self.binding,&self.image)?;
+  if local.frame()?!=self.id||local.registry.handlers.last()!=Some(&self.id){return Err("owned local cleanup lifetime");}
+  self.store_level(rt,local.registry,m,base,value,before,after)
+ }
  fn scope_store(&mut self,rt:&mut CrtStreamRuntime,r:&ThreadRegistry,m:&Machine,before:i32,after:i32)->RegistryResult<()>{
   m.check_raise_binding(self.binding).map_err(|_|"owned activation after event/phase")?;
   self.validate_storage(rt,r,m)?;
@@ -164,13 +180,7 @@ impl CrtOwnedFrameView<'_>{
  /// Original MOV to protected TryLevel only. Selection/unwind completion is
  /// a separate caller proof; this store cannot move Machine into Restore.
  fn store_level_operand(&mut self,base:CrtValue,value:CrtValue,before:i32,after:i32)->RegistryResult<()>{
-  self.validate()?;let owner=self.owner_frame()?;
-  if base!=CrtValue::Pointer(self.rt.offset(owner,-16)?)||self.storage.image.try_level!=before
-   ||value.known_scalar()?!=after as u32||after< -2||after== -1{return Err("owned original scope store operands/state");}
-  let key=i32::try_from(i64::from(self.storage.image.record)+12-i64::from(self.storage.image.entry_sp)).map_err(|_|"owned scope word offset")?;
-  if self.storage.protected.get(&key)!=Some(&CrtValue::scalar(before as u32)){return Err("owned original scope store role");}
-  self.rt.store(self.rt.offset(self.storage.entry,i64::from(key))?,32,value)?;
-  self.storage.protected.insert(key,value);self.storage.image.words.insert(key,FrameWord::Scalar(after as u32));self.storage.image.try_level=after;self.validate()
+  self.validate()?;self.storage.store_level(self.rt,self.registry,self.machine,base,value,before,after)
  }
 }
 /// Captured objects and callback entry remain explicit inputs, tied to the
