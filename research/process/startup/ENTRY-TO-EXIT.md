@@ -969,3 +969,54 @@ startup workflow40799674213 passed; both full runs40799681764/40799674303 had ei
 successful jobs and compiler-native-linux still comparing independent LLVM outcomes
 at the review checkpoint. Neither active work nor later passes resolve historical
 original-process or observer-build timeouts; their diagnostics remain preserved.
+
+### Original cleanup bodies and byte-backed temporary records
+
+CleanupA/B/C now compile from their unchanged 24-byte regions at VA0x401000,
+0x401020 and 0x401040 through the shared CRT IR/emitter. Runtime byte identity,
+complete eight-byte trace ownership and protected cdecl CALL/RET are checked.
+The component supplies an owned trace argument; this does not yet establish the
+original finally funclet's global argument binding or its other output stores.
+The independently specified two-callback trace is 5 -> 82 -> 1313 with sum18;
+a three-callback C/B/A path reaches21281. Thirteen earlier authored-callback
+cases remain separate from sixteen new original-cleanup/temporary-record cases.
+The latter include normal/filter/nested behavior, notification and cleanup failure,
+table/cursor/source-guard corruption, nested failure, protected scratch overlap,
+temporary cookie/handler-word corruption, expired nested temporary bytes and
+changed original callback code. The original PE is not modified.
+
+CrtOwnedTemporary now initializes the seven instruction-proved registration
+words in actual stack bytes, fully preflighting their ranges and protected aliases.
+Previous head is a typed thread/registry/epoch token; handler, establisher, cookie
+address and frame pointer retain their respective capabilities. Registry metadata,
+live word values and lifetime must match on every adapter effect. The bound
+original MOV FS installation remains ordered after private initialization. On
+successful POP/cleanup, the seven words are consumed and their initialization is
+forgotten. Corruption or callback failure preserves reached writes and installed
+head without automatic restoration. Nested successful cleanup restores the outer
+record and cannot reuse the retired bytes as initialized state. This covers the
+registration record, not the original helper's entire saved-register/CALL stack
+or a general Windows FS address space.
+
+The one ignored CRT test is
+`original_windows_wrapper_state_matches_native_normal_lifecycle`. Its annotation
+requires separately instrumented original Windows wrapper vectors. The evidence
+runner explicitly runs it with --ignored and verifies five retained observations;
+the ordinary local suite's ignored count therefore does not mean this evidence
+is untested. It is still recorded evidence, not a fresh original execution here.
+
+Local CRT143passed/one ignored, Clippy, formatting, original-PE evidence extraction
+and native projection checks passed. Generated Rust SHA256:
+`a9060f73062b80d7da9211871a2120432ba06917a2c1de514cb0ee70d27c4bf1`.
+The scripts now bind all three cleanup hashes across hosts. Zero new whole-PE
+translation pairs are claimed. All three df78665c workflows completed successfully;
+e21cb9f9 dedicated40800792813 passed and the two full runs were still active at
+this checkpoint. Historical timeout causes remain unresolved.
+
+Before retiring a younger frame, bind and execute its actual finally funclet
+around these bodies, including original notification/output effects and trace
+argument provenance, then run original guard checks and handler epilog against
+the live byte source. The current component handler receipt must not be presented
+as proof of those unexecuted instructions. Older-frame pre-event installation,
+full API/delivery effects and nonlocal control remain admission gates. Full startup
+and rcedit remain rejected; no formal approval or merge was submitted.

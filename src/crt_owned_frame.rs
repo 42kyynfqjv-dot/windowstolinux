@@ -352,13 +352,40 @@ impl CrtOwnedUnwind<'_>{
 
 /// Adapter for the instruction-proved ordinary local body. Callback providers
 /// remain separate compiler obligations; this type grants no API admission.
+struct CrtOwnedTemporary{base:CrtPointer,id:RegistrationId,shape:[RegistryWord;7],words:[CrtValue;7]}
+impl CrtOwnedTemporary{
+ fn bind(rt:&mut CrtStreamRuntime,record:&mut LocalRecord<'_>,storage:&CrtOwnedStorage)->RegistryResult<Self>{
+  let index=record.active_index()?;let t=&record.registry.temporary[index];
+  if t.installed||t.restored||t.frame!=storage.id{return Err("owned temporary installation lifetime");}
+  let base=rt.resolve_absolute(t.low,CrtRegionKind::Stack)?;rt.valid(base,28)?;
+  if rt.overlapping_tags(base.address(),28).iter().any(|(_,v)|matches!(v,CrtValue::ProtectedReturn(_)|CrtValue::OpaqueSaved(_)|CrtValue::ThreadHead(_))){return Err("owned temporary protected alias");}
+  let mut words=[CrtValue::scalar(0);7];
+  for(i,word)in t.words.iter().enumerate(){words[i]=match *word{
+   RegistryWord::Previous(head)=>CrtValue::ThreadHead(rt.thread_head(record.registry.identity.instance,t.id.generation,CrtNormalBinding::head_bits(head))?),
+   RegistryWord::Handler(at)|RegistryWord::CookieAddress(at)=>CrtValue::Pointer(rt.resolve_absolute(at,CrtRegionKind::Module)?),
+   RegistryWord::Guard{bits,..}|RegistryWord::Scalar(bits)=>CrtValue::scalar(bits),
+   RegistryWord::Establisher(id,at)|RegistryWord::FramePointer(id,at)=>{if id!=storage.id{return Err("owned temporary frame provenance");}CrtValue::Pointer(rt.resolve_absolute(at,CrtRegionKind::Stack)?)},
+  };}
+  // Full preflight precedes the private stores; no callback runs between these
+  // original private initialization effects and the bound MOV FS instruction.
+  for(i,v)in words.iter().enumerate(){rt.store(rt.offset(base,i as i64*4)?,32,*v)?;}
+  Ok(Self{base,id:t.id,shape:t.words,words})
+ }
+ fn validate(&self,rt:&CrtStreamRuntime,record:&LocalRecord<'_>)->RegistryResult<()>{
+  let t=&record.registry.temporary[record.active_index()?];if t.id!=self.id||!t.installed||t.low!=self.base.address()||t.words!=self.shape{return Err("owned temporary stale source");}
+  for(i,v)in self.words.iter().enumerate(){if rt.load(rt.offset(self.base,i as i64*4)?,32)?!=*v{return Err("owned temporary live word changed");}}Ok(())
+ }
+ fn discard(self,rt:&mut CrtStreamRuntime)->RegistryResult<()>{for(i,v)in self.words.into_iter().enumerate(){rt.consume_stack(rt.offset(self.base,i as i64*4)?,v)?;}Ok(())}
+}
+
 struct CrtOwnedLocalEffects<'a,'r,F,N>{
  rt:&'a mut CrtStreamRuntime,record:&'a mut LocalRecord<'r>,machine:&'a Machine,storage:&'a mut CrtOwnedStorage,
- rows:&'a[LocalScope],pending:Option<(i32,LocalScope)>,written:bool,notified:bool,finally:F,notification:N,
+ rows:&'a[LocalScope],temporary:Option<CrtOwnedTemporary>,pending:Option<(i32,LocalScope)>,written:bool,notified:bool,finally:F,notification:N,
 }
 impl<F,N> CrtOwnedLocalEffects<'_,'_,F,N>
 where F:FnMut(u32,i32,&mut CrtStreamRuntime,&mut CrtOwnedStorage,&mut LocalRecord<'_>)->RegistryResult<()>,N:FnMut(u32,u32)->RegistryResult<()>{
  fn validate_source(&mut self)->RegistryResult<()>{
+  self.temporary.as_ref().ok_or("owned temporary bytes absent")?.validate(self.rt,self.record)?;
   self.record.validate_binding(self.storage.binding,&self.storage.image)?;self.storage.validate(self.rt,self.record.registry,self.machine)?;
   if self.record.frame()?!=self.storage.id||self.rows.is_empty()||self.rows.len()>64{return Err("owned local source/row budget");}
   let table=self.rt.resolve_absolute(self.storage.image.scope_va,CrtRegionKind::Module)?;self.rt.valid(table,16+self.rows.len()as u32*12)?;
@@ -369,10 +396,14 @@ where F:FnMut(u32,i32,&mut CrtStreamRuntime,&mut CrtOwnedStorage,&mut LocalRecor
 }
 impl<F,N> LocalUnwindEffects for CrtOwnedLocalEffects<'_,'_,F,N>
 where F:FnMut(u32,i32,&mut CrtStreamRuntime,&mut CrtOwnedStorage,&mut LocalRecord<'_>)->RegistryResult<()>,N:FnMut(u32,u32)->RegistryResult<()>{
- fn install_temporary(&mut self,n:u32,h:u32)->RegistryResult<()>{self.record.install_head(n,h)}
+ fn install_temporary(&mut self,n:u32,h:u32)->RegistryResult<()>{
+  if n!=40||self.temporary.is_some(){return Err("owned temporary layout/replay");}
+  self.storage.validate(self.rt,self.record.registry,self.machine)?;
+  self.temporary=Some(CrtOwnedTemporary::bind(self.rt,self.record,self.storage)?);self.record.install_head(n,h)
+ }
  fn restore_previous_head(&mut self)->RegistryResult<()>{
   self.validate_source()?;
-  if self.pending.is_some_and(|(_,row)|row.filter==0){return Err("owned local incomplete callback");}self.record.restore_previous_head()
+  if self.pending.is_some_and(|(_,row)|row.filter==0){return Err("owned local incomplete callback");}self.record.restore_previous_head()?;self.temporary.take().ok_or("owned temporary missing bytes")?.discard(self.rt)
  }
  fn decode_scope(&mut self)->RegistryResult<()>{self.validate_source()}
  fn read_try_level(&mut self)->RegistryResult<i32>{

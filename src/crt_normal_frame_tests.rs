@@ -287,42 +287,51 @@ fn file_scope_failure(){
 
 fn bytes_for_native_filter()->Vec<u8>{vec![0x8b,0x55,0xec,0x8b,0x02,0x8b,0x08,0x89,0x4d,0xe4,0x8b,0x55,0xe4,0x33,0xc0,0x81,0xfa,0x42,0x00,0x42,0xe0,0x0f,0x94,0xc0,0xc3]}
 fn owned_loop_cases(){
- for mode in 0..13{
+ for case in 0..29{
+  let original=case>=13;let mode=if case>=23{case-10}else if original{case-13}else{case};
   let mut m=Machine::new_dispatch_known(vec![FrameSpec{scopes:vec![]}],0,[None;10],Some(0)).unwrap();let mut r=ThreadRegistry::new(m.owner(),0x8000,0xf000,&[(0x400000,0x420000)],0x41c000).unwrap();let mut rt=runtime(&r);
-  let sp=rt.resolve_absolute(0xe000,CrtRegionKind::Stack).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(71)).unwrap();let c=CrtCpu::new(sp,71).unwrap();let binding=m.owned_binding(0).unwrap();let mut storage=initialize_main_owned(&mut rt,&mut r,&m,binding,&c).unwrap();activate_main_owned(&mut rt,&r,&m,&mut storage).unwrap();storage.scope_store(&mut rt,&r,&m,0,1).unwrap();
-  m.issue_owned_event(binding).unwrap();r.contain(storage.id).unwrap();let id=storage.id;let word=rt.resolve_absolute(storage.image.record+12,CrtRegionKind::Stack).unwrap();let marker=rt.resolve_absolute(storage.image.ebp-780,CrtRegionKind::Stack).unwrap();rt.store(marker,32,CrtValue::scalar(5)).unwrap();
+  let sp=rt.resolve_absolute(0xe000,CrtRegionKind::Stack).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(71)).unwrap();let c=CrtCpu::new(sp,71).unwrap();let binding=m.owned_binding(0).unwrap();let mut storage=initialize_main_owned(&mut rt,&mut r,&m,binding,&c).unwrap();activate_main_owned(&mut rt,&r,&m,&mut storage).unwrap();storage.scope_store(&mut rt,&r,&m,0,if mode==18{2}else{1}).unwrap();
+  m.issue_owned_event(binding).unwrap();r.contain(storage.id).unwrap();let id=storage.id;let word=rt.resolve_absolute(storage.image.record+12,CrtRegionKind::Stack).unwrap();let marker=rt.resolve_absolute(storage.image.ebp-780,CrtRegionKind::Stack).unwrap();rt.store(marker,32,CrtValue::scalar(5)).unwrap();rt.store(rt.offset(marker,4).unwrap(),32,CrtValue::scalar(0)).unwrap();
+  let nested_bytes=original_nested_handler_bytes();rt.map_region(0x4027b0,nested_bytes.len()as u32,CrtRegionKind::Module,Some(&nested_bytes)).unwrap();
+  map_original_cleanups(&mut rt).unwrap();
+  if mode==16{let p=rt.resolve_absolute(0xbfd8,CrtRegionKind::Stack).unwrap();rt.store(p,32,CrtValue::ProtectedReturn(999)).unwrap();}
+  if mode==17{let p=rt.resolve_absolute(0x401020,CrtRegionKind::Module).unwrap();rt.store(p,8,CrtValue::scalar(0x90)).unwrap();}
   // Independently specified conformance table; the original PE is untouched.
-  let rows=[LocalScope{parent:-2,filter:0,handler:0x401200},LocalScope{parent:0,filter:if mode==9{0x401400}else{0},handler:if mode==10{0x700000}else{0x401100}}];
-  let table=rt.map_region(storage.image.scope_va,40,CrtRegionKind::Module,None).unwrap();for(i,row)in rows.iter().enumerate(){for(j,v)in [row.parent as u32,row.filter,row.handler].into_iter().enumerate(){rt.store(rt.offset(table,16+(i*12+j*4)as i64).unwrap(),32,CrtValue::scalar(v)).unwrap();}}
+  let mut rows=vec![LocalScope{parent:-2,filter:0,handler:if original{0x401000}else{0x401200}},LocalScope{parent:0,filter:if mode==9{0x401400}else{0},handler:if mode==10{0x700000}else if original{0x401020}else{0x401100}}];
+  if mode==18{rows.push(LocalScope{parent:1,filter:0,handler:0x401040});}
+  let table=rt.map_region(storage.image.scope_va,16+rows.len()as u32*12,CrtRegionKind::Module,None).unwrap();for(i,row)in rows.iter().enumerate(){for(j,v)in [row.parent as u32,row.filter,row.handler].into_iter().enumerate(){rt.store(rt.offset(table,16+(i*12+j*4)as i64).unwrap(),32,CrtValue::scalar(v)).unwrap();}}
   for (at,add) in [(0x401100,3u8),(0x401200,7u8)]{let bytes=[0x8b,0x02,0x6b,0xc0,10,0x83,0xc0,add,0x89,0x02,0xc3];let p=rt.map_region(at,bytes.len()as u32,CrtRegionKind::Module,Some(&bytes)).unwrap();if mode==12&&add==3{rt.store(p,8,CrtValue::scalar(0x90)).unwrap();}}
   if mode==1{rt.store(rt.offset(table,28).unwrap(),32,CrtValue::scalar(1)).unwrap();}
   if mode==11{rt.store(word,32,CrtValue::Scalar{bits:0,known:0}).unwrap();}
   let entry=LocalEntry{entry_sp:0xc000,handler:0x4027b0,cookie_address:0x41c000,cookie:0x12345678,target_level:-2};let events=std::cell::RefCell::new(Vec::new());
   let result=r.execute_handler(id,&mut storage,|r,storage|r.execute_local(id,storage,entry,|record,storage|{
-   let mut effects=CrtOwnedLocalEffects{rt:&mut rt,record,machine:&m,storage,rows:&rows,pending:None,written:false,notified:false,
+   let mut effects=CrtOwnedLocalEffects{rt:&mut rt,record,machine:&m,storage,rows:&rows,temporary:None,pending:None,written:false,notified:false,
     notification:|handler,reason|{events.borrow_mut().push(format!("N{handler:x}:{reason:x}"));if mode==2{Err("independent notification failure")}else{Ok(())}},
     finally:|handler,level,rt:&mut CrtStreamRuntime,storage:&mut CrtOwnedStorage,record:&mut LocalRecord<'_>|{
-     assert_eq!(rt.load(word,32)?.known_scalar()? as i32,if level==1{0}else{-2});events.borrow_mut().push(format!("F{handler:x}:{level}"));
-     owned_callback_invoke(rt,storage,record,handler,marker)?;
+     assert_eq!(rt.load(word,32)?.known_scalar()? as i32,if level==2{1}else if level==1{0}else{-2});events.borrow_mut().push(format!("F{handler:x}:{level}"));
+     if original{original_cleanup_invoke(rt,storage,record,handler,marker)?;}else{owned_callback_invoke(rt,storage,record,handler,marker)?;}
      if mode==3{return Err("independent cleanup failure");}
      if mode==4{rt.store(rt.offset(table,16)?,32,CrtValue::scalar(0))?;}
      if mode==5{rt.store(word,32,CrtValue::scalar(7))?;}
      if mode==6{let guard=rt.resolve_absolute(storage.image.ebp-796,CrtRegionKind::Stack)?;rt.store(guard,32,CrtValue::scalar(0))?;}
-     if mode==7||mode==8{
+     if mode==13{let p=rt.resolve_absolute(record.address()?+8,CrtRegionKind::Stack)?;rt.store(p,32,CrtValue::scalar(0))?;}
+     if mode==14{let p=rt.resolve_absolute(record.address()?+4,CrtRegionKind::Stack)?;rt.store(p,32,CrtValue::scalar(0x4027b0))?;}
+     if mode==7||mode==8||mode==15{
       record.registry.execute_local(id,storage,LocalEntry{entry_sp:0xb000,..entry},|nested,storage|{
-       let mut inner=CrtOwnedLocalEffects{rt,record:nested,machine:&m,storage,rows:&rows,pending:None,written:false,notified:false,
+       let mut inner=CrtOwnedLocalEffects{rt,record:nested,machine:&m,storage,rows:&rows,temporary:None,pending:None,written:false,notified:false,
         notification:|_,_|Err("nested notification should not run"),finally:|_,_,_:&mut CrtStreamRuntime,_:&mut CrtOwnedStorage,_:&mut LocalRecord<'_>|Err("nested callback should not run")};
        // Same live cursor is already the parent's level. No duplicate cleanup.
-       owned_original_local(&mut inner,if level==1{0}else{-2},0)?;
+       owned_original_local(&mut inner,if level==2{1}else if level==1{0}else{-2},0)?;
        if mode==8{return Err("independent nested failure");}Ok(())
       })?;
+      if mode==15{let retired=rt.resolve_absolute(0xafd8,CrtRegionKind::Stack)?;assert!(rt.load(retired,32)?.known_scalar().is_err());}
      }Ok(())
     }};
    owned_original_local(&mut effects,-2,0).map(|_|())
   }));
-  if mode==0||mode==7||mode==9{result.unwrap();assert_eq!(storage.image.try_level,-2);assert_eq!(rt.load(word,32).unwrap(),CrtValue::scalar((-2i32)as u32));assert!(r.temporary.is_empty());assert_eq!(r.head().unwrap(),RegistryHead::Owned(id));assert_eq!(rt.load(marker,32).unwrap().known_scalar().unwrap(),if mode==9{57}else{537});
-   assert_eq!(*events.borrow(),if mode==9{vec!["N401200:101","F401200:0"]}else{vec!["N401100:101","F401100:1","N401200:101","F401200:0"]});
-  }else{assert!(result.is_err(),"loop mode {mode}");assert!(r.available().is_err());assert!(r.frames[0].completion.is_none());assert!(!r.temporary.is_empty());if mode==1||mode==10||mode==11{assert_eq!(rt.load(marker,32).unwrap(),CrtValue::scalar(5));}else{assert_eq!(storage.image.try_level,0);assert_eq!(rt.load(marker,32).unwrap(),CrtValue::scalar(if mode==2||mode==12{5}else{53}));}}
+  if mode==0||mode==7||mode==9||mode==15||mode==18{result.unwrap();assert_eq!(storage.image.try_level,-2);assert_eq!(rt.load(word,32).unwrap(),CrtValue::scalar((-2i32)as u32));assert!(r.temporary.is_empty());assert_eq!(r.head().unwrap(),RegistryHead::Owned(id));assert_eq!(rt.load(marker,32).unwrap().known_scalar().unwrap(),if mode==18{21281}else if original{if mode==9{81}else{1313}}else if mode==9{57}else{537});
+   assert_eq!(*events.borrow(),if mode==18{vec!["N401040:101","F401040:2","N401020:101","F401020:1","N401000:101","F401000:0"]}else if original{if mode==9{vec!["N401000:101","F401000:0"]}else{vec!["N401020:101","F401020:1","N401000:101","F401000:0"]}}else if mode==9{vec!["N401200:101","F401200:0"]}else{vec!["N401100:101","F401100:1","N401200:101","F401200:0"]});
+  }else{assert!(result.is_err(),"loop mode {mode}");assert!(r.available().is_err());assert!(r.frames[0].completion.is_none());assert!(!r.temporary.is_empty());if mode==1||mode==10||mode==11||mode==16{assert_eq!(rt.load(marker,32).unwrap(),CrtValue::scalar(5));}else{assert_eq!(storage.image.try_level,0);assert_eq!(rt.load(marker,32).unwrap(),CrtValue::scalar(if mode==2||mode==12||mode==17{5}else if original{82}else{53}));}}
   assert_eq!(m.phase,Phase::Cleanup);assert_eq!(m.owned_context,Some([None;10]));assert!(m.restore_owned(0x40135c,|_,_|panic!("loop is not restoration")).is_err());
  }
 }
@@ -1000,6 +1009,21 @@ record.validate_binding(storage.binding,&storage.image)?;let sp=rt.resolve_absol
 cpu.call_activation(rt,0x402799,0,|rt,child|match target{0x401100=>independent_cleanup_4198656(rt,child),0x401200=>independent_cleanup_4198912(rt,child),_=>Err("independent cleanup target unbound")})?;
 rt.consume_stack(sp,CrtValue::ProtectedReturn(941))?;Ok(())}"#);
 
+        let nested_bytes=handler_bytes("owned-nested-handler.bin","8b4c2404f7410406000000b80100000074338b4424088b480833c8e87cedffff558b6818ff700cff7010ff7014e82effffff83c40c5d8b4424088b5424108902b803000000c3");
+        callback_source.push_str(&format!("fn original_nested_handler_bytes()->Vec<u8>{{vec!{nested_bytes:?}}}"));
+        let mut mappings=String::from("fn map_original_cleanups(rt:&mut CrtStreamRuntime)->RegistryResult<()>{");
+        let mut cases=String::new();
+        for(name,at,hex)in [("CleanupA",0x401000,"8b4c24048b0103c003c003c003c083c001890183410407c3"),("CleanupB",0x401020,"8b4c24048b0103c003c003c003c083c00289018341040bc3"),("CleanupC",0x401040,"8b4c24048b0103c003c003c003c083c00389018341040dc3")]{
+         let code=handler_bytes(&format!("owned-{name}.bin"),hex);let graph=crate::crt_stream_ir::Graph::decode(&code,at).unwrap();let body=crate::crt_stream_emit::emit_body(&graph,|_,_|Err("original cleanup has no calls".into()),&Default::default(),64).unwrap();
+         callback_source.push_str(&format!("fn original_cleanup_{at}(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->RegistryResult<CrtValue>{{let p=rt.resolve_absolute({at},CrtRegionKind::Module)?;for(i,byte)in {code:?}.into_iter().enumerate(){{if rt.load(rt.offset(p,i as i64)?,8)?.known_scalar()?!=byte as u32{{return Err(\"original cleanup code changed\");}}}}{body}}}"));
+         mappings.push_str(&format!("rt.map_region({at},{},CrtRegionKind::Module,Some(&{code:?}))?;",code.len()));cases.push_str(&format!("{at}=>original_cleanup_{at}(rt,child),"));
+        }
+        mappings.push_str("Ok(())}");callback_source.push_str(&mappings);
+        callback_source.push_str(&format!(r#"fn original_cleanup_invoke(rt:&mut CrtStreamRuntime,storage:&mut CrtOwnedStorage,record:&mut LocalRecord<'_>,target:u32,trace:CrtPointer)->RegistryResult<()>{{
+record.validate_binding(storage.binding,&storage.image)?;rt.valid(trace,8)?;
+for offset in [0,4]{{let at=rt.offset(trace,offset)?;let relative=i32::try_from(i64::from(at.address())-i64::from(storage.image.ebp)).map_err(|_|"cleanup trace offset")?;if trace.cap!=storage.entry.cap||!storage.ordinary.contains(&relative){{return Err("cleanup trace ordinary ownership");}}}}
+let sp=rt.resolve_absolute(0x9800,CrtRegionKind::Stack)?;rt.store(sp,32,CrtValue::ProtectedReturn(942))?;let mut cpu=CrtCpu::new(sp,942)?;cpu.push(rt,CrtValue::Pointer(trace))?;
+cpu.call_activation(rt,0x402799,0,|rt,child|match target{{{cases}_=>Err("original cleanup target unbound")}})?;cpu.discard(rt,4)?;rt.consume_stack(sp,CrtValue::ProtectedReturn(942))?;Ok(())}}"#));
         let local_source=format!("fn owned_original_local(effects:&mut impl LocalUnwindEffects,target_level:i32,exception_flags:u32)->RegistryResult<Option<i32>>{{{}}}",local_proof.source);
         let owned_types=crate::crt_owned_frame::EMITTED_TYPES;
         let original_local_store=super::normal_frame::NormalScopeStoreProof::prove(&handler_bytes("local-level-store.bin","89480c"),0x402775).unwrap().emit_owned_local("original_local_level_store",0,-2);
