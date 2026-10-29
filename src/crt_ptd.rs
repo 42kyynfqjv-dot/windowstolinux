@@ -52,10 +52,12 @@ pub(crate) fn helper_source(
             |_, _| Err("PTD helper cannot call".into()),
             &roles,
             4096,
-            |_, op| match op {
+            |_, op| {
+                match op {
                 Op::FsPush if enter => Ok("cpu.push(rt,frame.previous)?;".into()),
-                Op::FsWrite(r) => Ok(format!("frame.write_fs(rt,cpu.r[{}],{})?;", r.index, enter)),
+                Op::FsWrite(r) => Ok(format!("frame.check_fs(rt,cpu.r[{}],{})?;fs(rt,frame,cpu.r[{}],{})?;frame.write_fs(rt,cpu.r[{}],{})?;", r.index, enter, r.index, enter, r.index, enter)),
                 _ => Err("PTD helper thread instruction".into()),
+            }
             },
             |pc, _| {
                 Ok(if enter && pc == po + 34 {
@@ -71,7 +73,7 @@ pub(crate) fn helper_source(
                 Ok(Some("let p=CrtCpu::pointer(cpu.r[4])?;if rt.load(p,32)?!=CrtValue::ProtectedReturn(identity)||rt.tags.values().filter(|&&v|v==CrtValue::ProtectedReturn(identity)).count()!=1{return Err(\"PTD helper continuation uniqueness\");}cpu.pop(rt)?;return Ok(());".into()))
             },
         )?;
-        source.push_str(&format!("fn {name}(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,frame:&mut CrtPtdFrame,continuation:u32)->Result<(),&'static str>{{frame.helper(rt,cpu,{enter},continuation,|rt,cpu,frame,identity|{{{body}}})}}\n"));
+        source.push_str(&format!("fn {name}_with_fs(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,frame:&mut CrtPtdFrame,continuation:u32,mut fs:impl FnMut(&CrtStreamRuntime,&CrtPtdFrame,CrtValue,bool)->Result<(),&'static str>)->Result<(),&'static str>{{frame.helper(rt,cpu,{enter},continuation,|rt,cpu,frame,identity|{{{body}}})}}\nfn {name}(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,frame:&mut CrtPtdFrame,continuation:u32)->Result<(),&'static str>{{{name}_with_fs(rt,cpu,frame,continuation,|_,_,_,_|Ok(()))}}\n"));
     }
     Ok(source)
 }
@@ -139,11 +141,14 @@ impl CrtPtdFrame{
   // The next certified instruction overwrites precisely this old source word.
   rt.consume_stack(old,CrtValue::ProtectedReturn(id))
  }
- fn write_fs(&mut self,rt:&CrtStreamRuntime,value:CrtValue,enter:bool)->Result<(),&'static str>{
+ fn check_fs(&self,rt:&CrtStreamRuntime,value:CrtValue,enter:bool)->Result<(),&'static str>{
   let record=rt.offset(self.bp,-12)?;
   if enter{if self.phase!=0||self.current!=self.previous||value!=CrtValue::Pointer(record)||rt.load(record,32)?!=self.previous{return Err("PTD FS installation");}}
   else if self.phase!=1||self.current!=CrtValue::Pointer(record)||value!=self.previous||rt.load(record,32)?!=self.previous{return Err("PTD FS restoration");}
-  self.current=value;Ok(())
+  Ok(())
+ }
+ fn write_fs(&mut self,rt:&CrtStreamRuntime,value:CrtValue,enter:bool)->Result<(),&'static str>{
+  self.check_fs(rt,value,enter)?;self.current=value;Ok(())
  }
  fn helper(&mut self,rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,enter:bool,continuation:u32,run:impl FnOnce(&mut CrtStreamRuntime,&mut CrtCpu,&mut Self,u64)->Result<(),&'static str>)->Result<(),&'static str>{
   self.identity(rt,cpu)?;if continuation==0{return Err("PTD unbound helper continuation");}
@@ -329,3 +334,71 @@ rt.fls_set(f,next,7,CrtValue::scalar(u32::MAX),true,None).unwrap();assert!(rt.er
         "fls-set-lifetime",
     );
 }
+
+/// Shared-chain adapter for the original helper's FS instruction effects.
+/// Legacy helper inputs remain available only as explicitly supplied components.
+pub(crate) fn shared_chain_source() -> &'static str {
+    SHARED_CHAIN
+}
+const SHARED_CHAIN: &str = r#"
+struct CrtCxxChainBinding {
+ anchor:guest_memory::Capability,identity:RegistryIdentity,epoch:u64,lease:Option<DeliveryChildAuthority>,
+ previous:RegistryHead,token:CrtThreadHead,bp:CrtPointer,owner:u64,id:Option<RegistrationId>,done:bool,
+}
+impl CrtCxxChainBinding {
+ fn bind(rt:&CrtStreamRuntime,cpu:&CrtCpu,epoch:&NormalCallEpoch<'_>)->RegistryResult<Self>{
+  let state=epoch.state()?;cpu.validate_active(rt)?;CrtNormalBinding::validate_cxx_head(rt,epoch)?;
+  if rt.owner!=epoch.registry.identity.owner||rt.thread!=epoch.registry.identity.instance{return Err("C++ chain runtime/thread identity");}
+  let bp=CrtCpu::pointer(cpu.r[4])?;let previous=epoch.head()?;
+  let token=rt.thread_head(epoch.registry.identity.instance,state.generation,CrtNormalBinding::head_bits(previous))?;
+  Ok(Self{anchor:rt.anchor,identity:epoch.registry.identity,epoch:state.generation,lease:epoch.delivery,previous,token,bp,owner:cpu.return_id,id:None,done:false})
+ }
+ fn identity(&self,rt:&CrtStreamRuntime,epoch:&NormalCallEpoch<'_>,frame:&CrtPtdFrame)->RegistryResult<()>{
+  epoch.state()?;rt.valid(self.bp,4)?;
+  if self.done||self.anchor!=rt.anchor||self.identity!=epoch.registry.identity||self.epoch!=epoch.generation||self.lease!=epoch.delivery
+   ||frame.anchor!=self.anchor||frame.thread!=rt.thread||frame.outer!=self.owner||frame.bp!=self.bp||frame.previous!=CrtValue::ThreadHead(self.token){return Err("C++ chain stale owner/epoch/lease");}Ok(())
+ }
+ fn effect(&mut self,rt:&CrtStreamRuntime,epoch:&mut NormalCallEpoch<'_>,frame:&CrtPtdFrame,value:CrtValue,enter:bool)->RegistryResult<()>{
+  self.identity(rt,epoch,frame)?;frame.check_fs(rt,value,enter)?;
+  if enter {
+   if self.id.is_some()||epoch.head()?!=self.previous{return Err("C++ chain changed predecessor/replay");}
+   let low=rt.offset(frame.low,-4)?.address();let high=u64::from(CrtCpu::pointer(frame.entry[4])?.address())+4;
+   epoch.registry.range(low,high)?;epoch.delivery_range(low,high)?;
+   let state=epoch.state()?;
+   if epoch.registry.cxx.len()>=32||state.issued>=4096||!epoch.registry.module_contains_address(frame.handler)
+    ||epoch.registry.cxx.iter().any(|f|u64::from(low)<f.high&&u64::from(f.low)<high)
+    ||epoch.registry.frames.iter().any(|f|f.live&&u64::from(low)<f.high&&u64::from(f.low)<high)
+    ||state.frames.iter().any(|f|u64::from(low)<f.high&&u64::from(f.low)<high){return Err("C++ chain full frame overlap/budget/handler");}
+   let parent_low=match self.previous{
+    RegistryHead::Cxx(id)=>epoch.registry.cxx.iter().find(|f|f.id==id&&f.linked).ok_or("C++ chain stale predecessor")?.low,
+    RegistryHead::Normal(id)=>state.frames.iter().find(|f|f.id==id&&f.installed&&!f.unlinked).ok_or("C++ chain stale normal predecessor")?.low,
+    RegistryHead::Owned(id)=>epoch.registry.frames[epoch.registry.frame_index(id)?].low,
+    _=>return Err("C++ chain borrowed predecessor not contained"),
+   };
+   if high>u64::from(parent_low){return Err("C++ chain outside caller stack");}
+   let id=epoch.registry.next_id()?;
+   epoch.registry.cxx.push(RegistryCxxFrame{id,epoch:self.epoch,lease:self.lease,previous:self.previous,low,high,record:rt.offset(frame.bp,-12)?.address(),handler:frame.handler,owner:self.owner,linked:true});
+   epoch.registry.normal_epoch.as_mut().unwrap().issued+=1;
+   epoch.registry.head=RegistryHead::Cxx(id);self.id=Some(id);
+  }else{
+   let id=self.id.ok_or("C++ chain missing registration")?;
+   let f=epoch.registry.cxx.iter_mut().find(|f|f.id==id).ok_or("C++ chain retired registration")?;
+   if !f.linked||f.owner!=self.owner||f.epoch!=self.epoch||f.lease!=self.lease||f.record!=rt.offset(frame.bp,-12)?.address()||f.previous!=self.previous
+    ||epoch.registry.head!=RegistryHead::Cxx(id){return Err("C++ chain non-LIFO unlink/identity");}
+   f.linked=false;epoch.registry.head=self.previous;
+  }Ok(())
+ }
+}
+fn ptd_prolog_registered(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,epoch:&mut NormalCallEpoch<'_>,frame:&mut CrtPtdFrame,binding:&mut CrtCxxChainBinding,continuation:u32)->RegistryResult<()>{
+ let result=(||{binding.identity(rt,epoch,frame)?;ptd_prolog_with_fs(rt,cpu,frame,continuation,|rt,f,value,enter|binding.effect(rt,epoch,f,value,enter))})();
+ match result{Ok(())=>Ok(()),Err(e)=>epoch.fail(e)}
+}
+fn ptd_epilog_registered(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,epoch:&mut NormalCallEpoch<'_>,frame:&mut CrtPtdFrame,binding:&mut CrtCxxChainBinding,continuation:u32)->RegistryResult<()>{
+ let result=(||{binding.identity(rt,epoch,frame)?;ptd_epilog_with_fs(rt,cpu,frame,continuation,|rt,f,value,enter|binding.effect(rt,epoch,f,value,enter))?;
+  let id=binding.id.ok_or("C++ chain epilog without registration")?;
+  let index=epoch.registry.cxx.iter().position(|f|f.id==id&&!f.linked).ok_or("C++ chain missing unlink")?;
+  if frame.phase!=2||epoch.registry.head!=binding.previous{return Err("C++ chain incomplete original epilog");}
+  epoch.registry.cxx.remove(index);binding.done=true;Ok(())})();
+ match result{Ok(())=>Ok(()),Err(e)=>epoch.fail(e)}
+}
+"#;

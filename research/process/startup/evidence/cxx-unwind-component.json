@@ -1,12 +1,12 @@
 {
   "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
-  "rust_sha256": "d562772d9a31bc1a5ed46b633b1f5796153bdd396ce561f178e7cf211f49855c",
+  "rust_sha256": "8c1a27b5b221859eecc6fb65a7b6c23c1a41af38d0a7c87b7293f33b806d48cc",
   "unwind_binding_source_sha256": "ac16aa1903e90a6fb3dee07052d004fe7aa67fe7f479113096e1d5825f5f1aef",
   "unwind_native_cases": 24,
   "unwind_new_windows_pairs": 0,
   "unwind_binding_rust_tests": 1,
-  "kind": "Same-event supplied C++ invocation with live captured-object/result lifetime through original prefix/common/unwind; not whole-PE conversion",
-  "rust_crt_tests_passed": 217,
+  "kind": "Original C++ prolog/epilog shared registry-head component with mixed EH4 and delivery-child ownership; not ordered dispatch or whole-PE conversion",
+  "rust_crt_tests_passed": 218,
   "existing_observation_test_separate": true,
   "byte_mutations_rejected": 415,
   "recorded_wrapper_pairs": 5,
@@ -63,6 +63,16 @@
   },
   "chain_ownership_diagnostic_experiments": 1,
   "chain_ownership_new_windows_pairs": 0,
-  "chain_selection_status": "Unimplemented: native two-prolog experiment demonstrates separate local FS views and shared registry head; supplied invocation is not selection proof.",
-  "next_contract": "THREAD-CHAIN.md: shared FS authority, registration shape/source separation, ordered same-event dispatch and actual capture/flag producer"
+  "chain_selection_status": "Shared registered C++/EH4 head publication and retirement implemented; ordered handler selection still requires target-bound disposition receipts. Legacy supplied-FS diagnostic retained.",
+  "next_contract": "THREAD-CHAIN.md: target-bound ordered same-event dispatch, source shape separation and actual capture/flag producer",
+  "shared_chain_native_cases": 24,
+  "shared_chain_new_windows_pairs": 0,
+  "shared_chain_checks": [
+    "original mixed and directly nested C++/EH4 registration and LIFO epilogs",
+    "full stack extents, typed predecessor and unique live owner return before inheritance",
+    "stale predecessor/owner, replay, alias and guard corruption rejection",
+    "pending source remains suspended; matching child lease required",
+    "unlinked but unretired child rejected at callback completion",
+    "original FS publication and prior effects preserved after later failure"
+  ]
 }

@@ -5,7 +5,7 @@ supplied objects to one pending event and executes the original prefix/common/
 unwind path, preserving suspension and receipt lifetime. It does **not** derive
 handler selection from the original thread chain or acquire a Windows delivery.
 
-## Reproduced representation gap
+## Original reproducer (retained legacy component path)
 
 Run:
 
@@ -27,7 +27,7 @@ object binding do not prove actual head publication or selection. The legacy
 component helper has explicit incoming-FS inputs; this experiment exposes that
 composition boundary instead of promoting it to an OS dispatch implementation.
 
-## Exact code boundary
+## Code boundary reproduced at `8efaffc` (before this change)
 
 - `crt_ptd::helper_source` lowers original FS reads/writes through
   `CrtPtdFrame::previous` and `write_fs`. `write_fs` updates only that frame's
@@ -47,6 +47,61 @@ composition boundary instead of promoting it to an OS dispatch implementation.
 
 Changing only an enum or accepting a candidate's numeric record address would
 leave all these producer obligations unresolved.
+
+## Implemented shared-head path
+
+The registered helper path now executes the same certified prolog/epilog with an
+FS effect hook at the actual instruction. `CrtCxxChainBinding` binds runtime,
+thread, epoch, owner, stack capability and any active delivery-child lease.
+`RegistryHead::Cxx` identifies a fresh three-word registration separately from
+EH4's four-word layout. Publication and predecessor restoration update the same
+`ThreadRegistry::head` used by EH4. Failed later effects preserve earlier writes
+and poison the enclosing path; no successful retirement is invented.
+
+Inheritance revalidates the typed predecessor/handler/state words and the live,
+unique protected return of each leading C++ owner; a stale owner cannot lend its
+registration to a new EH4 or C++ frame.
+
+Full frame extents (including helper continuation scratch) are checked against
+module/thread bounds and other live registrations. Nested original C++ frames
+and mixed C++/EH4 calls inherit the actual predecessor. Original epilog completion
+is required to remove the unlinked lifetime record. Callback completion now also
+compares the C++ registration inventory, so merely restoring the head cannot
+conceal an unretired child. Ordinary access remains suspended during an event;
+only the matching child lease may create and retire child registrations.
+
+`original_cxx_and_eh4_share_live_lifo_thread_head` executes 24 native cases:
+14 mixed-chain/lifetime cases, five directly nested/failure cases, and five
+pending-delivery child cases. Positive paths assert completion explicitly.
+Existing changed-byte helper certificates are reused. The legacy diagnostic
+above still demonstrates why the old explicitly supplied helper path cannot
+justify selection. Neither that path nor the new registered helper admits an
+entire image. These cases add zero original Windows observations and zero
+whole-PE pairs; the artifact replay retains the original five wrapper pairs.
+
+## Exact remaining ordered-dispatch gate
+
+Shared publication closes the split-head producer for the registered helper
+path. It does not implement ordered exception dispatch. The present
+`CrtNormalHandlerReturn` binds identity, epoch, interrupted frame, event, scope
+level and scalar result, **not the executing registration/handler target**.
+`take_handler_result` explicitly does not interpret an EXCEPTION_DISPOSITION.
+Consequently it must not become a cursor-advance permission by testing EAX=1.
+
+The next connected change must bind execution to a live typed chain node and
+original handler target, then mint a target-bound disposition receipt only after
+that handler returns with its child registrations retired. A same-event cursor
+may advance once to that node's validated predecessor on ContinueSearch; it must
+reject wrong-target, replayed, changed-head, missing-owner and unsupported
+nested/collided receipts. Keep the physical head and search cursor distinct.
+The initial EH4 source cannot be skipped to select a later C++ owner. The
+existing `bind_unwind` remains an explicitly supplied component constructor,
+not a selected-chain constructor. The source activation still has EH4-specific
+validation; supporting a C++ interrupted source requires its actual source
+identity/lifetime representation, not retagging EH4 metadata.
+
+Sol can review the shared-head code and evidence. Target-bound dispatch and
+source-shape separation remain a bounded Astra High semantic integration.
 
 ## Cohesive bounded implementation contract
 
@@ -96,7 +151,7 @@ registers or substitute zero. A native runtime is allowed to implement guest
 semantics independently, but must prove the observables actually consumed by the
 unchanged code.
 
-The next semantic refactor warrants bounded Astra High reasoning. Sol can handle
-review, regression/evidence work and CI. This boundary adds one native diagnostic
-experiment, zero fresh Windows observations and zero whole-PE translation pairs.
+The legacy boundary retains one native diagnostic experiment. The registered
+path adds 24 native cases, zero fresh Windows observations and zero whole-PE
+translation pairs.
 Full startup/rcedit remains unsupported and PR #45 stays draft.

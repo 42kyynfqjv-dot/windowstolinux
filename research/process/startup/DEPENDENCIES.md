@@ -58,16 +58,16 @@ effects; retain rejection for exceptional funclets until their delivery and
 cleanup are justified. Actual delivery acquisition and incoming-chain containment
 remain separate gates. This is not whole-PE translation evidence.
 
-The next producer boundary is reproduced in [THREAD-CHAIN.md](THREAD-CHAIN.md): `reserve_eh4` owns normal EH4
-registrations, while the original three-word C++ record lives in `CrtPtdFrame`.
-The reserved Cxx registration kind does not implement thread-chain selection.
-Deriving the supplied invocation therefore requires a justified original C++
-registration/head lifecycle and delivery producer; matching an owned record's
-address is insufficient. The new binding validates that producer's eventual
-output but does not replace it. The original PTD prolog updates only its local
-FS view, while EH4 uses the separate registry head; two live local C++ frames do
-not determine the actual thread head. One shared head and an ordered same-event
-search cursor are required before deriving selection.
+The legacy split-head boundary remains reproduced in [THREAD-CHAIN.md](THREAD-CHAIN.md).
+The new registered original PTD helper shares the canonical EH4 head, typed
+predecessors, full frame bounds and child-lease lifetime. Twenty-four native cases
+cover mixed and directly nested registrations, stale/replayed authority, failed
+writes and pending delivery. Shared-head success does not derive a selected
+handler: existing result receipts identify the interrupted event but not the
+executing chain node. Next, bind original handler execution and disposition to
+that node before any single-use cursor advance. Keep actual capture/flags,
+C++ source activation, borrowed-chain containment and collided delivery explicit.
+No whole-image conversion or new Windows observation is claimed.
 
 ## Objective whole-program acceptance
 
@@ -79,6 +79,12 @@ lifetime/alias/unknown-state/cleanup negatives. Passing individual rows does not
 establish their entry-to-exit composition.
 
 ## CI evidence
+
+The reviewed predecessor `8efaffc` completed all three workflows successfully:
+Rust PR40965890530, Rust push40965882528 and pinned startup40965882457.
+The earlier `f5cbd05` also completed all three successfully:
+40964376142, 40964368746 and 40964368751. These are predecessor results;
+new shared-head changes require their own final-head checks.
 
 At the preceding checkpoint, fe0d0dc push run40949077644 attempt1 failed artifact
 creation with ECONNRESET, leaving later comparisons skipped. Its exact job/steps

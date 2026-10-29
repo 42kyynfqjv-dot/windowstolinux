@@ -270,3 +270,13 @@ to different head representations. A native two-prolog experiment demonstrates
 that two live local candidates do not establish selection. See [THREAD-CHAIN.md](THREAD-CHAIN.md)
 for the exact shared-head/source/search-cursor refactor and delivery obligations.
 No selector or capture acquisition is enabled by that experiment.
+
+## Shared-head checkpoint
+
+Registered original C++ prolog/epilog effects now share `ThreadRegistry::head`
+with EH4 and retain typed lifetime and child-lease checks (24 native cases).
+Legacy supplied-FS components remain visibly separate. Ordered selection is
+still unbound: result receipts need the actual executing registration/handler
+identity before they can authorize cursor advancement. See [THREAD-CHAIN.md](THREAD-CHAIN.md).
+Actual capture acquisition, incoming-chain containment and collided delivery are
+not replaced by these components; full startup/rcedit remains unsupported.

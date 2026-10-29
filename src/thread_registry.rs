@@ -14,6 +14,7 @@ enum RegistryHead {
  BorrowedDispatcher{identity:RegistryIdentity,generation:u64},
  Owned(RegistrationId),
  Normal(NormalFrameId),
+ Cxx(RegistrationId),
 }
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 enum RegistryWord {
@@ -38,9 +39,11 @@ struct Containment {identity:RegistryIdentity,target:RegistrationId,younger:Vec<
 impl Containment {fn younger(&self)->&[RegistrationId]{&self.younger}fn target(&self)->RegistrationId{self.target}}
 trait RegistryFrameStorage {fn registry_image(&self)->&FrameImage<RegistryHead>;}
 impl RegistryFrameStorage for FrameImage<RegistryHead>{fn registry_image(&self)->&FrameImage<RegistryHead>{self}}
+#[derive(Clone,Debug,PartialEq,Eq)]
+struct RegistryCxxFrame {id:RegistrationId,epoch:u64,lease:Option<DeliveryChildAuthority>,previous:RegistryHead,low:u32,high:u64,record:u32,handler:u32,owner:u64,linked:bool}
 struct ThreadRegistry {
  identity:RegistryIdentity,limit:u32,base:u32,bound:Vec<(u32,u32)>,cookie_address:u32,
- head:RegistryHead,frames:Vec<RegistryFrame>,temporary:Vec<RegistryTemporary>,
+ head:RegistryHead,cxx:Vec<RegistryCxxFrame>,frames:Vec<RegistryFrame>,temporary:Vec<RegistryTemporary>,
  generation:u64,selected:Option<Containment>,next_unwind:usize,
  handlers:Vec<RegistrationId>,borrowed_depth:usize,failure:Option<&'static str>,
  normal_authority:std::cell::Cell<Option<u64>>,normal_epoch:Option<NormalEpochState>,
@@ -86,7 +89,7 @@ impl ThreadRegistry {
   }
   let instance=NEXT_THREAD_REGISTRY.fetch_update(std::sync::atomic::Ordering::Relaxed,std::sync::atomic::Ordering::Relaxed,|n|n.checked_add(1)).map_err(|_|"registry identity exhaustion")?;
   let identity=RegistryIdentity{owner,instance};
-  Ok(Self{identity,limit,base,bound:bound.to_vec(),cookie_address,head:RegistryHead::BorrowedRoot(identity),frames:Vec::new(),temporary:Vec::new(),generation:0,selected:None,next_unwind:0,handlers:Vec::new(),borrowed_depth:0,failure:None,normal_authority:std::cell::Cell::new(None),normal_epoch:None})
+  Ok(Self{identity,limit,base,bound:bound.to_vec(),cookie_address,head:RegistryHead::BorrowedRoot(identity),cxx:Vec::new(),frames:Vec::new(),temporary:Vec::new(),generation:0,selected:None,next_unwind:0,handlers:Vec::new(),borrowed_depth:0,failure:None,normal_authority:std::cell::Cell::new(None),normal_epoch:None})
  }
  fn available(&self)->RegistryResult<()>{if let Some(e)=self.failure{Err(e)}else{Ok(())}}
  fn fail<T>(&mut self,error:&'static str)->RegistryResult<T>{let error=*self.failure.get_or_insert(error);Err(error)}
@@ -96,6 +99,9 @@ impl ThreadRegistry {
   Ok(RegistrationId{identity:self.identity,generation:self.generation})
  }
  fn head(&self)->RegistryResult<RegistryHead>{self.available()?;Ok(self.head)}
+ fn below_cxx(&self,mut head:RegistryHead)->RegistryResult<RegistryHead>{
+  self.available()?;for _ in 0..=32{match head{RegistryHead::Cxx(id)=>{let f=self.cxx.iter().find(|f|f.id==id&&f.linked).ok_or("stale C++ chain node")?;head=f.previous;},_=>return Ok(head)}}Err("C++ chain cycle/budget")
+ }
  fn frame_index(&self,id:RegistrationId)->RegistryResult<usize>{
   self.available()?;
   if id.identity!=self.identity{return Err("registry foreign identity");}
@@ -331,7 +337,7 @@ impl ThreadRegistry {
   self.available()?;
   let state=self.normal_epoch.as_ref().ok_or("normal call missing epoch")?;
   if state.generation!=generation||state.event!=permit.event||state.selected!=permit.selected
-   ||state.pending_exception.is_some()||state.delivery.is_some()||state.context!=permit.context||!state.frames.is_empty()||self.head!=state.previous
+   ||self.cxx.iter().any(|f|f.epoch==generation)||state.pending_exception.is_some()||state.delivery.is_some()||state.context!=permit.context||!state.frames.is_empty()||self.head!=state.previous
    ||self.next_unwind!=state.next_unwind||self.selected.as_ref().is_none_or(|p|p.target!=permit.selected)
    ||machine.owned_context!=Some(permit.context)||!matches!(machine.phase,Phase::Done|Phase::Returning) {
    return self.fail("normal call incomplete lifecycle or changed selected context");
@@ -364,6 +370,7 @@ impl NormalCallEpoch<'_> {
    self.registry.range(low,high)?;
    if u64::from(low)>=high||high>grant.ceiling
     ||state.frames.iter().any(|f|u64::from(low)<f.high&&u64::from(f.low)<high)
+    ||self.registry.cxx.iter().any(|f|u64::from(low)<f.high&&u64::from(f.low)<high)
     ||self.registry.frames.iter().any(|f|f.live&&u64::from(low)<f.high&&u64::from(f.low)<high){
     return Err("delivery child stack aliases live frame/arguments");
    }
@@ -403,17 +410,18 @@ impl NormalCallEpoch<'_> {
    let state=self.state()?;
    if state.frames.len()>=32||state.issued>=4096||plan.steps.is_empty()||plan.steps.len()>32
     ||plan.callee_pop%4!=0||plan.callee_pop>4096{return Err("normal call frame/plan budget");}
-   if let Some(parent)=state.frames.last(){if !parent.installed||parent.unlinked||self.registry.head!=RegistryHead::Normal(parent.id){return Err("normal call parent not installed");}}
+   if let Some(parent)=state.frames.last(){if !parent.installed||parent.unlinked||self.registry.below_cxx(self.registry.head)?!=RegistryHead::Normal(parent.id){return Err("normal call parent not installed");}}
    let low=image.esp;let high=u64::from(image.entry_sp)+4;
    // RET n consumes the caller's argument words as well as the protected
    // return. Their complete extent must remain in the same owned thread
    // range and outside module storage even though the frame does not own
    // their contents or gain dereference authority here.
    let consumed_high=high+u64::from(plan.callee_pop);self.registry.range(low,consumed_high)?;self.delivery_range(low,consumed_high)?;
-   let parent_low=state.frames.last().map(|f|f.low).unwrap_or(self.registry.frames[self.registry.frame_index(state.selected)?].low);
+   let parent_low=if let RegistryHead::Cxx(id)=self.registry.head{self.registry.cxx.iter().find(|f|f.id==id&&f.linked).ok_or("normal call stale C++ parent")?.low}else{state.frames.last().map(|f|f.low).unwrap_or(self.registry.frames[self.registry.frame_index(state.selected)?].low)};
    if consumed_high>u64::from(parent_low){return Err("normal call stack grows outside caller activation");}
    if low%4!=0||image.entry_sp%4!=0||image.record<low||image.ebp<low||u64::from(image.ebp)+4>high
     ||self.registry.frames.iter().any(|f|f.live&&u64::from(low)<f.high&&u64::from(f.low)<consumed_high)
+    ||self.registry.cxx.iter().any(|f|u64::from(low)<f.high&&u64::from(f.low)<consumed_high)
     ||state.frames.iter().any(|f|u64::from(low)<f.high&&u64::from(f.low)<consumed_high) {
     return Err("normal call frame overlap/alignment");
    }

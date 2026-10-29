@@ -164,7 +164,21 @@ impl CrtNormalBinding {
   RegistryHead::BorrowedDispatcher{generation,..}=>[1,generation,0],
   RegistryHead::Owned(id)=>[2,id.generation,0],
   RegistryHead::Normal(id)=>[3,id.epoch,id.generation],
+  RegistryHead::Cxx(id)=>[4,id.generation,0],
  }}
+ fn validate_cxx_head(rt:&CrtStreamRuntime,epoch:&NormalCallEpoch<'_>)->RegistryResult<()>{
+  let mut head=epoch.head()?;
+  for _ in 0..=32{let RegistryHead::Cxx(id)=head else{return Ok(());};
+   let f=epoch.registry.cxx.iter().find(|f|f.id==id&&f.linked).ok_or("C++ inherited stale head")?;
+   if f.epoch!=epoch.generation||rt.owner!=epoch.registry.identity.owner||rt.thread!=epoch.registry.identity.instance{return Err("C++ inherited foreign epoch/runtime");}
+   let entry=rt.resolve_absolute(u32::try_from(f.high-4).map_err(|_|"C++ inherited return range")?,CrtRegionKind::Stack)?;
+   let record=rt.resolve_absolute(f.record,CrtRegionKind::Stack)?;rt.valid(record,12)?;
+   let token=rt.thread_head(epoch.registry.identity.instance,f.epoch,Self::head_bits(f.previous))?;
+   if rt.load(entry,32)?!=CrtValue::ProtectedReturn(f.owner)||rt.tags.values().filter(|v|**v==CrtValue::ProtectedReturn(f.owner)).count()!=1
+    ||rt.load(record,32)?!=CrtValue::ThreadHead(token)||rt.load(rt.offset(record,4)?,32)?!=CrtValue::scalar(f.handler){return Err("C++ inherited owner/record lifetime");}
+   rt.load(rt.offset(record,8)?,32)?.known_scalar()?;head=f.previous;
+  }Err("C++ inherited chain budget/cycle")
+ }
  fn bind(rt:&CrtStreamRuntime,cpu:&CrtCpu,epoch:&NormalCallEpoch<'_>,layout:CrtNormalLayout)->RegistryResult<Self>{
   Self::bind_phase(rt,cpu,epoch,layout,None)
  }
@@ -174,7 +188,7 @@ impl CrtNormalBinding {
  fn bind_phase(rt:&CrtStreamRuntime,cpu:&CrtCpu,epoch:&NormalCallEpoch<'_>,layout:CrtNormalLayout,initialization:Option<CrtInitialization>)->RegistryResult<Self>{
   match initialization{Some(token)=>rt.initialization(token)?,None=>if rt.initialization.is_some(){return Err("CRT normal initialization token required");}}
 
-  epoch.state()?;let identity=epoch.registry.identity;let previous=epoch.head()?;
+  epoch.state()?;Self::validate_cxx_head(rt,epoch)?;let identity=epoch.registry.identity;let previous=epoch.head()?;
   let caller=CrtCpu::pointer(cpu.entry[4])?;
   if rt.owner!=identity.owner||rt.thread!=identity.instance||epoch.registry.cookie_address!=layout.cookie_address||rt.shutdown.is_some()||rt.closed
    ||cpu.returned||cpu.return_id==0||cpu.return_pop!=layout.pop||cpu.r[4]!=cpu.entry[4]
@@ -466,7 +480,7 @@ impl CrtNormalException {
   self.check_handler_stack(rt,interrupted,epoch,dispatcher)?;
   let state=epoch.registry.normal_epoch.as_ref().ok_or("delivery child missing epoch")?;
   if state.delivery.is_some(){return Err("delivery child already borrowed");}
-  let floor=state.frames.len();let context=state.context;
+  let floor=state.frames.len();let context=state.context;let cxx_before=epoch.registry.cxx.clone();
   let lease=epoch.registry.next_id()?.generation;
   self.delivery=CrtNormalDelivery::Calling;
   let result=(||{
@@ -477,7 +491,7 @@ impl CrtNormalException {
     let value={let mut borrowed=NormalCallEpoch{registry:&mut *epoch.registry,generation:epoch.generation,delivery:Some(grant)};
      let value=body(rt,child,&mut borrowed)?;
      let state=borrowed.state()?;
-     if state.frames.len()!=floor||state.context!=context||borrowed.head()?!=RegistryHead::Normal(self.frame){return Err("delivery child incomplete return or changed context");}
+     if borrowed.registry.cxx!=cxx_before||state.frames.len()!=floor||state.context!=context||borrowed.head()?!=RegistryHead::Normal(self.frame){return Err("delivery child incomplete return or changed context");}
      value
     };
     epoch.registry.normal_epoch.as_mut().ok_or("delivery child expired epoch")?.delivery=None;
