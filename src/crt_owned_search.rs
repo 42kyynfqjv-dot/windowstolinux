@@ -499,7 +499,7 @@ pub(crate) fn emit_context_transfer(
         r#"
 fn original_restore_loads(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->RegistryResult<CrtValue>{{{loads}}}
 fn restored_landing_stores(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->RegistryResult<CrtValue>{{{stores}}}
-struct CrtRestoredLanding{{anchor:guest_memory::Capability,event:u64,source:RegistrationId,target:CrtPointer,registers:[CrtValue;8]}}
+struct CrtRestoredLanding{{id:u64,anchor:guest_memory::Capability,event:u64,source:RegistrationId,target:CrtPointer,registers:[CrtValue;8]}}
 fn owned_context_transfer(frame:&mut CrtOwnedFrameView<'_>,cpu:&mut CrtCpu,prepared:CrtPreparedContext)->RegistryResult<CrtRestoredLanding>{{let result=(||{{
  frame.validate()?;let ready=&prepared.ready;
  if ready.anchor!=frame.rt.anchor||ready.event!=frame.machine.event||ready.source!=frame.storage.id||frame.storage.prepared_context!=Some(ready.id)||frame.owner_frame()?!=ready.owner||frame.registry.target_ready()?!=ready.source||frame.machine.current!=frame.machine.selected||frame.storage.image.try_level!= -2||cpu.returned||cpu.r[4]!=CrtValue::Pointer(ready.sp)||cpu.r[5]!=CrtValue::Pointer(ready.owner)||cpu.r[1]!=CrtValue::Pointer(prepared.context)||cpu.r[0]!=CrtValue::Pointer(prepared.target)||prepared.context!=frame.rt.offset(ready.owner,-744)?||prepared.target!=frame.rt.resolve_absolute(0x4013a5,CrtRegionKind::Module)?{{return Err("restore prepared ownership/registers");}}
@@ -520,8 +520,28 @@ fn owned_context_transfer(frame:&mut CrtOwnedFrameView<'_>,cpu:&mut CrtCpu,prepa
  if target!=prepared.target||cpu.r[4]!=CrtValue::Pointer(ready.sp)||cpu.r[5]!=CrtValue::Pointer(ready.owner)||cpu.r[0]!=CrtValue::scalar(77)||frame.rt.load(low,32)?!=CrtValue::ProtectedReturn(id){{return Err("restore terminal transfer");}}
  frame.rt.consume_stack(low,CrtValue::ProtectedReturn(id))?;frame.rt.consume_stack(frame.rt.offset(low,4)?,CrtValue::Pointer(prepared.context))?;
  restored_landing_stores(frame.rt,cpu)?;frame.validate()?;
- Ok(CrtRestoredLanding{{anchor:ready.anchor,event:ready.event,source:ready.source,target,registers:cpu.r}})
+ frame.storage.restored_landing=Some(id);
+ Ok(CrtRestoredLanding{{id,anchor:ready.anchor,event:ready.event,source:ready.source,target,registers:cpu.r}})
  }})();if result.is_err(){{frame.failed=true;}}result}}
 "#
     ))
 }
+
+/// Consume instruction-derived live restoration once. Actual OS event acquisition
+/// and its CapturedContext lifetime remain separately required for normal return.
+pub(crate) const RESTORATION_COMPLETION: &str = r#"
+fn complete_owned_restoration(frame:&mut CrtOwnedFrameView<'_>,cpu:&CrtCpu,landing:CrtRestoredLanding)->RegistryResult<[Option<u32>;10]>{let result=(||{
+ frame.validate()?;
+ let owner=frame.owner_frame()?;let sp=frame.rt.resolve_absolute(frame.storage.image.esp,CrtRegionKind::Stack)?;
+ if landing.anchor!=frame.rt.anchor||landing.event!=frame.machine.event||landing.source!=frame.storage.id||frame.storage.restored_landing!=Some(landing.id)||landing.registers!=cpu.r||cpu.returned||cpu.r[4]!=CrtValue::Pointer(sp)||cpu.r[5]!=CrtValue::Pointer(owner)||frame.storage.prepared_context.is_some()||frame.storage.selected_jump.is_some()||frame.storage.input.is_some()||frame.storage.pair_return.is_some()||frame.storage.image.try_level!= -2||landing.target!=frame.rt.resolve_absolute(0x4013a5,CrtRegionKind::Module)?||frame.registry.target_ready()?!=landing.source||frame.machine.current!=frame.machine.selected||frame.machine.frames.iter().skip(frame.machine.selected+1).any(|f|f.live){return Err("restoration stale transfer/lifetime");}
+ if frame.rt.load(frame.storage.entry,32)?!=CrtValue::ProtectedReturn(frame.storage.return_id)||frame.rt.tags.values().filter(|&&v|v==CrtValue::ProtectedReturn(frame.storage.return_id)).count()!=1{return Err("restoration Main return authority");}
+ for(offset,value)in [(-756,cpu.r[0]),(-760,cpu.r[4]),(-764,cpu.r[5])]{if frame.rt.load(frame.rt.offset(owner,offset)?,32)?!=value{return Err("restoration live continuation changed");}}
+ let old=frame.machine.owned_context.ok_or("restoration missing owned context")?;
+ for i in [3,6,7]{if old[i].is_some()&&old[i]!=cpu.r[i].known_scalar().ok(){return Err("restoration saved register disagreement");}}
+ let mut projection=[None;10];for i in [0,4,5]{projection[i]=Some(CrtCpu::number(cpu.r[i])?);}projection[8]=Some(landing.target.address());for i in [3,6,7]{projection[i]=old[i];}
+ let binding=frame.storage.binding;
+ frame.storage.restored_landing=None;
+ frame.machine.finish_selected_dispatch(binding).map_err(|_|"restoration selected cleanup incomplete")?;
+ frame.machine.restore_owned(landing.target.address(),|lease,_|{lease.bind_storage(binding)?;Ok(projection)}).map_err(|_|"restoration owned transition")
+ })();if result.is_err(){frame.failed=true;}result}
+"#;

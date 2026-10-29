@@ -850,3 +850,48 @@ continuation stores SHA256
 `06481e5466a0c6e04e96b89dbdd6fba40646f5af3373f2a55f16ebc917800590`;
 generated Rust SHA256
 `271b757b15ba5f57a7118c3b084d67d1ac5e509adbd80270bbdd90438b08bb69`.
+
+### Validated completion of the live restoration (2026-10-29)
+
+Independent review of a0e3527 found no live frame latch for its returned transfer
+receipt. The executed Restore transfer now records its fresh CALL generation in
+owned storage. Completion consumes that matching latch once and checks the
+process/event/registration, live CPU registers, selected ownership, Main return
+root and the three original continuation writes before changing Machine phase.
+Younger frames must already be retired, selected scopes disabled and all prior
+input/jump/context-preparation authority consumed.
+
+The adapter uses `finish_selected_dispatch` and `restore_owned`, binding the
+existing selected storage lease. Its projection comes from the instruction-derived
+registers and target. Unknown captured nonvolatile registers stay unknown;
+a known captured value that disagrees with the live register rejects. It does not
+restore ECX/EDX/flags from an invented capture. Six completion scenarios overlap
+183 owned-frame scenarios: success, stale event, changed live register, changed
+continuation write, missing storage latch and saved-register disagreement. A
+reconstructed replay rejects, and rejected preflight cases leave Cleanup phase
+and cannot mint normal-call authority.
+
+Crucially, Machine `Done` is restoration bookkeeping, not a finished
+`OwnedExceptionEvent`. The adapter deliberately does not call
+`mint_finished_event`. The original event's shared `CapturedContext` lifetime must
+still perform Live -> Restoring -> Finished, with matching original raise-site
+identity, before `NormalReturnSession` can take its normal-call permit. The tests
+assert that no such permit is created by this component.
+
+The concrete remaining connector is between the checked live `CrtNormalRaiseSite`
+/ captured input and `OwnedExceptionEvent::from_raise`, which currently consumes
+an initialized `FrameImage` at the original raise boundary. The owned dispatch
+fixture currently issues `Machine::issue_owned_event` directly and supplies the
+delivery context as a cut. Creating an event after that issue, editing its lifetime
+to Finished, or treating the restoration receipt as its substitute would bypass
+its issuance and capture checks. A shared live-storage issuance adapter needs to
+prove the actual four RaiseException argument words and CALL slot, own one event
+lifetime across nested dispatch, call begin-restoration at the selected boundary,
+and call finish after the validated transfer. Only then can the existing normal
+reporting/return/flush machinery consume the event. Actual OS delivery and
+collided-unwind effects remain separate acceptance gates. No new Windows pairs,
+whole-PE translations or full startup/rcedit admission are claimed.
+
+Local verification: 175 root and 158 CRT tests passed; one recorded-observation
+test is separately replayed. Formatting/Clippy and artifact/projection checks passed. Historical Windows
+timeout diagnostics remain intact. Generated Rust SHA256: `4774b4c88150ef243f930b3b17249480c40de315088fa570925d7d572780a684`.
