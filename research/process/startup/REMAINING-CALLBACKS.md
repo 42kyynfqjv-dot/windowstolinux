@@ -264,3 +264,9 @@ A lease-bound receipt revalidates capture lifetime at consumption. Thirty native
 cases cover mismatches, post-return retirement, replay, active nested delivery,
 flags, full bounds and aliases. Actual Windows record/flag production and C++
 registration selection remain supplied; no Windows/whole-PE comparisons are added.
+
+Thread-chain boundary: the original C++ prolog and EH4 registry currently publish
+to different head representations. A native two-prolog experiment demonstrates
+that two live local candidates do not establish selection. See [THREAD-CHAIN.md](THREAD-CHAIN.md)
+for the exact shared-head/source/search-cursor refactor and delivery obligations.
+No selector or capture acquisition is enabled by that experiment.

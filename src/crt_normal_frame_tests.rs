@@ -1490,7 +1490,50 @@ fn bound_invocation(){for delivery_mode in 0..30{let prefix=true;let mode=0;
   Err::<(),_>("original child unwind completion is not OS delivery/restoration")
  });assert!(result.is_err());assert_eq!(rt.initialization,None);assert_eq!(rt.module_references.len(),refs);assert_eq!(rt.memory.read(cache.address(),4).unwrap(),cache_before);assert_eq!(rt.last_os_error,saved_error);
 }}
-fn main(){match std::env::args().nth(1).unwrap().as_str(){"bound-cxx-invocation"=>bound_invocation(),"prefix-delivery-unwind"=>dispatcher_delivery_unwind(true),"dispatcher-delivery-unwind"=>dispatcher_delivery_unwind(false),"delivery-cached-unwind"=>delivery_cached_unwind(),"delivery-children"=>delivery_children(),"cxx-cached-unwind"=>cxx_cached_unwind(),"cxx-unwind"=>cxx_registered_unwind(),"manager-inherited"=>inherited_registered_manager(),"manager"=>manager_registered(),"live-finally"=>live_finally_cases(),"owned-loop"=>owned_loop_cases(),"owned-local"=>owned_local_cases(),"owned"=>{main_initial_rejections();initial_raise_rejections();owned_main_cases()},"path-edges"=>path_edges(),"live"=>live_dispatch(),"objects"=>captured_objects(),"handler"=>pending_handler_activation(),"pending"=>pending_normal_exception(),"pending-reject"=>reject_normal_exception(),"file"=>file_scope_normal(),"file-failure"=>file_scope_failure(),"nested"=>nested_actual(),"mutations"=>mutations(),"consumed"=>consumed_mutation(),"failure"=>body_failure(),"certificate"=>wrong_certificate(),"observed"=>observed(),_=>panic!("case")}}
+fn chain_ownership_gap(){let delivery_mode=0;let mode=0;
+ let(m,mut r,main,mut permit)=fixture_with_extra(&[(0x410000,0x420000)]);let _previous=r.head;
+ let(mut rt,init)=CrtStreamRuntime::new_initializing(r.identity.owner,r.identity.instance,0x8000,65536).unwrap();rt.map_region(0x9000,0x6000,CrtRegionKind::Stack,None).unwrap();rt.map_region(0x41c000,4,CrtRegionKind::Module,Some(&0x12345678u32.to_le_bytes())).unwrap();
+ let(module,reference)=rt.module_acquire_result(init,"independent unwind dependency",0x720000).unwrap();let function=rt.module_export_result(init,module,"FlsGetValue",0x721000).unwrap();let cache_root=rt.map_region(0x41cd14,12,CrtRegionKind::Module,None).unwrap();let cache=rt.offset(cache_root,8).unwrap();rt.store(cache,32,if mode==6{CrtValue::scalar(0)}else{CrtValue::Function(function)}).unwrap();
+ rt.map_region(0x415128,4,CrtRegionKind::Module,Some(&(if mode==10{0x401bfau32}else{0x401bf9u32}).to_le_bytes())).unwrap();rt.map_region(0x415d4c,8,CrtRegionKind::Input,Some(&[0,0,0,0,2,0,0,0])).unwrap();rt.map_region(0x415d54,12,CrtRegionKind::Input,Some(b"FlsGetValue\0")).unwrap();let index=rt.map_region(0x41c060,4,CrtRegionKind::Module,Some(&3u32.to_le_bytes())).unwrap();
+ let ptd=rt.map_region(0x6000,if mode==8{28}else{40},CrtRegionKind::ThreadData,None).unwrap();let count=rt.offset(ptd,24).unwrap();rt.store(count,32,CrtValue::scalar(2)).unwrap();let fiber=rt.bind_fiber(rt.thread).unwrap();let slot=rt.bind_fls(fiber,3,if mode==2{CrtValue::scalar(0)}else{CrtValue::Pointer(ptd)}).unwrap();
+ if mode==7{let alias=CrtValue::Pointer(rt.offset(ptd,4).unwrap());assert!(rt.bind_fls(fiber,4,alias).is_err());rt.fls.get_mut(&3).unwrap().1=alias;}
+ if mode==3{rt.retire_fls(fiber,slot).unwrap();rt.bind_fls(fiber,3,CrtValue::Pointer(ptd)).unwrap();}if mode==4{rt.module_release_result(init,reference,true).unwrap();}if mode==9{rt.retire_region(ptd).unwrap();}if mode==11{rt.store(index,32,CrtValue::Scalar{bits:0,known:0}).unwrap();}if mode==12{rt.store(index,32,CrtValue::scalar(u32::MAX)).unwrap();}rt.end_initialization(init).unwrap();
+ let metadata=rt.map_region(0x41b42c,36,CrtRegionKind::Module,Some(&cxx_meta_bytes())).unwrap();rt.map_region(0x41b41c,16,CrtRegionKind::Module,Some(&cxx_map_bytes())).unwrap();rt.map_region(0x41b298,40,CrtRegionKind::Module,Some(&cxx_scope_bytes())).unwrap();let notice=rt.map_region(0x41c070,16,CrtRegionKind::Module,None).unwrap();
+ let mut owner=cpu(&mut rt,0xe800,701);owner.return_pop=0;owner.push(&mut rt,CrtValue::scalar(0)).unwrap();owner.r[0]=CrtValue::scalar(0x414ad6);let predecessor=rt.thread_head(r.identity.instance,1,CrtNormalBinding::head_bits(r.head)).unwrap();let mut frame=CrtPtdFrame::new(&rt,&owner,predecessor,0x414ad6,0x41c000).unwrap();ptd_prolog(&mut rt,&mut owner,&mut frame,0x40a33e).unwrap();let record=cxx_bind(&rt,&owner,&frame).unwrap();let state=rt.offset(frame.bp,-4).unwrap();rt.store(state,32,CrtValue::scalar(if mode==1{0}else{u32::MAX})).unwrap();
+ let(mut other,_)=CrtStreamRuntime::new_initializing(rt.owner,rt.thread,0x8000,65536).unwrap();let foreign=other.bind_fiber(other.thread).unwrap();rt.last_os_error=if mode==13{None}else{Some(77)};let saved_error=rt.last_os_error;let refs=rt.module_references.len();let cache_before=rt.memory.read(cache.address(),4).unwrap().to_vec();
+
+ let stack=rt.resolve_absolute(0x9000,CrtRegionKind::Stack).unwrap();let cp=rt.map_region(0x50000,if delivery_mode==22{200}else{716},CrtRegionKind::Context,None).unwrap();rt.store(rt.offset(cp,196).unwrap(),32,CrtValue::Pointer(frame.low)).unwrap();let mut context=CrtCxxContext::bind(&rt,&owner,&frame,cp,stack).unwrap();
+ let exception=rt.map_region(0x51000,80,CrtRegionKind::Context,Some(&[0;80])).unwrap();rt.store(exception,32,CrtValue::scalar(0xe06d7363)).unwrap();rt.store(rt.offset(exception,4).unwrap(),32,CrtValue::scalar(if delivery_mode==29{3}else{2})).unwrap();rt.store(rt.offset(ptd,32).unwrap(),32,CrtValue::scalar(0)).unwrap();
+
+ let old_head=r.head;let first_current=frame.current;
+ let mut sibling=cpu(&mut rt,0xe000,801);sibling.return_pop=0;sibling.push(&mut rt,CrtValue::scalar(0)).unwrap();sibling.r[0]=CrtValue::scalar(0x414ad6);
+ let mut second=CrtPtdFrame::new(&rt,&sibling,predecessor,0x414ad6,0x41c000).unwrap();ptd_prolog(&mut rt,&mut sibling,&mut second,0x40a33e).unwrap();
+ let second_record=cxx_bind(&rt,&sibling,&second).unwrap();
+ frame.live(&rt,&owner).unwrap();second.live(&rt,&sibling).unwrap();
+ assert_eq!(frame.previous,second.previous);assert_ne!(first_current,second.current);
+ // Both instruction-proved FS stores updated their own frame view. Neither
+ // was published to the shared registry head: local liveness is not selection.
+ assert_eq!(r.head,old_head);assert_eq!(frame.current,first_current);
+ let stack=rt.resolve_absolute(0x9000,CrtRegionKind::Stack).unwrap();
+ let ca=rt.map_region(0x53000,716,CrtRegionKind::Context,None).unwrap();rt.store(rt.offset(ca,196).unwrap(),32,CrtValue::Pointer(frame.low)).unwrap();
+ let cb=rt.map_region(0x54000,716,CrtRegionKind::Context,None).unwrap();rt.store(rt.offset(cb,196).unwrap(),32,CrtValue::Pointer(second.low)).unwrap();
+ let context_a=CrtCxxContext::bind(&rt,&owner,&frame,ca,stack).unwrap();let context_b=CrtCxxContext::bind(&rt,&sibling,&second,cb,stack).unwrap();
+ let exception=rt.map_region(0x55000,80,CrtRegionKind::Context,Some(&[0;80])).unwrap();rt.store(exception,32,CrtValue::scalar(0xe06d7363)).unwrap();rt.store(rt.offset(exception,4).unwrap(),32,CrtValue::scalar(2)).unwrap();
+ let result=r.with_normal_calls(&m,&mut permit,&main,|epoch|{
+  let mut interrupted=cpu(&mut rt,0xd000,771);let mut binding=CrtNormalBinding::bind(&rt,&interrupted,epoch,epilog_run_layout())?;start(&mut rt,&mut interrupted,epoch,&mut binding,772)?;
+  for arg in [0,0,0,0xe06d7363]{interrupted.push(&mut rt,CrtValue::scalar(arg))?;}
+  let event=CrtNormalException::issue(&mut rt,&mut interrupted,epoch,&binding,raise_site())?;
+  assert_eq!(binding.previous,old_head,"normal source did not inherit either local C++ head");
+  let one=CrtCxxInvocation::bind_unwind(&event,&rt,epoch,&owner,&frame,&record,&context_a,exception).expect("supplied owner A binds");
+  let two=CrtCxxInvocation::bind_unwind(&event,&rt,epoch,&sibling,&second,&second_record,&context_b,exception).expect("supplied owner B binds");
+  assert_eq!(one.event,two.event);assert_ne!(one.bp,two.bp);
+  assert_eq!(epoch.registry.head,RegistryHead::Normal(event.frame));assert!(epoch.state().is_err());
+  // Deliberately do not select either candidate or invoke either handler.
+  // The observation demonstrates a missing producer, not thread-chain proof.
+  Err::<(),_>("two local FS views cannot establish actual handler selection")
+ });assert!(result.is_err());
+}
+fn main(){match std::env::args().nth(1).unwrap().as_str(){"chain-ownership-gap"=>chain_ownership_gap(),"bound-cxx-invocation"=>bound_invocation(),"prefix-delivery-unwind"=>dispatcher_delivery_unwind(true),"dispatcher-delivery-unwind"=>dispatcher_delivery_unwind(false),"delivery-cached-unwind"=>delivery_cached_unwind(),"delivery-children"=>delivery_children(),"cxx-cached-unwind"=>cxx_cached_unwind(),"cxx-unwind"=>cxx_registered_unwind(),"manager-inherited"=>inherited_registered_manager(),"manager"=>manager_registered(),"live-finally"=>live_finally_cases(),"owned-loop"=>owned_loop_cases(),"owned-local"=>owned_local_cases(),"owned"=>{main_initial_rejections();initial_raise_rejections();owned_main_cases()},"path-edges"=>path_edges(),"live"=>live_dispatch(),"objects"=>captured_objects(),"handler"=>pending_handler_activation(),"pending"=>pending_normal_exception(),"pending-reject"=>reject_normal_exception(),"file"=>file_scope_normal(),"file-failure"=>file_scope_failure(),"nested"=>nested_actual(),"mutations"=>mutations(),"consumed"=>consumed_mutation(),"failure"=>body_failure(),"certificate"=>wrong_certificate(),"observed"=>observed(),_=>panic!("case")}}
 "#;
 
 fn run(case: &str) {
@@ -2158,4 +2201,9 @@ fn original_prefix_produces_dispatcher_metadata_under_pending_delivery() {
 #[test]
 fn original_cxx_invocation_binds_pending_event_and_captured_objects() {
     run("bound-cxx-invocation");
+}
+
+#[test]
+fn original_cxx_fs_views_do_not_establish_shared_thread_chain_selection() {
+    run("chain-ownership-gap");
 }

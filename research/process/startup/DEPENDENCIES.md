@@ -58,13 +58,16 @@ effects; retain rejection for exceptional funclets until their delivery and
 cleanup are justified. Actual delivery acquisition and incoming-chain containment
 remain separate gates. This is not whole-PE translation evidence.
 
-The next producer boundary is concrete: `reserve_eh4` owns normal EH4
+The next producer boundary is reproduced in [THREAD-CHAIN.md](THREAD-CHAIN.md): `reserve_eh4` owns normal EH4
 registrations, while the original three-word C++ record lives in `CrtPtdFrame`.
 The reserved Cxx registration kind does not implement thread-chain selection.
 Deriving the supplied invocation therefore requires a justified original C++
 registration/head lifecycle and delivery producer; matching an owned record's
 address is insufficient. The new binding validates that producer's eventual
-output but does not replace it.
+output but does not replace it. The original PTD prolog updates only its local
+FS view, while EH4 uses the separate registry head; two live local C++ frames do
+not determine the actual thread head. One shared head and an ordered same-event
+search cursor are required before deriving selection.
 
 ## Objective whole-program acceptance
 
