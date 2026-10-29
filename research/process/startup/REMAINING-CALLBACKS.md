@@ -227,7 +227,7 @@ the current connected paths and next cohesive frame/counter/action gate.
 Registered unwind connection: wrapper4041a4/body4041bc now executes its actual
 EH4 frame, PTD counter and state traversal. The action bridge/notification writes
 also execute; termination remains rejected with earlier effects preserved.
-The PTD provider and completed-event normal registry remain explicit component
+The earlier provider and completed-event normal registry are explicit component
 inputs. Pending-exception entry, terminate/abort and exceptional funclets are the
 next connected gates. See [CXX-UNWIND.md](CXX-UNWIND.md) for24 native scenarios,
 original-byte checks and zero new Windows/whole-PE pairs.
@@ -237,6 +237,9 @@ Cached unwind PTD connection: the new entry executes the original required
 getter, dynamic cached lookup/guard and owned FLS access without a provider or
 loader callback. Fourteen additional native cases retain failure and lifetime
 rejection. Module/export and fiber/slot producers remain supplied. The next
-registry gate is explicit: NormalCallEpoch::state rejects a pending exception;
-a delivery-owned child adapter must preserve suspension of the interrupted
-frame. Terminate/abort effects remain unbound. See CXX-UNWIND.md.
+registry gate now has a scoped child-only grant: the original cached unwind body
+can execute during a pending component exception, while ordinary normal calls and
+parent retirement still reject. Actual common-dispatcher call selection, delivery
+acquisition and nested/collided effects remain external gates. Fourteen ownership
+and four connected native cases add no Windows observations or whole-PE pairs.
+See [CXX-UNWIND.md](CXX-UNWIND.md).

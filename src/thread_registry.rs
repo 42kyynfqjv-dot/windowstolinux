@@ -69,11 +69,13 @@ struct RegistryNormalFrame {
  protected:std::collections::BTreeMap<i32,FrameWord<RegistryHead>>,
  plan:NormalFramePlan,next:usize,saved:[Option<u32>;8],installed:bool,unlinked:bool,
 }
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+struct DeliveryChildAuthority {event:u64,lease:u64,parent:NormalFrameId,floor:usize,ceiling:u64}
 struct NormalEpochState {
  generation:u64,event:u64,selected:RegistrationId,previous:RegistryHead,next_unwind:usize,
- context:[Option<u32>;10],frames:Vec<RegistryNormalFrame>,issued:usize,pending_exception:Option<u64>,
+ context:[Option<u32>;10],frames:Vec<RegistryNormalFrame>,issued:usize,pending_exception:Option<u64>,delivery:Option<DeliveryChildAuthority>,
 }
-struct NormalCallEpoch<'a>{registry:&'a mut ThreadRegistry,generation:u64}
+struct NormalCallEpoch<'a>{registry:&'a mut ThreadRegistry,generation:u64,delivery:Option<DeliveryChildAuthority>}
 #[derive(Debug)]
 struct NormalFrameReceipt {frame:NormalFrameId,caller_sp:u32,saved:[Option<u32>;8]}
 impl ThreadRegistry {
@@ -323,13 +325,13 @@ impl ThreadRegistry {
   let next_stamp=match start{Ok(value)=>value,Err(e)=>return self.fail(e)};
   let generation=match self.next_id(){Ok(id)=>id.generation,Err(e)=>return self.fail(e)};
   self.normal_epoch=Some(NormalEpochState{generation,event:permit.event,selected:permit.selected,
-   previous:self.head,next_unwind:self.next_unwind,context:permit.context,frames:Vec::new(),issued:0,pending_exception:None});
-  let result=body(&mut NormalCallEpoch{registry:self,generation});
+   previous:self.head,next_unwind:self.next_unwind,context:permit.context,frames:Vec::new(),issued:0,pending_exception:None,delivery:None});
+  let result=body(&mut NormalCallEpoch{registry:self,generation,delivery:None});
   let value=match result{Ok(value)=>value,Err(e)=>return self.fail(e)};
   self.available()?;
   let state=self.normal_epoch.as_ref().ok_or("normal call missing epoch")?;
   if state.generation!=generation||state.event!=permit.event||state.selected!=permit.selected
-   ||state.pending_exception.is_some()||state.context!=permit.context||!state.frames.is_empty()||self.head!=state.previous
+   ||state.pending_exception.is_some()||state.delivery.is_some()||state.context!=permit.context||!state.frames.is_empty()||self.head!=state.previous
    ||self.next_unwind!=state.next_unwind||self.selected.as_ref().is_none_or(|p|p.target!=permit.selected)
    ||machine.owned_context!=Some(permit.context)||!matches!(machine.phase,Phase::Done|Phase::Returning) {
    return self.fail("normal call incomplete lifecycle or changed selected context");
@@ -345,12 +347,32 @@ impl NormalCallEpoch<'_> {
   self.registry.available()?;
   let state=self.registry.normal_epoch.as_ref().ok_or("normal call expired epoch")?;
   if state.generation!=self.generation{return Err("normal call stale epoch");}
-  if state.pending_exception.is_some(){return Err("normal call suspended for owned exception");}Ok(state)
+  match self.delivery {
+   None=>if state.pending_exception.is_some()||state.delivery.is_some(){return Err("normal call suspended for owned exception");},
+   Some(grant)=>{
+    if state.delivery!=Some(grant)||state.pending_exception!=Some(grant.event)||grant.floor==0
+     ||state.frames.get(grant.floor-1).is_none_or(|f|f.id!=grant.parent||!f.installed||f.unlinked||f.next!=0){
+     return Err("delivery child expired/foreign suspension authority");
+    }
+   }
+  }Ok(state)
  }
  fn head(&self)->RegistryResult<RegistryHead>{self.state()?;self.registry.head()}
+ fn delivery_range(&self,low:u32,high:u64)->RegistryResult<()>{
+  let state=self.state()?;
+  if let Some(grant)=self.delivery {
+   self.registry.range(low,high)?;
+   if u64::from(low)>=high||high>grant.ceiling
+    ||state.frames.iter().any(|f|u64::from(low)<f.high&&u64::from(f.low)<high)
+    ||self.registry.frames.iter().any(|f|f.live&&u64::from(low)<f.high&&u64::from(f.low)<high){
+    return Err("delivery child stack aliases live frame/arguments");
+   }
+  }Ok(())
+ }
  fn fail<T>(&mut self,error:&'static str)->RegistryResult<T>{self.registry.fail(error)}
  fn top(&self,id:NormalFrameId)->RegistryResult<&RegistryNormalFrame>{
   let state=self.state()?;
+  if self.delivery.is_some_and(|grant|state.frames.len()<=grant.floor){return Err("delivery child cannot consume interrupted frame");}
   let frame=state.frames.last().ok_or("normal call no live frame")?;
   if id.identity!=self.registry.identity||id.epoch!=self.generation||frame.id!=id{return Err("normal call stale, foreign or non-LIFO frame");}Ok(frame)
  }
@@ -380,7 +402,7 @@ impl NormalCallEpoch<'_> {
    // return. Their complete extent must remain in the same owned thread
    // range and outside module storage even though the frame does not own
    // their contents or gain dereference authority here.
-   let consumed_high=high+u64::from(plan.callee_pop);self.registry.range(low,consumed_high)?;
+   let consumed_high=high+u64::from(plan.callee_pop);self.registry.range(low,consumed_high)?;self.delivery_range(low,consumed_high)?;
    let parent_low=state.frames.last().map(|f|f.low).unwrap_or(self.registry.frames[self.registry.frame_index(state.selected)?].low);
    if consumed_high>u64::from(parent_low){return Err("normal call stack grows outside caller activation");}
    if low%4!=0||image.entry_sp%4!=0||image.record<low||image.ebp<low||u64::from(image.ebp)+4>high

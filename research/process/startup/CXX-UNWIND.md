@@ -65,37 +65,61 @@ memory/register/order assertions. They do not establish actual Windows exception
 delivery, fresh Windows unwind observations, loader acquisition, concurrent PTD
 access, or the exceptional funclet behavior.
 
-The native harness starts from an explicitly completed-event registry fixture
-and supplies module/export/fiber/slot acquisition. The connected entry executes
-the actual cached getter. This is not proof that the new body can be
-entered from a pending Windows exception. That registry-phase connection remains
-an admission gate, alongside actual delivery and termination effects.
+## Delivery-owned child frames
+
+The completed-event harness remains for the earlier 24 unwind and 14 cached
+getter scenarios. A separate connected test now executes the original cached
+unwind body while an actual `CrtNormalException::issue` CALL is pending. It uses
+supplied handler selection and module/export/fiber/slot acquisition; it does not
+claim to acquire a Windows delivery or close incoming-chain containment.
+
+`execute_child_handler` lends a scoped child-frame grant during the protected
+handler CALL. Its identity includes the event, a fresh registry lease, the
+interrupted frame, the existing frame depth and the handler stack ceiling. The
+registry stores the same grant. Ordinary `NormalCallEpoch::state` still rejects
+throughout the pending exception. The child handle cannot consume the interrupted
+frame or any earlier frame. Child allocation must fit below the handler arguments
+and avoid every live registered frame, including a check before prolog writes.
+Original prolog/epilog, guard, saved-register, protected-return and LIFO checks
+remain in use.
+
+Successful callback return requires all child registrations retired, the original
+head/context unchanged, the suspended CALL still unique and the live source frame
+revalidated. The grant expires before any result receipt is returned. A callback
+result is still not restoration authority. Failure preserves earlier writes and
+poisons the registry; it does not clear suspension, roll back memory, manufacture
+cleanup or mint a finished-event permit. Nested native helpers are supported;
+a second exception rejects explicitly because nested delivery/containment is not
+proved by this grant.
+
+Fourteen independent native scenarios cover child and nested-helper completion,
+parent retirement rejection, overlapping storage, revoked or mismatched event/
+lease, missing RET, corrupt guard, nested-exception rejection without effects,
+prior writes on callback failure, changed suspended storage and expired/replayed
+authority, changed saved context and mismatched frame depth. Four connected scenarios run the original cached PTD/unwind path:
+empty-state return, two sequential child calls, stale/reused FLS rejection, and
+the original notification followed by the unbound terminate target. The last
+case preserves the next-state store and incremented counter; it produces no
+successful unwind receipt. Existing byte-mutation tests continue to bind the
+executed instructions to the unchanged artifact.
+
+These 18 new cases are native component checks, with **zero new Windows
+observations or whole-PE comparisons**. The five recorded Windows wrapper pairs
+retain their original component meaning.
 
 ## Next connected gate
 
-The cached PTD binding is connected. Fourteen additional native scenarios cover
-normal and unknown-LastError return, the pending action, null FLS result, retired
-and reused slots, unloaded modules, foreign fibers, cache miss, interior PTD
-corruption, truncated/retired PTD, changed guard, unknown and sentinel indices.
-Cache bytes, module reference count and initialization phase remain unchanged.
-A completed call cannot be replayed. Existing getter/lookup mutation checks still
-bind the original code and imports to the retained PE.
-
-The next concrete gate is a registry-phase adapter: `NormalCallEpoch::state`
-currently rejects `pending_exception.is_some()`. This correctly protects the
-interrupted normal frame. Binding an EH4 child under that epoch would require
-separate delivery-owned child authority, keeping the interrupted frame suspended,
-with independent nested-handler return, failure and restoration checks. Removing
-that check or treating the finished-event permit as pending delivery is unsound.
-This is a bounded ownership transition design suitable for Astra High if Sol
-cannot establish it from existing delivery leases. No bypass is implemented.
+Sol can review the scoped grant and connect it at the common dispatcher's actual
+call403de2 → wrapper4041a4. That connection must supply the already validated live C++ owner and
+handler arguments, rather than the test callback's explicit selection. Actual
+Windows delivery acquisition, nested/collided-unwind effects and incoming-chain
+containment remain unproved.
 
 Then execute terminate40770c's own EH4 frame and PTD+12 callback/guard contract,
 followed by abort4077ff's signal/lock/debug/exit dependencies. Cleanup exceptions
 must enter the actual scope funclets with owned delivery state; no successful
-callback default is allowed. Sol can review this connected component and bind the
-existing getter. A concrete pending-exception registry transition or terminal
-control-flow question may warrant a bounded Astra pass.
+callback default is allowed. The new child authority solves the registry-phase
+restriction for this bounded component; it does not solve those external effects.
 
 See [DEPENDENCIES.md](DEPENDENCIES.md) for whole-program acceptance and other
 remaining producers. No full startup or utility support is inferred from this

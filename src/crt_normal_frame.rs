@@ -182,6 +182,7 @@ impl CrtNormalBinding {
    ||[3,5,6,7].iter().any(|&r|cpu.r[r]!=cpu.entry[r]){
    return Err("CRT normal bind runtime/activation identity");
   }
+  epoch.delivery_range(rt.offset(caller,i64::from(layout.low))?.address(),u64::from(caller.address())+4+u64::from(layout.pop))?;
   rt.valid(rt.offset(caller,i64::from(layout.low))?,u32::try_from(-i64::from(layout.low)+4+i64::from(layout.pop)).map_err(|_|"CRT normal frame extent")?)?;
   if rt.load(caller,32)?!=CrtValue::ProtectedReturn(cpu.return_id)
    ||rt.tags.values().filter(|v|**v==CrtValue::ProtectedReturn(cpu.return_id)).count()!=1{
@@ -375,6 +376,9 @@ impl CrtNormalException {
  /// Initial domain: no exception parameters. The opcode/IAT effect binding is
  /// still a compiler prerequisite, never inferred from numeric address equality.
  fn issue(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,epoch:&mut NormalCallEpoch<'_>,binding:&CrtNormalBinding,site:CrtNormalRaiseSite)->RegistryResult<Self>{
+  if epoch.registry.normal_epoch.as_ref().is_some_and(|s|s.pending_exception.is_some()||s.delivery.is_some()){
+   return Err("normal exception nested delivery contract unbound");
+  }
   let CrtNormalRaiseSite{instruction,continuation,iat}=site;
   binding.image(rt,cpu,epoch)?;
   let frame=binding.id.ok_or("normal exception source not installed")?;
@@ -447,6 +451,40 @@ impl CrtNormalException {
    let value=dispatcher.call_activation(rt,continuation,0,body)?;
    let after=self.dispatch_source(rt,interrupted,epoch,binding)?;
    if after.try_level!=before.try_level{return Err("normal exception unproved scope transition");}
+   Ok(CrtNormalHandlerReturn{identity:self.identity,epoch:self.epoch,frame:self.frame,generation:self.generation,level:after.try_level,value})
+  })();
+  match result{Ok(receipt)=>{self.delivery=CrtNormalDelivery::Returned;Ok(receipt)},Err(error)=>{self.delivery=CrtNormalDelivery::Failed;epoch.fail(error)}}
+ }
+ /// Lend only child-frame authority during the protected handler CALL. The
+ /// interrupted frame remains suspended; no finished-event permit is minted.
+ /// Nested native helper frames are allowed. A nested exception requires its
+ /// own delivery/containment contract and is rejected by issue().
+ fn execute_child_handler<F>(&mut self,rt:&mut CrtStreamRuntime,interrupted:&CrtCpu,epoch:&mut NormalCallEpoch<'_>,binding:&CrtNormalBinding,dispatcher:&mut CrtCpu,continuation:u32,body:F)->RegistryResult<CrtNormalHandlerReturn>
+ where F:FnOnce(&mut CrtStreamRuntime,&mut CrtCpu,&mut NormalCallEpoch<'_>)->RegistryResult<CrtValue>{
+  if self.delivery!=CrtNormalDelivery::Pending||epoch.delivery.is_some(){return Err("delivery child replay/nested phase");}
+  let before=self.dispatch_source(rt,interrupted,epoch,binding)?;
+  self.check_handler_stack(rt,interrupted,epoch,dispatcher)?;
+  let state=epoch.registry.normal_epoch.as_ref().ok_or("delivery child missing epoch")?;
+  if state.delivery.is_some(){return Err("delivery child already borrowed");}
+  let floor=state.frames.len();let context=state.context;
+  let lease=epoch.registry.next_id()?.generation;
+  self.delivery=CrtNormalDelivery::Calling;
+  let result=(||{
+   let value=dispatcher.call_activation(rt,continuation,0,|rt,child|{
+    let grant=DeliveryChildAuthority{event:self.generation,lease,parent:self.frame,floor,
+     ceiling:u64::from(CrtCpu::pointer(child.entry[4])?.address())+4};
+    epoch.registry.normal_epoch.as_mut().ok_or("delivery child expired epoch")?.delivery=Some(grant);
+    let value={let mut borrowed=NormalCallEpoch{registry:&mut *epoch.registry,generation:epoch.generation,delivery:Some(grant)};
+     let value=body(rt,child,&mut borrowed)?;
+     let state=borrowed.state()?;
+     if state.frames.len()!=floor||state.context!=context||borrowed.head()?!=RegistryHead::Normal(self.frame){return Err("delivery child incomplete return or changed context");}
+     value
+    };
+    epoch.registry.normal_epoch.as_mut().ok_or("delivery child expired epoch")?.delivery=None;
+    Ok(value)
+   })?;
+   let after=self.dispatch_source(rt,interrupted,epoch,binding)?;
+   if after.try_level!=before.try_level{return Err("delivery child unproved scope transition");}
    Ok(CrtNormalHandlerReturn{identity:self.identity,epoch:self.epoch,frame:self.frame,generation:self.generation,level:after.try_level,value})
   })();
   match result{Ok(receipt)=>{self.delivery=CrtNormalDelivery::Returned;Ok(receipt)},Err(error)=>{self.delivery=CrtNormalDelivery::Failed;epoch.fail(error)}}
