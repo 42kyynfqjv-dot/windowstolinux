@@ -109,11 +109,28 @@ retain their original component meaning.
 
 ## Next connected gate
 
-Sol can review the scoped grant and connect it at the common dispatcher's actual
-call403de2 → wrapper4041a4. That connection must supply the already validated live C++ owner and
-handler arguments, rather than the test callback's explicit selection. Actual
+The original common dispatcher now executes call403de2 → wrapper4041a4 under
+the same child grant, including the original argument pushes, ADD ESP, return
+branches and common epilog. The common/thunk/entry/tail are validated against
+unchanged bytes; all other search and indirect targets still reject. Entry checks
+require live delivery authority and the exact C++ owner/context arguments before
+body effects. The original wrapper and registered EH4 body use the same epoch.
+
+Eight native cases cover empty-state completion, original notification then
+unsupported termination, stale FLS, unknown flags, retired or changed captured
+context, expired grant and an interior establisher alias. Mutation checks also
+exercise this emitter mode. Positive delivery cases now assert callback success
+explicitly: propagating a failure to an intentionally rejecting outer fixture
+cannot count as successful execution. The actual common result is checked before
+returning it.
+
+The component still supplies the common entry and its metadata register as
+produced by the separately validated prefix. Next thread child authority through
+that original prefix, replacing this entry cut. The C++ context, exception bytes,
+module/export/fiber/slot and interrupted-frame fixture remain supplied. Actual
 Windows delivery acquisition, nested/collided-unwind effects and incoming-chain
-containment remain unproved.
+containment are unproved. These eight cases add no fresh Windows observations or
+whole-PE pairs.
 
 Then execute terminate40770c's own EH4 frame and PTD+12 callback/guard contract,
 followed by abort4077ff's signal/lock/debug/exit dependencies. Cleanup exceptions

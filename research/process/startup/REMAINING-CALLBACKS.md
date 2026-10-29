@@ -243,3 +243,10 @@ parent retirement still reject. Actual common-dispatcher call selection, deliver
 acquisition and nested/collided effects remain external gates. Fourteen ownership
 and four connected native cases add no Windows observations or whole-PE pairs.
 See [CXX-UNWIND.md](CXX-UNWIND.md).
+
+Original dispatcher unwind connection: common403002 → dispatcher403d76 now
+executes call403de2 → wrapper4041a4 using the same delivery child grant, owned
+record/context and cached PTD. Eight native cases and byte mutations preserve
+rejection at all other search/indirect targets. The prefix entry, captured objects
+and loader/FLS producers remain supplied; termination and actual Windows delivery
+remain unbound. Positive delivery checks explicitly require callback success.

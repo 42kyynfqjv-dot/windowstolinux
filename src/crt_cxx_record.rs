@@ -118,6 +118,51 @@ fn common_source_bound(
     tail_bytes: &[u8],
     cached: bool,
 ) -> Result<String, String> {
+    common_source_mode(common, thunk, entry, tail_bytes, cached, false)
+}
+/// Original common dispatcher with the unwind call bound to a live delivery
+/// child epoch. Acquisition and nested exception effects remain separate gates.
+pub(crate) fn delivered_common_source() -> Result<String, String> {
+    let context = context_source(&crate::crt_ptd::raw(CONTEXT_CHECK))?;
+    let context = &context[context
+        .find("struct CrtCxxContext")
+        .ok_or("C++ shared context types")?..];
+    Ok(format!(
+        "{}\n{}",
+        context,
+        common_source_mode(
+            &crate::crt_ptd::raw(COMMON),
+            &crate::crt_ptd::raw(DISPATCH_THUNK),
+            &crate::crt_ptd::raw(DISPATCH_ENTRY),
+            &crate::crt_ptd::raw(DISPATCH_TAIL),
+            true,
+            true
+        )?
+    ))
+}
+fn common_source_mode(
+    common: &[u8],
+    thunk: &[u8],
+    entry: &[u8],
+    tail_bytes: &[u8],
+    cached: bool,
+    delivery: bool,
+) -> Result<String, String> {
+    let epoch_parameter = if delivery {
+        "epoch:&mut NormalCallEpoch<'_>,"
+    } else {
+        ""
+    };
+    let preflight = if delivery {
+        r#"
+ epoch.state()?;if epoch.delivery.is_none(){return Err("C++ dispatcher requires delivery child authority");}
+ context.check(rt,owner,frame)?;record.state(rt,owner,frame)?;
+ let entry=CrtCpu::pointer(cpu.entry[4])?;
+ if rt.load(rt.offset(entry,8)?,32)?!=CrtValue::Pointer(rt.offset(frame.bp,-12)?)||rt.load(rt.offset(entry,12)?,32)?!=CrtValue::Pointer(context.context){return Err("C++ dispatcher original owner/context arguments");}
+ "#
+    } else {
+        ""
+    };
     let parameters = if cached {
         "fiber:CrtFiber,slot:CrtFlsSlot"
     } else {
@@ -173,7 +218,16 @@ fn common_source_bound(
     }
     let tail = crate::crt_stream_emit::emit_body_with_indirect(
         &graph,
-        |_, _| Ok("return Err(\"C++ dispatcher unwind/search call effects unbound\");".into()),
+        |pc, target| {
+            if delivery
+                && pc == 0x403de2
+                && matches!(target, crate::crt_stream_ir::Target::Direct(0x4041a4))
+            {
+                Ok("cpu.call_activation(rt,0x403de7,0,|rt,child|cxx_unwind_cached(rt,child,epoch,owner,frame,record,fiber,slot))?;".into())
+            } else {
+                Ok("return Err(\"C++ dispatcher unwind/search call effects unbound\");".into())
+            }
+        },
         &Default::default(),
         4096,
         |_, _| Err("C++ tail thread effect".into()),
@@ -191,8 +245,8 @@ fn common_source_bound(
     )?;
     Ok(format!(
         r#"
-fn cxx_common(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,owner:&CrtCpu,frame:&CrtPtdFrame,context:&CrtCxxContext,record:&CrtCxxRecord,{parameters})->Result<CrtValue,&'static str>{{
- cpu.validate_active(rt)?;
+fn cxx_common(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,owner:&CrtCpu,frame:&CrtPtdFrame,context:&CrtCxxContext,record:&CrtCxxRecord,{epoch_parameter}{parameters})->Result<CrtValue,&'static str>{{
+ cpu.validate_active(rt)?;{preflight}
  let _=(||->Result<CrtValue,&'static str>{{{a}}})()?;
  // Original CLD. This component constructor guarantees DF=0, and the
  // supported operations preserve it. Unknown thread flags are not admitted.
@@ -526,6 +580,10 @@ for mode in 0..20{{
             inputs[which][i] ^= 1;
             assert!(
                 common_source_bound(&inputs[0], &inputs[1], &inputs[2], &inputs[3], true).is_err()
+            );
+            assert!(
+                common_source_mode(&inputs[0], &inputs[1], &inputs[2], &inputs[3], true, true)
+                    .is_err()
             );
         }
     }
