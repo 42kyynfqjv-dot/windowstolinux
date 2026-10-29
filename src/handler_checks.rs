@@ -1,8 +1,8 @@
 //! Instruction-derived contract for the original x86 handler prefix.
 //!
 //! This verifies data flow, not Windows exception delivery. Calls require the
-//! separately verified cdecl helper effects. The unwind-flags edge is retained
-//! as an unsupported boundary; only its fallthrough reaches the installer.
+//! separately verified cdecl helper effects. Search fallthrough reaches the
+//! installer; the owned-delivery body stops at the original unwind branch.
 use iced_x86::{Code, Decoder, DecoderOptions, Instruction, OpKind, Register};
 use std::collections::BTreeMap;
 
@@ -35,6 +35,8 @@ pub(crate) struct PrefixProof {
     #[allow(dead_code)]
     pub(crate) front: String,
     pub(crate) caller: String,
+    #[allow(dead_code)] // Owned-delivery backend is not used by legacy slice examples.
+    pub(crate) unwind_caller: String,
     #[allow(dead_code)] // Owned CRT entry binding; other slice emitters use call sites.
     pub(crate) entry: u32,
     pub calls: Vec<CallSite>,
@@ -172,6 +174,7 @@ pub(crate) fn prove_prefix(code: &[u8], origin: u32, b: &Bindings) -> Result<Pre
     let mut count = 0;
     let mut front = String::new();
     let mut front_end = None;
+    let mut unwind_caller = None;
     while decoder.can_decode() {
         let i = decoder.decode();
         count += 1;
@@ -236,6 +239,9 @@ pub(crate) fn prove_prefix(code: &[u8], origin: u32, b: &Bindings) -> Result<Pre
              Code::Jne_rel8_32=>"if cpu.condition(1)?{return Err(\"prefix flags delivery outside search domain\");}".into(),
              _=>return Err("prefix live front unsupported instruction".into()),
             };
+            if i.code() == Code::Jne_rel8_32 {
+                unwind_caller=Some(format!("{front}if !cpu.condition(1)?{{return Err(\"prefix requires owned unwind flags\");}}return Ok({}u32);",i.near_branch32()));
+            }
             front.push_str(&statement);
             front.push('\n');
         }
@@ -486,6 +492,7 @@ pub(crate) fn prove_prefix(code: &[u8], origin: u32, b: &Bindings) -> Result<Pre
     Ok(PrefixProof {
         front: front[..front_end.ok_or("prefix missing live front")?].into(),
         caller: front,
+        unwind_caller: unwind_caller.ok_or("prefix missing unwind edge")?,
         entry: origin,
         calls,
         exception_flags_mask: 0x66,

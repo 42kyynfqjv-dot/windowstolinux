@@ -380,7 +380,7 @@ fn owned_local_cases(){
 }
 
 fn owned_main_cases(){
- for mode in 0..74{
+ for mode in 0..75{
   let mut m=Machine::new_dispatch_known(vec![FrameSpec{scopes:vec![]}],0,[None;10],Some(0)).unwrap();
   let mut r=ThreadRegistry::new(m.owner(),0x8000,0xf000,&[(0x400000,0x420000)],0x41c000).unwrap();let mut rt=runtime(&r);
   let entry=rt.resolve_absolute(if mode==23||mode==32||mode==41{0xe800}else{0xe000},CrtRegionKind::Stack).unwrap();rt.store(entry,32,CrtValue::ProtectedReturn(71)).unwrap();let cpu=CrtCpu::new(entry,71).unwrap();
@@ -492,8 +492,8 @@ fn owned_main_cases(){
        session.with_delivery(f,&mut child,context_arg,|session,f,child,token|{
         assert!(session.check_cleanup_boundary(f,wrapper,0x402855).is_err());
         reached+=1;assert_eq!(token.captured_esp,0x9600);assert_ne!(token.context,input.context);assert_ne!(token.captured_esp,CrtCpu::pointer(child.r[4])?.address());
-        owned_handler_prolog(f,child)?;session.validate_delivery(f,child,token)?;
-        assert_eq!(child.r[5],CrtValue::Pointer(f.rt.offset(sp,-4)?));assert_eq!(child.r[4],CrtValue::Pointer(f.rt.offset(sp,-32)?));
+        let branch=owned_delivery_prefix_helpers::execute(session,f,child,token)?;assert_eq!(branch,0x4022bd);session.validate_delivery(f,child,token)?;
+        assert_eq!(child.r[5],CrtValue::Pointer(f.rt.offset(sp,-4)?));assert_eq!(child.r[4],CrtValue::Pointer(f.rt.offset(sp,-44)?));assert_eq!(f.storage.input.unwrap().0,Some(actual_pair));assert_eq!(f.storage.input.unwrap().2,context);
         if mode==57{f.rt.store(f.rt.offset(context,0xb8)?,32,CrtValue::scalar(7))?;}
         if mode==58{f.rt.store(f.rt.offset(delivery,0xb8)?,32,CrtValue::scalar(8))?;}
         if mode==59{f.rt.store(f.rt.offset(record,4)?,32,CrtValue::scalar(0))?;}
@@ -502,8 +502,8 @@ fn owned_main_cases(){
         if mode==63{let p=f.rt.offset(bp,-780)?;f.rt.store(p,32,CrtValue::scalar(0xface))?;marker=Some(p);return Err("independent delivery failure");}
         if mode==70{f.rt.store(f.rt.offset(sp,12)?,32,CrtValue::Pointer(context))?;}
         if mode==65{f.rt.consume_stack(sp,CrtValue::ProtectedReturn(701))?;}
-        if mode==52||mode==60||mode==64{
-         let nested=if mode==64{delivery}else{nested_context};let nsp=f.rt.resolve_absolute(0x9800,CrtRegionKind::Stack)?;
+        if mode==52||mode==60||mode==64||mode==74{
+         let nested=if mode==64{delivery}else{nested_context};let nsp=f.rt.resolve_absolute(if mode==74{0x9fc0}else{0x9800},CrtRegionKind::Stack)?;
          let mut ncpu=delivery_cpu(f,nsp,702,record,nested)?;
          session.with_delivery(f,&mut ncpu,nested,|session,f,ncpu,note|{
           if mode==60{return session.validate_delivery(f,child,token);}
@@ -527,10 +527,10 @@ fn owned_main_cases(){
        assert_eq!(CrtOwnedUnwind::context_words(f.rt,context)?,captured_before);
        Ok(())
       }));
-      if mode==70||mode==72||mode==73{assert_ne!(result.as_ref().unwrap_err(),&"RtlUnwind requires owned continuation and effect contract");}
+      if mode==70||mode==72||mode==73||mode==74{assert_ne!(result.as_ref().unwrap_err(),&"RtlUnwind requires owned continuation and effect contract");}
       assert!(result.is_err());assert!(view.failed);assert!(view.storage.unwind_epoch.is_some());
       if mode==51||mode==52||mode==71{assert_eq!(result.unwrap_err(),"RtlUnwind requires owned continuation and effect contract");assert_eq!(reached,if mode==52||mode==71{2}else{1});}
-      if (53..=56).contains(&mode){assert_eq!(reached,0);}
+      if (53..=56).contains(&mode){assert_eq!(reached,0);}if mode==74{assert_eq!(reached,1);assert_eq!(result.as_ref().unwrap_err(),&"unwind delivery callback stack");}
       if let Some(p)=marker{assert_eq!(view.rt.load(p,32).unwrap(),CrtValue::scalar(0xface));}
       if mode==57{assert_eq!(view.rt.load(view.rt.offset(context,0xb8).unwrap(),32).unwrap(),CrtValue::scalar(7));}
       if mode==58{assert_eq!(view.rt.load(view.rt.offset(delivery,0xb8).unwrap(),32).unwrap(),CrtValue::scalar(8));}
@@ -1070,6 +1070,16 @@ pub(super) fn execute(frame:&mut CrtOwnedFrameView<'_>,cpu:&mut CrtCpu,objects:&
  }})();if result.is_err(){{frame.failed=true;}}result
 }}
 }}"#,body=prefix.caller_body());
+        let delivery_normalizer=crate::selection::prove_code_identity(&normalizer,0x414a1b,&std::collections::BTreeSet::from([0x41ccb8]),0xe0424242).unwrap().owned_delivery_prefix_call("normalizer_prefix_call");
+        let delivery_context=context_proof.owned_delivery_prefix_call("context_prefix_call");
+        let delivery_prefix=format!(r#"mod owned_delivery_prefix_helpers{{use super::*;
+{delivery_normalizer}
+{owned_guard}
+{delivery_context}
+pub(super) fn execute(session:&CrtOwnedUnwind<'_>,frame:&mut CrtOwnedFrameView<'_>,cpu:&mut CrtCpu,token:&CrtUnwindDelivery)->RegistryResult<u32>{{
+ let result=(||{{let binding=CrtOwnedDeliveryPrefix::bind(session,frame,cpu,token,{temporary})?;let objects=&binding;objects.validate_prefix_source(frame)?;{body}}})();if result.is_err(){{frame.failed=true;}}result
+}}
+}}"#,temporary=prefix.temporary_bytes,body=prefix.unwind_caller);
         let main_table=handler_bytes("Main-scope-table.bin","e4ffffff00000000e4fcffff00000000feffffff331340005c134000");
         let handler_complete=handler_bytes("handler-complete.bin","558bec83ec1c538b5d085657c645ff00ff33c745f401000000e8ed27010089038b5d0c8b43088d7310330500c0410056508975f08945f8e884ffffffff7510e8230600008b450883c4108b7b0cf6400466755a8945e48b45108945e88d45e48943fc83fffe74698b4df88d47028d04478b1c818d04818b48048945ec85c974148bd6e869050000b101884dff85c078147f48eb038a4dff8bfb83fbfe75c984c9742eeb20c745f400000000eb1783fffe741e6800c0410056bafeffffff8bcbe88c05000056ff75f8e8f3feffff83c4088b45f45f5e5b8be55dc38b4508813863736de07538833dc052410000742f68c0524100e8381e010083c40485c0741b8b35c05241008bce6a01ff7508ff1528514100ffd68b75f083c4088b45088b4d0c8bd0e8090500008b450c39780c74126800c04100568bd78bc8e8120500008b450c56ff75f889580ce873feffff8b4dec83c4088bd68b4908e8b3040000cc");
         assert!(handler_complete.starts_with(&prefix_bytes));
@@ -1129,7 +1139,7 @@ if fault==1{{cpu.condition(0)?;}}
         let context_check=context_proof.normal_object_check();
         let finally_source=crate::crt_finally_tests::emit();
         let finally_cases=crate::crt_finally_tests::CASES;
-        let source = format!("#![allow(dead_code)]\nmod guest_memory{{{memory}}}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{fixture}\n{file_scope}\n{context_types}\n{context_check}\n{scope_store}\n{permuted_store}\n{install}\n{handler_prolog}\n{filter_source}\n{false_filter_source}\n{normalizer_source}\n{guard_source}\n{header_source}\n{prefix_normalizer}\n{prefix_front}\n{guard_prefix}\n{prefix_caller}\n{bridge_native}\n{local_types}\n{owned_types}\n{local_source}\n{callback_source}\n{finally_source}\n{finally_cases}\n{original_local_store}\n{main_init}\n{inner_init}\n{owned_filter}\n{owned_bridge}\n{main_filter_bytes}\n{activation}\n{owned_prolog}\n{owned_prefix}\n{owned_header}\n{owned_scope_store}\n{owned_permuted_store}\n{global_source}\n{delivery_source}\n{tail_source}\n{owned_search}\n{code_data}\n{path_edges}\n{prefix_metadata}\nfn raise_site()->CrtNormalRaiseSite{{{{{raise}}}}}\n{CASES}",
+        let source = format!("#![allow(dead_code)]\nmod guest_memory{{{memory}}}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{fixture}\n{file_scope}\n{context_types}\n{context_check}\n{scope_store}\n{permuted_store}\n{install}\n{handler_prolog}\n{filter_source}\n{false_filter_source}\n{normalizer_source}\n{guard_source}\n{header_source}\n{prefix_normalizer}\n{prefix_front}\n{guard_prefix}\n{prefix_caller}\n{bridge_native}\n{local_types}\n{owned_types}\n{local_source}\n{callback_source}\n{finally_source}\n{finally_cases}\n{original_local_store}\n{main_init}\n{inner_init}\n{owned_filter}\n{owned_bridge}\n{main_filter_bytes}\n{activation}\n{owned_prolog}\n{owned_prefix}\n{delivery_prefix}\n{owned_header}\n{owned_scope_store}\n{owned_permuted_store}\n{global_source}\n{delivery_source}\n{tail_source}\n{owned_search}\n{code_data}\n{path_edges}\n{prefix_metadata}\nfn raise_site()->CrtNormalRaiseSite{{{{{raise}}}}}\n{CASES}",
             include_str!("linker/unwind_runtime.rs").replace("//!", "//"),
             emitted_literal(include_str!("frame_proof.rs")),emitted_literal(include_str!("thread_registry.rs")),
             crate::crt_stream_runtime::EMITTED_TYPES,crate::crt_stream_cpu::EMITTED_TYPES,

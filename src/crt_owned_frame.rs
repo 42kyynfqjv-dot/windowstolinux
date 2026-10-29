@@ -319,7 +319,7 @@ impl CrtOwnedPrefixInput {
 /// context is retained for identity checks and is never used as call registers.
 struct CrtOwnedUnwind<'a>{
  source:&'a CrtOwnedPrefixInput,epoch:u64,wrapper_entry:CrtPointer,wrapper_id:u64,api_sp:CrtPointer,
- captured:Vec<CrtValue>,active:Vec<(u64,CrtPointer,CrtPointer,u64)>,used:Vec<CrtPointer>,serial:u64,failed:bool,
+ captured:Vec<CrtValue>,active:Vec<(u64,CrtPointer,CrtPointer,u64)>,stack_extents:std::cell::RefCell<std::collections::BTreeMap<u64,u32>>,used:Vec<CrtPointer>,serial:u64,failed:bool,
 }
 struct CrtUnwindDelivery{
  epoch:u64,serial:u64,context:CrtPointer,entry:CrtPointer,callback:u64,captured_esp:u32,snapshot:Vec<CrtValue>,
@@ -344,7 +344,7 @@ impl CrtOwnedUnwind<'_>{
   let captured=Self::context_words(frame.rt,source.context)?;
   let epoch=frame.rt.generation.checked_add(1).ok_or("unwind generation exhausted")?;
   frame.rt.generation=epoch;frame.storage.unwind_epoch=Some(epoch);
-  Ok(CrtOwnedUnwind{source,epoch,wrapper_entry:entry,wrapper_id:cpu.return_id,api_sp,captured,active:vec![],used:vec![],serial:0,failed:false})
+  Ok(CrtOwnedUnwind{source,epoch,wrapper_entry:entry,wrapper_id:cpu.return_id,api_sp,captured,active:vec![],stack_extents:std::cell::RefCell::new(std::collections::BTreeMap::new()),used:vec![],serial:0,failed:false})
  }
  fn validate(&self,frame:&CrtOwnedFrameView<'_>)->RegistryResult<()>{
   if self.failed||frame.storage.unwind_epoch!=Some(self.epoch){return Err("unwind stale/failed lifetime");}
@@ -369,7 +369,7 @@ impl CrtOwnedUnwind<'_>{
     ||Self::overlap(context,716,self.source.record,80)||Self::overlap(context,716,self.source.context,716)
     ||self.active.iter().any(|(_,p,_,_)|Self::overlap(context,716,*p,716)){return Err("unwind delivery identity/alias/budget");}
    let entry=CrtCpu::pointer(cpu.entry[4])?;
-   let ceiling=self.active.last().map(|(_,_,p,_)|p.address().saturating_sub(32)).unwrap_or(self.api_sp.address());
+   let ceiling=if let Some((serial,_,p,_))=self.active.last(){let extent=*self.stack_extents.try_borrow().map_err(|_|"unwind stack extent borrow")?.get(serial).ok_or("unwind stack extent missing")?;p.address().checked_sub(extent).ok_or("unwind stack extent overflow")?}else{self.api_sp.address()};
    if entry.kind!=CrtRegionKind::Stack||entry.cap!=self.api_sp.cap||entry.address()%4!=0
     ||entry.address().checked_add(20).is_none_or(|n|n>ceiling)
     ||frame.rt.load(entry,32)?!=CrtValue::ProtectedReturn(cpu.return_id)
@@ -385,9 +385,9 @@ impl CrtOwnedUnwind<'_>{
    }
    let serial=self.serial.checked_add(1).ok_or("unwind delivery serial exhausted")?;self.serial=serial;
    let token=CrtUnwindDelivery{epoch:self.epoch,serial,context,entry,callback:cpu.return_id,captured_esp,snapshot};
-   self.active.push((serial,context,entry,cpu.return_id));self.used.push(context);frame.active=cpu.return_id;
+   self.active.push((serial,context,entry,cpu.return_id));self.stack_extents.get_mut().insert(serial,32);self.used.push(context);frame.active=cpu.return_id;
    let value=body(self,frame,cpu,&token)?;
-   self.validate_delivery(frame,cpu,&token)?;self.active.pop();Ok(value)
+   self.validate_delivery(frame,cpu,&token)?;self.active.pop();self.stack_extents.get_mut().remove(&serial);Ok(value)
   })();frame.active=parent;
   if result.is_err(){self.failed=true;frame.failed=true;}result
  }
@@ -417,6 +417,25 @@ impl CrtOwnedUnwind<'_>{
   }
   // A comparison snapshot has no restoration/writeback authority.
   Ok(())
+ }
+}
+
+/// Borrowed live delivery authority. It never substitutes the saved CONTEXT.
+struct CrtOwnedDeliveryPrefix<'a,'b,'c>{session:&'a CrtOwnedUnwind<'b>,token:&'c CrtUnwindDelivery,record:CrtPointer,context:CrtPointer}
+impl<'a,'b,'c> CrtOwnedDeliveryPrefix<'a,'b,'c>{
+ fn bind(session:&'a CrtOwnedUnwind<'b>,frame:&CrtOwnedFrameView<'_>,cpu:&CrtCpu,token:&'c CrtUnwindDelivery,temporary:u32)->RegistryResult<Self>{
+  session.validate_delivery(frame,cpu,token)?;cpu.validate_active(frame.rt)?;
+  if cpu.r!=cpu.entry||temporary==0||temporary>256{return Err("delivery prefix entry/capacity");}
+  let low=frame.rt.offset(token.entry,-i64::from(temporary))?;frame.rt.valid(low,temporary+20)?;frame.registry.range(low.address(),u64::from(token.entry.address())+20)?;
+  if !frame.rt.overlapping_tags(low.address(),temporary).is_empty(){return Err("delivery prefix protected scratch");}
+  {let mut extents=session.stack_extents.try_borrow_mut().map_err(|_|"delivery stack extent borrow")?;let extent=extents.get_mut(&token.serial).ok_or("delivery stack extent lease")?;*extent=(*extent).max(temporary);}
+  Ok(Self{session,token,record:session.source.record,context:token.context})
+ }
+ fn validate_prefix_source(&self,frame:&CrtOwnedFrameView<'_>)->RegistryResult<()>{
+  self.session.validate(frame)?;let token=self.token;
+  if self.session.active.last()!=Some(&(token.serial,token.context,token.entry,token.callback))||token.epoch!=self.session.epoch||self.record!=self.session.source.record||self.context!=token.context||frame.rt.load(token.entry,32)?!=CrtValue::ProtectedReturn(token.callback)||frame.rt.tags.values().filter(|&&v|v==CrtValue::ProtectedReturn(token.callback)).count()!=1||CrtOwnedUnwind::context_words(frame.rt,token.context)?!=token.snapshot{return Err("delivery prefix stale lease/context");}
+  let owner=frame.rt.resolve_absolute(frame.storage.image.record,CrtRegionKind::Stack)?;
+  for(i,v)in [CrtValue::Pointer(self.record),CrtValue::Pointer(owner),CrtValue::Pointer(self.context),CrtValue::scalar(0)].into_iter().enumerate(){if frame.rt.load(frame.rt.offset(token.entry,4+i as i64*4)?,32)?!=v{return Err("delivery prefix callback arguments changed");}}Ok(())
  }
 }
 

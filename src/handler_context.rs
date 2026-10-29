@@ -69,12 +69,12 @@ impl CrtNormalException {{
 "#,
             body = self.body,
             selector = self.selector_va,
-            prefix = self.emit_prefix_call("context_prefix_call", false)
+            prefix = self.emit_prefix_call("context_prefix_call", false, false)
         )
     }
     #[allow(dead_code)] // Owned source retains its separate captured-object authority.
     pub(crate) fn owned_prefix_call(&self, name: &str) -> String {
-        let helper = self.emit_prefix_call(name, true);
+        let helper = self.emit_prefix_call(name, true, false);
         format!(
             r#"impl CrtOwnedPrefixInput{{
  fn check_prefix_context(&self,frame:&CrtOwnedFrameView<'_>)->RegistryResult<()>{{
@@ -88,9 +88,22 @@ impl CrtNormalException {{
             selector = self.selector_va
         )
     }
-    fn emit_prefix_call(&self, name: &str, owned: bool) -> String {
+    #[allow(dead_code)]
+    pub fn owned_delivery_prefix_call(&self, name: &str) -> String {
+        let helper = self.emit_prefix_call(name, true, true);
+        let selector = self.selector_va;
+        format!("impl CrtOwnedDeliveryPrefix<'_,'_,'_>{{fn check_prefix_context(&self,frame:&CrtOwnedFrameView<'_>)->RegistryResult<()>{{self.validate_prefix_source(frame)?;let selector=frame.rt.load(frame.rt.resolve_absolute({selector},CrtRegionKind::Module)?,32)?.known_scalar()?;ThreadContext::new(frame.rt.owner,frame.registry.limit,frame.registry.base,self.token.captured_esp)?.original_check(frame.rt.owner,selector)}}}}{helper}")
+    }
+    fn emit_prefix_call(&self, name: &str, owned: bool, delivery: bool) -> String {
         let (frame_type, object_type) = if owned {
-            ("CrtOwnedFrameView<'_>", "CrtOwnedPrefixInput")
+            (
+                "CrtOwnedFrameView<'_>",
+                if delivery {
+                    "CrtOwnedDeliveryPrefix<'_,'_,'_>"
+                } else {
+                    "CrtOwnedPrefixInput"
+                },
+            )
         } else {
             ("CrtLiveFrame<'_,'_>", "CrtNormalObjects")
         };

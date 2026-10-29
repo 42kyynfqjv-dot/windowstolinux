@@ -314,19 +314,36 @@ impl CodeIdentity {
     /// return this same code without observable writes.
     #[allow(dead_code)] // CRT integration, not every standalone slice.
     pub fn normal_call(&self, name: &str) -> String {
-        self.emit_normal_call(name, false, false)
+        self.emit_normal_call(name, false, false, false)
     }
     #[allow(dead_code)]
     pub fn prefix_call(&self, name: &str) -> String {
-        self.emit_normal_call(name, true, false)
+        self.emit_normal_call(name, true, false, false)
     }
     #[allow(dead_code)] // Shared owned CRT backend, not every slice emitter.
     pub fn owned_prefix_call(&self, name: &str) -> String {
-        self.emit_normal_call(name, true, true)
+        self.emit_normal_call(name, true, true, false)
     }
-    fn emit_normal_call(&self, name: &str, caller_arguments: bool, owned: bool) -> String {
+    #[allow(dead_code)]
+    pub fn owned_delivery_prefix_call(&self, name: &str) -> String {
+        self.emit_normal_call(name, true, true, true)
+    }
+    fn emit_normal_call(
+        &self,
+        name: &str,
+        caller_arguments: bool,
+        owned: bool,
+        delivery: bool,
+    ) -> String {
         let (frame_type, object_type) = if owned {
-            ("CrtOwnedFrameView<'_>", "CrtOwnedPrefixInput")
+            (
+                "CrtOwnedFrameView<'_>",
+                if delivery {
+                    "CrtOwnedDeliveryPrefix<'_,'_,'_>"
+                } else {
+                    "CrtOwnedPrefixInput"
+                },
+            )
         } else {
             ("CrtLiveFrame<'_,'_>", "CrtNormalObjects")
         };

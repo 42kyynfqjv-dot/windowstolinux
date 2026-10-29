@@ -209,3 +209,47 @@ scenarios (4 success/34 failure), with no additional test functions or whole-PE
 pairs. Original dispatcher branches, captured/delivery context acquisition and
 intervening body effects remain explicit integration gates. See
 [AUDIT-69b844fd.md](AUDIT-69b844fd.md) for the independent routine-audit review.
+
+
+## Owned delivery prefix and the remaining target-frame boundary
+
+The same original prefix proof now emits an owned unwind route through its real
+normalizer, guard and context calls, ending at the taken JNE target0x4022bd.
+It stops before the search-only installer. Search still requires flags0; the
+separately scoped delivery lease requires flags2 and retains the original mask
+check. No arbitrary nonzero flags are interpreted as unwind delivery.
+
+`CrtOwnedDeliveryPrefix` borrows the active delivery lease and checks its epoch,
+serial, callback arguments, return identity and unchanged delivery snapshot.
+Context helper arguments and stack validation use the delivery CONTEXT and its
+ESP, while session validation preserves the distinct saved search CONTEXT.
+The full instruction-derived temporary extent is checked before prefix execution.
+The existing delivery regressions now execute this prefix instead of only its
+initial six-byte prolog. They check the original branch address, complete saved
+stack shape and unchanged source exception-pointer pair/context binding.
+
+This is still same-frame component evidence. The concrete remaining Inner gate
+is `CrtOwnedUnwind::validate`: it validates the suspended search source against
+`frame.storage`; `with_delivery` also derives the establisher from that storage.
+Changing the view to Inner would therefore correctly fail source identity checks.
+Removing those checks would conflate target and search ownership.
+
+The next bounded architecture change needs separately validated search-source and
+delivery-target frame storage in one live registry/runtime, with the delivery
+argument packet, callbacks and retirement bound to the target. Shared captured
+context checks must stay bound to the source. Independent two-frame, stale-source,
+wrong-target, nested-delivery and failed-cleanup cases are required. That ownership
+refactor warrants a focused Astra High pass; routine artifact checks remain on Sol
+or a bounded reviewed Terra task. No Inner/startup/rcedit admission is claimed.
+
+Prefix integration also exposed a nested stack-boundary gap: delivery previously
+reserved only its initial32-byte prolog cut. The session now retains the maximum
+instruction-proved prefix extent per active lease. Nested callback arguments must
+end below that live extent, including when saved values happen to be scalar.
+A close nested entry that would fit the old32-byte boundary now rejects at the
+specific callback-stack check before its body executes. The existing owned-frame
+corpus grows from74 to75 cases; delivery-lifetime cases grow17 to18, without a new
+test function. Local `/tmp` exhaustion interrupted one validation attempt; only
+old generated native harnesses were removed, workspace evidence was preserved,
+and affected checks were rerun successfully. This is distinct from historical
+original-Windows process timeouts, whose causes remain unresolved.
