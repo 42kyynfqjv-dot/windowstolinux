@@ -654,3 +654,49 @@ generated Rust is `d9a314efb61009a4524f3462902f1130bd72b37cab718abe6704d23ab4d9a
 All three prior-checkpoint 9ca97bb2 workflows passed:40826135827,40826128227,
 40826128242. That success does not resolve retained Windows process-exit timeouts.
 Fresh publication CI must be checked separately. Full startup/rcedit is unsupported.
+
+### Selected bridge execution to the owned landing boundary
+
+The post-caller cut now records a single-use ticket tied to the original handler
+activation and actual ESP. The original selected bridge executes its register
+moves, PUSH 1, actual notification CALL/RET 4, XORs and checked indirect-jump
+outcome. Notification uses the existing original-body lowering against live
+module storage, under a separate selected-frame caller binding. It reports
+reason 1 and the actual selected owner/target. The nonreturning CALL's protected
+slot remains live in a private jump receipt; no ordinary RET, Machine restore,
+stack abandonment or landing body is fabricated.
+
+Seven connected cases cover success, changed bridge/notification bytes, wrong
+owner, missing ticket, replay and shifted caller ESP. Review tightened the ticket
+to the issuing CPU activation and ESP so another call on the same frame cannot
+borrow it. Altered notification targets and jump registers reject during proof.
+The full unchanged 25-byte bridge is extracted from the same PE by the checker.
+The landing is currently only a checked target range, not executed instructions.
+
+Root175 and CRT158/one separately replayed observation test pass, as do Clippy,
+format, artifact-bound wrapper and projection checks. There are158 owned scenarios;
+seven selected-bridge scenarios overlap the existing groups. No new Windows
+comparison or whole-PE translation is claimed. Local PE remains1e96cb39...;
+generated Rust SHA256 is
+`c785416d9550238ad554239650487cefb27a5f7c938bec44be31ecf3966a2e54`.
+
+The next executable gate is original landing `MOV ESP,[EBP-24]`: bind the actual
+Main saved-ESP word and complete stack extent, then explicitly retire abandoned
+handler/selected CALL roots under the nonlocal transition. The jump receipt alone
+must not authorize arbitrary ESP or CONTEXT writes. Original landing/context-store
+proofs can then be bound to live owned slots. Sol can implement/review that bounded
+scope; actual delivery acquisition/collided effects remain independent API gates.
+
+Previous head fe4e1678: startup40828206690 and full40828213392 passed. Full run
+40828206749 contains failed authored-windows-fixture job123296040130; its Linux job
+was still running when reviewed. Original corpus case23, SHA256
+`6c4846a95a41aecc55d122576c091538094902940315a7463aff56b707949ab5`,
+produced the expected 64 Z bytes and empty stderr but remained alive after15s,
+then was killed/reaped with exit1. Server2025 build26100 runner
+win25-vs2026/20261021.278.1. Identity-checked PID3344/creation134377282006476144,
+CPU0s, one WCT thread7920, cyclefalse/type8/status2/wait9285ms. This is evidence,
+not a root-cause diagnosis. Artifact12877700855 ZIP SHA256
+`063cf2a50fdd59c8e6fbad9552279d52b52a7aeed37375e1e9cd2ebf69ad4a12`
+is preserved locally alongside the failure JSON/process state. The independent
+exit controls and 18 launch samples passed earlier. No retry/threshold change
+was made and parallel success does not resolve this timeout.

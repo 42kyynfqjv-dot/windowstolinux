@@ -134,6 +134,14 @@ if entry.cap!=storage.entry.cap||entry.address()>=storage.image.esp||rt.overlapp
 let p=rt.resolve_absolute({origin},CrtRegionKind::Module)?;for(i,b)in {code:?}.into_iter().enumerate(){{if rt.load(rt.offset(p,i as i64)?,8)?.known_scalar()?!=b as u32{{return Err("notification native code changed");}}}}
 cpu.r[0]=CrtValue::Pointer(target);{native_body}
 }}
+fn selected_notify_child(frame_view:&mut CrtOwnedFrameView<'_>,cpu:&mut CrtCpu,target:CrtPointer)->RegistryResult<CrtValue>{{
+frame_view.validate()?;cpu.validate_active(frame_view.rt)?;let owner=frame_view.owner_frame()?;let entry=CrtCpu::pointer(cpu.entry[4])?;
+if cpu.r!=cpu.entry||cpu.return_pop!=4||cpu.r[0]!=CrtValue::scalar(target.address())||cpu.r[5]!=CrtValue::Pointer(owner)||frame_view.rt.load(frame_view.rt.offset(entry,4)?,32)?!=CrtValue::scalar(1){{return Err("selected notification argument identity");}}
+let low=frame_view.rt.offset(entry,-{scratch})?;frame_view.rt.valid(low,{scratch})?;frame_view.registry.range(low.address(),u64::from(entry.address()))?;
+if frame_view.rt.overlapping_tags(low.address(),{scratch}).iter().any(|(_,v)|matches!(v,CrtValue::ProtectedReturn(_)|CrtValue::ThreadHead(_)|CrtValue::OpaqueSaved(_))){{return Err("selected notification occupied scratch");}}
+let rt=&mut *frame_view.rt;let p=rt.resolve_absolute({origin},CrtRegionKind::Module)?;for(i,b)in {code:?}.into_iter().enumerate(){{if rt.load(rt.offset(p,i as i64)?,8)?.known_scalar()?!=b as u32{{return Err("selected notification code changed");}}}}
+let frame=owner;let reason=1u32;cpu.r[0]=CrtValue::Pointer(target);{native_body}
+}}
 fn require_original_notification(rt:&CrtStreamRuntime,storage:&CrtOwnedStorage,target:u32,reason:u32)->RegistryResult<()>{{let frame=rt.resolve_absolute(storage.image.ebp,CrtRegionKind::Stack)?;let target=rt.resolve_absolute(target,CrtRegionKind::Module)?;for(at,v)in [({target_word},CrtValue::Pointer(target)),({action_word},CrtValue::scalar(reason)),({frame_word},CrtValue::Pointer(frame))]{{if rt.load(rt.resolve_absolute(at,CrtRegionKind::Module)?,32)?!=v{{return Err("notification live result changed");}}}}Ok(())}}
 "#,
         length = code.len(),
@@ -156,7 +164,7 @@ struct CrtHandlerExit {anchor:guest_memory::Capability,id:RegistrationId,event:u
 struct CrtOwnedStorage {
  anchor:guest_memory::Capability,identity:RegistryIdentity,binding:OwnedFrameBinding,id:RegistrationId,event:u64,
  entry:CrtPointer,return_id:u64,image:FrameImage<RegistryHead>,ordinary:std::collections::BTreeSet<i32>,
- protected:std::collections::BTreeMap<i32,CrtValue>,input:Option<(Option<CrtPointer>,CrtPointer,CrtPointer,u32)>,pair_return:Option<(CrtPointer,u64)>,unwind_epoch:Option<u64>,resume_ticket:Option<u64>,post_unwind:Option<(u64,u64,u64)>,post_authority:Option<u64>,
+ protected:std::collections::BTreeMap<i32,CrtValue>,input:Option<(Option<CrtPointer>,CrtPointer,CrtPointer,u32)>,pair_return:Option<(CrtPointer,u64)>,unwind_epoch:Option<u64>,resume_ticket:Option<u64>,post_unwind:Option<(u64,u64,u64)>,post_authority:Option<u64>,selected_cut:Option<(u64,u32,u64,CrtPointer)>,
 }
 impl RegistryFrameStorage for CrtOwnedStorage{fn registry_image(&self)->&FrameImage<RegistryHead>{&self.image}}
 impl CrtOwnedStorage {
@@ -193,7 +201,7 @@ impl CrtOwnedStorage {
   // No external callback occurs before final registry installation.
   for(p,value)in writes{rt.store(p,32,value)?;}
   let id=r.install_frame(binding,&image)?;
-  Ok(Self{anchor:rt.anchor,identity:r.identity,binding,id,event:m.event,entry,return_id:cpu.return_id,image,ordinary:ordinary.iter().copied().collect(),protected,input:None,pair_return:None,unwind_epoch:None,resume_ticket:None,post_unwind:None,post_authority:None})
+  Ok(Self{anchor:rt.anchor,identity:r.identity,binding,id,event:m.event,entry,return_id:cpu.return_id,image,ordinary:ordinary.iter().copied().collect(),protected,input:None,pair_return:None,unwind_epoch:None,resume_ticket:None,post_unwind:None,post_authority:None,selected_cut:None})
  }
  fn retire_completed(&mut self,rt:&mut CrtStreamRuntime,r:&mut ThreadRegistry,m:&mut Machine,completion:HandlerCompletion,exit:CrtHandlerExit)->RegistryResult<()>{
   let result=(||{
@@ -588,7 +596,7 @@ impl<'a>CrtOwnedPostUnwind<'a>{
  }
  fn transfer_cut(&mut self,frame:&mut CrtOwnedFrameView<'_>,cpu:&CrtCpu,landing:u32)->RegistryResult<CrtValue>{
   self.validate(frame,cpu)?;if !self.stored||frame.storage.image.try_level!= -2||cpu.r[1].known_scalar()?!=landing||cpu.r[2]!=CrtValue::Pointer(frame.owner_frame()?){return Err("post unwind transfer arguments");}
-  self.complete=true;frame.storage.post_authority=None;Ok(CrtValue::scalar(landing))
+  self.complete=true;frame.storage.post_authority=None;frame.storage.selected_cut=Some((self.ticket,landing,cpu.return_id,CrtCpu::pointer(cpu.r[4])?));Ok(CrtValue::scalar(landing))
  }
 }
 

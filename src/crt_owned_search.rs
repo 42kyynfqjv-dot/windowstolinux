@@ -319,3 +319,62 @@ pub(crate) fn emit_post_global(input: Input<'_>, name: &str) -> Result<String, S
         r#"fn {name}(frame:&mut CrtOwnedFrameView<'_>,cpu:&mut CrtCpu,post:&mut CrtOwnedPostUnwind<'_>)->RegistryResult<CrtValue>{{let result=(||{{post.validate(frame,cpu)?;if frame.scope_address()!={table_va}||frame.storage.image.try_level!={expected_level}||cpu.r[7]!=CrtValue::scalar({expected_level}i32 as u32){{return Err("post caller proof entry differs");}}if post.stored{{return Err("post caller already executed");}}for(base,bytes)in [({origin}u32,&{raw:?}[..]),({table_va}u32,&{table:?}[..])]{{let p=frame.rt.resolve_absolute(base,CrtRegionKind::Module)?;for(i,b)in bytes.iter().enumerate(){{if frame.rt.load(frame.rt.offset(p,i as i64)?,8)?.known_scalar()?!=*b as u32{{return Err("post caller code/table changed");}}}}}}{body}}})();if result.is_err(){{frame.failed=true;}}result}}"#
     ))
 }
+
+/// Original nonreturning bridge up to its checked indirect jump. The receipt
+/// retains its live CALL slot; it cannot restore Machine or abandon that slot.
+pub(crate) fn emit_selected(
+    code: &[u8],
+    origin: u32,
+    notification: &[u8],
+    notify: u32,
+    binding: super::unwind_bridges::NotificationBinding,
+) -> Result<String, String> {
+    use iced_x86::{Decoder, DecoderOptions, Mnemonic};
+    let n = super::unwind_bridges::prove_notification(notification, notify, binding)?;
+    super::unwind_bridges::prove_selected(code, origin, notify, &n)?;
+    let instructions: Vec<_> = Decoder::with_ip(32, code, u64::from(origin), DecoderOptions::NONE)
+        .into_iter()
+        .collect();
+    let call = instructions
+        .iter()
+        .find(|i| i.mnemonic() == Mnemonic::Call)
+        .ok_or("selected call missing")?;
+    let jump = instructions.last().ok_or("selected jump missing")?;
+    let a = (call.ip() as u32 - origin) as usize;
+    let b = (call.next_ip() as u32 - origin) as usize;
+    let c = (jump.ip() as u32 - origin) as usize;
+    let prefix = crt_stream_emit::emit_linear_fragment(
+        &super::crt_stream_ir::Graph::decode_linear_fragment(&code[..a], origin)?,
+        &BTreeMap::new(),
+    )?;
+    let tail = crt_stream_emit::emit_linear_fragment(
+        &super::crt_stream_ir::Graph::decode_linear_fragment(&code[b..c], call.next_ip() as u32)?,
+        &BTreeMap::new(),
+    )?;
+    let continuation = call.next_ip() as u32;
+    Ok(format!(
+        r#"
+struct CrtSelectedJump{{ticket:u64,slot:CrtPointer,id:u64,owner:CrtPointer,landing:CrtPointer}}
+fn selected_prefix(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->RegistryResult<CrtValue>{{{prefix}}}
+fn selected_tail(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->RegistryResult<CrtValue>{{{tail}}}
+fn owned_selected_bridge(frame:&mut CrtOwnedFrameView<'_>,cpu:&mut CrtCpu)->RegistryResult<CrtSelectedJump>{{let result=(||{{
+ frame.validate()?;cpu.validate_active(frame.rt)?;
+ let(ticket,landing,caller,caller_sp)=frame.storage.selected_cut.ok_or("selected missing single-use caller cut")?;
+ let owner=frame.owner_frame()?;let target=frame.rt.resolve_absolute(landing,CrtRegionKind::Module)?;
+ if cpu.return_id!=caller||cpu.r[4]!=CrtValue::Pointer(caller_sp)||frame.storage.image.try_level!= -2||frame.registry.target_ready()?!=frame.storage.id||frame.machine.current!=frame.machine.selected||cpu.return_id!=frame.active||cpu.r[1]!=CrtValue::scalar(landing)||cpu.r[2]!=CrtValue::Pointer(owner){{return Err("selected live caller identity");}}
+ let p=frame.rt.resolve_absolute({origin},CrtRegionKind::Module)?;for(i,b)in {code:?}.into_iter().enumerate(){{if frame.rt.load(frame.rt.offset(p,i as i64)?,8)?.known_scalar()?!=b as u32{{return Err("selected original code changed");}}}}
+ let sp=CrtCpu::pointer(cpu.r[4])?;let low=frame.rt.offset(sp,-64)?;frame.rt.valid(low,64)?;frame.registry.range(low.address(),u64::from(sp.address()))?;
+ if sp.cap!=frame.storage.entry.cap||sp.address()>=frame.storage.image.esp||frame.rt.overlapping_tags(low.address(),64).iter().any(|(_,v)|matches!(v,CrtValue::ProtectedReturn(_)|CrtValue::OpaqueSaved(_)|CrtValue::ThreadHead(_))){{return Err("selected occupied scratch");}}
+ let id=frame.rt.generation.checked_add(1).filter(|n|*n<1u64<<63).ok_or("selected call identity exhausted")?;frame.rt.generation=id;let id=id|(1u64<<63);
+ if frame.rt.tags.values().any(|v|*v==CrtValue::ProtectedReturn(id)){{return Err("selected call identity collision");}}
+ frame.storage.selected_cut=None;cpu.push(frame.rt,CrtValue::ProtectedReturn(id))?;let slot=CrtCpu::pointer(cpu.r[4])?;
+ selected_prefix(frame.rt,cpu)?;
+ // Original CALL executes with its actual child stack and RET 4 cleanup.
+ frame.call_pop(cpu,{continuation},4,|f,k|selected_notify_child(f,k,target))?;
+ selected_tail(frame.rt,cpu)?;
+ if cpu.r[4]!=CrtValue::Pointer(slot)||cpu.r[5]!=CrtValue::Pointer(owner)||cpu.r[6]!=CrtValue::scalar(landing)||frame.rt.load(slot,32)?!=CrtValue::ProtectedReturn(id){{return Err("selected jump state changed");}}
+ Ok(CrtSelectedJump{{ticket,slot,id,owner,landing:target}})
+ }})();if result.is_err(){{frame.failed=true;}}result}}
+"#
+    ))
+}
