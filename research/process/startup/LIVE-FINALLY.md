@@ -2124,3 +2124,31 @@ At review,74b4bbf startup40942487315 passed; full Rust40942499571/40942487466 re
 in progress. The preserved original-Windows hello timeout remains unexplained.
 Next: checked indirect guard/lookup and dynamic FLS binding; actual loader effects,
 forwarder lifetime and full startup/rcedit remain unsupported.
+
+### Original dynamic guard and owned FLS lookup
+
+Review of2ad289f retained original retry/error ordering, bounded word reads and
+module/reference/publication lifetime checks. A separate original59-byte lookup
+wrapper now connects cold/cached resolution, the actual3-byte return-only guard
+and dynamic FLS access. The live guard pointer must match the byte-bound target;
+the checked function must match both symbol and live cache, with a local single-use
+guard receipt. FLS uses the actual argument index and live fiber/slot generation.
+No function address becomes a host call, and unknown PTD bytes stay unknown.
+
+Nineteen native scenarios cover success/null/sentinel, stale/reloaded module,
+wrong symbol/scalar target, guard corruption/unknown state, stale/reused slots,
+foreign fiber, stale PTD, failed setter knowledge, wrong index and expired input.
+Cold callbacks that corrupt the guard or retire the slot reject after retaining
+load/export effects. All62 wrapper/guard bytes reject individual mutations.
+Local205 CRT tests passed, one existing observation test separate, with Clippy,
+format/diff and Python syntax checks. Artifact replay passed seven C++ checks,
+seven prior PTD checks and five recorded Windows wrapper comparisons, with zero
+new Windows FLS observations or whole-PE pairs. Hashes/counts are preserved in
+[evidence/dynamic-fls-component.json](evidence/dynamic-fls-component.json).
+
+The existing dispatcher PTD getter still uses its legacy lookup cut. Next connect
+this checked variant to that protected lookup call. Original loader/forwarder
+identity, loader initialization/detach, actual FLS allocation, unwind/termination
+and full startup/rcedit remain unproven. At inspection,2ad289f startup40944120217
+passed; Rust40944128252/40944120075 remained active. Historical Windows hello and
+other process-exit timeouts remain preserved and unresolved.

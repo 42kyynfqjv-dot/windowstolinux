@@ -447,3 +447,138 @@ for (left,right,count,expected) in cases {
         .is_err());
     }
 }
+
+pub(crate) const INDIRECT_GUARD: &str = "c20000";
+/// Original wrapper with explicit loader and stationary-fiber input contracts.
+/// Only the byte-bound return-only guard domain is supported; a patched guard
+/// or a missing TLS fallback contract rejects at its original call site.
+fn dynamic_source(wrapper: &[u8], guard: &[u8]) -> Result<String, String> {
+    if wrapper != crate::crt_ptd::raw(WRAPPER) || guard != crate::crt_ptd::raw(INDIRECT_GUARD) {
+        return Err("C++ dynamic lookup/guard binding".into());
+    }
+    let guard_graph = Graph::decode(guard, 0x401bf9)?;
+    let guard_body = crate::crt_stream_emit::emit_body(
+        &guard_graph,
+        |_, _| Err("guard call".into()),
+        &BTreeMap::new(),
+        2,
+    )?;
+    let mut nodes = BTreeMap::new();
+    let mut decoder =
+        iced_x86::Decoder::with_ip(32, wrapper, 0x402bb4, iced_x86::DecoderOptions::NONE);
+    while decoder.can_decode() {
+        let i = decoder.decode();
+        let offset = (i.ip32() - 0x402bb4) as usize;
+        nodes.insert(
+            i.ip32(),
+            Graph::decode_instruction(&wrapper[offset..offset + i.len()], i.ip32())?,
+        );
+    }
+    let graph = Graph {
+        origin: 0x402bb4,
+        end: 0x402bef,
+        nodes,
+    };
+
+    let body = crate::crt_stream_emit::emit_body_with_indirect(
+        &graph,
+        |pc, t| {
+            let next = pc + graph.nodes[&pc].length;
+            Ok(match t {
+                Target::Direct(0x402a53) => format!(
+                    r#"let sp=CrtCpu::pointer(cpu.r[4])?;let names=rt.resolve_absolute(0x415d4c,CrtRegionKind::Input)?;if rt.load(names,32)?.known_scalar()?!=0||rt.load(rt.offset(names,4)?,32)?.known_scalar()?!=2{{return Err("C++ module index list");}}let symbol=rt.resolve_absolute(0x415d54,CrtRegionKind::Input)?;for(i,b)in b"FlsGetValue\0".iter().enumerate(){{if rt.load(rt.offset(symbol,i as i64)?,8)?.known_scalar()?!=u32::from(*b){{return Err("C++ dynamic symbol bytes");}}}}for(offset,address,value)in [(4,0x415d54,symbol),(8,0x415d4c,names),(12,0x415d54,rt.offset(names,8)?)]{{let p=rt.offset(sp,offset)?;if rt.load(p,32)?.known_scalar()?!=address{{return Err("C++ lookup pointer immediate");}}rt.store(p,32,CrtValue::Pointer(value))?;}}cpu.call_activation(rt,{next},0,|rt,c|cxx_cold_resolver(rt,c,init,api))?;"#
+                ),
+                Target::Import(0x415128) => format!(
+                    r#"let cell=rt.resolve_absolute(0x415128,CrtRegionKind::Module)?;if rt.load(cell,32)?.known_scalar()?!=0x401bf9{{return Err("C++ live guard target unbound");}}let CrtValue::Function(f)=cpu.r[1] else{{return Err("C++ guard function authority");}};rt.function_identity(f,Some("FlsGetValue"))?;if cpu.r[6]!=CrtValue::Function(f){{return Err("C++ guard target mismatch");}}cpu.call_activation(rt,{next},0,|rt,c|cxx_lookup_guard(rt,c))?;guarded=Some(f);"#
+                ),
+                _ => "return Err(\"C++ TLS fallback effect remains unbound\");".into(),
+            })
+        },
+        &BTreeMap::new(),
+        4096,
+        |_, _| Err("dynamic FS effect".into()),
+        |_, _| Ok(String::new()),
+        |_, _| Ok(None),
+        None,
+        |_, _, _| Ok(None),
+        |pc, _| {
+            let next = pc + graph.nodes[&pc].length;
+            Ok(format!(
+                r#"let CrtValue::Function(f)=target else{{return Err("C++ indirect function provenance");}};if guarded.take()!=Some(f){{return Err("C++ missing/replayed guard receipt");}}rt.function_identity(f,Some("FlsGetValue"))?;let cache=rt.resolve_absolute(0x41cd1c,CrtRegionKind::Module)?;if rt.load(cache,32)?!=target{{return Err("C++ indirect cache target changed");}}cpu.call_activation(rt,{next},4,|rt,c|{{rt.function_identity(f,Some("FlsGetValue"))?;let sp=CrtCpu::pointer(c.r[4])?;let index=rt.load(rt.offset(sp,4)?,32)?.known_scalar()?;let value=rt.fls_get(fiber,slot,index)?;c.clobber(value);c.finish_pop(rt,4)}})?;"#
+            ))
+        },
+    )?;
+    Ok(format!("fn cxx_lookup_guard(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->Result<CrtValue,&'static str>{{{guard_body}}}fn cxx_dynamic_lookup(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,init:CrtInitialization,fiber:CrtFiber,slot:CrtFlsSlot,api:&mut impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu,u32)->Result<CrtValue,&'static str>)->Result<CrtValue,&'static str>{{rt.initialization(init)?;let mut guarded:Option<CrtFunction>=None;{body}}}"))
+}
+
+#[test]
+fn original_dynamic_lookup_checks_guard_module_fiber_slot_and_protected_return() {
+    let wrapper = crate::crt_ptd::raw(WRAPPER);
+    let guard = crate::crt_ptd::raw(INDIRECT_GUARD);
+    let extra = format!(
+        "{} {}",
+        cold_source(
+            &crate::crt_ptd::raw(COLD_FULL),
+            &crate::crt_ptd::raw(LOAD_HELPER)
+        )
+        .unwrap(),
+        dynamic_source(&wrapper, &guard).unwrap()
+    );
+    if let Some(out) = std::env::var_os("W2L_EH4_EVIDENCE") {
+        std::fs::write(
+            std::path::Path::new(&out).join("dynamic-fls-component.rs"),
+            format!(
+                "{}\n{}\n{}",
+                crate::crt_stream_runtime::EMITTED_TYPES,
+                crate::crt_stream_cpu::EMITTED_TYPES,
+                extra
+            ),
+        )
+        .unwrap();
+    }
+    crate::crt_stream_callees_tests::native(
+        &extra,
+        r#"
+for scenario in 0..19{
+ let(mut rt,init)=CrtStreamRuntime::new_initializing(12,34,0x8000,65536).unwrap();
+ let(m,reference)=rt.module_acquire_result(init,"independent executable module",0x700000).unwrap();let f=rt.module_export_result(init,m,if scenario==8{"OtherExport"}else{"FlsGetValue"},0x701000).unwrap();
+ let cache_root=rt.map_region(0x41cd14,12,CrtRegionKind::Module,None).unwrap();let cache=rt.offset(cache_root,8).unwrap();rt.store(cache,32,if scenario==9{CrtValue::scalar(0x701000)}else if scenario>=16{CrtValue::scalar(0)}else{CrtValue::Function(f)}).unwrap();
+ if scenario>=16{let cells=rt.map_region(0x41cd08,12,CrtRegionKind::Module,Some(&[0;12])).unwrap();rt.bind_loader_cell(init,cells,false).unwrap();rt.bind_loader_cell(init,rt.offset(cells,8).unwrap(),false).unwrap();rt.bind_loader_cell(init,cache,true).unwrap();let name=rt.map_region(0x6500,4,CrtRegionKind::Input,Some(&[97,0,0,0])).unwrap();let table=rt.map_region(0x415c80,12,CrtRegionKind::Module,None).unwrap();rt.store(table,32,CrtValue::Pointer(name)).unwrap();}
+ let guard=rt.map_region(0x415128,4,CrtRegionKind::Module,Some(&0x401bf9u32.to_le_bytes())).unwrap();
+ let names=rt.map_region(0x415d4c,8,CrtRegionKind::Input,Some(&[0,0,0,0,2,0,0,0])).unwrap();
+ rt.map_region(0x415d54,12,CrtRegionKind::Input,Some(b"FlsGetValue\0")).unwrap();
+ let ptd=rt.map_region(0x6000,40,CrtRegionKind::ThreadData,None).unwrap();let fiber=rt.bind_fiber(34).unwrap();let slot=rt.bind_fls(fiber,3,if scenario==1{CrtValue::scalar(0)}else if scenario==2{CrtValue::scalar(u32::MAX)}else{CrtValue::Pointer(ptd)}).unwrap();
+ let(mut other,other_init)=CrtStreamRuntime::new_initializing(12,34,0x8000,65536).unwrap();let foreign=other.bind_fiber(34).unwrap();
+ match scenario{
+  3=>{rt.retire_fls(fiber,slot).unwrap();},4=>{rt.retire_fls(fiber,slot).unwrap();rt.bind_fls(fiber,3,CrtValue::Pointer(ptd)).unwrap();},
+  6|7=>{rt.module_release_result(init,reference,true).unwrap();if scenario==7{rt.module_acquire_result(init,"independent executable module",0x700000).unwrap();}},
+  10=>{rt.store(guard,32,CrtValue::scalar(0x401bfa)).unwrap();},11=>{rt.store(guard,32,CrtValue::Scalar{bits:0,known:0}).unwrap();},
+  12=>{rt.retire_region(ptd).unwrap();},13=>{rt.fls_set(fiber,slot,3,CrtValue::Pointer(ptd),false,Some(8)).unwrap();},
+  14=>{rt.memory.release(names.cap,names.owner).unwrap();},_=>{}
+ }
+ rt.last_os_error=Some(123);
+ let stack=rt.map_region(0x9000,2048,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,1536).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(1)).unwrap();let mut cpu=CrtCpu::new(sp,1).unwrap();cpu.r[1]=CrtValue::Scalar{bits:0,known:0};cpu.push(&mut rt,CrtValue::scalar(if scenario==15{4}else{3})).unwrap();
+ let mut api_calls=0;
+ let result=cpu.call_activation(&mut rt,0x1111,0,|rt,c|cxx_dynamic_lookup(rt,c,init,if scenario==5{foreign}else{fiber},slot,&mut |rt,c,iat|{assert!(scenario>=16);api_calls+=1;let result=match iat{0x415074=>{let(module,_)=rt.module_acquire_result(init,"independent executable module",0x700000)?;if scenario==17{rt.store(guard,32,CrtValue::scalar(0x401bfa))?;}if scenario==18{rt.retire_fls(fiber,slot)?;}CrtValue::Module(module)},0x415070=>CrtValue::Function(rt.module_export_result(init,m,"FlsGetValue",0x701000)?),_=>panic!()};c.clobber(result);c.finish_pop(rt,if iat==0x415074{12}else{8})}));
+ if scenario<=2||scenario==16{
+  assert_eq!(api_calls,if scenario==16{2}else{0});assert_eq!(result.unwrap(),if scenario==1{CrtValue::scalar(0)}else if scenario==2{CrtValue::scalar(u32::MAX)}else{CrtValue::Pointer(ptd)});assert_eq!(rt.last_os_error,None);assert!(rt.load(rt.offset(ptd,32).unwrap(),32).unwrap().known_scalar().is_err());cpu.discard(&mut rt,4).unwrap();cpu.finish(&mut rt).unwrap();
+ }else{assert!(result.is_err(),"scenario {scenario}");assert_eq!(rt.last_os_error,Some(123));if scenario>=17{assert_eq!(api_calls,2);assert_eq!(rt.module_references.len(),2);}}
+ // Release receipts stay single-use, and a foreign runtime cannot revive them.
+ assert!(other.module_release_result(other_init,reference,true).is_err());
+}
+"#,
+        "owned-dynamic-fls",
+    );
+    for (which, bytes) in [(0, &wrapper), (1, &guard)] {
+        for i in 0..bytes.len() {
+            let mut changed = bytes.clone();
+            changed[i] ^= 1;
+            assert!(if which == 0 {
+                dynamic_source(&changed, &guard)
+            } else {
+                dynamic_source(&wrapper, &changed)
+            }
+            .is_err());
+        }
+    }
+}

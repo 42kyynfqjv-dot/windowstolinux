@@ -1,0 +1,15 @@
+{
+  "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "rust_sha256": "1d4353871658ac3470ff65cd4be5703d8bea347fed26ef5413801ba861ef5300",
+  "cold_resolver_source_sha256": "3045de84d33caad740346e7becd739c79b42d7fa69e7090392c3f1d60403fea9",
+  "dynamic_fls_source_sha256": "a8dd8360299eff95872001f4817e1c09e2fb711349cf1c9f29de6295900ac5da",
+  "dynamic_fls_native_cases": 19,
+  "dynamic_fls_new_windows_pairs": 0,
+  "cxx_record_rust_tests": 7,
+  "comparisons": 5,
+  "whole_pe_translation_pairs": 0,
+  "scope": "Linux native components with supplied loader/module/fiber state; five replayed recorded Windows wrapper comparisons; no fresh Windows FLS observations or whole-PE pairs",
+  "crt_tests": 205,
+  "crt_ignored": 1,
+  "changed_wrapper_guard_bytes_rejected": 62
+}

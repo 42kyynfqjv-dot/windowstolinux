@@ -2,7 +2,8 @@
 
 The cached path remains implemented. The original cold resolver and load helper
 now execute as checked native components with explicit loader API effects.
-Whole-image cold resolution and dynamic FLS invocation remain rejected. This is
+Whole-image cold resolution remains rejected. A separate original-wrapper
+component now invokes checked dynamic FLS under explicit loader/fiber inputs. This is
 not a native DLL loader or new application compatibility claim.
 
 ## Implemented ownership and publication boundary
@@ -106,13 +107,35 @@ normalize into shared width-aware operations, with checked initialized reads.
 The module-prefix immediate refines only after exact live input bytes validate.
 Keep the supplied loader effects explicit.
 
-Next bind the checked function result through the original indirect-call guard
-and lookup wrapper into the distinct dispatcher PTD backend. This requires actual
-module/API-set/forwarder lifetime evidence and a live FLS index/fiber owner; a
-function token alone is not an API-effect certificate. Unknown exports and loader
-initialization/detach/TLS callbacks stay rejected. Actual loading and concurrent
-module publication require a separately justified contract, not broader defaults.
-Unwind/termination and original Windows delivery remain separate unresolved gates.
+The new connected lookup component executes the actual59-byte wrapper, original
+resolver/load/retry bodies, the3-byte return-only guard and a checked FLS effect.
+It validates the live415128 guard word against401bf9, validates exact function
+symbol/module lifetime and uses a local single-use guard receipt before FF D6.
+The target must still match the live function cache. Alternative guard targets
+reject; image initial contents alone do not establish runtime guard state.
+
+FLS access checks the actual argument index against an explicitly bound fiber and
+slot generation. Retired/reused slots, foreign fibers, stale PTD storage and unknown
+slot contents reject. Success does not initialize unknown PTD bytes and makes
+LastError unknown. Function tokens never become host calls. Repeated valid API
+calls need new guard executions; no persistent guard authority is returned.
+
+Nineteen native scenarios cover cached/cold production, nonnull/null/sentinel
+results, module unload/reload, wrong symbol/scalar target, changed/unknown guard,
+slot retirement/reuse, foreign fiber, stale PTD, failed setter knowledge, invalid
+index and expired list storage. Cold callbacks corrupting the guard or retiring
+the slot reject later while retaining both load/export effects and references.
+All59 wrapper and3 guard bytes reject individual mutations. These are component
+cases, with no new original-Windows FLS observations or whole-PE pairs.
+
+Next connect this variant to the distinct dispatcher PTD getter's protected
+lookup call. The existing getter still uses its legacy cached/TLS effect cut;
+these components must not be reported as that composition until integrated.
+Bind actual module/API-set/forwarder identity, loader initializer/detach effects
+and original FLS allocation before removing explicit producer assumptions. The
+legacy TLS fallback remains separately tested; this dynamic variant rejects at
+its fallback call because TLS slot effects have not been bound here.
+Unwind/termination and original Windows delivery remain unresolved.
 
 Primary contracts read for this implementation are Microsoft Learn
 [LoadLibraryExW](https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-loadlibraryexw),

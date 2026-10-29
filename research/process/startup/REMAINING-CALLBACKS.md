@@ -177,3 +177,13 @@ including bounded UTF-16 prefix reads and the original nonmatching-prefix retry.
 Seventeen scripted loader outcomes and eleven independent comparator cases pass;
 loader initialization/detach and dynamic FLS still require explicit contracts.
 The original failing hello run at5c3c2b5 remains preserved and unexplained.
+
+
+Dynamic lookup connection: a separate component now executes original lookup,
+resolver/retry, return-only indirect guard and checked FLS access. The live guard
+word, module/export lifetime, target cache, single-use guard receipt and exact
+fiber/slot generation must all match. Nineteen native cases retain earlier effects
+on later guard/slot failure and preserve unknown PTD bytes. Actual loader/FLS
+producers remain explicit. Next wire this variant into the dispatcher PTD getter;
+the existing getter still uses the legacy lookup cut. See the current cold
+resolver handoff for this precise composition boundary.
