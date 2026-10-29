@@ -499,3 +499,49 @@ CPU rather than the private effect backend and scratch. The source/captured vs
 delivery ownership and validated cleanup/retirement gates stay required, followed
 by selected restoration and OS delivery. Full startup/rcedit stays unsupported.
 Sol can attempt that next scope; no concrete escalation need is established yet.
+
+## Native funclet and nested dispatcher bodies
+
+The connected finally body now executes both unchanged funclets, the original
+bounded dispatcher, and original CleanupA/B/C instructions on the issued child
+CPU. Funclet LEA/PUSH/CALL/ADD/RET operations supply real field pointers; the
+dispatcher builds its trace/local pair on its own live stack. The nested cleanup
+receives that actual pair, and original dispatcher MOV instructions commit its
+results before updating the cursor. No fixed0x9500/0x9600 scratch or scalar-effect
+copy replaces this connected path. The old effect backend remains only for its
+separate tests and explicit older component callers.
+
+An instruction-level indirect-call node and emitter callback bind the actual
+register/table operand at the dispatcher CALL. Default whole-graph decoding and
+default emission still reject indirect calls. Only the separately proved bounded
+dispatch component constructs/lower its node with a checked table target; the
+new independent test covers rejection of register and indexed-table calls without
+that contract. Unknown targets do not become host pointers or implicit imports.
+The dispatcher admits initialized cursors0–2 under the existing independent
+three-path proof. Its error/fast-fail path stays outside the admitted domain:
+entry and original JA predicates reject invalid cursors before emission effects.
+
+Immutable source/table validation, owner EBP/argument capability checks, bounded
+private-stack preflight, exact protected returns and native register restoration
+remain live throughout. Nested providers no longer overwrite native results with
+shadow register values. Callback failure still retains earlier private or public
+writes. Completion/retirement follows the checked handler epilog as before.
+
+Six added cases cover an aliased returned funclet identity, invalid cursor,
+changed nested cleanup code, changed dispatch target table, unknown cursor, and
+an independently specified alternate entry cut (TryLevel0/cursor2). That last case
+executes CleanupC and independently expects trace83/local113 before retirement;
+it does not alter the PE or claim an additional Windows observation. Aggregate
+counts overlap:124 owned-frame,67 delivery,49 cross-frame and34 connected native
+callback/loop/stack cases. Root175 and CRT156 tests pass locally (plus the separately
+replayed observation test). Five recorded wrapper pairs remain separate; new
+native cases add zero Windows and whole-PE pairs.
+
+The next gate is the original global-unwind API completion/selected continuation.
+The explicit delivery provider still supplies captured/delivery entry contexts,
+and the original global wrapper rejects after it returns. Cleanup completion
+must be bound to an owned, single-use API/continuation receipt and actual wrapper
+resumption; it cannot by itself authorize guest restoration. OS delivery, full
+startup and rcedit remain unsupported until entry-to-exit evidence establishes
+those semantics. Sol can review this native integration and attempt the bounded
+completion handoff, escalating only a concrete unresolved semantic question.

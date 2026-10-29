@@ -23,6 +23,7 @@ pub(crate) enum SignedCondition {
 pub(crate) enum Op {
     Ordinary(Operation),
     Call(Target),
+    IndirectCall(Operand),
     ReturnPop(u16),
     FsRead(Reg),
     FsWrite(Reg),
@@ -270,6 +271,8 @@ fn extended(i: &Instruction, raw: &[u8], tables: &[JumpTable<'_>]) -> Result<Op,
                 && i.memory_displacement32().is_multiple_of(4)
             {
                 Op::Call(Target::Import(i.memory_displacement32()))
+            } else if i.code() == Code::Call_rm32 {
+                Op::IndirectCall(operand_from_move(i, 0)?)
             } else {
                 return Err("CRT IR: unbound call form".into());
             }
@@ -436,6 +439,7 @@ impl Graph {
                 || matches!(
                     node.op,
                     Op::Call(_)
+                        | Op::IndirectCall(_)
                         | Op::FsRead(_)
                         | Op::FsWrite(_)
                         | Op::FsPush
@@ -712,6 +716,12 @@ impl Graph {
         }
         if reached.len() != nodes.len() {
             return Err("CRT IR: hidden unreachable instructions".into());
+        }
+        if nodes
+            .values()
+            .any(|node| matches!(node.op, Op::IndirectCall(_)))
+        {
+            return Err("CRT IR: unbound call form".into());
         }
         Ok(Self { origin, end, nodes })
     }

@@ -303,6 +303,31 @@ pub(crate) fn emit_body_with_exit(
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn emit_body_with_store(
     graph: &Graph,
+    call: impl FnMut(u32, Target) -> Result<String, String>,
+    roles: &BTreeMap<u32, String>,
+    step_budget: u32,
+    thread: impl FnMut(u32, &Op) -> Result<String, String>,
+    before: impl FnMut(u32, &Op) -> Result<String, String>,
+    return_hook: impl FnMut(u32, u16) -> Result<Option<String>, String>,
+    exit: Option<u32>,
+    store: impl FnMut(u32, &Address, u8) -> Result<Option<String>, String>,
+) -> Result<String, String> {
+    emit_body_with_indirect(
+        graph,
+        call,
+        roles,
+        step_budget,
+        thread,
+        before,
+        return_hook,
+        exit,
+        store,
+        |_, _| Err("CRT emit indirect call requires target proof".into()),
+    )
+}
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn emit_body_with_indirect(
+    graph: &Graph,
     mut call: impl FnMut(u32, Target) -> Result<String, String>,
     roles: &BTreeMap<u32, String>,
     step_budget: u32,
@@ -311,6 +336,7 @@ pub(crate) fn emit_body_with_store(
     mut return_hook: impl FnMut(u32, u16) -> Result<Option<String>, String>,
     exit: Option<u32>,
     mut store: impl FnMut(u32, &Address, u8) -> Result<Option<String>, String>,
+    mut indirect: impl FnMut(u32, &Operand) -> Result<String, String>,
 ) -> Result<String, String> {
     if graph
         .nodes
@@ -332,6 +358,7 @@ pub(crate) fn emit_body_with_store(
         let mut controlled = false;
         match &node.op{
  Op::Call(target)=>out.push_str(&call(pc,*target)?),
+ Op::IndirectCall(operand)=>{out.push_str(&format!("let target={};",read(operand,roles)?));out.push_str(&indirect(pc,operand)?);},
  Op::FsRead(_)|Op::FsWrite(_)|Op::FsPush=>out.push_str(&thread(pc,&node.op)?),
  Op::ReturnPop(bytes)=>{out.push_str(&return_hook(pc,*bytes)?.unwrap_or_else(||format!("return cpu.finish_pop(rt,{bytes});")));controlled=true;},
  Op::SignDividend=>out.push_str("cpu.sign_dividend()?;"),
@@ -381,4 +408,40 @@ pub(crate) fn emit_body_with_store(
     }
     source.push_str("_=>return Err(\"CRT control outside certified graph\"),}}");
     Ok(source)
+}
+
+#[cfg(test)]
+mod indirect_rejection_tests {
+    use super::*;
+    #[test]
+    fn indirect_register_and_table_calls_need_explicit_lowering_contract() {
+        for code in [
+            &[0xff, 0xd0, 0xc3][..],
+            &[0xff, 0x14, 0x85, 0x84, 0x51, 0x41, 0, 0xc3][..],
+        ] {
+            assert!(Graph::decode(code, 0x710000).is_err());
+            let call = Graph::decode_instruction(&code[..code.len() - 1], 0x710000).unwrap();
+            let ret = Graph::decode_instruction(
+                &code[code.len() - 1..],
+                0x710000 + code.len() as u32 - 1,
+            )
+            .unwrap();
+            let graph = Graph {
+                origin: 0x710000,
+                end: 0x710000 + code.len() as u32,
+                nodes: BTreeMap::from([(0x710000, call), (0x710000 + code.len() as u32 - 1, ret)]),
+            };
+            assert!(Graph::decode_linear_fragment(code, 0x710000).is_err());
+            let result = emit_body(
+                &graph,
+                |_, _| panic!("indirect call must not become a direct/import call"),
+                &BTreeMap::from([(0x415184, "CrtRegionKind::Module".into())]),
+                32,
+            );
+            assert_eq!(
+                result.unwrap_err(),
+                "CRT emit indirect call requires target proof"
+            );
+        }
+    }
 }

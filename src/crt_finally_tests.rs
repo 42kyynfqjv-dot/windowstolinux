@@ -127,6 +127,77 @@ pub(crate) fn emit() -> String {
         .unwrap();
         out.push_str(&format!("fn live_dispatch_{entry}(effects:&mut impl LiveFinallyEffects<Error=&'static str>)->RegistryResult<()>{{{}}}",p.live_source));
     }
+    let roles = BTreeMap::from([
+        (0x41c948, "CrtRegionKind::Module".into()),
+        (0x41c94c, "CrtRegionKind::Module".into()),
+        (0x41c958, "CrtRegionKind::Module".into()),
+        (0x415180, "CrtRegionKind::Module".into()),
+        (0x415184, "CrtRegionKind::Module".into()),
+    ]);
+    for (at, code) in &regions {
+        if ![0x40116e, 0x40117f, 0x401060].contains(at) {
+            continue;
+        }
+        let dispatcher = *at == 0x401060;
+        let graph = if dispatcher {
+            let mut nodes = BTreeMap::new();
+            let mut offset = 0;
+            while offset < 84 {
+                let mut d = iced_x86::Decoder::with_ip(
+                    32,
+                    &code[offset..84],
+                    u64::from(*at + offset as u32),
+                    iced_x86::DecoderOptions::NONE,
+                );
+                let i = d.decode();
+                let pc = i.ip() as u32;
+                nodes.insert(
+                    pc,
+                    crate::crt_stream_ir::Graph::decode_instruction(
+                        &code[offset..offset + i.len()],
+                        pc,
+                    )
+                    .unwrap(),
+                );
+                offset += i.len();
+            }
+            assert_eq!(offset, 84);
+            crate::crt_stream_ir::Graph {
+                origin: *at,
+                end: 0x4010b4,
+                nodes,
+            }
+        } else {
+            crate::crt_stream_ir::Graph::decode(code, *at).unwrap()
+        };
+        let body=crate::crt_stream_emit::emit_body_with_indirect(&graph,|pc,target|{
+      if !matches!(target,crate::crt_stream_ir::Target::Direct(0x401060)){return Err("native funclet unknown direct call".into());}
+      Ok(format!("cpu.call_activation(rt,{},0,|rt,child|original_native_dispatch(rt,s,record,m,fields,child))?;",pc+5))
+     },&roles,256,|_,_|Err("native funclet thread effect".into()),|pc,_|{
+      let mut pre=String::from("fields.validate(rt,record.registry,m,s)?;");
+      if pc==0x40106e{pre.push_str("if cpu.condition(3)?{return Err(\"native dispatcher unsupported cursor\");}");}Ok(pre)
+     },|_,_|Ok(None),if dispatcher{Some(0x4010b4)}else{None},|_,_,_|Ok(None),|pc,_|{
+      if pc!=0x401090{return Err("native dispatcher unknown indirect call".into());}
+      Ok("let target=target.known_scalar()?;let index=cpu.r[7].known_scalar()? as usize;let expected=*[(0x401000u32),(0x401020u32),(0x401040u32)].get(index).ok_or(\"native dispatch index\")?;if target!=expected{return Err(\"native dispatch target provenance\");}let pair=rt.load(CrtCpu::pointer(cpu.r[4])?,32)?;let pair=CrtCpu::pointer(pair)?;if pair.address()!=CrtCpu::pointer(cpu.entry[4])?.address()-8{return Err(\"native dispatch private pair\");}cpu.call_activation(rt,0x401092,0,|rt,child|match target{0x401000=>original_cleanup_4198400(rt,child),0x401020=>original_cleanup_4198432(rt,child),0x401040=>original_cleanup_4198464(rt,child),_=>Err(\"unbound native cleanup\")})?;".into())
+     }).unwrap();
+        let name = if dispatcher {
+            "original_native_dispatch".into()
+        } else {
+            format!("original_native_funclet_{at}")
+        };
+        let entry = if dispatcher {
+            "let entry=CrtCpu::pointer(cpu.entry[4])?;if rt.load(rt.offset(entry,4)?,32)?!=CrtValue::Pointer(fields.frame_at(rt,s,fields.cursor)?)||rt.load(rt.offset(entry,8)?,32)?!=CrtValue::Pointer(fields.frame_at(rt,s,fields.local)?)||!(0..=2).contains(&fields.read_cursor(rt,record.registry,m,s)?){return Err(\"native dispatch arguments/cursor\");}"
+        } else {
+            "if cpu.r[5]!=CrtValue::Pointer(rt.resolve_absolute(s.image.ebp,CrtRegionKind::Stack)?){return Err(\"native funclet EBP\");}"
+        };
+        out.push_str(&format!("fn {name}(rt:&mut CrtStreamRuntime,s:&mut CrtOwnedStorage,record:&mut LocalRecord<'_>,m:&Machine,fields:&mut CrtFinallyFields,cpu:&mut CrtCpu)->RegistryResult<CrtValue>{{fields.validate(rt,record.registry,m,s)?;cpu.validate_active(rt)?;{entry}let entry=CrtCpu::pointer(cpu.entry[4])?;let low=rt.offset(entry,-64)?;rt.valid(low,64)?;if rt.overlapping_tags(low.address(),64).iter().any(|(_,v)|matches!(v,CrtValue::ProtectedReturn(_)|CrtValue::OpaqueSaved(_)|CrtValue::ThreadHead(_)))||record.registry.temporary.iter().any(|t|u64::from(low.address())<t.high&&u64::from(t.low)<u64::from(entry.address())){{return Err(\"native funclet protected scratch\");}}{body}}}"));
+    }
+    out.push_str(r#"fn original_native_finally(rt:&mut CrtStreamRuntime,s:&mut CrtOwnedStorage,record:&mut LocalRecord<'_>,m:&Machine,cpu:&mut CrtCpu,target:u32)->RegistryResult<CrtValue>{
+require_original_notification(rt,s,target,0x101)?;let trace=rt.resolve_absolute(0x41c948,CrtRegionKind::Module)?;let globals=[0x41c94c,0x41c958].into_iter().map(|at|rt.resolve_absolute(at,CrtRegionKind::Module)).collect::<RegistryResult<Vec<_>>>()?;
+let mut fields=CrtFinallyFields::bind(rt,record.registry,m,s,-28,-32,trace,globals,&finally_original_regions())?;
+match target{0x40116e=>original_native_funclet_4198766(rt,s,record,m,&mut fields,cpu),0x40117f=>original_native_funclet_4198783(rt,s,record,m,&mut fields,cpu),_=>Err("native finally unbound target")}
+}
+"#);
     out.push_str("fn finally_original_regions()->Vec<(u32,&'static[u8])>{vec![");
     for (at, code) in regions {
         out.push_str(&format!("({at},&{code:?}),"));
@@ -215,6 +286,9 @@ fn original_finally_effects(rt:&mut CrtStreamRuntime,record:&mut LocalRecord<'_>
  let result=match target{0x40116e=>live_funclet_4198766(&mut effects),0x40117f=>live_funclet_4198783(&mut effects),_=>Err("unbound original finally")};
  if result.is_err(){effects.fields.failed=true;assert!(effects.read_cursor().is_err());}result
 }
+fn alias_native_finally_return(rt:&mut CrtStreamRuntime,s:&mut CrtOwnedStorage,record:&mut LocalRecord<'_>,m:&Machine,cpu:&mut CrtCpu,target:u32)->RegistryResult<CrtValue>{
+let value=original_native_finally(rt,s,record,m,cpu,target)?;rt.store(rt.resolve_absolute(0xa500,CrtRegionKind::Stack)?,32,CrtValue::ProtectedReturn(cpu.return_id))?;Ok(value)
+}
 /// Explicit caller cut at the local-unwind branch, using original body effects.
 fn connected_inner_cleanup(session:&CrtOwnedUnwind<'_>,frame:&mut CrtOwnedFrameView<'_>,cpu:&mut CrtCpu,token:&CrtUnwindDelivery,fault:usize,source_guard:CrtPointer)->RegistryResult<()>{
  CrtOwnedDeliveryPrefix{session,token,record:session.source.record,context:token.context}.validate_prefix_source(frame)?;cpu.validate_active(frame.rt)?;
@@ -226,10 +300,10 @@ fn connected_inner_cleanup(session:&CrtOwnedUnwind<'_>,frame:&mut CrtOwnedFrameV
   if entry.cap!=storage.entry.cap||rt.overlapping_tags(low.address(),40).iter().any(|(_,v)|matches!(v,CrtValue::ProtectedReturn(_)|CrtValue::ThreadHead(_)|CrtValue::OpaqueSaved(_))){return Err("native local prolog protected scratch");}
   original_local_stack_entry(rt,record,cpu)?;
   let actual=CrtOwnedTemporary::bind_native(rt,record,storage,cpu)?;let body_return=cpu.return_id;let body_entry=CrtCpu::pointer(cpu.entry[4])?;
-  let mut effects=CrtOwnedLocalEffects{rt,record,machine,storage,rows:&rows,native_stack:true,native_notification:Some(if fault==23{duplicate_notify_return}else{original_notify_child}),native_finally_bridge:Some((0x402a50,original_finally_bridge_bytes())),installation_seen:false,temporary:Some(actual),pending:None,written:false,notified:false,
+  let mut effects=CrtOwnedLocalEffects{rt,record,machine,storage,rows:&rows,native_stack:true,native_notification:Some(if fault==23{duplicate_notify_return}else{original_notify_child}),native_finally_bridge:Some((0x402a50,original_finally_bridge_bytes())),native_finally_body:Some(if fault==28{alias_native_finally_return}else{original_native_finally}),installation_seen:false,temporary:Some(actual),pending:None,written:false,notified:false,
    notification:|target,reason,rt:&mut CrtStreamRuntime,s:&mut CrtOwnedStorage,record:&mut LocalRecord<'_>|{fixture_notify_invoke(rt,s,record,target,reason,0)},
-   finally:|target,_,rt:&mut CrtStreamRuntime,s:&mut CrtOwnedStorage,record:&mut LocalRecord<'_>|{
-    original_finally_effects(rt,record,machine,s,target,0)?;
+   finally:|target,_,rt:&mut CrtStreamRuntime,s:&mut CrtOwnedStorage,record:&mut LocalRecord<'_>,body_done:bool|{
+    if !body_done{original_finally_effects(rt,record,machine,s,target,0)?;}
     if fault==18{let v=rt.load(rt.offset(body_entry,-44)?,32)?;if !matches!(v,CrtValue::ProtectedReturn(_)){return Err("independent callback return missing");}rt.store(rt.resolve_absolute(0xa300,CrtRegionKind::Stack)?,32,v)?;}
     if fault==19{let t=&record.registry.temporary[record.active_index()?];rt.store(rt.resolve_absolute(t.low,CrtRegionKind::Stack)?,32,CrtValue::scalar(0))?;}
     if fault==11{let t=&record.registry.temporary[record.active_index()?];rt.store(rt.resolve_absolute(t.low+8,CrtRegionKind::Stack)?,32,CrtValue::scalar(0))?;}
@@ -272,9 +346,9 @@ fn live_finally_cases(){
    let mut cpu=CrtCpu::new(sp,946)?;let exception=rt.map_region(0x7000,80,CrtRegionKind::Context,Some(&[0;80]))?;rt.store(rt.offset(sp,4)?,32,CrtValue::Pointer(exception))?;
    handler_saved_entry(&mut rt,&mut cpu)?;handler_disposition_init(&mut rt,&mut cpu)?;assert_eq!(cpu.steps,8);assert!(!cpu.returned);cpu.validate_active(&rt)?;
    r.execute_local(id,s,LocalEntry{entry_sp:0xc000,handler:0x4027b0,cookie_address:0x41c000,cookie:0x12345678,target_level:-2},|record,s|{
-   let mut effects=CrtOwnedLocalEffects{rt:&mut rt,record,machine:&m,storage:s,rows:&rows,native_stack:false,native_notification:None,native_finally_bridge:None,installation_seen:false,temporary:None,pending:None,written:false,notified:false,
+   let mut effects=CrtOwnedLocalEffects{rt:&mut rt,record,machine:&m,storage:s,rows:&rows,native_stack:false,native_notification:None,native_finally_bridge:None,native_finally_body:None,installation_seen:false,temporary:None,pending:None,written:false,notified:false,
     notification:|target,reason,rt:&mut CrtStreamRuntime,s:&mut CrtOwnedStorage,record:&mut LocalRecord<'_>|{cpu.validate_active(rt)?;fixture_notify_invoke(rt,s,record,target,reason,0)},
-    finally:|target,_,rt:&mut CrtStreamRuntime,s:&mut CrtOwnedStorage,record:&mut LocalRecord<'_>|{
+    finally:|target,_,rt:&mut CrtStreamRuntime,s:&mut CrtOwnedStorage,record:&mut LocalRecord<'_>,body_done:bool|{
      cpu.validate_active(rt)?;
      if mode==12{let old=s.event;s.event+=1;let result=original_finally_effects(rt,record,&m,s,target,0);s.event=old;return result;}
      original_finally_effects(rt,record,&m,s,target,if mode>=20{0}else{mode})?;

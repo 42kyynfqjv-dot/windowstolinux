@@ -584,13 +584,14 @@ impl CrtOwnedTemporary{
  fn discard(self,rt:&mut CrtStreamRuntime)->RegistryResult<()>{for(i,v)in self.words.into_iter().enumerate(){rt.consume_stack(rt.offset(self.base,i as i64*4)?,v)?;}Ok(())}
 }
 
+type CrtNativeFinally=fn(&mut CrtStreamRuntime,&mut CrtOwnedStorage,&mut LocalRecord<'_>,&Machine,&mut CrtCpu,u32)->RegistryResult<CrtValue>;
 type CrtNativeNotification=fn(&mut CrtStreamRuntime,&mut CrtOwnedStorage,&mut LocalRecord<'_>,&mut CrtCpu,u32,u32)->RegistryResult<CrtValue>;
 struct CrtOwnedLocalEffects<'a,'r,F,N>{
  rt:&'a mut CrtStreamRuntime,record:&'a mut LocalRecord<'r>,machine:&'a Machine,storage:&'a mut CrtOwnedStorage,
- rows:&'a[LocalScope],native_stack:bool,native_notification:Option<CrtNativeNotification>,native_finally_bridge:Option<(u32,&'static[u8])>,installation_seen:bool,temporary:Option<CrtOwnedTemporary>,pending:Option<(i32,LocalScope)>,written:bool,notified:bool,finally:F,notification:N,
+ rows:&'a[LocalScope],native_stack:bool,native_notification:Option<CrtNativeNotification>,native_finally_bridge:Option<(u32,&'static[u8])>,native_finally_body:Option<CrtNativeFinally>,installation_seen:bool,temporary:Option<CrtOwnedTemporary>,pending:Option<(i32,LocalScope)>,written:bool,notified:bool,finally:F,notification:N,
 }
 impl<F,N> CrtOwnedLocalEffects<'_,'_,F,N>
-where F:FnMut(u32,i32,&mut CrtStreamRuntime,&mut CrtOwnedStorage,&mut LocalRecord<'_>)->RegistryResult<()>,N:FnMut(u32,u32,&mut CrtStreamRuntime,&mut CrtOwnedStorage,&mut LocalRecord<'_>)->RegistryResult<()>{
+where F:FnMut(u32,i32,&mut CrtStreamRuntime,&mut CrtOwnedStorage,&mut LocalRecord<'_>,bool)->RegistryResult<()>,N:FnMut(u32,u32,&mut CrtStreamRuntime,&mut CrtOwnedStorage,&mut LocalRecord<'_>)->RegistryResult<()>{
  fn validate_source(&mut self)->RegistryResult<()>{
   self.temporary.as_ref().ok_or("owned temporary bytes absent")?.validate(self.rt,self.record)?;
   self.record.validate_binding(self.storage.binding,&self.storage.image)?;self.storage.validate(self.rt,self.record.registry,self.machine)?;
@@ -613,16 +614,16 @@ where F:FnMut(u32,i32,&mut CrtStreamRuntime,&mut CrtOwnedStorage,&mut LocalRecor
    if let Some((origin,code))=self.native_finally_bridge{
     if code!=[0xff,0xd0,0xc3]||origin.checked_add(3).is_none()||!self.record.registry.module_contains_address(origin)||child.r[0].known_scalar()?!=target||child.r[1].known_scalar()?!=abnormal||child.r[5]!=CrtValue::Pointer(rt.resolve_absolute(self.storage.image.ebp,CrtRegionKind::Stack)?){return Err("native finally bridge entry/code contract");}
     let p=rt.resolve_absolute(origin,CrtRegionKind::Module)?;for(i,b)in code.iter().enumerate(){if rt.load(rt.offset(p,i as i64)?,8)?.known_scalar()?!=*b as u32{return Err("native finally bridge bytes changed");}}
-    child.tick(u32::MAX)?;child.call_activation(rt,origin+2,0,|rt,funclet|{(self.finally)(target,level,rt,self.storage,self.record)?;funclet.clobber(CrtValue::Scalar{bits:0,known:0});funclet.finish(rt)})?;
+    child.tick(u32::MAX)?;child.call_activation(rt,origin+2,0,|rt,funclet|{if let Some(native)=self.native_finally_body{let value=native(rt,self.storage,self.record,self.machine,funclet,target)?;(self.finally)(target,level,rt,self.storage,self.record,true)?;Ok(value)}else{(self.finally)(target,level,rt,self.storage,self.record,false)?;funclet.clobber(CrtValue::Scalar{bits:0,known:0});funclet.finish(rt)}})?;
     child.tick(u32::MAX)?;return child.finish(rt);
    }
-   (self.finally)(target,level,rt,self.storage,self.record)?;child.clobber(CrtValue::Scalar{bits:0,known:0});child.finish(rt)})?;
+   (self.finally)(target,level,rt,self.storage,self.record,false)?;child.clobber(CrtValue::Scalar{bits:0,known:0});child.finish(rt)})?;
   if self.read_try_level()?!=row.parent{return Err("native finally changed parent");}self.pending=None;self.written=false;self.notified=false;Ok(())
  }
 
 }
 impl<F,N> LocalUnwindEffects for CrtOwnedLocalEffects<'_,'_,F,N>
-where F:FnMut(u32,i32,&mut CrtStreamRuntime,&mut CrtOwnedStorage,&mut LocalRecord<'_>)->RegistryResult<()>,N:FnMut(u32,u32,&mut CrtStreamRuntime,&mut CrtOwnedStorage,&mut LocalRecord<'_>)->RegistryResult<()>{
+where F:FnMut(u32,i32,&mut CrtStreamRuntime,&mut CrtOwnedStorage,&mut LocalRecord<'_>,bool)->RegistryResult<()>,N:FnMut(u32,u32,&mut CrtStreamRuntime,&mut CrtOwnedStorage,&mut LocalRecord<'_>)->RegistryResult<()>{
  fn install_temporary(&mut self,n:u32,h:u32)->RegistryResult<()>{
   if n!=40||self.installation_seen||(!self.native_stack&&self.temporary.is_some()){return Err("owned temporary layout/replay");}self.installation_seen=true;
   self.storage.validate(self.rt,self.record.registry,self.machine)?;
@@ -659,7 +660,7 @@ where F:FnMut(u32,i32,&mut CrtStreamRuntime,&mut CrtOwnedStorage,&mut LocalRecor
  fn invoke_finally(&mut self,handler:u32,abnormal:u32)->RegistryResult<()>{
   let(level,row)=self.pending.ok_or("owned local callback without row")?;
   if !self.written||!self.notified||row.filter!=0||row.handler!=handler||abnormal!=1||self.read_try_level()?!=row.parent{return Err("owned local callback order");}
-  (self.finally)(handler,level,self.rt,self.storage,self.record)?;
+  (self.finally)(handler,level,self.rt,self.storage,self.record,false)?;
   if self.read_try_level()?!=row.parent{return Err("owned local callback changed protected cursor");}
   self.pending=None;self.written=false;self.notified=false;Ok(())
  }
