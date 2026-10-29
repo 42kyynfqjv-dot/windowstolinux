@@ -666,3 +666,87 @@ completion or establish why it timed out. No retry or threshold relaxation.
 Earlier f7a0968e PR40785300452 is now terminal FAILURE(corpus10); its push
 40785293650 and dedicated40785293748 completed SUCCESS. All earlier original
 Windows timeout causes remain unresolved.
+
+
+## Original global-wrapper boundary and owned selected-store effects
+
+Review of bda01875 verified all three workflows40791014337/40791006618/
+40791006642SUCCESS. Downloaded native artifact12861742283 contains actual
+Windows and Linux reports with identical PEhash
+836e40be0afaa83b399d392a12a562330e5ed141013750093d6c6e16e515281d
+and Rusthash4603f8b1b308904b1ebd82933a73f194c430eff4b6b1c7b3c7d9d03bd49db32c.
+Both report42owned cases, three branch-obligation cases, five retained wrapper
+comparisons and zero whole-PE pairs. This CI rebuild is distinct from the older
+local recorded original PE1e96cb39...; hashes are never mixed across baselines.
+
+The unchanged26byte global wrapper atVA0x402840 now executes from the live
+search state through its prolog, four original argument pushes and the exact
+imported CALL atVA0x40284f. The checker independently confirms the original
+PE import is kernel32.dll!RtlUnwind. All36bytes of original private scratch
+are preflighted from BridgeProof before the first wrapper push. Execution
+checks the actual target frame, original TargetIp0x402855, exception-record
+pointer and ReturnValue0. It then REJECTS at the still-unbound API effect.
+The reached stack stores, live transient CALL and unknown saved context are
+retained; no fake API return or cleanup success is inserted.
+
+The same exact three-byte MOV proof now supports owned protected TryLevel
+storage. It checks the live registration/phase, typed establisher, complete
+initialized before value and independently bound after value; only record+12
+is writable. Actual bytes and protected FrameImage metadata update together.
+Positive/permuted-register, scalar alias, wrong frame/value, unknown value and
+replay cases exercise this operation. This is a separately supplied MOV-fragment
+entry cut after search, not a claim that the global API completed or original
+control flow skipped over it. Machine stays Cleanup; attempted restoration
+rejects before its callback and leaves saved context unknown.
+
+There are51owned scenarios =42inherited+9added, three inherited native branch
+cases and one new ordinary-call negative control. CRT134passed/one ignored
+and frame171passed remain unchanged function counts. New component cases do
+not add whole-PE Windows/ELF comparisons.
+
+### Concrete continuation and delivery gap
+
+Fresh separate original-Windows artifact12861766580 (bda01875) corroborates the
+existing contract on Server2022/MSVC14.44.35207: at the original API continuation
+EBX changed from0xfffffffe to0 and ESI from0x4ffc40 to0 before wrapper POPs;
+EAX was0 and ESP advanced16. Search callbacks used CONTEXT0x4fed88 while unwind
+callbacks used0x4fe8c8 with the same exception-record pointer0x4fed38 and flags2.
+These numeric addresses describe that observed run only, not portable addresses.
+Observed TargetIp0x112855 is original RVA0x2855 in a load at0x110000; the native
+component uses preferred virtual-image TargetIp0x402855. This is relational
+component/control evidence, not general rebasing validation.
+The independently authored native negative control demonstrates why ordinary
+CrtCpu::call_activation/finish cannot supply this effect: changed nonvolatile
+state fails the callee-saved RET check. That guard must remain for normal calls.
+The search-only CrtOwnedPrefixInput also correctly rejects unwind flags2; clearing
+those flags or reusing its captured-context identity would fabricate semantics.
+
+Microsoft's RtlUnwind contract supplies TargetFrame, TargetIp and ReturnValue
+semantics; EXCEPTION_RECORD documentation marks unlisted flags as system-reserved.
+Neither page specifies a complete arbitrary callback/memory mutation footprint.
+Primary references:
+
+- https://learn.microsoft.com/en-us/windows/win32/api/winnt/nf-winnt-rtlunwind
+- https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-exception_record
+
+The next bounded architecture pass must connect a genuine owned TargetIp
+continuation outcome (not an ordinary protected RET) to actually completed
+younger-frame cleanup. It must allow conservative unknown register/record
+knowledge before the wrapper's real POPs, maintain separate search/unwind
+delivery CONTEXT lifetimes, and execute local temporary-FS/nested callback
+effects through live storage. Current OwnedStorage initialization is also
+raise-source-only: check_raise_binding requires the current youngest binding,
+so installing older Main/Outer records in a multi-frame native composition
+needs a separate validated installation contract, not removing event checks.
+Then bind selected TryLevel/guard/transfer and original landing/context stores
+using actual receipts. The new store primitive reduces that work but grants no
+unwind completion.
+
+Acceptance must include normal and changed-nonvolatile continuations, wrong
+TargetIp/IAT/thread/record, stale delivery objects, independent three-frame
+cleanup order and partial failures, plus unchanged-artifact evidence. No callback
+result Boolean, supplied saved array or detached image may authorize resumption.
+This is a concrete Astra High question about nonlocal control/effect ownership;
+routine testing and CI remain Sol work. Full startup/rcedit stays rejected.
+Earlier observer-build and original-process timeouts remain unresolved; current
+passing CI explains neither.

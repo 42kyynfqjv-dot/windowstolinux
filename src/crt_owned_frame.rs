@@ -161,6 +161,17 @@ impl CrtOwnedFrameView<'_>{
  fn at(&self,offset:i32)->RegistryResult<CrtPointer>{self.validate()?;if offset%4!=0||!self.storage.ordinary.contains(&offset){return Err("owned ordinary word bounds/role");}self.rt.offset(self.owner_frame()?,i64::from(offset))}
  fn read(&self,offset:i32)->RegistryResult<CrtValue>{if offset== -20&&self.storage.input.is_none_or(|(pair,_,_,_)|pair.is_none()){return Err("owned unbound exception pair");}self.rt.load(self.at(offset)?,32)}
  fn write_u32(&mut self,offset:i32,value:u32)->RegistryResult<()>{let p=self.at(offset)?;self.rt.store(p,32,CrtValue::scalar(value))}
+ /// Original MOV to protected TryLevel only. Selection/unwind completion is
+ /// a separate caller proof; this store cannot move Machine into Restore.
+ fn store_level_operand(&mut self,base:CrtValue,value:CrtValue,before:i32,after:i32)->RegistryResult<()>{
+  self.validate()?;let owner=self.owner_frame()?;
+  if base!=CrtValue::Pointer(self.rt.offset(owner,-16)?)||self.storage.image.try_level!=before
+   ||value.known_scalar()?!=after as u32||after< -2||after== -1{return Err("owned original scope store operands/state");}
+  let key=i32::try_from(i64::from(self.storage.image.record)+12-i64::from(self.storage.image.entry_sp)).map_err(|_|"owned scope word offset")?;
+  if self.storage.protected.get(&key)!=Some(&CrtValue::scalar(before as u32)){return Err("owned original scope store role");}
+  self.rt.store(self.rt.offset(self.storage.entry,i64::from(key))?,32,value)?;
+  self.storage.protected.insert(key,value);self.storage.image.words.insert(key,FrameWord::Scalar(after as u32));self.storage.image.try_level=after;self.validate()
+ }
 }
 /// Captured objects and callback entry remain explicit inputs, tied to the
 /// owned event. This token neither synthesizes CONTEXT nor authorizes resumption.

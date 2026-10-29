@@ -287,7 +287,7 @@ fn file_scope_failure(){
 
 fn bytes_for_native_filter()->Vec<u8>{vec![0x8b,0x55,0xec,0x8b,0x02,0x8b,0x08,0x89,0x4d,0xe4,0x8b,0x55,0xe4,0x33,0xc0,0x81,0xfa,0x42,0x00,0x42,0xe0,0x0f,0x94,0xc0,0xc3]}
 fn owned_main_cases(){
- for mode in 0..42{
+ for mode in 0..51{
   let mut m=Machine::new_dispatch_known(vec![FrameSpec{scopes:vec![]}],0,[None;10],Some(0)).unwrap();
   let mut r=ThreadRegistry::new(m.owner(),0x8000,0xf000,&[(0x400000,0x420000)],0x41c000).unwrap();let mut rt=runtime(&r);
   let entry=rt.resolve_absolute(if mode==23||mode==32||mode==41{0xe800}else{0xe000},CrtRegionKind::Stack).unwrap();rt.store(entry,32,CrtValue::ProtectedReturn(71)).unwrap();let cpu=CrtCpu::new(entry,71).unwrap();
@@ -381,6 +381,27 @@ fn owned_main_cases(){
      assert_eq!(c.r[3],CrtValue::scalar((-2i32)as u32));assert_eq!(c.r[7],CrtValue::scalar(0));assert_eq!(c.r[4],CrtValue::Pointer(view.rt.offset(hbp,-40).unwrap()));
      assert_eq!(view.calls,5);assert_eq!(view.storage.image.try_level,0);assert_eq!(m.owned_context,saved);assert_eq!(m.phase,Phase::Cleanup);
      for offset in [-776,-780]{assert_eq!(view.read(offset).unwrap(),CrtValue::scalar(0xe0424242));}
+     if mode==50{view.rt.store(view.rt.offset(record,4).unwrap(),32,CrtValue::scalar(2)).unwrap();assert!(input.validate(&view,&c).is_err());assert_eq!(view.rt.load(view.rt.offset(record,4).unwrap(),32).unwrap(),CrtValue::scalar(2));assert_eq!(m.owned_context,saved);continue;}
+     if mode==42{
+      let sp=CrtCpu::pointer(c.r[4]).unwrap();let old=c.r;let result=view.call(&mut c,0x402337,|f,child|original_global_to_api(f,child,&input));
+      assert_eq!(result.unwrap_err(),"RtlUnwind requires owned continuation and effect contract");assert!(view.failed);
+      assert_eq!(c.r[4],CrtValue::Pointer(view.rt.offset(sp,-36).unwrap()));let transient=view.rt.load(view.rt.offset(sp,-4).unwrap(),32).unwrap();assert!(matches!(transient,CrtValue::ProtectedReturn(id) if id!=return_id)); // transient CALL remains live on failure
+      assert_eq!(view.storage.image.try_level,0);assert_eq!(m.owned_context,saved);assert_eq!(c.r[3],old[3]);continue;
+     }
+     if (43..=49).contains(&mode){
+      // Separate original MOV fragment entry; no claim that RtlUnwind returned.
+      let mut fragment=CrtCpu::new(bridge_sp,return_id).unwrap();fragment.r[0]=CrtValue::Pointer(view.rt.offset(bp,-16).unwrap());fragment.r[3]=CrtValue::scalar((-2i32)as u32);
+      if mode==44{fragment.r[0]=CrtValue::scalar(view.storage.image.record);}
+      if mode==45{fragment.r[0]=CrtValue::Pointer(hbp);}
+      if mode==46{fragment.r[3]=CrtValue::Scalar{bits:0,known:0};}
+      if mode==47{fragment.r[3]=CrtValue::scalar(1);}
+      let result=if mode==49{fragment.r[1]=fragment.r[0];fragment.r[2]=fragment.r[3];owned_permuted_scope_store(&mut view,&fragment)}else{owned_selected_scope_store(&mut view,&fragment)};
+      if (44..=47).contains(&mode){assert!(result.is_err());assert_eq!(view.storage.image.try_level,0);assert_eq!(view.rt.load(view.rt.offset(bp,-4).unwrap(),32).unwrap(),CrtValue::scalar(0));continue;}
+      result.unwrap();assert_eq!(view.storage.image.try_level,-2);assert_eq!(view.rt.load(view.rt.offset(bp,-4).unwrap(),32).unwrap(),CrtValue::scalar((-2i32)as u32));
+      if mode==48{assert!(owned_selected_scope_store(&mut view,&fragment).is_err());}
+      assert_eq!(m.phase,Phase::Cleanup);assert_eq!(m.owned_context,saved);
+      drop(view);assert!(m.restore_owned(0x40135c,|_,_|panic!("scope store cannot authorize restoration")).is_err());assert_eq!(m.owned_context,saved);continue;
+     }
      drop(view);
      assert!(m.restore_owned(0x40135c,|_,_|panic!("search cannot authorize restoration")).is_err());assert_eq!(m.owned_context,saved);
      continue;
@@ -410,6 +431,9 @@ fn path_edges(){
  let(m,r,_,_)=fixture_with_extra(&[(0x410000,0x420000)]);let mut rt=runtime(&r);let sp=rt.resolve_absolute(0xc000,CrtRegionKind::Stack).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(901)).unwrap();
  for value in [Some(0),Some(1),None]{let mut c=CrtCpu::new(sp,901).unwrap();c.r[0]=value.map(CrtValue::scalar).unwrap_or(CrtValue::Scalar{bits:0,known:0});let before=c.r;
   let result=native_path_edge(&mut rt,&mut c);if value==Some(0){result.unwrap();}else{assert!(result.is_err());}assert_eq!(c.r,before);assert_eq!(rt.load(sp,32).unwrap(),CrtValue::ProtectedReturn(901));}
+ let mut c=CrtCpu::new(sp,901).unwrap();let original=c.r[3];
+ let failure=c.call_activation(&mut rt,0x402855,0,|rt,k|{k.r[3]=CrtValue::scalar(0);k.r[0]=CrtValue::scalar(0);k.finish(rt)});
+ assert_eq!(failure.unwrap_err(),"CRT callee saved restoration");assert_ne!(c.r[3],original);
  let _=m;
 }
 fn live_dispatch(){
@@ -769,6 +793,9 @@ fn run(case: &str) {
         let scope_bytes=match std::env::var("W2L_EH4_CODE") { Ok(path)=>std::fs::read(std::path::Path::new(&path).join("handler-scope-store.bin")).unwrap(), Err(_)=>vec![0x89,0x58,0x0c] };
         let scope_store=super::normal_frame::NormalScopeStoreProof::prove(&scope_bytes,0x402355).unwrap().emit("original_scope_store");
         let permuted_store=super::normal_frame::NormalScopeStoreProof::prove(&[0x89,0x51,0x0c],0x402600).unwrap().emit("permuted_scope_store");
+        let owned_scope_store=super::normal_frame::NormalScopeStoreProof::prove(&scope_bytes,0x402355).unwrap().emit_owned("owned_selected_scope_store",0,-2);
+        let owned_permuted_store=super::normal_frame::NormalScopeStoreProof::prove(&[0x89,0x51,0x0c],0x402600).unwrap().emit_owned("owned_permuted_scope_store",0,-2);
+
         let handler_bytes=|file:&str,literal:&str|match std::env::var("W2L_EH4_CODE"){Ok(path)=>std::fs::read(std::path::Path::new(&path).join(file)).unwrap(),Err(_)=>bytes_hex(literal)};
         let handler_prolog=super::normal_frame::emit_handler_prolog(&handler_bytes("handler-prolog.bin","558bec83ec1c"),0x402210).unwrap();
         let installer=crate::handler_bridge::prove_installer(&handler_bytes("handler-installer.bin","8945e48b45108945e88d45e48943fc"),0x402263,&crate::handler_bridge::InstallerLayout{handler_start:-28,handler_end:0,owner_start:-48,owner_end:0,writable_handler_words:vec![-28,-24],writable_owner_words:vec![-20]}).unwrap();
@@ -848,6 +875,14 @@ pub(super) fn execute(frame:&mut CrtOwnedFrameView<'_>,cpu:&mut CrtCpu,objects:&
         let mut foreign_table=main_table.clone();foreign_table[16..20].copy_from_slice(&0u32.to_le_bytes());
         assert!(crate::crt_owned_search::emit(crate::crt_owned_search::Input{proof:&dispatch,origin:prefix.end,code:&handler_complete[prefix_bytes.len()..],table_va:main.scope_va(),table:&foreign_table,bridge:0x402800,filters:&filters},"mismatched_parent").is_err());
         let code_data=format!("fn original_main_table()->Vec<u8>{{vec!{:?}}}fn original_handler_body()->Vec<u8>{{vec!{:?}}}",main_table,&handler_complete[prefix_bytes.len()..]);
+        let global_code=handler_bytes("global-wrapper.bin","558bec5356576a0052685528400051ff15405041005f5e5b5dc3");
+        let global_proof=crate::unwind_bridges::prove_global(&global_code,0x402840,0x415040).unwrap();assert_eq!(global_proof.calls.len(),1);
+        let global_graph=crate::crt_stream_ir::Graph::decode(&global_code,0x402840).unwrap();
+        let global_body=crate::crt_stream_emit::emit_body_with_hooks(&global_graph,|pc,target|{
+         assert_eq!((pc,target),(0x40284f,crate::crt_stream_ir::Target::Import(0x415040)));
+         Ok("objects.validate_prefix_source(frame)?;let sp=CrtCpu::pointer(cpu.r[4])?;let owner=frame.owner_frame()?;for(i,value)in [CrtValue::Pointer(frame.rt.offset(owner,-16)?),CrtValue::scalar(0x402855),CrtValue::Pointer(objects.record),CrtValue::scalar(0)].into_iter().enumerate(){if frame.rt.load(frame.rt.offset(sp,i as i64*4)?,32)?!=value{return Err(\"original RtlUnwind argument shape\");}}return Err(\"RtlUnwind requires owned continuation and effect contract\");".into())
+        },&Default::default(),64,|_,_|Err("unexpected thread effect".into()),|_,op|Ok(if matches!(op,crate::crt_stream_ir::Op::Call(_)){String::new()}else{"let rt=&mut *frame.rt;".into()}),|_,_|Ok(None)).unwrap();
+        let global_source=format!("fn original_global_to_api(frame:&mut CrtOwnedFrameView<'_>,cpu:&mut CrtCpu,objects:&CrtOwnedPrefixInput)->RegistryResult<CrtValue>{{frame.preflight_bridge(cpu,{})?;{global_body}}}",global_proof.temporary_bytes);
         let edge_steps=[crate::crt_stream_emit::PathStep{pc:0x430000,bytes:&[0x83,0xf8,1],next:Some(0x430003)},crate::crt_stream_emit::PathStep{pc:0x430003,bytes:&[0x74,5],next:Some(0x430005)},crate::crt_stream_emit::PathStep{pc:0x430005,bytes:&[0xe8,0xf6,0x0f,0,0],next:None}];
         let edge_body=crate::crt_stream_emit::emit_proved_path(&edge_steps,|_,_|Ok("return Ok(());".into()),&Default::default(),|_,_|Ok(String::new())).unwrap();
         let path_edges=format!("fn native_path_edge(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->RegistryResult<()>{{{edge_body}}}");
@@ -865,7 +900,7 @@ pub(super) fn execute(frame:&mut CrtOwnedFrameView<'_>,cpu:&mut CrtCpu,objects:&
         let prefix_metadata=format!("fn owned_prefix_handler()->u32{{{}}}fn owned_prefix_temporary()->u32{{{}}}",prefix.entry,prefix.temporary_bytes);
         let context_types=crate::handler_context::EMITTED_TYPES;
         let context_check=context_proof.normal_object_check();
-        let source = format!("#![allow(dead_code)]\nmod guest_memory{{{memory}}}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{fixture}\n{file_scope}\n{context_types}\n{context_check}\n{scope_store}\n{permuted_store}\n{install}\n{handler_prolog}\n{filter_source}\n{false_filter_source}\n{normalizer_source}\n{guard_source}\n{header_source}\n{prefix_normalizer}\n{prefix_front}\n{guard_prefix}\n{prefix_caller}\n{bridge_native}\n{owned_types}\n{main_init}\n{inner_init}\n{owned_filter}\n{owned_bridge}\n{main_filter_bytes}\n{activation}\n{owned_prolog}\n{owned_prefix}\n{owned_header}\n{owned_search}\n{code_data}\n{path_edges}\n{prefix_metadata}\nfn raise_site()->CrtNormalRaiseSite{{{{{raise}}}}}\n{CASES}",
+        let source = format!("#![allow(dead_code)]\nmod guest_memory{{{memory}}}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{fixture}\n{file_scope}\n{context_types}\n{context_check}\n{scope_store}\n{permuted_store}\n{install}\n{handler_prolog}\n{filter_source}\n{false_filter_source}\n{normalizer_source}\n{guard_source}\n{header_source}\n{prefix_normalizer}\n{prefix_front}\n{guard_prefix}\n{prefix_caller}\n{bridge_native}\n{owned_types}\n{main_init}\n{inner_init}\n{owned_filter}\n{owned_bridge}\n{main_filter_bytes}\n{activation}\n{owned_prolog}\n{owned_prefix}\n{owned_header}\n{owned_scope_store}\n{owned_permuted_store}\n{global_source}\n{owned_search}\n{code_data}\n{path_edges}\n{prefix_metadata}\nfn raise_site()->CrtNormalRaiseSite{{{{{raise}}}}}\n{CASES}",
             include_str!("linker/unwind_runtime.rs").replace("//!", "//"),
             emitted_literal(include_str!("frame_proof.rs")),emitted_literal(include_str!("thread_registry.rs")),
             crate::crt_stream_runtime::EMITTED_TYPES,crate::crt_stream_cpu::EMITTED_TYPES,

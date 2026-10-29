@@ -80,6 +80,9 @@ impl NormalScopeStoreProof {
     pub(crate) fn emit(&self, name: &str) -> String {
         format!("fn {name}(frame:&mut CrtLiveFrame<'_,'_>,cpu:&CrtCpu)->RegistryResult<()>{{frame.store_level_operand(cpu.r[{}],cpu.r[{}])}}",self.base,self.source)
     }
+    pub(crate) fn emit_owned(&self, name: &str, before: i32, after: i32) -> String {
+        format!("fn {name}(frame:&mut CrtOwnedFrameView<'_>,cpu:&CrtCpu)->RegistryResult<()>{{frame.store_level_operand(cpu.r[{}],cpu.r[{}],{before},{after})}}",self.base,self.source)
+    }
 }
 /// Exact admitted x86 frame prolog for the original EH4 handler. This does
 /// not prove the following helper calls or exception delivery.
