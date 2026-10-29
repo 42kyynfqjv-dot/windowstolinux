@@ -76,3 +76,20 @@ the later accessor binding rejects it. GetProcessHeap's acquisition outcome and
 heap policy remain declared inputs. The registered manager still needs to replace
 its old result callback with these tested allocator instructions. Free failure,
 actual state producers and exceptional paths remain gates; no full startup claim.
+
+## Registered composition and errno routing update
+
+The registered manager now calls actual calloc and its original errno router.
+PTD offset16 and module fallback41c130 are selected by original instructions and
+bound to canonical error storage. A distinct ThreadData role and root/lifetime
+checks prevent borrowing an unrelated exception Context. The lookup remains a
+callable effect, preserving earlier writes on failure. The actual-heap composition
+rejects stream error writes until a canonical cell is bound, preventing shadow
+cache divergence. This does not close PTD acquisition itself.
+
+Actual PTD acquisition uses helper414268/epilog414254, TLS/FLS lookup and a lazy
+initializing sentinel. It differs from the manager's proved EH4 ABI and can recurse
+through calloc/errno failure. Handler retrieval also needs global0 locking,
+cookie decoding and guard-slot415128/callback provenance. These effects remain
+explicitly unresolved; no mode0 default, guessed PTD object or unproved no-exception
+condition may replace them. See LIVE-FINALLY.md for precise code dependencies.

@@ -1722,3 +1722,81 @@ No retry, timeout relaxation or inferred diagnosis was used.
 
 Heap/calloc checkpoint wrapper Rust SHA256: `37a9af55f16e6980a04f86dbe2d60a8effd73f75aeb0738a03f8a61ed027c689`.
 PE SHA256 remains `1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4`.
+
+## Registered manager uses original calloc and canonical errno routing
+
+Review of `bb7b991` preserved opaque heap/null/partial-register knowledge and retry
+failure ordering. Its startup workflow40921033508 and push Rust40921033519 passed;
+PR Rust40921040084 remained running at inspection. Historical Windows timeout
+failures, including original case16, remain unresolved and preserved.
+
+The registered manager/inherited producer now uses the original calloc body,
+heap producer and new-mode getter on the same owned runtime and protected call
+stack. It no longer selects the descriptor allocation result directly. Heap API
+outcomes, heap exception policy and initial new-mode state remain explicit
+component inputs. Existing manager null-allocation tests now pass through the
+actual errno path before normal cleanup and validated EH4 return.
+
+The original errno router `407ccd..407ce2` executes through the emitter. Its
+PTD lookup is a callable external effect, allowing writes/failure before pointer
+validation. A valid non-null result must be the exact live root of a ThreadData
+region with the full prefix needed for offset16; forged integers, unrelated
+Context storage, foreign runtimes and retired roots reject. A null PTD result
+selects the original bound module fallback at41c130. The original pointer-valued
+return is normalized only against this complete instruction/body proof and the
+owned selected cell. Fixed image-address/load-base assumptions remain explicit;
+no arbitrary scalar-address coincidence becomes pointer authority.
+
+The accessor binds its selected four-byte cell as canonical errno storage without
+initializing unknown bytes. Original stores update the known-value cache from the
+actual bytes, and the stream error adapter writes that same cell. ThreadData
+retirement invalidates the cache and future accesses reject; it does not renew
+old pointer authority. Typed pointer writes into the errno scalar field reject.
+A composition regression found that a stream error before the first accessor
+could otherwise update only the old shadow cache. The actual-heap composition
+now requires a bound canonical cell before that adapter can act; rejection leaves
+the cell, errno and doserrno unchanged. Legacy isolated error-state input cuts
+remain separate from this new composed path.
+
+Nine errno-routing schedules cover fallback, PTD, scalar-forged pointer, wrong
+role, expired PTD, unknown input, retirement after binding, foreign arena and a
+lookup write followed by failure. They check canonical writes in both directions,
+unknown-value preservation, and failure ordering. A separate regression protects
+the pre-binding shadow error gap. Existing registered-manager failure ordering,
+foreign initialization, changed epilog and root corruption cases still pass.
+Local full CRT suite191 passed (existing Windows observation test separate),
+frame/unwind183 and root175 passed. Clippy/format/Python checks passed. These are
+native component executions and five replayed recorded Windows boundaries, not
+fresh Windows observations or whole-PE acceptance. Full startup/rcedit remains
+unproven; ordinary CRT/general app/XP7 and driver support are not claimed.
+
+### Concrete remaining PTD and handler gates
+
+The actual PTD getter40a332 calls prolog414268 and epilog414254. This is a different
+record/continuation protocol from the current manager EH4 helper401e60: record at
+EBP-0c, level sentinel-1, a variable stack reservation and epilog continuation
+POP/PUSH relocation. Its installed handler is414ad6. Do not reuse the EH4 proof
+by changing constants or assume no exception path exists.
+
+The getter chooses TLS/FLS using41d130, index41c170, a dynamic function slot41e00c
+or TLS import thunks. It preserves LastError on the TLS branch. Lazy creation at
+40a1ee installs an initializing -1 sentinel before allocating1*0x364 bytes; failure
+can call calloc/errno recursively, making the sentinel and fallback semantics
+observable. The present routing callback does not prove these effects read-only
+or complete. A bounded shared state/prolog contract is needed for lookup,
+initialization, recursive allocation failure, cleanup and restoration.
+
+The new-handler getter40ca20 locks global0, decodes the pointer from41d2cc with
+cookie41c000 using406d47 (XOR and ROR), then unlocks through an EH4 cleanup.
+Dispatcher40c9c0 performs a guard call through slot415128 before CALL ESI. That
+slot is not an import-table binding in this image. Its source/target, callback
+identity/lifetime and actual callback effects remain unproved. Sampled mode0 or
+a successful handler callback cannot close this gate.
+
+Routine review and CI belong on Sol. A bounded Astra High pass is justified for
+the different PTD frame/continuation protocol and recursive TLS/errno state if
+that is the next integration target; no Ultra is needed. Free-error mapping and
+locale/FILE producers remain on the same critical path.
+
+Registered allocator/errno wrapper Rust SHA256: `8dc49ff3bf8ffec192fcc69d83b730594638a2aa03a5a5400f9b7f840b0867f3`.
+Unchanged PE SHA256: `1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4`.

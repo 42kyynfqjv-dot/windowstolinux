@@ -3,7 +3,7 @@
 //! Generated code embeds the existing guest_memory::Space and this source.
 pub(crate) const EMITTED_TYPES: &str = r#"
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
-enum CrtRegionKind {File,Descriptor,Module,Input,Stack,Buffer,Result,Context}
+enum CrtRegionKind {File,Descriptor,Module,Input,Stack,Buffer,Result,Context,ThreadData}
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 struct CrtPointer {cap:guest_memory::Capability,owner:guest_memory::Owner,base:u32,size:u32,address:u32,kind:CrtRegionKind}
 impl CrtPointer {fn address(self)->u32{self.address}}
@@ -53,7 +53,7 @@ struct CrtStreamRuntime {
  heap:Option<CrtHeap>,memory:guest_memory::Space,owner:u64,thread:u64,anchor:guest_memory::Capability,
  dispatchers:std::collections::BTreeMap<u64,CrtDispatcherContext>,regions:Vec<CrtRegion>,retired:Vec<CrtPointer>,tags:std::collections::BTreeMap<u32,CrtValue>,
  partial:std::collections::BTreeMap<u32,(u8,u8)>,descriptors:Vec<CrtDescriptor>,
- global_objects:std::collections::BTreeMap<u32,CrtPointer>,global_locks:Vec<CrtGlobalLock>,record_objects:Vec<CrtPointer>,record_locks:Vec<CrtRecordLock>,locks:Vec<CrtLock>,descriptor_locks:Vec<CrtDescriptorLock>,serial:u64,generation:u64,errno:Option<i32>,doserrno:Option<u32>,last_os_error:Option<u32>,
+ global_objects:std::collections::BTreeMap<u32,CrtPointer>,global_locks:Vec<CrtGlobalLock>,record_objects:Vec<CrtPointer>,record_locks:Vec<CrtRecordLock>,locks:Vec<CrtLock>,descriptor_locks:Vec<CrtDescriptorLock>,serial:u64,generation:u64,canonical_errno:bool,errno_cell:Option<CrtPointer>,errno:Option<i32>,doserrno:Option<u32>,last_os_error:Option<u32>,
  locale_generation:u64,locale_live:bool,initialization:Option<u64>,shutdown:Option<CrtShutdown>,closed:bool,lock_objects:std::collections::BTreeSet<u32>,
 }
 impl CrtStreamRuntime {
@@ -66,7 +66,7 @@ impl CrtStreamRuntime {
   let mut memory=guest_memory::Space::new(byte_limit,64).map_err(|_|"CRT memory budget")?;
   let anchor=memory.map(file_address,size,guest_memory::Owner::Module(owner),guest_memory::Permissions::READ_WRITE,false).map_err(|_|"CRT FILE mapping")?;
   let pointer=CrtPointer{cap:anchor,owner:guest_memory::Owner::Module(owner),base:file_address,size,address:file_address,kind:CrtRegionKind::File};
-  Ok(Self{heap:None,memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],global_objects:std::collections::BTreeMap::new(),global_locks:vec![],record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([file_address])})
+  Ok(Self{heap:None,memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],global_objects:std::collections::BTreeMap::new(),global_locks:vec![],record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,canonical_errno:false,errno_cell:None,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([file_address])})
  }
  /// Separate startup-exclusive storage authority, with no preconstructed lock.
  /// Ending it does not attest that original CRT initialization has completed.
@@ -211,7 +211,7 @@ impl CrtStreamRuntime {
   if self.closed||kind==CrtRegionKind::Buffer||kind==CrtRegionKind::File&&(self.initialization.is_none()||base%4!=0||size%56!=0)||base==0||size==0||base.checked_add(size).is_none()
    ||initial.is_some_and(|bytes|bytes.len()!=size as usize){return Err("CRT mapped region contract");}
   let next=self.generation.checked_add(1).ok_or("CRT generation budget")?;
-  let owner=match kind{CrtRegionKind::Stack|CrtRegionKind::Context=>guest_memory::Owner::Stack(next),_=>guest_memory::Owner::Module(self.owner)};
+  let owner=match kind{CrtRegionKind::Stack|CrtRegionKind::Context|CrtRegionKind::ThreadData=>guest_memory::Owner::Stack(next),_=>guest_memory::Owner::Module(self.owner)};
   let cap=self.memory.map(base,size,owner,guest_memory::Permissions::READ_WRITE,false).map_err(|_|"CRT region bounds/alias/budget")?;
   if let Some(bytes)=initial {if self.memory.write(base,bytes).is_err(){self.memory.release(cap,owner).map_err(|_|"CRT failed mapping rollback")?;return Err("CRT region initialization");}}
   let p=CrtPointer{cap,owner,base,size,address:base,kind};self.regions.push(CrtRegion{pointer:p,heap:false,file_owner:None});self.generation=next;Ok(p)
@@ -253,6 +253,7 @@ impl CrtStreamRuntime {
  fn store(&mut self,p:CrtPointer,width:u8,value:CrtValue)->Result<(),&'static str>{
   let size=match width{8=>1,16=>2,32=>4,_=>return Err("CRT store width")};self.valid(p,size)?;self.ordinary_file_bytes(p,size)?;
   if matches!(p.kind,CrtRegionKind::Input){return Err("CRT immutable source write");}
+  if self.errno_cell.is_some_and(|q|q.cap==p.cap&&u64::from(p.address)<u64::from(q.address)+4&&u64::from(q.address)<u64::from(p.address)+u64::from(size))&&!matches!(value,CrtValue::Scalar{..}){return Err("CRT errno scalar field");}
   let old=self.overlapping_tags(p.address,size);
   if old.iter().any(|(_,v)|matches!(v,CrtValue::OpaqueSaved(_)|CrtValue::ProtectedReturn(_)|CrtValue::ThreadHead(_))){return Err("CRT protected saved/return overwrite");}
   if !old.is_empty()&&(width!=32||old.len()!=1||old[0].0!=p.address){return Err("CRT partial pointer/handle overwrite");}
@@ -279,6 +280,7 @@ impl CrtStreamRuntime {
   self.memory.write(p.address,&bits.to_le_bytes()[..size as usize]).map_err(|_|"CRT storage write")?;
   for(at,_)in old{self.tags.remove(&at);}for i in 0..size{self.partial.remove(&(p.address+i));}
   match value{CrtValue::Scalar{bits,known}=>{for i in 0..size{let mask=(known>>(8*i))as u8;if mask!=255{self.memory.forget(p.address+i,1).map_err(|_|"CRT scalar knowledge epoch")?;self.partial.insert(p.address+i,(((bits>>(8*i))as u8)&mask,mask));}}},_=>{self.tags.insert(p.address,value);}}
+  if let Some(cell)=self.errno_cell{if cell.cap==p.cap&&u64::from(p.address)<u64::from(cell.address)+4&&u64::from(cell.address)<u64::from(p.address)+u64::from(size){self.errno=self.load(cell,32)?.known_scalar().ok().map(|n|n as i32);}}
   Ok(())
  }
  /// A decoded POP/RET consumes precisely its protected stack token. This does
@@ -317,7 +319,7 @@ impl CrtStreamRuntime {
  }
  /// Bind an observed process-heap outcome without inventing handle bits.
  fn process_heap_result(&mut self,init:CrtInitialization,available:bool,exceptions:Option<bool>)->Result<CrtValue,&'static str>{
-  self.initialization(init)?;self.last_os_error=None;if !available{return Ok(CrtValue::scalar(0));}
+  self.initialization(init)?;self.canonical_errno=true;self.last_os_error=None;if !available{return Ok(CrtValue::scalar(0));}
   let heap=CrtHeap{anchor:self.anchor,exceptions};if self.heap.is_some_and(|h|h!=heap){return Err("CRT changed process heap contract");}self.heap=Some(heap);Ok(CrtValue::Heap(heap))
  }
  fn heap_identity(&self,heap:CrtHeap)->Result<(),&'static str>{if self.closed||heap.anchor!=self.anchor||self.heap!=Some(heap){return Err("CRT heap owner/lifetime");}Ok(())}
@@ -376,9 +378,9 @@ impl CrtStreamRuntime {
  }
  fn retire_region(&mut self,p:CrtPointer)->Result<(),&'static str>{
   self.valid(p,0)?;let index=self.regions.iter().position(|r|r.pointer.cap==p.cap).ok_or("CRT region identity")?;let root=self.regions[index].pointer;
-  if !matches!(p.kind,CrtRegionKind::Stack|CrtRegionKind::Context|CrtRegionKind::Input|CrtRegionKind::Result)||p.address!=root.base||p.base!=root.base||p.size!=root.size{return Err("CRT complete temporary region required");}
+  if !matches!(p.kind,CrtRegionKind::Stack|CrtRegionKind::Context|CrtRegionKind::ThreadData|CrtRegionKind::Input|CrtRegionKind::Result)||p.address!=root.base||p.base!=root.base||p.size!=root.size{return Err("CRT complete temporary region required");}
   if self.overlapping_tags(p.base,p.size).iter().any(|(_,v)|matches!(v,CrtValue::OpaqueSaved(_)|CrtValue::ProtectedReturn(_)|CrtValue::ThreadHead(_))){return Err("CRT retirement before protected restoration");}
-  self.reserve_retirement()?;self.memory.release(p.cap,p.owner).map_err(|_|"CRT region release")?;self.regions.remove(index);self.retired.push(root);self.tags.retain(|&a,_|a<p.base||u64::from(a)>=u64::from(p.base)+u64::from(p.size));self.partial.retain(|&a,_|a<p.base||u64::from(a)>=u64::from(p.base)+u64::from(p.size));Ok(())
+  self.reserve_retirement()?;self.memory.release(p.cap,p.owner).map_err(|_|"CRT region release")?;self.regions.remove(index);self.retired.push(root);if self.errno_cell.is_some_and(|p|p.cap==root.cap){self.errno=None;}self.tags.retain(|&a,_|a<p.base||u64::from(a)>=u64::from(p.base)+u64::from(p.size));self.partial.retain(|&a,_|a<p.base||u64::from(a)>=u64::from(p.base)+u64::from(p.size));Ok(())
  }
  fn bind_descriptor(&mut self,number:u32,handle:u32)->Result<CrtDescriptorId,&'static str>{
   if self.locks.is_empty()&&self.initialization.is_none()||number>2047||handle==0||handle==u32::MAX||self.descriptors.iter().any(|d|d.live&&(d.id.number==number||d.id.handle==handle)){return Err("CRT descriptor binding/alias");}
@@ -444,7 +446,15 @@ impl CrtStreamRuntime {
  fn close_once(&mut self,id:CrtDescriptorId,backend:&mut impl CrtBackend)->Result<bool,&'static str>{
   self.descriptor(id)?;let closed=backend.close_once(id)?;if closed{self.descriptors.iter_mut().find(|d|d.id==id).ok_or("CRT close identity")?.live=false;}Ok(closed)
  }
- fn set_errors(&mut self,lease:CrtLock,errno:Option<i32>,doserrno:Option<u32>)->Result<(),&'static str>{self.check_lock(lease)?;self.errno=errno;self.doserrno=doserrno;Ok(())}
+ /// Bind the actual accessor result, without initializing the selected cell.
+ fn bind_errno_cell(&mut self,p:CrtPointer)->Result<CrtPointer,&'static str>{
+  self.valid(p,4)?;let root=self.regions.iter().find(|r|r.pointer.cap==p.cap).ok_or("CRT errno owner")?.pointer;
+  let role=match p.kind{CrtRegionKind::ThreadData=>root.kind==p.kind&&p.address-root.base==16,CrtRegionKind::Module=>root.kind==p.kind&&root.size==4&&p.address==root.base,_=>false};
+  if !role||p.address%4!=0{return Err("CRT errno owner/field role");}let p=self.subrange(p,4)?;
+  let value=self.load(p,32)?;if !matches!(value,CrtValue::Scalar{..}){return Err("CRT errno initial scalar type");}
+  self.canonical_errno=true;self.errno_cell=Some(p);self.errno=value.known_scalar().ok().map(|n|n as i32);Ok(p)
+ }
+ fn set_errors(&mut self,lease:CrtLock,errno:Option<i32>,doserrno:Option<u32>)->Result<(),&'static str>{self.check_lock(lease)?;if self.canonical_errno&&self.errno_cell.is_none(){return Err("CRT canonical errno cell not yet bound");}if let Some(p)=self.errno_cell{self.store(p,32,match errno{Some(n)=>CrtValue::scalar(n as u32),None=>CrtValue::Scalar{bits:0,known:0}})?;}self.errno=errno;self.doserrno=doserrno;Ok(())}
  fn initialize_c_locale(&mut self,lease:CrtLock)->Result<CrtLocale,&'static str>{self.check_lock(lease)?;if self.locale_live{return Err("CRT duplicate locale ownership");}self.locale_generation=self.locale_generation.checked_add(1).ok_or("CRT locale generation")?;self.locale_live=true;Ok(CrtLocale{anchor:self.anchor,thread:self.thread,generation:self.locale_generation})}
  fn check_locale(&self,thread:u64,locale:CrtLocale)->Result<(),&'static str>{if self.closed||locale.anchor!=self.anchor||locale.thread!=self.thread||thread!=self.thread||!self.locale_live||locale.generation!=self.locale_generation{return Err("CRT locale thread/lifetime");}Ok(())}
  fn retire_locale(&mut self,lease:CrtLock,locale:CrtLocale)->Result<(),&'static str>{self.check_lock(lease)?;self.check_locale(self.thread,locale)?;self.locale_live=false;Ok(())}
@@ -537,6 +547,15 @@ for result in [0,1,7,u32::MAX]{
 let(mut r,init)=CrtStreamRuntime::new_initializing(1,2,0x5000,32768).unwrap();let f=r.file();let p=r.offset(f,32).unwrap();let(_,foreign)=CrtStreamRuntime::new_initializing(1,2,0x5000,32768).unwrap();
 assert!(r.construct_lock_result(foreign,p,0,1).is_err());assert!(r.construct_lock_result(init,r.offset(p,4).unwrap(),0,1).is_err());assert!(r.construct_lock_result(init,r.subrange(p,20).unwrap(),0,1).is_err());assert!(r.construct_lock_result(init,p,1,1).is_err());
 r.store(p,32,CrtValue::Pointer(f)).unwrap();assert!(r.construct_lock_result(init,p,0,1).is_err());assert_eq!(r.load(p,32).unwrap(),CrtValue::Pointer(f));assert!(r.lock_objects.is_empty());
+"#,
+        );
+    }
+
+    #[test]
+    fn composed_heap_errors_cannot_fall_back_to_an_unbound_shadow_errno() {
+        native(
+            r#"
+let(mut rt,init)=CrtStreamRuntime::new_initializing(1,2,0x8000,32768).unwrap();rt.process_heap_result(init,true,Some(false)).unwrap();let ptd=rt.map_region(0x7000,20,CrtRegionKind::ThreadData,None).unwrap();let cell=rt.offset(ptd,16).unwrap();rt.store(cell,32,CrtValue::scalar(73)).unwrap();rt.construct_lock(init,rt.file()).unwrap();rt.end_initialization(init).unwrap();let lease=rt.lock(2).unwrap();assert!(rt.set_errors(lease,Some(22),Some(5)).is_err());assert_eq!(rt.load(cell,32).unwrap(),CrtValue::scalar(73));assert_eq!(rt.errno,None);assert_eq!(rt.doserrno,None);rt.bind_errno_cell(cell).unwrap();rt.set_errors(lease,Some(22),Some(5)).unwrap();assert_eq!(rt.load(cell,32).unwrap(),CrtValue::scalar(22));assert_eq!(rt.errno,Some(22));rt.unlock(lease).unwrap();
 "#,
         );
     }

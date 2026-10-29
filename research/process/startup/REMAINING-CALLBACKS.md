@@ -85,10 +85,12 @@ calloc/new-handler/errno (`407cf0`), free failure/errno (`407d50`), and continua
 after failed critical-section initialization remain unresolved. Explicit inputs
 include global-lock initialization, frame/request, allocator availability and API
 outcomes. The actual heap producer/calloc/new-mode getter now execute in component tests,
-and a descriptor-constructor path uses actual calloc. The registered manager still
-has its earlier allocation-result callback. Next: connect these paths using live
-heap/mode/errno bindings, establish the actual errno/PTD and new-handler effects,
-then free failure and locale/FILE production. See
+and a descriptor-constructor path uses actual calloc. The registered manager now calls that actual allocator, and the original errno
+router selects canonical PTD/fallback storage. Its PTD lookup remains an explicit
+callable effect. Next: establish the actual PTD/TLS acquisition and different
+414268/414254 frame/continuation protocol, recursive initializing-sentinel failure
+behavior, and encoded new-handler/guard-slot/callback effects; then free failure
+and locale/FILE production. See
 [ALLOCATOR-EFFECTS.md](ALLOCATOR-EFFECTS.md) for exact instruction/API dependencies
 and independent acceptance requirements. Sol can proceed; escalate only a
 concrete missing exception-effect contract. Full startup/formatter/rcedit remains

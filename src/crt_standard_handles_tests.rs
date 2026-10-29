@@ -203,6 +203,9 @@ for fault in 0..4 {
 }
 
 pub(super) fn manager_source() -> String {
+    manager_source_with_allocator(None)
+}
+pub(super) fn manager_source_with_allocator(allocator: Option<&str>) -> String {
     let global_enter: Vec<u8> = "8bff558bec6b4508180550d1410050ff154c5041005dc3"
         .as_bytes()
         .chunks_exact(2)
@@ -236,7 +239,7 @@ pub(super) fn manager_source() -> String {
  Target::Direct(0x40be7a)=>"rt.check_global(held.ok_or(\"allocation without manager lock\")?)?;let mut calls=0;let mut allocated=None;construct(rt,child,init,allocations<successes,usize::MAX,&mut calls,&mut allocated)?;allocations+=1;Ok(child.r[0])",
  Target::Direct(0x40bfbf)=>"if rt.load(rt.offset(CrtCpu::pointer(child.r[5])?,-4)?,32)?.known_scalar()?!=u32::MAX-1{return Err(\"cleanup before scope disable\");}cleanup(rt,child,held,events,release_fails)",
  _=>return Err("manager call changed".into())};Ok(format!("cpu.call_activation(rt,{next},0,|rt,child|{{{code}}})?;"))},&std::collections::BTreeMap::from([(0x41cf08,"CrtRegionKind::Module".into()),(0x41d108,"CrtRegionKind::Module".into())]),16384,|_,_|Err("unbound FS".into()),|_,_|Ok(String::new()),|_,_|Ok(None),Some(0x40bf4e)).unwrap();
-    let extra=format!("{enter} {leave} {} fn cleanup(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,held:&mut Option<CrtGlobalLock>,events:&mut Vec<u32>,release_fails:bool)->Result<CrtValue,&'static str>{{{cb}}} fn manager(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,init:CrtInitialization,successes:usize,acquire_fails:bool,release_fails:bool,held:&mut Option<CrtGlobalLock>,events:&mut Vec<u32>)->Result<CrtValue,&'static str>{{let mut allocations=0;{body}}}",descriptor_source());
+    let extra=format!("{enter} {leave} {} fn cleanup(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,held:&mut Option<CrtGlobalLock>,events:&mut Vec<u32>,release_fails:bool)->Result<CrtValue,&'static str>{{{cb}}} fn manager(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,init:CrtInitialization,successes:usize,acquire_fails:bool,release_fails:bool,held:&mut Option<CrtGlobalLock>,events:&mut Vec<u32>)->Result<CrtValue,&'static str>{{let mut allocations=0;{body}}}",descriptor_source_with_allocator(allocator));
     extra
 }
 #[test]
@@ -261,8 +264,10 @@ for fault in 0..6 {
     );
 }
 
-#[test]
-fn original_heap_producer_calloc_and_descriptor_constructor_preserve_error_paths() {
+pub(super) fn allocator_source() -> String {
+    allocator_source_with_errno(None)
+}
+pub(super) fn allocator_source_with_errno(accessor: Option<&str>) -> String {
     let heap_producer: Vec<u8> = "ff15f850410085c0a3c8d241000f95c0c3"
         .as_bytes()
         .chunks_exact(2)
@@ -286,7 +291,7 @@ fn original_heap_producer_calloc_and_descriptor_constructor_preserve_error_paths
    Target::Import(0x415094)=>(12,"let sp=CrtCpu::pointer(child.r[4])?;let CrtValue::Heap(heap)=rt.load(rt.offset(sp,4)?,32)? else{return Err(\"HeapAlloc opaque heap identity\")};let flags=rt.load(rt.offset(sp,8)?,32)?.known_scalar()?;let size=rt.load(rt.offset(sp,12)?,32)?.known_scalar()?;allocations.push(size);let available=allocations.len()<=success_after.0||allocations.len()>success_after.1;child.clobber(match rt.heap_alloc_result(init,heap,flags,size,descriptor,available)?{Some(p)=>CrtValue::Pointer(p),None=>CrtValue::scalar(0)});child.finish_pop(rt,12)"),
    Target::Direct(0x4071c0)=>(0,"mode_getter(rt,child,init,heap_available,policy,success_after,descriptor,errno,allocations,handler)"),
    Target::Direct(0x40c9c0)=>(0,"let requested=rt.load(rt.offset(CrtCpu::pointer(child.r[4])?,4)?,32)?.known_scalar()?;let retry=handler(rt,requested)?;child.clobber(CrtValue::scalar(u32::from(retry)));child.finish(rt)"),
-   Target::Direct(0x407ccd)=>(0,"rt.valid(errno,4)?;if errno.kind!=CrtRegionKind::Context||errno.size!=4||errno.address!=errno.base||!rt.regions.iter().any(|r|r.pointer==errno){return Err(\"errno owned thread-context role\");}child.clobber(CrtValue::Pointer(errno));child.finish(rt)"),
+   Target::Direct(0x407ccd)=>(0,accessor.unwrap_or("rt.valid(errno,4)?;if errno.kind!=CrtRegionKind::Context||errno.size!=4||errno.address!=errno.base||!rt.regions.iter().any(|r|r.pointer==errno){return Err(\"errno owned thread-context role\");}child.clobber(CrtValue::Pointer(errno));child.finish(rt)")),
    _=>return Err("unbound allocator call".into())};Ok(format!("cpu.call_activation(rt,{next},{pop},|rt,child|{{{code}}})?;"))},&std::collections::BTreeMap::from([(0x41d2c8,"CrtRegionKind::Module".into()),(0x41ce80,"CrtRegionKind::Module".into())]),2048).unwrap();
         let entry = if name == "calloc_original" {
             "let sp=CrtCpu::pointer(cpu.r[4])?;if rt.load(rt.offset(sp,4)?,32)?.known_scalar()?==0||rt.load(rt.offset(sp,8)?,32)?.known_scalar()?==0{return Err(\"zero-request calloc domain unbound\");}"
@@ -295,6 +300,11 @@ fn original_heap_producer_calloc_and_descriptor_constructor_preserve_error_paths
         };
         extra.push_str(&format!("fn {name}(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,init:CrtInitialization,heap_available:bool,policy:Option<bool>,success_after:(usize,usize),descriptor:bool,errno:CrtPointer,allocations:&mut Vec<u32>,handler:&mut impl FnMut(&mut CrtStreamRuntime,u32)->Result<bool,&'static str>)->Result<CrtValue,&'static str>{{{entry}{body}}}"));
     }
+    extra
+}
+#[test]
+fn original_heap_producer_calloc_and_descriptor_constructor_preserve_error_paths() {
+    let mut extra = allocator_source();
     extra.push_str(&descriptor_source_with_allocator(Some("let errno=rt.resolve_absolute(0x7000,CrtRegionKind::Context)?;let mut requests=vec![];let result=calloc_original(rt,child,init,true,Some(false),if available{(1,1)}else{(0,usize::MAX)},true,errno,&mut requests,&mut |_,_|Err(\"new handler remains unbound\"))?;if let CrtValue::Pointer(p)=result{*allocated=Some(p);}Ok(result)")));
     super::crt_stream_callees_tests::native(
         &extra,
@@ -346,4 +356,33 @@ let mut rt=CrtStreamRuntime::new(1,2,0x8000,32768).unwrap();let stack=rt.map_reg
     ] {
         assert!(Graph::decode(bytes, 0x1000).is_err());
     }
+}
+
+pub(super) fn errno_source() -> String {
+    let errno_router: Vec<u8> = "e8602600008bd0b830c1410085d28d4a100f45c1c3"
+        .as_bytes()
+        .chunks_exact(2)
+        .map(|x| u8::from_str_radix(std::str::from_utf8(x).unwrap(), 16).unwrap())
+        .collect();
+    let graph = Graph::decode(&errno_router, 0x407ccd).unwrap();
+    let body=crt_stream_emit::emit_body_with_hooks(&graph,|pc,target|{if target!=Target::Direct(0x40a332){return Err("errno PTD target changed".into());}let next=pc+graph.nodes[&pc].length;Ok(format!("cpu.call_activation(rt,{next},0,|rt,child|{{let ptd=lookup(rt)?;match ptd{{CrtValue::Pointer(p)=>{{rt.valid(p,20)?;if p.kind!=CrtRegionKind::ThreadData||p.address!=p.base||!rt.regions.iter().any(|r|r.pointer==p){{return Err(\"errno PTD owner/extent\");}}}},CrtValue::Scalar{{bits:0,known:u32::MAX}}=>{{}},_=>return Err(\"errno PTD unknown or forged pointer\")}};child.clobber(ptd);child.finish(rt)}})?;"))},&Default::default(),32,|_,_|Err("no FS in errno router".into()),|_,_|Ok(String::new()),|_,pop|{if pop!=0{return Err("errno RET changed".into());}Ok(Some("let p=match cpu.r[0]{CrtValue::Pointer(p)=>{if p.kind!=CrtRegionKind::ThreadData{return Err(\"errno PTD result role\");}p},CrtValue::Scalar{bits:0x41c130,known:u32::MAX}=>rt.resolve_absolute(0x41c130,CrtRegionKind::Module)?,_=>return Err(\"errno result provenance\")};cpu.r[0]=CrtValue::Pointer(rt.bind_errno_cell(p)?);return cpu.finish(rt);".into()))}).unwrap();
+    format!("fn errno_routed(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,mut lookup:impl FnMut(&mut CrtStreamRuntime)->Result<CrtValue,&'static str>)->Result<CrtValue,&'static str>{{{body}}}")
+}
+#[test]
+fn original_errno_router_binds_ptd_or_fallback_without_alias_or_lifetime_renewal() {
+    super::crt_stream_callees_tests::native(
+        &errno_source(),
+        r#"
+for fault in 0..9{
+ let mut rt=CrtStreamRuntime::new(1,2,0x8000,32768).unwrap();let fallback=rt.map_region(0x41c130,4,CrtRegionKind::Module,Some(&73u32.to_le_bytes())).unwrap();let ptd=rt.map_region(0x7000,32,if fault==3{CrtRegionKind::Context}else{CrtRegionKind::ThreadData},None).unwrap();let cell=rt.offset(ptd,16).unwrap();rt.store(cell,32,CrtValue::scalar(19)).unwrap();let stack=rt.map_region(0x9000,256,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,224).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(1)).unwrap();let mut c=CrtCpu::new(sp,1).unwrap();
+ if fault==4{rt.retire_region(ptd).unwrap();}let foreign=if fault==7{let mut other=CrtStreamRuntime::new(1,2,0x8000,32768).unwrap();Some(other.map_region(0x7000,32,CrtRegionKind::ThreadData,None).unwrap())}else{None};let input=match fault{7=>CrtValue::Pointer(foreign.unwrap()),0=>CrtValue::scalar(0),2=>CrtValue::scalar(ptd.address()),5=>CrtValue::Scalar{bits:0,known:0},_=>CrtValue::Pointer(ptd)};
+ let observed=rt.map_region(0x7200,4,CrtRegionKind::Result,Some(&[0;4])).unwrap();let result=errno_routed(&mut rt,&mut c,|rt|{if fault==8{rt.store(observed,32,CrtValue::scalar(91))?;return Err("unresolved lookup after prior effect");}Ok(input)});
+ if [2,3,4,5,7,8].contains(&fault){assert!(result.is_err());assert!(rt.errno_cell.is_none());assert!(!c.returned);if fault==8{assert_eq!(rt.load(observed,32).unwrap(),CrtValue::scalar(91));}continue;}
+ let selected=CrtCpu::pointer(result.unwrap()).unwrap();assert_eq!(selected.address(),if fault==0{fallback.address()}else{cell.address()});assert_eq!(rt.errno,Some(if fault==0{73}else{19}));
+ rt.store(selected,32,CrtValue::scalar(12)).unwrap();assert_eq!(rt.errno,Some(12));let lock=rt.lock(2).unwrap();rt.set_errors(lock,Some(22),Some(5)).unwrap();assert_eq!(rt.load(selected,32).unwrap(),CrtValue::scalar(22));rt.set_errors(lock,None,None).unwrap();assert!(rt.load(selected,32).unwrap().known_scalar().is_err());assert_eq!(rt.errno,None);rt.unlock(lock).unwrap();assert!(rt.store(selected,32,CrtValue::Pointer(stack)).is_err());
+ if fault==6{rt.retire_region(ptd).unwrap();assert_eq!(rt.errno,None);let lock=rt.lock(2).unwrap();assert!(rt.set_errors(lock,Some(7),None).is_err());rt.unlock(lock).unwrap();assert!(rt.load(selected,32).is_err());}
+}
+"#,
+        "errno-route",
+    );
 }

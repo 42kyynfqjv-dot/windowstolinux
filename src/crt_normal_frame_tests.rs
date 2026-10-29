@@ -1225,6 +1225,9 @@ fn initial_raise_rejections(){for mode in 0..6{
  if mode==5{let p=rt.offset(storage.entry,i64::from(storage.image.esp)-i64::from(storage.image.entry_sp)+12).unwrap();rt.store(p,32,CrtValue::Pointer(storage.entry)).unwrap();}
  let before=c.r;let generation=rt.generation;assert!(issue_initial_raise(&mut rt,&r,&mut m,&mut storage,&mut c).is_err(),"initial mode {mode}");assert!(!m.event_issued);assert_eq!(c.r,before);assert_eq!(rt.generation,generation);assert!(storage.raise_call.is_none());
 }}
+fn map_allocator_state(rt:&mut CrtStreamRuntime,init:CrtInitialization){
+ rt.map_region(0x41d2c8,4,CrtRegionKind::Module,None).unwrap();rt.map_region(0x41ce80,4,CrtRegionKind::Module,Some(&[0;4])).unwrap();let ptd=rt.map_region(0x6ff0,20,CrtRegionKind::ThreadData,None).unwrap();let errno=rt.offset(ptd,16).unwrap();rt.store(errno,32,CrtValue::scalar(73)).unwrap();rt.map_region(0x41c130,4,CrtRegionKind::Module,Some(&73u32.to_le_bytes())).unwrap();let sp=rt.resolve_absolute(0xcf00,CrtRegionKind::Stack).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(800)).unwrap();let mut c=CrtCpu::new(sp,800).unwrap();heap_producer(rt,&mut c,init,true,Some(false),(0,0),true,errno,&mut vec![],&mut |_,_|Err("startup handler not bound")).unwrap();assert!(c.returned);
+}
 fn registered_allocation(rt:&mut CrtStreamRuntime,c:&mut CrtCpu,e:&mut NormalCallEpoch<'_>,init:CrtInitialization)->RegistryResult<CrtValue>{
  let argument=rt.load(rt.offset(CrtCpu::pointer(c.r[4])?,4)?,32)?.known_scalar()?;if argument>=8192{return Err("manager invalid-request API path remains unbound");}
  let mut b=CrtNormalBinding::bind_initializing(rt,c,e,manager_epilog_layout(),init)?;
@@ -1236,13 +1239,13 @@ fn inherited_registered_manager(){
  let(m,mut r,main,mut permit)=fixture_with_extra(&[(0x410000,0x420000)]);let previous=r.head;
  let(mut rt,init)=CrtStreamRuntime::new_initializing(r.identity.owner,r.identity.instance,0x8000,65536).unwrap();rt.map_region(0x9000,0x6000,CrtRegionKind::Stack,None).unwrap();rt.map_region(0x41c000,4,CrtRegionKind::Module,Some(&0x12345678u32.to_le_bytes())).unwrap();
  let lock=rt.map_region(0x41d1f8,24,CrtRegionKind::Module,None).unwrap();rt.construct_global_lock(init,7,lock,1).unwrap();let table=rt.map_region(0x41cf08,512,CrtRegionKind::Module,Some(&[0;512])).unwrap();rt.map_region(0x41d108,4,CrtRegionKind::Module,Some(&[0;4])).unwrap();
- let ids=[rt.bind_descriptor(0,44).unwrap(),rt.bind_descriptor(1,45).unwrap(),rt.bind_descriptor(2,46).unwrap()];let serialized=rt.map_region(0x7000,19,CrtRegionKind::Result,None).unwrap();rt.store(serialized,32,CrtValue::scalar(3)).unwrap();for(i,f)in[1,9,1].into_iter().enumerate(){rt.store(rt.offset(serialized,4+i as i64).unwrap(),8,CrtValue::scalar(f)).unwrap();}for(i,v)in[CrtValue::Handle(ids[0]),CrtValue::Handle(ids[1]),CrtValue::scalar(u32::MAX)].into_iter().enumerate(){rt.store(rt.offset(serialized,7+i as i64*4).unwrap(),32,v).unwrap();}
+ map_allocator_state(&mut rt,init);let ids=[rt.bind_descriptor(0,44).unwrap(),rt.bind_descriptor(1,45).unwrap(),rt.bind_descriptor(2,46).unwrap()];let serialized=rt.map_region(0x7100,19,CrtRegionKind::Result,None).unwrap();rt.store(serialized,32,CrtValue::scalar(3)).unwrap();for(i,f)in[1,9,1].into_iter().enumerate(){rt.store(rt.offset(serialized,4+i as i64).unwrap(),8,CrtValue::scalar(f)).unwrap();}for(i,v)in[CrtValue::Handle(ids[0]),CrtValue::Handle(ids[1]),CrtValue::scalar(u32::MAX)].into_iter().enumerate(){rt.store(rt.offset(serialized,7+i as i64*4).unwrap(),32,v).unwrap();}
  r.with_normal_calls(&m,&mut permit,&main,|e|{let mut c=cpu(&mut rt,0xe000,71);c.return_pop=0;let saved=c.r;let arg=rt.offset(CrtCpu::pointer(c.r[4])?,4)?;rt.store(arg,32,CrtValue::scalar(8192))?;assert!(registered_allocation(&mut rt,&mut c,e,init).is_err());assert_eq!(c.r,saved);assert_eq!(e.head()?,previous);let(mut allocations,mut queries)=(vec![],vec![]);inherit_registered(&mut rt,&mut c,serialized,false,&mut allocations,&mut queries,e,init)?;assert!(c.returned);for i in [3,5,6,7]{assert_eq!(c.r[i],saved[i]);}assert_eq!(allocations,[3]);assert_eq!(queries,[0]);assert_eq!(e.head()?,previous);assert!(rt.global_locks.is_empty());let block=CrtCpu::pointer(rt.load(table,32)?)?;assert_eq!(rt.load(rt.offset(block,24)?,32)?,CrtValue::Handle(ids[0]));assert_eq!(rt.load(rt.offset(block,80)?,32)?,CrtValue::Handle(ids[1]));assert_eq!(rt.load(rt.offset(block,136)?,32)?,CrtValue::scalar(u32::MAX));Ok(())}).unwrap();assert_eq!(r.head,previous);
 }
 fn manager_registered(){for mode in 0..5{
  let(m,mut r,main,mut permit)=fixture_with_extra(&[(0x410000,0x420000)]);let previous=r.head;
  let(mut rt,init)=CrtStreamRuntime::new_initializing(r.identity.owner,r.identity.instance,0x8000,65536).unwrap();rt.map_region(0x9000,0x6000,CrtRegionKind::Stack,None).unwrap();rt.map_region(0x41c000,4,CrtRegionKind::Module,Some(&0x12345678u32.to_le_bytes())).unwrap();
- let lock=rt.map_region(0x41d1f8,24,CrtRegionKind::Module,None).unwrap();rt.construct_global_lock(init,7,lock,1).unwrap();rt.map_region(0x41cf08,512,CrtRegionKind::Module,Some(&[0;512])).unwrap();let capacity=rt.map_region(0x41d108,4,CrtRegionKind::Module,Some(&[0;4])).unwrap();
+ let lock=rt.map_region(0x41d1f8,24,CrtRegionKind::Module,None).unwrap();rt.construct_global_lock(init,7,lock,1).unwrap();rt.map_region(0x41cf08,512,CrtRegionKind::Module,Some(&[0;512])).unwrap();let capacity=rt.map_region(0x41d108,4,CrtRegionKind::Module,Some(&[0;4])).unwrap();map_allocator_state(&mut rt,init);
  let result=r.with_normal_calls(&m,&mut permit,&main,|e|{
   let mut c=cpu(&mut rt,0xe000,71);c.return_pop=0;c.r[1]=CrtValue::Scalar{bits:0,known:0};c.entry=c.r;let caller=CrtCpu::pointer(c.r[4])?;rt.store(rt.offset(caller,4)?,32,CrtValue::scalar(3))?;
   assert!(CrtNormalBinding::bind(&rt,&c,e,manager_epilog_layout()).is_err());
@@ -1252,6 +1255,7 @@ fn manager_registered(){for mode in 0..5{
   manager_prolog(&mut rt,&mut c,99,b.token,|rt,c,record,head|b.install(rt,c,e,record,head))?;assert!(matches!(e.head()?,RegistryHead::Normal(_)));
   let(mut held,mut events)=(None,vec![]);manager(&mut rt,&mut c,init,if mode==3{0}else{1},false,false,&mut held,&mut events)?;assert!(held.is_none());assert_eq!(events,[1,2]);assert!(!c.returned);
   manager_return_move(&mut rt,&mut c)?;
+  if mode==3{assert_eq!(rt.errno,Some(12));}
   if mode==1{rt.store(b.at(&rt,b.layout.guard)?,32,CrtValue::scalar(0))?;}
   if mode==2{rt.end_initialization(init)?;}
   let result=manager_epilog(&mut rt,&mut c,e,&mut b);
@@ -1593,13 +1597,14 @@ if fault==1{{cpu.condition(0)?;}}
         let move_graph=crate::crt_stream_ir::Graph::decode_linear_fragment(&[0x8b,0xc6],0x40bf4e).unwrap();
         let move_body=crate::crt_stream_emit::emit_body_with_exit(&move_graph,|_,_|Err("no return-move call".into()),&Default::default(),1,|_,_|Err("no FS".into()),|_,_|Ok(String::new()),|_,_|Ok(None),Some(0x40bf50)).unwrap();
         let inherited_registered=crate::crt_standard_handles_tests::inherited_source_for(Some("let n=rt.load(rt.offset(sp,4)?,32)?.known_scalar()?;allocations.push(n);registered_allocation(rt,child,e,init)"));
-        let manager_native=format!("{}\n{}\n{}\nfn manager_return_move(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->RegistryResult<CrtValue>{{{move_body}}}",crate::crt_standard_handles_tests::manager_source(),manager_p.emit("manager_prolog").unwrap(),manager_e.emit("manager_epilog").unwrap());
+        let allocator_native=format!("{} {}",crate::crt_standard_handles_tests::errno_source(),crate::crt_standard_handles_tests::allocator_source_with_errno(Some("let ptd=rt.resolve_absolute(0x6ff0,CrtRegionKind::ThreadData)?;errno_routed(rt,child,|_|Ok(CrtValue::Pointer(ptd)))")));
+        let manager_native=format!("{}\n{}\n{}\nfn manager_return_move(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->RegistryResult<CrtValue>{{{move_body}}}",crate::crt_standard_handles_tests::manager_source_with_allocator(Some("let errno=rt.resolve_absolute(0x7000,CrtRegionKind::ThreadData)?;let mut requests=vec![];let result=calloc_original(rt,child,init,true,Some(false),if available{(1,1)}else{(0,usize::MAX)},true,errno,&mut requests,&mut |_,_|Err(\"startup handler not bound\"))?;if let CrtValue::Pointer(p)=result{*allocated=Some(p);}Ok(result)")),manager_p.emit("manager_prolog").unwrap(),manager_e.emit("manager_epilog").unwrap());
         let source = format!("#![allow(dead_code)]\nmod guest_memory{{{memory}}}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{fixture}\n{printf_native}\n{printf_entry_native}\n{printf_native_map}\n{completion_live}\n{main_initial_live}\n{main_initial_map}\n{initial_raise_types}\n{initial_raise_init}\n{initial_raise}\n{initial_raise_map}\n{file_scope}\n{context_types}\n{context_check}\n{scope_store}\n{permuted_store}\n{install}\n{handler_prolog}\n{filter_source}\n{false_filter_source}\n{normalizer_source}\n{guard_source}\n{header_source}\n{prefix_normalizer}\n{prefix_front}\n{guard_prefix}\n{prefix_caller}\n{bridge_native}\n{local_types}\n{owned_types}\n{local_source}\n{callback_source}\n{finally_source}\n{finally_cases}\n{original_local_store}\n{main_init}\n{inner_init}\n{owned_filter}\n{owned_bridge}\n{main_filter_bytes}\n{activation}\n{owned_prolog}\n{owned_prefix}\n{delivery_prefix}
 {inner_data}
 {unwind_caller}
 {stack_source}
 {native_loop}\n{owned_header}\n{owned_scope_store}\n{owned_permuted_store}\n{global_source}\n{delivery_source}\n{tail_source}\n{owned_search}
-{post_global}\n{code_data}\n{path_edges}\n{prefix_metadata}\nfn raise_site()->CrtNormalRaiseSite{{{{{raise}}}}}\n{manager_native}\n{inherited_registered}\n{CASES}",
+{post_global}\n{code_data}\n{path_edges}\n{prefix_metadata}\nfn raise_site()->CrtNormalRaiseSite{{{{{raise}}}}}\n{allocator_native}\n{manager_native}\n{inherited_registered}\n{CASES}",
             include_str!("linker/unwind_runtime.rs").replace("//!", "//"),
             emitted_literal(include_str!("frame_proof.rs")),emitted_literal(include_str!("thread_registry.rs")),
             crate::crt_stream_runtime::EMITTED_TYPES,crate::crt_stream_cpu::EMITTED_TYPES,
