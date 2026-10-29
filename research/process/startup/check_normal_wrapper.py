@@ -79,6 +79,17 @@ def check(original, observation, out, compare=None):
     (out/'main-filter-0.bin').write_bytes(mapped(image, 0x401333, 41, executable=True))
     (out/'main-prolog.bin').write_bytes(mapped(image, 0x401280, 54, executable=True))
     (out/'Inner-prolog.bin').write_bytes(mapped(image, 0x4010c0, 48, executable=True))
+    finally_regions = {}
+    for name,at,size,executable in [('inner-scalar-init',0x4010f0,28,True),
+                                     ('inner-finally-1',0x40116e,17,True),
+                                     ('inner-finally-0',0x40117f,33,True),
+                                     ('finally-dispatch',0x401060,93,True),
+                                     ('finally-dispatch-table',0x415180,24,False),
+                                     ('Inner-scope-table',0x41b1d0,40,False)]:
+        raw=mapped(image,at,size,executable=executable)
+        (out/(name+'.bin')).write_bytes(raw)
+        finally_regions[name]=sha(raw)
+
     (out/'main-activate.bin').write_bytes(mapped(image, 0x40130f, 7, executable=True))
     (out/'Main-scope-header.bin').write_bytes(mapped(image, 0x41b218, 16))
     (out/'Main-scope-table.bin').write_bytes(mapped(image, 0x41b218, 28))
@@ -142,6 +153,10 @@ def check(original, observation, out, compare=None):
     (out/'path-edge-cargo.stdout').write_bytes(edges_run.stdout)
     (out/'path-edge-cargo.stderr').write_bytes(edges_run.stderr)
     if edges_run.returncode or b'1 passed' not in edges_run.stdout: raise ValueError('native branch obligation checks failed')
+    finally_run=subprocess.run(['cargo','test','--locked','--example','crt_stream','original_finally_dispatch_writes_live_fields_in_instruction_order'],env=env,capture_output=True,timeout=180)
+    (out/'live-finally-cargo.stdout').write_bytes(finally_run.stdout)
+    (out/'live-finally-cargo.stderr').write_bytes(finally_run.stderr)
+    if finally_run.returncode or b'1 passed' not in finally_run.stdout: raise ValueError('original finally live field checks failed')
     expected = [[w['return_eax'], w['return_flags'], w['caller_stack_delta'], *w['saved']] for w in observed]
     actual = [[int(n) for n in line.split()] for line in (out/'normal-wrapper-results.txt').read_text().splitlines()]
     if actual != expected:
@@ -174,6 +189,7 @@ def check(original, observation, out, compare=None):
                   observation_sha256=sha((observation/'report.json').read_bytes()),
                   vectors_sha256=sha(vector_bytes), rust_sha256=source_hash, command=command,
                   comparisons=5, whole_pe_translation_pairs=0,
+                  live_finally_native_cases=20, live_finally_windows_pairs=0, live_finally_hashes=finally_regions,
                   file_scope_code_sha256=file_regions, file_scope_imports=file_imports,
                   file_scope_native_test_functions=3,
                   live_dispatch_native_cases=37, live_dispatch_windows_original_pairs=0,
@@ -181,7 +197,7 @@ def check(original, observation, out, compare=None):
                   scope='Live registry fixture; body EAX/flags inputs; original stack/FS/saved-state restoration only')
     if compare:
         previous = json.loads(compare.read_text())
-        for key in ['original_notification_sha256', 'original_cleanup_hashes', 'owned_local_body_sha256', 'local_level_store_sha256', 'pe_sha256', 'helper_sha256', 'epilog_sha256', 'handler_scope_store_sha256', 'handler_prolog_sha256', 'handler_installer_sha256', 'event_normalizer_sha256', 'guard_validator_sha256', 'security_check_sha256', 'scope_header_sha256', 'prefix_sha256', 'context_helper_sha256', 'filter_bridge_sha256', 'main_filter_sha256', 'main_prolog_sha256', 'inner_prolog_sha256', 'main_activation_sha256', 'main_scope_header_sha256', 'main_scope_table_sha256', 'complete_handler_sha256', 'global_wrapper_sha256', 'observation_sha256', 'vectors_sha256', 'rust_sha256', 'file_scope_code_sha256', 'file_scope_imports']:
+        for key in ['live_finally_hashes', 'original_notification_sha256', 'original_cleanup_hashes', 'owned_local_body_sha256', 'local_level_store_sha256', 'pe_sha256', 'helper_sha256', 'epilog_sha256', 'handler_scope_store_sha256', 'handler_prolog_sha256', 'handler_installer_sha256', 'event_normalizer_sha256', 'guard_validator_sha256', 'security_check_sha256', 'scope_header_sha256', 'prefix_sha256', 'context_helper_sha256', 'filter_bridge_sha256', 'main_filter_sha256', 'main_prolog_sha256', 'inner_prolog_sha256', 'main_activation_sha256', 'main_scope_header_sha256', 'main_scope_table_sha256', 'complete_handler_sha256', 'global_wrapper_sha256', 'observation_sha256', 'vectors_sha256', 'rust_sha256', 'file_scope_code_sha256', 'file_scope_imports']:
             if previous[key] != result[key]:
                 raise ValueError('wrapper cross-host provenance differs: '+key)
         result['matching_windows_native_report'] = str(compare)

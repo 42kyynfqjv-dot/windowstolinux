@@ -235,3 +235,18 @@ mod handler_dispatch;
 #[allow(dead_code)]
 #[path = "../src/local_unwind.rs"]
 mod local_unwind;
+
+#[cfg(test)]
+#[path = "../src/dispatch.rs"]
+mod dispatch;
+#[cfg(test)]
+#[path = "../src/funclet.rs"]
+mod funclet;
+
+#[cfg(test)]
+#[path = "../src/crt_finally_fields.rs"]
+mod crt_finally_fields;
+
+#[cfg(test)]
+#[path = "../src/crt_finally_tests.rs"]
+mod crt_finally_tests;

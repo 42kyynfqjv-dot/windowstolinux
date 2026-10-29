@@ -4,6 +4,25 @@ use super::graph::{self, Address, Binary, Operand, Operation};
 use iced_x86::{Code, Decoder, DecoderOptions};
 use std::collections::{BTreeMap, BTreeSet};
 
+/// The adapter must validate live ownership on every operation. Cleanup acts on
+/// the dispatcher's private pair; outer stores happen only at their decoded
+/// MOV instructions after successful return. An error is terminal for this call
+/// and retains already executed writes. No method grants a restoration receipt.
+#[allow(dead_code)] // Included only by the checked CRT field composition.
+pub(crate) const LIVE_EFFECTS: &str = r#"
+trait LiveFinallyEffects {
+ type Error;
+ fn require_cursor(&mut self, expected:i32)->Result<(),Self::Error>;
+ fn read_cursor(&mut self)->Result<i32,Self::Error>;
+ fn write_cursor(&mut self,value:i32)->Result<(),Self::Error>;
+ fn read_cell(&mut self,index:usize)->Result<u32,Self::Error>;
+ fn write_cell(&mut self,index:usize,value:u32)->Result<(),Self::Error>;
+ fn write_global(&mut self,index:usize,value:u32)->Result<(),Self::Error>;
+ fn dispatch(&mut self)->Result<(),Self::Error>;
+ fn cleanup(&mut self,action:usize,private:&mut[u32;2])->Result<(),Self::Error>;
+}
+"#;
+
 #[derive(Clone)]
 enum Value {
     Unknown,
@@ -14,6 +33,9 @@ enum Value {
 pub(crate) struct ProvenFunclet {
     /// Body for a helper with cells, cursor, globals and a proven dispatch callback.
     pub source: String,
+    /// Checked effects at original instruction points; no final copy-back.
+    #[allow(dead_code)] // Legacy slice entry points use the array-backed emitter.
+    pub live_source: String,
     /// Derived from original argument order, not supplied semantic field names.
     pub local_offset: i32,
     pub cursor_offset: i32,
@@ -89,6 +111,7 @@ pub(crate) fn prove_funclet(
     let mut arguments: Vec<i32> = Vec::new();
     let mut roles: Option<(i32, i32)> = None;
     let mut source = String::new();
+    let mut live_source = String::new();
     let mut global_writes = Vec::new();
     let mut serial = 0;
     let mut count = 0;
@@ -122,6 +145,7 @@ pub(crate) fn prove_funclet(
             temporary_bytes = temporary_bytes.max(depth);
             dispatch_entry_depth = Some(depth);
             source.push_str("dispatch(cells,cursor)?;\n");
+            live_source.push_str("effects.dispatch()?;\n");
             for index in [0, 1, 2] {
                 registers[index] = Value::Unknown;
             }
@@ -175,6 +199,12 @@ pub(crate) fn prove_funclet(
                         let name = format!("f{serial}");
                         serial += 1;
                         source.push_str(&format!("let {name}:u32={expression};\n"));
+                        let live = if offset == local {
+                            "effects.read_cell(1)?"
+                        } else {
+                            "effects.read_cursor()? as u32"
+                        };
+                        live_source.push_str(&format!("let {name}:u32={live};\n"));
                         Value::Scalar(name)
                     }
                     _ => return Err("funclet: unsupported value read".into()),
@@ -198,6 +228,8 @@ pub(crate) fn prove_funclet(
                         source.push_str(&format!(
                             "*globals.get_mut({index}).ok_or(Error::Range)?=Some({expression});\n"
                         ));
+                        live_source
+                            .push_str(&format!("effects.write_global({index},{expression})?;\n"));
                         global_writes.push(index);
                     }
                     _ => return Err("funclet: protected/non-scalar destination".into()),
@@ -213,8 +245,10 @@ pub(crate) fn prove_funclet(
                     return Err("funclet: complete return extent/stack proof".into());
                 }
                 source.push_str("Ok(())\n");
+                live_source.push_str("Ok(())\n");
                 return Ok(ProvenFunclet {
                     source,
+                    live_source,
                     local_offset,
                     cursor_offset,
                     global_writes,
@@ -341,6 +375,44 @@ mod tests {
         .is_err());
     }
 
+    #[test]
+    fn live_funclet_reads_after_dispatch_and_retains_first_global_on_later_failure() {
+        let p = prove(&code(-44, -48, true)).unwrap();
+        let source = format!(
+            r#"
+        #[derive(Debug)]struct Failure;
+        struct Effects{{local:u32,cursor:i32,globals:[Option<u32>;2],fail:bool}}
+        impl Effects{{
+         fn dispatch(&mut self)->Result<(),Failure>{{self.local=self.local.wrapping_add(7);self.cursor=-1;Ok(())}}
+         fn read_cell(&mut self,i:usize)->Result<u32,Failure>{{assert_eq!(i,1);Ok(self.local)}}
+         fn read_cursor(&mut self)->Result<i32,Failure>{{Ok(self.cursor)}}
+         fn write_global(&mut self,i:usize,v:u32)->Result<(),Failure>{{if self.fail&&i==0{{return Err(Failure)}}self.globals[i]=Some(v);Ok(())}}
+        }}
+        fn run(effects:&mut Effects)->Result<(),Failure>{{{}}}
+        fn main(){{for fail in [false,true]{{let mut e=Effects{{local:900,cursor:2,globals:[None;2],fail}};assert_eq!(run(&mut e).is_err(),fail);assert_eq!((e.local,e.cursor),(907,-1));assert_eq!(e.globals,[if fail{{None}}else{{Some(u32::MAX)}},Some(907)]);}}}}
+        "#,
+            p.live_source
+        );
+        let dir = std::env::temp_dir().join(format!("w2l-funclet-live-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("test.rs");
+        let bin = dir.join(if cfg!(windows) { "test.exe" } else { "test" });
+        std::fs::write(&file, source).unwrap();
+        let out = std::process::Command::new("rustc")
+            .arg("--edition=2021")
+            .arg(&file)
+            .arg("-o")
+            .arg(&bin)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(std::process::Command::new(&bin).status().unwrap().success());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
     #[test]
     fn native_postcall_observations_use_live_values_and_store_failure_cannot_succeed() {
         let proof = prove(&code(-44, -48, true)).unwrap();

@@ -1,5 +1,10 @@
 # Cohesive handler execution milestone — SUB-579 / same PR45
 
+Current live-field boundary: [original finally/dispatcher effects](LIVE-FINALLY.md)
+connects Inner initialization and original cleanup bodies to canonical owned
+storage, preserving partial effects on failure. Guard/epilog/retirement and
+full entry-to-exit admission remain open; no new whole-PE pairs.
+
 Current normal-call integration: [original FILE scope](FILE-SCOPE.md) connects
 owned lock acquisition, active scope, explicit driver cut, original normal cleanup
 and epilog. It preserves unresolved formatter exceptions and termination as

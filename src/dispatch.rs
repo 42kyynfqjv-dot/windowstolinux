@@ -47,6 +47,7 @@ struct State<'a> {
     cleanup_entry_depth: Option<u32>,
     flags: Option<(bool, bool)>,
     source: String,
+    live_source: String,
     serial: usize,
     table_va: u32,
     trace_va: u32,
@@ -55,6 +56,9 @@ struct State<'a> {
 }
 pub(crate) struct ProvenDispatch {
     pub source: String,
+    /// Checked live effects, emitted by the same original-instruction proof walk.
+    #[allow(dead_code)] // Legacy slice entry points use the array-backed emitter.
+    pub live_source: String,
     pub parent: i32,
     pub action: usize,
     /// Own maximum bytes below entry ESP, including nested CALL's return word
@@ -88,10 +92,15 @@ fn full(reg: Reg) -> Result<usize, String> {
 }
 impl State<'_> {
     fn snapshot(&mut self, expression: String, known: Option<u32>) -> Value {
+        self.snapshot_live(expression.clone(), expression, known)
+    }
+    fn snapshot_live(&mut self, expression: String, live: String, known: Option<u32>) -> Value {
         let name = format!("v{}", self.serial);
         self.serial += 1;
         self.source
             .push_str(&format!("let {name}:u32={expression};\n"));
+        self.live_source
+            .push_str(&format!("let {name}:u32={live};\n"));
         Value::Scalar {
             expression: name,
             known,
@@ -148,9 +157,17 @@ impl State<'_> {
             Operand::Reg(reg) => self.registers[full(*reg)?].clone(),
             Operand::Memory(a, 32) => match self.address(a)? {
                 Place::Stack(at) => self.stack[&at].value.clone(),
-                Place::Cursor => self.snapshot("*cursor as u32".into(), Some(self.cursor as u32)),
-                Place::Local => self.snapshot("cells[1]".into(), None),
-                Place::Trace => self.snapshot("cells[0]".into(), None),
+                Place::Cursor => self.snapshot_live(
+                    "*cursor as u32".into(),
+                    "effects.read_cursor()? as u32".into(),
+                    Some(self.cursor as u32),
+                ),
+                Place::Local => {
+                    self.snapshot_live("cells[1]".into(), "effects.read_cell(1)?".into(), None)
+                }
+                Place::Trace => {
+                    self.snapshot_live("cells[0]".into(), "effects.read_cell(0)?".into(), None)
+                }
                 Place::Table(index, false) => {
                     let n = self.rows[index].0 as u32;
                     Value::Scalar {
@@ -192,6 +209,8 @@ impl State<'_> {
                     self.cursor_writes += 1;
                     self.source
                         .push_str(&format!("*cursor={expression} as i32;\n"));
+                    self.live_source
+                        .push_str(&format!("effects.write_cursor({expression} as i32)?;\n"));
                 }
                 Place::Local | Place::Trace => {
                     let (expression, _) = scalar(&value)?;
@@ -202,6 +221,8 @@ impl State<'_> {
                     };
                     self.source
                         .push_str(&format!("cells[{index}]={expression};\n"));
+                    self.live_source
+                        .push_str(&format!("effects.write_cell({index},{expression})?;\n"));
                 }
                 Place::Table(..) => return Err("dispatch: immutable table write".into()),
             },
@@ -290,6 +311,10 @@ impl State<'_> {
         self.serial += 1;
         self.source.push_str(&format!(
             "let mut {name}=[{},{}];\ncleanup_{action}(&mut {name})?;\n",
+            values[0], values[1]
+        ));
+        self.live_source.push_str(&format!(
+            "let mut {name}=[{},{}];\neffects.cleanup({action},&mut {name})?;\n",
             values[0], values[1]
         ));
         for (index, at) in [start, second].into_iter().enumerate() {
@@ -389,6 +414,7 @@ pub(crate) fn prove_dispatch(
         cleanup_entry_depth: None,
         flags: None,
         source: format!("if *cursor!={entry}i32 {{return Err(Error::Order);}}\n"),
+        live_source: format!("effects.require_cursor({entry})?;\n"),
         serial: 0,
         table_va,
         trace_va,
@@ -505,8 +531,10 @@ pub(crate) fn prove_dispatch(
                     return Err("dispatch: return ownership/cursor/call proof".into());
                 }
                 s.source.push_str("Ok(())\n");
+                s.live_source.push_str("Ok(())\n");
                 return Ok(ProvenDispatch {
                     source: s.source,
+                    live_source: s.live_source,
                     parent: s.cursor,
                     action: s.calls[0],
                     temporary_bytes: s.temporary_bytes,
@@ -626,6 +654,51 @@ mod tests {
         }
         source.push_str("fn main(){let mut c=[0,100];let mut k=0;dispatch_0(&mut c,&mut k).unwrap();assert_eq!(c,[1,107]);assert_eq!(k,1);dispatch_1(&mut c,&mut k).unwrap();assert_eq!(c,[18,118]);assert_eq!(k,-1);c=[18,200];k=2;dispatch_2(&mut c,&mut k).unwrap();assert_eq!(c,[291,213]);assert_eq!(k,-1);c=[u32::MAX,u32::MAX];k=0;dispatch_0(&mut c,&mut k).unwrap();assert_eq!(c,[0xfffffff1,6]);let before=c;k=1;assert!(dispatch_0(&mut c,&mut k).is_err());assert_eq!(c,before);assert_eq!(k,1);}");
         let dir = std::env::temp_dir().join(format!("w2l-dispatch-native-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("test.rs");
+        let bin = dir.join(if cfg!(windows) { "test.exe" } else { "test" });
+        std::fs::write(&file, source).unwrap();
+        let out = std::process::Command::new("rustc")
+            .arg("--edition=2021")
+            .arg(&file)
+            .arg("-o")
+            .arg(&bin)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(std::process::Command::new(&bin).status().unwrap().success());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+    #[test]
+    fn live_effects_preserve_original_store_order_and_private_failure_boundary() {
+        let p = proof(&code(), 0).unwrap();
+        let source = format!(
+            r#"
+        #[derive(Debug,PartialEq)]struct Failure;
+        struct Effects{{cells:[u32;2],cursor:i32,fail:u8,private:Option<[u32;2]>}}
+        impl Effects{{
+         fn require_cursor(&mut self,n:i32)->Result<(),Failure>{{if self.cursor==n{{Ok(())}}else{{Err(Failure)}}}}
+         fn read_cursor(&mut self)->Result<i32,Failure>{{Ok(self.cursor)}}
+         fn read_cell(&mut self,i:usize)->Result<u32,Failure>{{Ok(self.cells[i])}}
+         fn write_cell(&mut self,i:usize,v:u32)->Result<(),Failure>{{if self.fail==i as u8+2{{return Err(Failure)}}self.cells[i]=v;Ok(())}}
+         fn write_cursor(&mut self,v:i32)->Result<(),Failure>{{if self.fail==4{{return Err(Failure)}}self.cursor=v;Ok(())}}
+         fn cleanup(&mut self,a:usize,c:&mut[u32;2])->Result<(),Failure>{{assert_eq!(a,0);c[0]=c[0].wrapping_mul(16).wrapping_add(1);c[1]=c[1].wrapping_add(7);self.private=Some(*c);if self.fail==1{{Err(Failure)}}else{{Ok(())}}}}
+        }}
+        fn run(effects:&mut Effects)->Result<(),Failure>{{{}}}
+        fn main(){{
+         for (fail,expected,cursor) in [(0,[49,107],1),(1,[3,100],0),(2,[3,100],0),(3,[49,100],0),(4,[49,107],0)]{{
+          let mut e=Effects{{cells:[3,100],cursor:0,fail,private:None}};assert_eq!(run(&mut e).is_ok(),fail==0);assert_eq!(e.cells,expected);assert_eq!(e.cursor,cursor);assert_eq!(e.private,Some([49,107]));
+         }}
+         let mut e=Effects{{cells:[u32::MAX,u32::MAX],cursor:0,fail:0,private:None}};run(&mut e).unwrap();assert_eq!(e.cells,[0xfffffff1,6]);
+         e.cursor=2;let before=e.cells;assert!(run(&mut e).is_err());assert_eq!(e.cells,before);
+        }}"#,
+            p.live_source
+        );
+        let dir = std::env::temp_dir().join(format!("w2l-dispatch-live-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let file = dir.join("test.rs");
         let bin = dir.join(if cfg!(windows) { "test.exe" } else { "test" });
