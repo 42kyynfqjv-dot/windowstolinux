@@ -280,3 +280,45 @@ remain unable to authorize a cursor advance merely because EAX is 1.
 
 This review changes documentation/evidence only. Original handler return-only
 execution, ordered advancement and full startup/rcedit remain unproved.
+
+## Original return and first ordered advancement
+
+The new return-path emitter retains the CALL-cut interface unchanged and accepts
+only a separately validated terminal RET/RET-immediate contract. Original edges,
+branches, instruction extents and cleanup remain checked. The live search adapter
+binds the retained prefix/body/table bytes, executes the original prefix (including
+its guard and context helpers), then the proved empty-scope branch and epilog.
+This path skips the later guard call exactly as the original branch does. It
+checks the actual returned EAX against ContinueSearch=1; the proof constant never
+replaces execution. RET consumes only the handler return identity. Transient
+handler facts and pointer tags into them expire while numeric escaped bytes and
+prior guest effects are preserved. The interrupted RaiseException CALL stays
+suspended and retains its protected return.
+
+A first-node cursor binds the fresh normal registration, event, runtime/epoch,
+source owner, actual handler, predecessor, captured objects and saved ESP, plus
+the complete registered C++ inventory and normal-frame count. Only the generated
+original handler call can mint its executed receipt. At consumption it rechecks
+code/table bytes, suspension, source/capture ownership, predecessor record bytes
+and unique live return authority. One successful ContinueSearch advances the
+cursor to the actual predecessor, without unlinking the physical FS head or
+issuing a restoration permit. Receipt replay and cursor reuse reject.
+
+Twenty-one native cursor cases and one standalone return case exercise this
+composition, including varied predecessor allocation sizes. They require reaching
+explicit success/error assertions. Negatives cover wrong target, source, order,
+serial, duplicate use, changed code before/after execution, retired context or
+predecessor, replaced/rebound capture, unexpected child inventory and nested
+exception acquisition. The unknown-feature failure preserves prior original
+local writes. Separate emitter tests reject CALL-as-RET, wrong/unaligned cleanup
+and non-original edges; three retained-handler byte mutations reject compilation.
+
+This closes the first EH4 return/advance boundary only. The predecessor is selected
+but **not executed by this cursor yet**. Its C++ search invocation must derive
+owner/record authority from that registration and retain the source event, rather
+than reuse the older supplied-owner unwind receipt (which requires unwind flags).
+Actual capture acquisition, module/fiber acquisition, incoming-chain containment,
+collided delivery and termination remain unproved. Prefix helper effects retain
+their existing independently proved component contracts; this does not acquire a
+Windows runtime or prove every helper's original initialization. No new Windows
+observation or whole-PE comparison is claimed. Full startup/rcedit stays rejected.

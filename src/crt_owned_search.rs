@@ -176,6 +176,148 @@ fn {name}(frame:&mut CrtOwnedFrameView<'_>,cpu:&mut CrtCpu,objects:&CrtOwnedPref
     ))
 }
 
+/// Execute a proved empty-scope search on the suspended normal source. Helper
+/// contracts remain explicit; no captured context or incoming chain is invented.
+pub(crate) fn emit_live_return(
+    input: Input<'_>,
+    prefix: &super::handler_checks::PrefixProof,
+    name: &str,
+) -> Result<String, String> {
+    if prefix.source.is_empty()
+        || prefix.entry.checked_add(prefix.source.len() as u32) != Some(prefix.end)
+        || input.proof.instructions.first().map(|s| s.pc) != Some(input.origin)
+        || input.origin.checked_add(input.code.len() as u32).is_none()
+        || input.origin != prefix.end
+        || input.proof.source_table != input.table
+        || input.proof.final_level != -2
+        || input.code.is_empty()
+        || input.code.len() > 1024
+        || input.table.len() < 16
+        || input.table.len() > 4096
+    {
+        return Err("live search: entry/table/level contract".into());
+    }
+    let (return_pc, expected) = match input.proof.actions.last() {
+        Some(Action::ReturnDisposition { pc, value: 1 }) => (*pc, 1),
+        _ => return Err("live search: requires proved ContinueSearch return".into()),
+    };
+    let guard = prefix
+        .calls
+        .iter()
+        .find(|c| c.effect == super::handler_checks::CallEffect::ValidateGuards)
+        .ok_or("live search: prefix guard absent")?
+        .target;
+    let mut calls = BTreeMap::new();
+    for action in &input.proof.actions[..input.proof.actions.len() - 1] {
+        match action {
+            Action::ValidateGuards { pc, target, .. } if *target == guard => {
+                if calls.insert(*pc, *target).is_some() {
+                    return Err("live search: repeated guard".into());
+                }
+            }
+            _ => return Err("live search: effect requires separate binding".into()),
+        }
+    }
+    if calls.len() > 1 || input.proof.instructions.last().map(|s| s.pc) != Some(return_pc) {
+        return Err("live search: original guard/return shape".into());
+    }
+    let mut path = Vec::new();
+    for s in &input.proof.instructions {
+        let offset =
+            s.pc.checked_sub(input.origin)
+                .ok_or("live search: source offset")? as usize;
+        if input.code.get(
+            offset
+                ..offset
+                    .checked_add(s.bytes.len())
+                    .ok_or("live search: extent")?,
+        ) != Some(s.bytes.as_slice())
+        {
+            return Err("live search: changed original instruction".into());
+        }
+        path.push(PathStep {
+            pc: s.pc,
+            bytes: &s.bytes,
+            next: s.next,
+        });
+    }
+    let mut consumed = 0;
+    let body = crt_stream_emit::emit_proved_return_path(
+        &path,
+        |pc, target| {
+            if calls.get(&pc).copied().map(Target::Direct) != Some(target) {
+                return Err("live search: unbound original call".into());
+            }
+            consumed += 1;
+            Ok(format!("guard_prefix_call(frame,cpu,{})?;", pc + 5))
+        },
+        &BTreeMap::new(),
+        |_, op| {
+            Ok(if matches!(op, Op::Call(_)) {
+                String::new()
+            } else {
+                "let rt=&mut *frame.rt;".into()
+            })
+        },
+        0,
+    )?;
+    if consumed != calls.len() {
+        return Err("live search: unused guard effect".into());
+    }
+    let raw = input.code;
+    let table = input.table;
+    let prefix_raw = &prefix.source;
+    let source = prefix.caller_body();
+    let entry = prefix.entry;
+    let origin = input.origin;
+    let table_va = input.table_va;
+    Ok(format!(
+        r#"
+fn {name}_identity()->u32{{{entry}}}
+fn {name}_bytes(rt:&CrtStreamRuntime)->RegistryResult<()>{{
+ let regions:&[(u32,&[u8])]=&[({entry}u32,&{prefix_raw:?}[..]),({origin}u32,&{raw:?}[..]),({table_va}u32,&{table:?}[..])];
+ for &(base,bytes) in regions{{
+  let p=rt.resolve_absolute(base,CrtRegionKind::Module)?;rt.valid(p,bytes.len()as u32)?;
+  for(i,&b)in bytes.iter().enumerate(){{if rt.load(rt.offset(p,i as i64)?,8)?.known_scalar()?!=u32::from(b){{return Err("live search original code/table changed");}}}}
+ }}Ok(())
+}}
+fn {name}_dispatch(search:&mut CrtOrderedSearch,event:&mut CrtNormalException,objects:&CrtNormalObjects,rt:&mut CrtStreamRuntime,interrupted:&CrtCpu,epoch:&mut NormalCallEpoch<'_>,binding:&CrtNormalBinding,dispatcher:&mut CrtCpu,continuation:u32)->RegistryResult<CrtOrderedReturn>{{
+ let result=(||{{
+ search.validate(event,objects,rt,interrupted,epoch,binding)?;{name}_bytes(rt)?;
+ if search.phase!=0||search.handler!={entry}{{return Err("ordered search handler/phase mismatch");}}
+ let receipt=event.execute_live_handler(objects,rt,interrupted,epoch,binding,dispatcher,continuation,|frame,cpu|{name}(frame,cpu,objects))?;
+ search.validate(event,objects,rt,interrupted,epoch,binding)?;{name}_bytes(rt)?;
+ if receipt.value!=CrtValue::scalar(1){{return Err("ordered search unexpected executed disposition");}}
+ search.phase=1;Ok(CrtOrderedReturn{{serial:search.serial,source:search.source,previous:search.previous,handler:{entry},receipt}})
+ }})();if result.is_err(){{search.phase=3;}}result
+}}
+fn {name}_advance(search:&mut CrtOrderedSearch,returned:CrtOrderedReturn,event:&mut CrtNormalException,objects:&CrtNormalObjects,rt:&CrtStreamRuntime,interrupted:&CrtCpu,epoch:&mut NormalCallEpoch<'_>,binding:&CrtNormalBinding)->RegistryResult<RegistryHead>{{
+ if let Err(e)={name}_bytes(rt){{search.phase=3;return Err(e);}}
+ if returned.handler!={entry}{{search.phase=3;return Err("ordered search wrong executed handler");}}
+ search.consume(returned,event,objects,rt,interrupted,epoch,binding)
+}}
+fn {name}(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,objects:&CrtNormalObjects)->RegistryResult<CrtValue>{{
+ let result=(||{{
+ frame.validate()?;objects.validate(frame.event,frame.rt,frame.epoch)?;{name}_bytes(frame.rt)?;
+ if frame.binding.layout.handler!={entry}||frame.scope_address()!={table_va}||frame.state.level!= -2
+  ||frame.rt.load(frame.rt.offset(objects.record,4)?,32)?.known_scalar()?!=0{{return Err("live search handler/scope/flags contract");}}
+ frame.preflight_bridge(cpu,{temporary})?;
+ let local_low=frame.rt.offset(CrtCpu::pointer(cpu.entry[4])?,-{temporary})?;
+ {source}
+ let pair=CrtHandlerPair::from_installed(frame,cpu,objects)?;pair.read(frame,cpu)?;
+ let value=(||{{{body}}})()?;
+ if !cpu.returned||value!=CrtValue::scalar({expected}){{return Err("live search disposition disagrees with proof");}}
+ // RET and saved-register restoration happened above. Retire only transient
+ // facts below the handler return slot; the interrupted source stays live.
+ frame.retire_handler_scratch(cpu,local_low,{temporary})?;
+ {name}_bytes(frame.rt)?;frame.validate()?;Ok(value)
+ }})();if result.is_err(){{frame.state.failed=true;}}result
+}}
+"#,
+        temporary = prefix.temporary_bytes
+    ))
+}
+
 /// Lower the separately proved selected-caller phase after GlobalUnwind returns.
 pub(crate) fn emit_post_global(input: Input<'_>, name: &str) -> Result<String, String> {
     let global = input

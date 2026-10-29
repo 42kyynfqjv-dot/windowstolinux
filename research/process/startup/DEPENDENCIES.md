@@ -107,3 +107,35 @@ CALL cut uses a different storage/lifetime authority from pending normal deliver
 Return-only support therefore needs a verified terminal RET contract and live
 normal-frame adapter together, preserving the interrupted source's suspension;
 removing the GlobalUnwind check alone is insufficient. See THREAD-CHAIN.md.
+
+## Current return/advance integration
+
+The earlier return-only emitter gate is now implemented as a separate RET
+contract and live pending-event adapter. The original EH4 empty-scope search runs
+its prefix/helpers/epilog and produces an actual ContinueSearch result. A receipt
+bound to that normal registration permits exactly one checked advance to the
+predecessor; source suspension and physical thread head remain intact. Twenty-one
+cursor cases plus a standalone native return case cover execution and rejection.
+See [THREAD-CHAIN.md](THREAD-CHAIN.md) for contracts and limitations.
+
+Next connected gate: invoke the selected C++ registration with its own live owner
+and the same search event. The current C++ component invocation accepts a supplied
+owner and unwind flags; it must not be relabeled a search-selection certificate.
+Actual captured-state acquisition, loader/FLS producers, incoming/collided
+semantics and termination stay separate unresolved prerequisites. New evidence
+is component execution from retained original bytes, not whole-PE translation.
+
+Validation for the return/advance checkpoint: 223 CRT tests passed (one retained
+observation test run separately), 175 root tests passed, and all-target Clippy
+passed with warnings denied. The retained-artifact checker passed, including five
+recorded Windows wrapper comparisons and all new native cases. It retained PE
+SHA256 `1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4`
+and generated harness SHA256
+`fe270f49ba9a37241c585bafbc6d6c837e01696a55b3c72effd3da6eeb5256c8`.
+These are local component/replay results, with zero new Windows observations and
+zero whole-PE pairs. Independent Sol review and new-commit CI remain required.
+
+All three workflows for both reviewed predecessors completed successfully:
+214d585: 40971700846, 40971694667, 40971694772;
+cfaa71f: 40972514039, 40972507526, 40972507509.
+Their success does not explain or erase the historical Windows timeouts.

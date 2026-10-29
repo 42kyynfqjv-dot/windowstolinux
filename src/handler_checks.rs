@@ -32,6 +32,8 @@ pub(crate) struct CallSite {
 }
 #[derive(Clone, Debug)]
 pub(crate) struct PrefixProof {
+    #[allow(dead_code)] // Live return binding; projection-only examples use the semantic fields.
+    pub(crate) source: Vec<u8>,
     #[allow(dead_code)]
     pub(crate) front: String,
     pub(crate) caller: String,
@@ -490,6 +492,7 @@ pub(crate) fn prove_prefix(code: &[u8], origin: u32, b: &Bindings) -> Result<Pre
         return Err("handler prefix incomplete saved-state/effect contract".into());
     }
     Ok(PrefixProof {
+        source: code.to_vec(),
         front: front[..front_end.ok_or("prefix missing live front")?].into(),
         caller: front,
         unwind_caller: unwind_caller.ok_or("prefix missing unwind edge")?,

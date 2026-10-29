@@ -74,6 +74,7 @@ def check(original, observation, out, compare=None):
     (out/'original-guard-validator.bin').write_bytes(mapped(image, 0x4021d0, 50, executable=True))
     (out/'original-security-check.bin').write_bytes(mapped(image, 0x40154c, 14, executable=True))
     (out/'file-scope-header.bin').write_bytes(mapped(image, 0x41b400, 16))
+    (out/'file-scope-table.bin').write_bytes(mapped(image, 0x41b400, 28))
     (out/'original-handler-prefix.bin').write_bytes(mapped(image, 0x402210, 98, executable=True))
     (out/'original-context-check.bin').write_bytes(mapped(image, 0x402877, 48, executable=True))
     (out/'original-filter-bridge.bin').write_bytes(mapped(image, 0x402800, 23, executable=True))
@@ -346,6 +347,8 @@ def check(original, observation, out, compare=None):
         ('chain-ownership-gap', 'original_cxx_fs_views_do_not_establish_shared_thread_chain_selection'),
         ('shared-chain', 'original_cxx_and_eh4_share_live_lifo_thread_head'),
         ('chain-effect-lifetime', 'shared_chain_rechecks_owner_at_original_fs_effect'),
+        ('live-return', 'original_empty_search_executes_guard_and_protected_return'),
+        ('ordered-search', 'original_return_receipt_advances_only_matching_live_registration'),
     ]:
         delivery = subprocess.run(['cargo','test','--locked','--example','crt_stream',test],env=env,capture_output=True,timeout=180)
         (out/(label+'.stdout')).write_bytes(delivery.stdout)
@@ -376,7 +379,7 @@ def check(original, observation, out, compare=None):
                   main_scope_header_sha256=sha((out/'Main-scope-header.bin').read_bytes()),
                   locale_state_evidence=locale_state_evidence(image),
                   unwind_binding_source_sha256=sha((out/'cxx-unwind-connected.rs').read_bytes()),
-                  shared_chain_native_cases=24, shared_chain_effect_lifetime_cases=4, shared_chain_new_windows_pairs=0, chain_ownership_diagnostic_experiments=1, chain_ownership_new_windows_pairs=0, bound_cxx_invocation_native_cases=34, bound_cxx_invocation_new_windows_pairs=0, prefix_delivery_unwind_native_cases=14, prefix_delivery_new_windows_pairs=0, dispatcher_delivery_unwind_native_cases=8, dispatcher_delivery_new_windows_pairs=0, delivery_child_native_cases=14, delivery_cached_unwind_native_cases=4, delivery_new_windows_pairs=0,
+                  ordered_search_native_cases=21, original_empty_search_native_cases=1, ordered_search_new_windows_pairs=0, shared_chain_native_cases=24, shared_chain_effect_lifetime_cases=4, shared_chain_new_windows_pairs=0, chain_ownership_diagnostic_experiments=1, chain_ownership_new_windows_pairs=0, bound_cxx_invocation_native_cases=34, bound_cxx_invocation_new_windows_pairs=0, prefix_delivery_unwind_native_cases=14, prefix_delivery_new_windows_pairs=0, dispatcher_delivery_unwind_native_cases=8, dispatcher_delivery_new_windows_pairs=0, delivery_child_native_cases=14, delivery_cached_unwind_native_cases=4, delivery_new_windows_pairs=0,
                   unwind_native_cases=24, cached_unwind_native_cases=14, cached_unwind_new_windows_pairs=0, unwind_new_windows_pairs=0, unwind_binding_rust_tests=1,
                   unwind_state_source_sha256=sha((out/'unwind-state-live.rs').read_bytes()),
                   unwind_state_native_cases=12, unwind_state_new_windows_pairs=0,

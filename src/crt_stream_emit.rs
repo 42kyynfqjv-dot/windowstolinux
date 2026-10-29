@@ -128,8 +128,39 @@ pub(crate) fn emit_proved_path_with_store(
     path: &[PathStep<'_>],
     call: impl FnMut(u32, Target) -> Result<String, String>,
     roles: &BTreeMap<u32, String>,
+    before: impl FnMut(u32, &Op) -> Result<String, String>,
+    store: impl FnMut(u32, &Address, u8) -> Result<Option<String>, String>,
+) -> Result<String, String> {
+    emit_path(path, call, roles, before, store, None)
+}
+
+/// A separately proved terminal RET. The original opcode supplies cleanup;
+/// the bound activation checks that cleanup, saved registers and return token.
+/// This does not turn a CALL cut into permission to return.
+pub(crate) fn emit_proved_return_path(
+    path: &[PathStep<'_>],
+    call: impl FnMut(u32, Target) -> Result<String, String>,
+    roles: &BTreeMap<u32, String>,
+    before: impl FnMut(u32, &Op) -> Result<String, String>,
+    expected_cleanup: u16,
+) -> Result<String, String> {
+    emit_path(
+        path,
+        call,
+        roles,
+        before,
+        |_, _, _| Ok(None),
+        Some(expected_cleanup),
+    )
+}
+
+fn emit_path(
+    path: &[PathStep<'_>],
+    call: impl FnMut(u32, Target) -> Result<String, String>,
+    roles: &BTreeMap<u32, String>,
     mut before: impl FnMut(u32, &Op) -> Result<String, String>,
     store: impl FnMut(u32, &Address, u8) -> Result<Option<String>, String>,
+    return_cleanup: Option<u16>,
 ) -> Result<String, String> {
     if path.is_empty() || path.len() > 2048 {
         return Err("CRT path: instruction budget".into());
@@ -152,7 +183,20 @@ pub(crate) fn emit_proved_path_with_store(
             return Err("CRT path: overlapping instruction cuts".into());
         }
         if index + 1 == path.len() {
-            if step.next.is_some() || !matches!(node.op, Op::Call(_)) {
+            if let Some(cleanup) = return_cleanup {
+                let actual = match node.op {
+                    Op::Ordinary(Operation::Return) => Some(0),
+                    Op::ReturnPop(n) => Some(n),
+                    _ => None,
+                };
+                if step.next.is_some()
+                    || actual != Some(cleanup)
+                    || cleanup > 256
+                    || cleanup % 4 != 0
+                {
+                    return Err("CRT path: terminal return contract".into());
+                }
+            } else if step.next.is_some() || !matches!(node.op, Op::Call(_)) {
                 return Err("CRT path: terminal call cut".into());
             }
         } else if step.next != Some(path[index + 1].pc)
@@ -204,7 +248,13 @@ pub(crate) fn emit_proved_path_with_store(
             code.push_str(&before(pc, op)?);
             Ok(code)
         },
-        |_, _| Err("CRT path: unproved return".into()),
+        |pc, cleanup| {
+            if return_cleanup == Some(cleanup) && path.last().is_some_and(|s| s.pc == pc) {
+                Ok(None)
+            } else {
+                Err("CRT path: unproved return".into())
+            }
+        },
         None,
         store,
     )
@@ -458,5 +508,91 @@ mod indirect_rejection_tests {
                 "CRT emit indirect call requires target proof"
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod terminal_path_tests {
+    use super::*;
+    #[test]
+    fn return_contract_does_not_admit_call_cuts_or_wrong_cleanup() {
+        for (bytes, cleanup, accepted) in [
+            (&[0xc3][..], 0, true),
+            (&[0xc2, 8, 0][..], 8, true),
+            (&[0xc2, 8, 0][..], 0, false),
+            (&[0xc3][..], 8, false),
+            (&[0xe8, 0, 0, 0, 0][..], 0, false),
+            (&[0xc2, 3, 0][..], 3, false),
+        ] {
+            let p = [PathStep {
+                pc: 0x400100,
+                bytes,
+                next: None,
+            }];
+            let got = emit_proved_return_path(
+                &p,
+                |_, _| panic!("terminal CALL is not RET"),
+                &BTreeMap::new(),
+                |_, _| Ok(String::new()),
+                cleanup,
+            );
+            assert_eq!(got.is_ok(), accepted, "{bytes:?}/{cleanup}");
+            if accepted {
+                assert!(got.unwrap().contains("cpu.finish"));
+            }
+            if bytes[0] != 0xe8 {
+                assert_eq!(
+                    emit_proved_path(
+                        &p,
+                        |_, _| panic!(),
+                        &BTreeMap::new(),
+                        |_, _| Ok(String::new())
+                    )
+                    .unwrap_err(),
+                    if cleanup == 3 {
+                        "CRT IR: bounded word RET cleanup"
+                    } else {
+                        "CRT path: terminal call cut"
+                    }
+                );
+            }
+        }
+    }
+    #[test]
+    fn return_path_requires_original_edges_and_disjoint_instruction_cuts() {
+        let call = |_, _| Err("unexpected call".into());
+        let p = [
+            PathStep {
+                pc: 0x400100,
+                bytes: &[0x90],
+                next: Some(0x400103),
+            },
+            PathStep {
+                pc: 0x400103,
+                bytes: &[0xc3],
+                next: None,
+            },
+        ];
+        assert_eq!(
+            emit_proved_return_path(&p, call, &BTreeMap::new(), |_, _| Ok(String::new()), 0)
+                .unwrap_err(),
+            "CRT path: original successor mismatch"
+        );
+        let p = [
+            PathStep {
+                pc: 0x400100,
+                bytes: &[0xc3],
+                next: Some(0x400101),
+            },
+            PathStep {
+                pc: 0x400101,
+                bytes: &[0xc3],
+                next: None,
+            },
+        ];
+        assert!(
+            emit_proved_return_path(&p, call, &BTreeMap::new(), |_, _| Ok(String::new()), 0)
+                .is_err()
+        );
     }
 }

@@ -1490,6 +1490,86 @@ fn bound_invocation(){for delivery_mode in 0..34{let prefix=true;let mode=0;
   checked=true;Err::<(),_>("original child unwind completion is not OS delivery/restoration")
  });assert!(result.is_err());assert!(checked,"invocation case {} failed before its assertions",delivery_mode);assert_eq!(rt.initialization,None);assert_eq!(rt.module_references.len(),refs);assert_eq!(rt.memory.read(cache.address(),4).unwrap(),cache_before);assert_eq!(rt.last_os_error,saved_error);
 }}
+fn ordered_search_cases(){for mode in 0..21{
+ let(m,mut r,main,mut permit)=fixture_with_extra(&[(0x410000,0x420000)]);let mut rt=runtime(&r);let mut checked=false;
+ let result=r.with_normal_calls(&m,&mut permit,&main,|e|{
+  let mut ancestor=cpu(&mut rt,0xe800,1300);ancestor.return_pop=0;ancestor.push(&mut rt,CrtValue::scalar((mode%3)*16))?;ancestor.r[0]=CrtValue::scalar(0x414ad6);
+  let mut ab=CrtCxxChainBinding::bind(&rt,&ancestor,e)?;let mut af=CrtPtdFrame::new(&rt,&ancestor,ab.token,0x414ad6,0x41c000)?;
+  ptd_prolog_registered(&mut rt,&mut ancestor,e,&mut af,&mut ab,0x40a33e).expect("original predecessor installation");let predecessor=e.head()?;
+  let mut c=cpu(&mut rt,0xd000,1301);let mut b=CrtNormalBinding::bind(&rt,&c,e,epilog_run_layout())?;start(&mut rt,&mut c,e,&mut b,1302)?;
+  for arg in [0,0,0,0xe0420042]{c.push(&mut rt,CrtValue::scalar(arg))?;}
+  let mut event=CrtNormalException::issue(&mut rt,&mut c,e,&b,raise_site())?;let saved=c.r;
+  let record=rt.map_region(0x50000,80,CrtRegionKind::Context,None)?;let context=rt.map_region(0x51000,716,CrtRegionKind::Context,None)?;
+  for(offset,value)in [(0,event.code),(4,0),(8,0),(16,0)]{rt.store(rt.offset(record,offset)?,32,CrtValue::scalar(value))?;}
+  rt.store(rt.offset(context,0xc4)?,32,CrtValue::scalar(0x9500))?;
+  let mut objects=CrtNormalObjects::bind(&event,&rt,e,record,context)?;
+  let mut d=cpu(&mut rt,0xc000,1303);let sp=rt.resolve_absolute(0xbfc0,CrtRegionKind::Stack)?;d.r[4]=CrtValue::Pointer(sp);
+  for(i,v)in [CrtValue::Pointer(record),CrtValue::Pointer(b.at(&rt,b.layout.record)?),CrtValue::Pointer(context),CrtValue::scalar(0)].into_iter().enumerate(){rt.store(rt.offset(sp,i as i64*4)?,32,v)?;}
+  map_live_search_return(&mut rt)?;
+  let mut search=CrtOrderedSearch::begin(&event,&objects,&rt,&c,e,&b).expect("pending source cursor");assert_eq!(search.previous,predecessor);
+  if mode==10{rt.store(rt.resolve_absolute(0x402210,CrtRegionKind::Module)?,8,CrtValue::scalar(0x90))?;}
+  if mode==11{search.handler+=1;}
+  if mode==12{rt.store(rt.resolve_absolute(0x41ccb8,CrtRegionKind::Module)?,32,CrtValue::Scalar{bits:0,known:0})?;}
+  if mode==13{search.current=predecessor;}
+  if mode==14{search.event+=1;}
+  if mode==19{assert_eq!(CrtNormalException::issue(&mut rt,&mut c,e,&b,raise_site()).err(),Some("normal exception nested delivery contract unbound"));assert_eq!(event.delivery,CrtNormalDelivery::Pending);}
+  let returned=original_live_search_return_dispatch(&mut search,&mut event,&objects,&mut rt,&c,e,&b,&mut d,0x401900);
+  if (10..=14).contains(&mode){
+   let expected=match mode{10=>"live search original code/table changed",12=>"CRT scalar knowledge/type",_=>"ordered search stale source/order/children"};
+   assert_eq!(returned.err(),Some(expected),"dispatch negative {mode}");
+   if mode==12{assert_eq!(c.r,saved);assert_eq!(rt.load(rt.resolve_absolute(0xbfac,CrtRegionKind::Stack)?,32)?,CrtValue::scalar(1));assert_eq!(event.delivery,CrtNormalDelivery::Failed);}
+   checked=true;return Err("ordered rejection checked");
+  }
+  let mut returned=returned.expect("receipt follows actual original prefix and terminal RET");
+  assert_eq!(returned.handler,0x402210);assert_eq!(returned.receipt.value,CrtValue::scalar(1));
+  assert_eq!(c.r,saved);assert_eq!(e.registry.head,RegistryHead::Normal(event.frame));assert!(e.state().is_err());
+  if mode==18{assert_eq!(original_live_search_return_dispatch(&mut search,&mut event,&objects,&mut rt,&c,e,&b,&mut d,0x401900).err(),Some("ordered search handler/phase mismatch"));checked=true;return Err("ordered rejection checked");}
+  let replay=if mode==5{Some(CrtOrderedReturn{serial:returned.serial,source:returned.source,previous:returned.previous,handler:returned.handler,receipt:CrtNormalHandlerReturn{identity:returned.receipt.identity,epoch:returned.receipt.epoch,frame:returned.receipt.frame,generation:returned.receipt.generation,level:returned.receipt.level,value:returned.receipt.value}})}else{None};
+  match mode{
+   1=>returned.handler+=1,2=>returned.source.generation+=1,3=>returned.previous=RegistryHead::Normal(event.frame),4=>returned.serial+=1,
+   6=>rt.memory.release(context.cap,context.owner).map_err(|_|"test context retirement")?,
+   7=>event.generation+=1,
+   8=>rt.consume_stack(CrtCpu::pointer(ancestor.entry[4])?,CrtValue::ProtectedReturn(ancestor.return_id))?,
+   9=>rt.store(rt.resolve_absolute(0x402275,CrtRegionKind::Module)?,8,CrtValue::scalar(0x90))?,
+   15=>{let other=rt.map_region(0x52000,716,CrtRegionKind::Context,None)?;rt.store(rt.offset(other,0xc4)?,32,CrtValue::scalar(0x9500))?;objects=CrtNormalObjects::bind(&event,&rt,e,record,other)?;},
+   20=>{rt.store(rt.offset(context,0xc4)?,32,CrtValue::scalar(0x9600))?;objects=CrtNormalObjects::bind(&event,&rt,e,record,context)?;},
+   16=>{let extra=e.registry.cxx[0].clone();e.registry.cxx.push(extra);},
+   17=>{let at=rt.resolve_absolute(e.registry.cxx[0].record+4,CrtRegionKind::Stack)?;rt.store(at,32,CrtValue::scalar(0x414ad7))?;},
+   _=>{}
+  }
+  let taken=original_live_search_return_advance(&mut search,returned,&mut event,&objects,&rt,&c,e,&b);
+  if matches!(mode,0|5|19){assert_eq!(taken,Ok(predecessor));assert_eq!(search.current,predecessor);assert_eq!(e.registry.head,RegistryHead::Normal(event.frame));assert_eq!(event.delivery,CrtNormalDelivery::ResultTaken);assert_eq!(c.r,saved);
+   if let Some(replay)=replay{assert_eq!(original_live_search_return_advance(&mut search,replay,&mut event,&objects,&rt,&c,e,&b),Err("ordered search stale source/order/children"));}
+  }else{
+   let expected=match mode{1=>"ordered search wrong executed handler",2..=4=>"ordered search foreign/replayed executed receipt",6=>"CRT pointer lifetime",7=>"normal exception stale/foreign ownership",8|17=>"ordered search expired predecessor storage",9=>"live search original code/table changed",15|16|20=>"ordered search stale source/order/children",_=>unreachable!()};
+   assert_eq!(taken,Err(expected),"consume negative {mode}");assert_ne!(search.current,predecessor);
+  }
+  checked=true;Err::<(),_>("ordered rejection checked")
+ });assert_eq!(result,Err(if mode==12{"CRT scalar knowledge/type"}else{"ordered rejection checked"}),"outer case {mode}");assert!(checked,"case {mode} did not reach its required assertion");
+}}
+fn live_return_cases(){
+ let(m,mut r,main,mut permit)=fixture_with_extra(&[(0x410000,0x420000)]);let mut rt=runtime(&r);let mut checked=false;
+ let result=r.with_normal_calls(&m,&mut permit,&main,|e|{
+  let mut c=cpu(&mut rt,0xd000,1200);let mut b=CrtNormalBinding::bind(&rt,&c,e,epilog_run_layout())?;start(&mut rt,&mut c,e,&mut b,1201)?;
+  for arg in [0,0,0,0xe0420042]{c.push(&mut rt,CrtValue::scalar(arg))?;}
+  let mut event=CrtNormalException::issue(&mut rt,&mut c,e,&b,raise_site())?;let saved=c.r;
+  let record=rt.map_region(0x50000,80,CrtRegionKind::Context,None)?;let context=rt.map_region(0x51000,716,CrtRegionKind::Context,None)?;
+  for(offset,value)in [(0,event.code),(4,0),(8,0),(16,0)]{rt.store(rt.offset(record,offset)?,32,CrtValue::scalar(value))?;}
+  rt.store(rt.offset(context,0xc4)?,32,CrtValue::scalar(0x9500))?;
+  let objects=CrtNormalObjects::bind(&event,&rt,e,record,context)?;
+  let mut d=cpu(&mut rt,0xc000,1202);let sp=rt.resolve_absolute(0xbfc0,CrtRegionKind::Stack)?;d.r[4]=CrtValue::Pointer(sp);
+  for(i,v)in [CrtValue::Pointer(record),CrtValue::Pointer(b.at(&rt,b.layout.record)?),CrtValue::Pointer(context),CrtValue::scalar(0)].into_iter().enumerate(){rt.store(rt.offset(sp,i as i64*4)?,32,v)?;}
+  map_live_search_return(&mut rt)?;
+  let receipt=event.execute_live_handler(&objects,&mut rt,&c,e,&b,&mut d,0x401900,original_live_search_return_adapter).expect("original prefix, guard and RET must execute");
+  assert_eq!(event.take_handler_result(receipt,&rt,&c,e,&b)?,1);assert_eq!(c.r,saved);assert_eq!(rt.load(CrtCpu::pointer(c.r[4])?,32)?,CrtValue::ProtectedReturn(event.return_id));
+  assert!(matches!(rt.load(b.at(&rt,b.layout.bp-20)?,32)?,CrtValue::Scalar{known:u32::MAX,..}),"expired exception-pair pointer loses dereference authority");
+  checked=true;Err::<(),_>("checked search return leaves original exception pending")
+ });assert_eq!(result,Err("checked search return leaves original exception pending"));assert!(checked);
+}
+fn original_live_search_return_adapter(f:&mut CrtLiveFrame<'_,'_>,c:&mut CrtCpu)->RegistryResult<CrtValue>{
+ let objects=CrtNormalObjects::bind(f.event,f.rt,f.epoch,CrtCpu::pointer(f.rt.load(f.rt.offset(CrtCpu::pointer(c.entry[4])?,4)?,32)?)?,CrtCpu::pointer(f.rt.load(f.rt.offset(CrtCpu::pointer(c.entry[4])?,12)?,32)?)?)?;
+ original_live_search_return(f,c,&objects)
+}
 fn chain_effect_lifetime(){for mode in 0..4{
  let(m,mut r,main,mut permit)=fixture_with_extra(&[(0x410000,0x420000)]);let mut rt=runtime(&r);let mut checked=false;
  let result=r.with_normal_calls(&m,&mut permit,&main,|e|{
@@ -1637,7 +1717,7 @@ fn chain_ownership_gap(){let delivery_mode=0;let mode=0;
   Err::<(),_>("two local FS views cannot establish actual handler selection")
  });assert!(result.is_err());
 }
-fn main(){match std::env::args().nth(1).unwrap().as_str(){"chain-effect-lifetime"=>chain_effect_lifetime(),"shared-chain"=>{shared_chain_cases();shared_chain_nested();shared_chain_delivery()},"chain-ownership-gap"=>chain_ownership_gap(),"bound-cxx-invocation"=>bound_invocation(),"prefix-delivery-unwind"=>dispatcher_delivery_unwind(true),"dispatcher-delivery-unwind"=>dispatcher_delivery_unwind(false),"delivery-cached-unwind"=>delivery_cached_unwind(),"delivery-children"=>delivery_children(),"cxx-cached-unwind"=>cxx_cached_unwind(),"cxx-unwind"=>cxx_registered_unwind(),"manager-inherited"=>inherited_registered_manager(),"manager"=>manager_registered(),"live-finally"=>live_finally_cases(),"owned-loop"=>owned_loop_cases(),"owned-local"=>owned_local_cases(),"owned"=>{main_initial_rejections();initial_raise_rejections();owned_main_cases()},"path-edges"=>path_edges(),"live"=>live_dispatch(),"objects"=>captured_objects(),"handler"=>pending_handler_activation(),"pending"=>pending_normal_exception(),"pending-reject"=>reject_normal_exception(),"file"=>file_scope_normal(),"file-failure"=>file_scope_failure(),"nested"=>nested_actual(),"mutations"=>mutations(),"consumed"=>consumed_mutation(),"failure"=>body_failure(),"certificate"=>wrong_certificate(),"observed"=>observed(),_=>panic!("case")}}
+fn main(){match std::env::args().nth(1).unwrap().as_str(){"ordered-search"=>ordered_search_cases(),"live-return"=>live_return_cases(),"chain-effect-lifetime"=>chain_effect_lifetime(),"shared-chain"=>{shared_chain_cases();shared_chain_nested();shared_chain_delivery()},"chain-ownership-gap"=>chain_ownership_gap(),"bound-cxx-invocation"=>bound_invocation(),"prefix-delivery-unwind"=>dispatcher_delivery_unwind(true),"dispatcher-delivery-unwind"=>dispatcher_delivery_unwind(false),"delivery-cached-unwind"=>delivery_cached_unwind(),"delivery-children"=>delivery_children(),"cxx-cached-unwind"=>cxx_cached_unwind(),"cxx-unwind"=>cxx_registered_unwind(),"manager-inherited"=>inherited_registered_manager(),"manager"=>manager_registered(),"live-finally"=>live_finally_cases(),"owned-loop"=>owned_loop_cases(),"owned-local"=>owned_local_cases(),"owned"=>{main_initial_rejections();initial_raise_rejections();owned_main_cases()},"path-edges"=>path_edges(),"live"=>live_dispatch(),"objects"=>captured_objects(),"handler"=>pending_handler_activation(),"pending"=>pending_normal_exception(),"pending-reject"=>reject_normal_exception(),"file"=>file_scope_normal(),"file-failure"=>file_scope_failure(),"nested"=>nested_actual(),"mutations"=>mutations(),"consumed"=>consumed_mutation(),"failure"=>body_failure(),"certificate"=>wrong_certificate(),"observed"=>observed(),_=>panic!("case")}}
 "#;
 
 fn run(case: &str) {
@@ -1910,6 +1990,14 @@ fn map_local_wrapper(rt:&mut CrtStreamRuntime)->RegistryResult<()>{{rt.map_regio
         let empty_dispatch=crate::handler_dispatch::prove_dispatch(&handler_complete[prefix_bytes.len()..],prefix.end,&prefix,dispatch_bindings,crate::handler_dispatch::Entry::Search,&main_table,-2,0xe0424242,&filters,&filter_layout,&std::collections::BTreeSet::from([0x401333,0x40135c])).expect("original empty-scope search proof");
         assert!(empty_dispatch.actions.iter().any(|a|matches!(a,crate::handler_dispatch::Action::ReturnDisposition{value:1,..})),"original empty-scope path must return ContinueSearch");
         assert_eq!(crate::crt_owned_search::emit(crate::crt_owned_search::Input{proof:&empty_dispatch,origin:prefix.end,code:&handler_complete[prefix_bytes.len()..],table_va:main.scope_va(),table:&main_table,bridge:0x402800,filters:&filters},"empty_search").unwrap_err(),"owned search: no global boundary");
+        let return_table=handler_bytes("file-scope-table.bin","feffffff00000000d4ffffff00000000feffffff00000000a8464000");
+        let return_dispatch=crate::handler_dispatch::prove_dispatch(&handler_complete[prefix_bytes.len()..],prefix.end,&prefix,dispatch_bindings,crate::handler_dispatch::Entry::Search,&return_table,-2,0xe0420042,&Default::default(),&filter_layout,&std::collections::BTreeSet::from([0x4046a8])).unwrap();
+        let live_return=crate::crt_owned_search::emit_live_return(crate::crt_owned_search::Input{proof:&return_dispatch,origin:prefix.end,code:&handler_complete[prefix_bytes.len()..],table_va:0x41b400,table:&return_table,bridge:0x402800,filters:&Default::default()},&prefix,"original_live_search_return").unwrap();
+        for offset in [0,2,return_dispatch.instructions.last().unwrap().pc as usize-prefix.end as usize]{
+            let mut changed=handler_complete[prefix_bytes.len()..].to_vec();changed[offset]^=1;
+            assert!(crate::crt_owned_search::emit_live_return(crate::crt_owned_search::Input{proof:&return_dispatch,origin:prefix.end,code:&changed,table_va:0x41b400,table:&return_table,bridge:0x402800,filters:&Default::default()},&prefix,"bad_return").is_err());
+        }
+        let live_return_map=format!("fn map_live_search_return(rt:&mut CrtStreamRuntime)->RegistryResult<()>{{rt.map_region(0x402210,{},CrtRegionKind::Module,Some(&{handler_complete:?}))?;rt.map_region(0x41b400,{},CrtRegionKind::Module,Some(&{return_table:?}))?;rt.map_region(0x41ccb8,4,CrtRegionKind::Module,Some(&1u32.to_le_bytes()))?;rt.map_region(0x415128,4,CrtRegionKind::Module,Some(&0u32.to_le_bytes()))?;Ok(())}}",handler_complete.len(),return_table.len());
         let owned_search=crate::crt_owned_search::emit(crate::crt_owned_search::Input{proof:&dispatch,origin:prefix.end,code:&handler_complete[prefix_bytes.len()..],table_va:main.scope_va(),table:&main_table,bridge:0x402800,filters:&filters},"owned_search_to_global_call").unwrap();
         let post_global=crate::crt_owned_search::emit_post_global(crate::crt_owned_search::Input{proof:&dispatch,origin:prefix.end,code:&handler_complete[prefix_bytes.len()..],table_va:main.scope_va(),table:&main_table,bridge:0x402800,filters:&filters},"owned_post_global_caller").unwrap();
         let mut changed_post=handler_complete[prefix_bytes.len()..].to_vec();changed_post[(0x402337-prefix.end)as usize]^=1;
@@ -1989,7 +2077,7 @@ if fault==1{{cpu.condition(0)?;}}
 {unwind_caller}
 {stack_source}
 {native_loop}\n{owned_header}\n{owned_scope_store}\n{owned_permuted_store}\n{global_source}\n{delivery_source}\n{tail_source}\n{owned_search}
-{post_global}\n{code_data}\n{path_edges}\n{prefix_metadata}\nfn raise_site()->CrtNormalRaiseSite{{{{{raise}}}}}\n{allocator_native}\n{manager_native}\n{inherited_registered}\n{cxx_unwind}\n{cxx_cached}\n{cxx_action}\n{cxx_state}\n{cxx_record}\n{cxx_owner}\n{cxx_data}\n{CASES}",
+{live_return}\n{live_return_map}\n{post_global}\n{code_data}\n{path_edges}\n{prefix_metadata}\nfn raise_site()->CrtNormalRaiseSite{{{{{raise}}}}}\n{allocator_native}\n{manager_native}\n{inherited_registered}\n{cxx_unwind}\n{cxx_cached}\n{cxx_action}\n{cxx_state}\n{cxx_record}\n{cxx_owner}\n{cxx_data}\n{CASES}",
             include_str!("linker/unwind_runtime.rs").replace("//!", "//"),
             emitted_literal(include_str!("frame_proof.rs")),emitted_literal(include_str!("thread_registry.rs")),
             crate::crt_stream_runtime::EMITTED_TYPES,crate::crt_stream_cpu::EMITTED_TYPES,
@@ -2324,4 +2412,14 @@ fn original_cxx_and_eh4_share_live_lifo_thread_head() {
 #[test]
 fn shared_chain_rechecks_owner_at_original_fs_effect() {
     run("chain-effect-lifetime");
+}
+
+#[test]
+fn original_empty_search_executes_guard_and_protected_return() {
+    run("live-return");
+}
+
+#[test]
+fn original_return_receipt_advances_only_matching_live_registration() {
+    run("ordered-search");
 }

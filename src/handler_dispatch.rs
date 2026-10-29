@@ -1044,6 +1044,7 @@ mod tests {
         // tests. Actual prefix-byte certification is tested by handler_checks;
         // the retained original-body smoke test uses that real certificate.
         let prefix = PrefixProof {
+            source: Vec::new(), // No native prefix certificate in this routing-only fixture.
             unwind_caller: String::new(),
             entry: 0, // Routing-only fixture.
             caller: String::new(),

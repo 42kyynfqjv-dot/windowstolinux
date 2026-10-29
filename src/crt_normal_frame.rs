@@ -578,6 +578,21 @@ impl CrtLiveFrame<'_,'_> {
    ||l.saved.iter().any(|&(p,_)|p==at){return Err("live frame protected/outside word");}
   let p=self.binding.at(self.rt,at)?;self.rt.valid(p,4)?;Ok(p)
  }
+ /// End a completed handler's local borrow without inventing guest writes.
+ fn retire_handler_scratch(&mut self,cpu:&mut CrtCpu,low:CrtPointer,bytes:u32)->RegistryResult<()>{
+  self.validate()?;let entry=CrtCpu::pointer(cpu.entry[4])?;
+  if !cpu.returned||cpu.return_id!=self.state.activation||bytes==0||bytes>256||bytes%4!=0
+   ||low!=self.rt.offset(entry,-i64::from(bytes))?{return Err("live search scratch retirement authority");}
+  self.rt.valid(low,bytes)?;
+  if self.rt.overlapping_tags(low.address(),bytes).iter().any(|(_,v)|matches!(v,CrtValue::ProtectedReturn(_)|CrtValue::ThreadHead(_)|CrtValue::OpaqueSaved(_))){return Err("live search scratch retains protected state");}
+  let inside=|p:CrtPointer|p.cap==low.cap&&p.address()>=low.address()&&p.address()<entry.address();
+  // Preserve numeric bytes of escaped aliases, but remove the expired borrow.
+  self.rt.tags.retain(|&at,v|!(at>=low.address()&&at<entry.address())&&!matches!(v,CrtValue::Pointer(p)if inside(*p)));
+  self.rt.partial.retain(|&at,_|at<low.address()||at>=entry.address());
+  self.rt.memory.forget(low.address(),bytes).map_err(|_|"live search scratch extent")?;
+  for v in &mut cpu.r{if let CrtValue::Pointer(p)=*v{if inside(p){*v=CrtValue::scalar(p.address());}}}
+  Ok(())
+ }
  fn read(&self,offset:i32)->RegistryResult<CrtValue>{self.rt.load(self.ordinary(offset)?,32)}
  fn write(&mut self,offset:i32,value:CrtValue)->RegistryResult<()>{
   let p=self.ordinary(offset)?;
@@ -651,6 +666,58 @@ impl CrtNormalException {
    Ok(value)=>{self.delivery=CrtNormalDelivery::Returned;Ok(CrtNormalHandlerReturn{identity:self.identity,epoch:self.epoch,frame:self.frame,generation:self.generation,level:state.level,value})},
    Err(error)=>{self.delivery=CrtNormalDelivery::Failed;epoch.fail(error)},
   }
+ }
+}
+
+/// First-node search ownership. Advancement records order only; it does not
+/// execute the predecessor, grant a child lease, or authorize restoration.
+struct CrtOrderedSearch {
+ identity:RegistryIdentity,epoch:u64,event:u64,source:NormalFrameId,serial:u64,
+ current:RegistryHead,previous:RegistryHead,handler:u32,owner:u64,
+ record:CrtPointer,context:CrtPointer,captured_esp:u32,cxx:Vec<RegistryCxxFrame>,normal_count:usize,phase:u8,
+}
+struct CrtOrderedReturn { serial:u64,source:NormalFrameId,previous:RegistryHead,handler:u32,receipt:CrtNormalHandlerReturn }
+impl CrtOrderedSearch {
+ fn begin(event:&CrtNormalException,objects:&CrtNormalObjects,rt:&CrtStreamRuntime,interrupted:&CrtCpu,epoch:&mut NormalCallEpoch<'_>,binding:&CrtNormalBinding)->RegistryResult<Self>{
+  if event.delivery!=CrtNormalDelivery::Pending{return Err("ordered search requires pending first handler");}
+  event.dispatch_source(rt,interrupted,epoch,binding)?;objects.validate(event,rt,epoch)?;
+  let serial=epoch.registry.next_id()?.generation;
+  let s=Self{identity:event.identity,epoch:event.epoch,event:event.generation,source:event.frame,serial,
+   current:RegistryHead::Normal(event.frame),previous:binding.previous,handler:binding.layout.handler,owner:binding.return_id,
+   record:objects.record,context:objects.context,captured_esp:objects.captured_esp,cxx:epoch.registry.cxx.clone(),normal_count:epoch.registry.normal_epoch.as_ref().ok_or("ordered search missing epoch")?.frames.len(),phase:0};
+  s.validate(event,objects,rt,interrupted,epoch,binding)?;Ok(s)
+ }
+ fn validate(&self,event:&CrtNormalException,objects:&CrtNormalObjects,rt:&CrtStreamRuntime,interrupted:&CrtCpu,epoch:&NormalCallEpoch<'_>,binding:&CrtNormalBinding)->RegistryResult<()>{
+  event.dispatch_source(rt,interrupted,epoch,binding)?;objects.validate(event,rt,epoch)?;
+  if self.phase>1||self.identity!=event.identity||self.epoch!=event.epoch||self.event!=event.generation
+   ||self.source!=event.frame||self.current!=RegistryHead::Normal(event.frame)||self.previous!=binding.previous
+   ||self.handler!=binding.layout.handler||self.owner!=binding.return_id||self.record!=objects.record||self.context!=objects.context||self.captured_esp!=objects.captured_esp
+   ||epoch.registry.cxx!=self.cxx||epoch.registry.normal_epoch.as_ref().is_none_or(|s|s.frames.len()!=self.normal_count||s.delivery.is_some()){
+   return Err("ordered search stale source/order/children");
+  }
+  // Unlike normal-call acquisition, this read-only check deliberately permits
+  // the source's pending exception. It grants no predecessor execution rights.
+  let mut head=self.previous;
+  for _ in 0..32{
+   let RegistryHead::Cxx(id)=head else{return Ok(());};
+   let f=epoch.registry.cxx.iter().find(|f|f.id==id&&f.linked).ok_or("ordered search missing predecessor")?;
+   if f.epoch!=self.epoch{return Err("ordered search foreign predecessor epoch");}
+   let entry=rt.resolve_absolute(u32::try_from(f.high-4).map_err(|_|"ordered predecessor extent")?,CrtRegionKind::Stack)?;
+   let record=rt.resolve_absolute(f.record,CrtRegionKind::Stack)?;
+   let token=rt.thread_head(self.identity.instance,f.epoch,CrtNormalBinding::head_bits(f.previous))?;
+   if rt.load(entry,32)?!=CrtValue::ProtectedReturn(f.owner)||rt.tags.values().filter(|v|**v==CrtValue::ProtectedReturn(f.owner)).count()!=1
+    ||rt.load(record,32)?!=CrtValue::ThreadHead(token)||rt.load(rt.offset(record,4)?,32)?!=CrtValue::scalar(f.handler){return Err("ordered search expired predecessor storage");}
+   rt.load(rt.offset(record,8)?,32)?.known_scalar()?;head=f.previous;
+  }Err("ordered search predecessor budget/cycle")
+ }
+ fn consume(&mut self,returned:CrtOrderedReturn,event:&mut CrtNormalException,objects:&CrtNormalObjects,rt:&CrtStreamRuntime,interrupted:&CrtCpu,epoch:&mut NormalCallEpoch<'_>,binding:&CrtNormalBinding)->RegistryResult<RegistryHead>{
+  let result=(||{
+   self.validate(event,objects,rt,interrupted,epoch,binding)?;
+   if self.phase!=1||returned.serial!=self.serial||returned.source!=self.source||returned.previous!=self.previous||returned.handler!=self.handler{return Err("ordered search foreign/replayed executed receipt");}
+   if returned.receipt.value!=CrtValue::scalar(1){return Err("ordered search requires ContinueSearch disposition");}
+   if event.take_handler_result(returned.receipt,rt,interrupted,epoch,binding)?!=1{return Err("ordered search disposition changed");}
+   self.phase=2;self.current=self.previous;Ok(self.current)
+  })();if result.is_err(){self.phase=3;}result
  }
 }
 
