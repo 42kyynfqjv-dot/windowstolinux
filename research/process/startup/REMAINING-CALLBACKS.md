@@ -11,6 +11,7 @@ application identifiers used to choose behavior.
 | stdio-common formatter body | Full-body callback remains for returning cases. Original entry and full locale constructor execute in the rejection experiment | Prove initialized live locale/FILE state, execute driver/parser/integer/output and ordered destruction with correct failure behavior |
 | Locale state | Constructor's unknown branch word at0x41ce7c rejects after original object writes. Lifecycle tokens now bind runtime identity as well as thread/generation; they do not initialize locale data | Establish this word and the objects/lifetimes behind0x41c230/0x41c234 from startup/effect evidence; cover alternative/lazy paths or reject them. Image initial bytes and successful samples do not establish post-startup state |
 | stdout and options | FILE-array storage is live but the connected printf stdout fields/lock are unconstructed. The separate original initializer now uses a result-aware lock transition: only API success grants ownership, and constructed lock bytes are opaque. Basic options words are explicit initialized component inputs | Prove stream/lock/descriptor/encoding/buffer initialization and mutation assumptions before native formatter access |
+| Inherited startup records | Original parser feeds the original standard-handle body on the same typed owner; seven native cases cover valid/empty input and bounds/lifetime/provenance failures | GetStartupInfoW output and already-provisioned descriptor capacity remain explicit effects. Bind the real allocator/block-lock/inheritance lifetime before claiming startup; reserved-data protocol is derived from original instructions |
 | Standard-handle low-I/O initialization | Original 176-byte body executes in 25 native component cases with explicit API outcomes and pre-owned records. Artifact bytes/imports are bound; inherited handles, detached sentinels and type flags follow original instructions | Bind preceding block allocation/inherited startup data, actual API acquisition and handle lifetime/alias contracts, then connect resulting records to FILE startup. No initialized record or full startup authority follows from these tests |
 | Integer C++ record and cleanup | Separate instruction/metadata inventory and partial helper proofs; no complete dispatch equivalence | Preserve the original C++ record/handler semantics or prove a complete contained domain. An EH4 token cannot stand in for this record |
 | Output backend and exit | Separate writer/FILE/error/flush components exist; this connected path makes no physical stdout claim | Bind native formatter output to those effects; test short writes, errors, buffered flush/close and termination order |
@@ -62,3 +63,9 @@ order visible in conformance tests. Use the existing helper certificates where
 they apply, and reject remaining API/exception effects rather than supply default
 results. This is a concrete semantic integration scope suitable for a bounded
 Astra High pass after independent Sol review; routine verification stays on Sol.
+
+Current concrete allocator integration: `40bf2a` calls the `40be7a` block
+constructor. Its 64 descriptor records have stride 56 and critical sections at
+record offset 0, while FILE locks use offset 32. Implement checked allocation-role
+and record-lock ownership, retaining heap identity and failure effects; do not
+reinterpret a Buffer pointer or reuse FILE locking as descriptor authority.

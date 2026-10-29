@@ -2,8 +2,37 @@
 import argparse
 import hashlib
 import json
+import os
+import time
 from pathlib import Path
 import subprocess
+
+
+def run_owned(binary, output, run=subprocess.run):
+    command=[str(binary.resolve()), 'owned']
+    started=time.monotonic()
+    try:
+        result=run(command,capture_output=True,check=True,timeout=15,
+                   env=dict(os.environ,W2L_CASE_TIMINGS='1'))
+    except (subprocess.TimeoutExpired, subprocess.CalledProcessError) as error:
+        (output/'owned.stdout').write_bytes(error.stdout or b'')
+        (output/'owned.stderr').write_bytes(error.stderr or b'')
+        (output/'owned-timing.json').write_text(json.dumps(dict(status='timeout' if isinstance(error,subprocess.TimeoutExpired) else 'failure',command=command,timeout=15,elapsed=time.monotonic()-started))+'\n')
+        raise
+    (output/'owned.stdout').write_bytes(result.stdout)
+    (output/'owned.stderr').write_bytes(result.stderr)
+    rows=result.stderr.decode().splitlines()
+    durations=[]
+    for mode in range(202):
+        if len(rows)!=404 or rows[mode*2]!=f'owned-start {mode}':
+            raise ValueError('owned timing case sequence or unexpected stderr')
+        fields=rows[mode*2+1].split()
+        if len(fields)!=3 or fields[:2]!=['owned-end',str(mode)] or not fields[2].isdigit():
+            raise ValueError('owned timing completion sequence')
+        durations.append(int(fields[2]))
+    if result.stdout:
+        raise ValueError('owned frame regression unexpected output')
+    (output/'owned-timing.json').write_text(json.dumps(dict(status='success',command=command,timeout=15,elapsed=time.monotonic()-started,case_microseconds=durations))+'\n')
 
 
 def check(source, output):
@@ -34,8 +63,7 @@ println!("projected=-2 live=0 suspended=true");'''
     live = subprocess.run([str(binary.resolve()), 'live'], capture_output=True, check=True, timeout=15)
     if live.stdout or live.stderr:
         raise ValueError('live adapter regression emitted unexpected output')
-    owned=subprocess.run([str(binary.resolve()), 'owned'],capture_output=True,check=True,timeout=15)
-    if owned.stdout or owned.stderr: raise ValueError('owned frame regression unexpected output')
+    run_owned(binary, output)
     subprocess.run([str(binary.resolve()),'owned-local'],capture_output=True,check=True,timeout=15)
     subprocess.run([str(binary.resolve()),'owned-loop'],capture_output=True,check=True,timeout=15)
     edges=subprocess.run([str(binary.resolve()),'path-edges'],capture_output=True,check=True,timeout=15)

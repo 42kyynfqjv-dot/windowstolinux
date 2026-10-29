@@ -1323,3 +1323,69 @@ preceding allocation/inheritance producers and bind the resulting records to
 FILE initialization on the same owner; retain handle lifetime/alias/failure
 contracts and the separate locale producer gate. The full formatter callback
 remains explicit. Both timeout histories remain preserved and unresolved.
+
+### Inherited startup records feed standard-handle initialization
+
+The original 176-byte inherited-record parser at 408537 now executes before the
+original standard-handle initializer on the same typed owner in a connected
+native component test. The artifact checker binds both bodies and the actual
+GetStartupInfoW/GetFileType import slots to the unchanged PE. The supplied API
+output initializes only the fields actually read; a zero reserved-data length
+exits without reading the unknown pointer field. An initialized serialized count,
+flags and typed handles feed the actual parser stores, after which the original
+standard initializer queries only the remaining missing handle.
+
+The shared IR/emitter now admits exactly word-memory CMP with sign-extended
+imm8, and 32-bit signed CMOVL/CMOVG forms. Independent literal boundary vectors
+cover 16-bit carry/sign/overflow, negative immediates, signed 32-bit extrema,
+equality, unknown flags and mandatory memory-source evaluation on an untaken
+CMOV. Other operand/segment/address overrides and 16-bit register forms remain
+rejected. The new forms do not grant startup or general graph admission.
+
+Seven inherited-path executions cover the connected success path, empty reserved
+data, truncated serialized bytes, unknown count, scalar handle fabrication,
+expired buffer lifetime and an unclosed allocation request. A later truncation
+preserves the earlier imported handle while refusing to read the next incomplete
+word. The explicit allocation callback accepts only already-provisioned capacity;
+it does not fabricate allocation or OS failure behavior. API volatile registers
+and flags are invalidated, and callee-saved state/protected return are checked.
+These are component executions with declared startup/handle inputs, not fresh
+Windows observations or whole unchanged-binary translations.
+
+The concrete remaining allocation gate is 40BF2A and its block constructor 40BE7A:
+64 records of 56 bytes, with critical sections at record offset 0. FILE locks are
+at offset 32. Heap allocations currently carry Buffer role, while low-I/O records
+require Descriptor role plus independent lock construction/lifetime. Reusing the
+FILE adapter or changing pointer-kind bits would grant incorrect authority.
+The coherent next scope must bind allocation and the typed record/lock lifetime,
+then feed inherited parsing, standard handles and FILE startup on the same owner,
+including partial allocation/lock failure and EH4 cleanup. Locale producer and
+full formatter gates remain separate. This is a concrete ownership refactor
+suitable for bounded Astra High after Sol review.
+
+CI for a5db451: startup run 40906539916 failed in native-unwind-slice job 123565233818,
+where the `owned` command exceeded the unchanged 15-second projection limit.
+Artifact 12912002933 was uploaded successfully; archive SHA256 is
+`29258b8fa930284ff2819e46697c8edca260d23acfbdeadd86c5faf9c434fce0`.
+This reproduces the same command/limit symptom as the retained local failure,
+without proving the underlying cause. It is distinct from original-Windows
+process-alive timeouts. No passing rerun is used to erase either history.
+
+Opt-in case timing now records the start/completion of each of 202 owned-frame
+cases. The command also runs its existing initialization/raise prechecks. The
+projection checker preserves partial stdout/stderr and a status/elapsed report
+on timeout or process failure and rethrows the failure. The limit stays 15 seconds;
+there are no retries. Successful output must include all ordered completions
+and no extra output. Two independent harness tests verify retained timeout data,
+continued failure, full coverage and rejection of reordered/noisy diagnostics.
+
+Final local checks: 177 CRT tests passed (the existing observation test is
+separate), 178 frame/unwind and 175 root tests passed; formatting, Clippy, artifact
+replay and the two diagnostic tests passed. The changed implementation's
+projection command completed in 12.335 seconds with 202 ordered case timings. This
+is a new implementation measurement, not a diagnosis or removal of prior failures.
+The five existing Windows boundary comparisons replayed; zero new Windows pairs
+or whole-PE translations were added. PE SHA256 remains
+`1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4`;
+generated wrapper Rust SHA256 is
+`d470d50085cbed3e52c08ca11b4b8bbdfeaa8abf618e00b798284a021f4341cb`.

@@ -24,6 +24,11 @@ pub(crate) enum Op {
     Ordinary(Operation),
     Call(Target),
     IndirectCall(Operand),
+    SignedMove {
+        condition: SignedCondition,
+        dst: Reg,
+        source: Operand,
+    },
     ReturnPop(u16),
     FsRead(Reg),
     FsWrite(Reg),
@@ -178,6 +183,23 @@ fn extended(i: &Instruction, raw: &[u8], tables: &[JumpTable<'_>]) -> Result<Op,
             destination,
             source,
         });
+    }
+    // Exact word-memory compare used by STARTUPINFO.cbReserved2. Keep the
+    // operand override local to this form; it grants no 16-bit register state.
+    if i.code() == Code::Cmp_rm16_imm8
+        && raw.starts_with(&[0x66, 0x83])
+        && i.op0_kind() == OpKind::Memory
+        && !i.has_lock_prefix()
+        && i.segment_prefix() == Register::None
+    {
+        let Operand::Memory(address, _) = operand_from_move(i, 0)? else {
+            return Err("CRT word compare address".into());
+        };
+        return Ok(Op::Ordinary(Operation::Binary(
+            Binary::Compare,
+            Operand::Memory(address, 16),
+            Operand::Immediate(i.immediate8to16() as u16 as u32),
+        )));
     }
     if raw
         .first()
@@ -344,6 +366,19 @@ fn extended(i: &Instruction, raw: &[u8], tables: &[JumpTable<'_>]) -> Result<Op,
                     _ => SignedCondition::NotSign,
                 },
                 target: i.near_branch32(),
+            }
+        }
+        Mnemonic::Cmovl | Mnemonic::Cmovg
+            if matches!(i.code(), Code::Cmovl_r32_rm32 | Code::Cmovg_r32_rm32) =>
+        {
+            Op::SignedMove {
+                condition: if i.mnemonic() == Mnemonic::Cmovl {
+                    SignedCondition::Less
+                } else {
+                    SignedCondition::Greater
+                },
+                dst: full(i.op0_register())?,
+                source: operand_from_move(i, 1)?,
             }
         }
         Mnemonic::Cmovne if i.op0_kind() == OpKind::Register => Op::ConditionalMove {

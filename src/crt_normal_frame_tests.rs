@@ -380,8 +380,11 @@ fn owned_local_cases(){
  }
 }
 
+struct OwnedCaseTiming{mode:usize,started:std::time::Instant,enabled:bool}
+impl Drop for OwnedCaseTiming{fn drop(&mut self){if self.enabled{eprintln!("owned-end {} {}",self.mode,self.started.elapsed().as_micros());}}}
 fn owned_main_cases(){
  for mode in 0..202{
+ let enabled=std::env::var_os("W2L_CASE_TIMINGS").is_some();if enabled{eprintln!("owned-start {mode}");}let _timing=OwnedCaseTiming{mode,started:std::time::Instant::now(),enabled};
   let mut m=Machine::new_dispatch_known((0..if mode>=75{2}else{1}).map(|_|FrameSpec{scopes:vec![]}).collect(),0,[None;10],Some(0)).unwrap();
   let mut r=ThreadRegistry::new(m.owner(),0x8000,0xf000,&[(0x400000,0x420000)],0x41c000).unwrap();let mut rt=if mode>=194{runtime_stdio(&r)}else{runtime(&r)};
   let entry=rt.resolve_absolute(if mode==23||mode==32||mode==41||mode==76{0xe800}else{0xe000},CrtRegionKind::Stack).unwrap();rt.store(entry,32,CrtValue::ProtectedReturn(71)).unwrap();let cpu=CrtCpu::new(entry,71).unwrap();
