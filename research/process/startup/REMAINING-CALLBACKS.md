@@ -151,3 +151,11 @@ supplied non-unwind component cases. Unwind/search/dynamic-handler calls reject;
 normal callback return grants no guest resumption. Backend API state remains an
 explicit callable cut. Next: cold resolver/module lifetime and the separately
 owned dynamic FLS backend, followed by dispatcher unwind/termination effects.
+
+Cold resolver gate is now pinned in COLD-RESOLVER-HANDOFF.md: module/function
+acquisition lifetime and four memory-XCHG publication sites are absent from the
+current value/IR domain. Cold loading remains rejected. A reproduced stale-capture
+hole after backend return was fixed by post-call context validation; mutation and
+retirement now reject before dispatcher continuation, preserving earlier effects.
+Next bounded Astra scope is shared module/function authority plus original cold
+resolver/publication integration, not an unqualified scalar function-pointer call.

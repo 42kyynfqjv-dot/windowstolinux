@@ -102,3 +102,53 @@ pub(crate) fn source(prefix: &[u8], epilog: &[u8], wrapper: &[u8]) -> Result<Str
     out.push_str(&format!("fn cxx_original_lookup(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,backend:&mut impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu)->Result<CrtValue,&'static str>)->Result<CrtValue,&'static str>{{{body}}}"));
     Ok(out)
 }
+
+pub(crate) const COLD_FULL:&str="558bec51518b4508578d048514cd41008945f88b009083cfff3bc7750433c0eb5685c07552538b5d1056eb3d8b0b894dfc8d048d08cd41008b309085f674063bf77546eb21ff348d805c4100e84f0000008b55fc8bf0598d0c9508cd410085f675188bc7870183c3043b5d1475be8b55f8873a33c05e5b5fc9c38bc6870185c0740756ff156c504100ff750c56ff157050410085c074d78b55f88bc8870aebd5";
+pub(crate) const LOAD_HELPER:&str="558bec68000800006a00ff7508ff157450410085c07532ff154450410083f85775256a0768185d4100ff7508e8bc4d000083c40c85c0740f6a006a00ff7508ff15745041005dc333c05dc3";
+
+#[test]
+fn cold_resolution_has_atomic_publication_and_owned_loader_dependencies() {
+    use iced_x86::{Decoder, DecoderOptions, Mnemonic, OpKind};
+    let bytes = crate::crt_ptd::raw(COLD_FULL);
+    let mut d = Decoder::with_ip(32, &bytes, 0x402a53, DecoderOptions::NONE);
+    let mut exchanges = Vec::new();
+    let mut imports = Vec::new();
+    while d.can_decode() {
+        let i = d.decode();
+        assert!(!i.is_invalid());
+        if i.mnemonic() == Mnemonic::Xchg {
+            assert_eq!(i.op0_kind(), OpKind::Memory);
+            assert_eq!(i.op1_kind(), OpKind::Register);
+            exchanges.push(i.ip32());
+            let a = (i.ip32() - 0x402a53) as usize;
+            assert!(Graph::decode_instruction(&bytes[a..a + i.len()], i.ip32()).is_err());
+        }
+        if i.mnemonic() == Mnemonic::Call && i.op0_kind() == OpKind::Memory {
+            imports.push(i.memory_displacement32());
+        }
+    }
+    assert_eq!(exchanges, [0x402ab7, 0x402ac4, 0x402acf, 0x402aef]);
+    assert_eq!(imports, [0x41506c, 0x415070]);
+    let load = crate::crt_ptd::raw(LOAD_HELPER);
+    let graph = Graph::decode(&load, 0x402af3).unwrap();
+    let calls: Vec<_> = graph
+        .nodes
+        .values()
+        .filter_map(|n| {
+            if let crate::crt_stream_ir::Op::Call(t) = n.op {
+                Some(t)
+            } else {
+                None
+            }
+        })
+        .collect();
+    assert_eq!(
+        calls,
+        [
+            Target::Import(0x415074),
+            Target::Import(0x415044),
+            Target::Direct(0x4078e0),
+            Target::Import(0x415074)
+        ]
+    );
+}

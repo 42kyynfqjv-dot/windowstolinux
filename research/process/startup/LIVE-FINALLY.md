@@ -2036,3 +2036,27 @@ two C++ tests, seven prior PTD checks and five previously recorded Windows wrapp
 comparisons. New original bytes for cached resolution/lookup/dispatcher tail and
 the FlsGetValue dynamic symbol are bound to the PE. Zero new Windows observations
 or whole-image pairs. Final focused and changed-code checks passed after review.
+
+### Post-backend capture review and measured cold-resolver boundary
+
+A new adversarial native test reproduced normal dispatcher return after a backend
+callback changed or retired the captured Context. Post-PTD context revalidation
+now rejects changed ESP, foreign-stack ESP and retired capture, preserving earlier
+writes. Handler coverage expands from11 to14 scenarios; no normal callback return
+can rely on those stale captures. Existing lifetime/address-reuse tests remain.
+
+The entire cold resolver/load helper is now artifact-bound and independently
+inventoried: four memory XCHG publication sites, FreeLibrary/GetProcAddress and
+LoadLibraryExW/GetLastError/prefix-fallback calls. Shared IR still rejects memory
+XCHG and there are no module/function capabilities with unload lifetimes.
+Cold resolution and dynamic FLS remain rejected pending the cohesive ownership/
+publication scope in COLD-RESOLVER-HANDOFF.md. No new whole-PE or Windows comparison
+claim follows from this inventory or the review fix.
+
+Verification:201 CRT tests passed, one existing observation test separate; three
+focused C++ checks, Clippy/format/diff and Python syntax passed. Artifact replay
+passed three C++ checks, seven prior PTD checks and five recorded Windows wrapper
+comparisons, with the same PE and wrapper Rust hashes above. Zero new Windows
+observations or whole-image pairs. 9fc5c1f workflows40938216500/40938203406 and
+startup40938203420 remained active at inspection, without a completed-failure
+conclusion. Historical Windows timeouts remain preserved and unexplained.

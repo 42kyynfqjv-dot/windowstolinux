@@ -207,12 +207,15 @@ def check(original, observation, out, compare=None):
         if tuple(import_at_iat(image,address-base))!=('kernel32.dll',name):
             raise ValueError('C++ TLS fallback import changed; UCRT FLS is distinct')
     lookup_source=(Path(__file__).resolve().parents[3]/'src/crt_cxx_lookup.rs').read_text()
-    for name,start,length in [('PREFIX',0x402a53,37),('EPILOG',0x402aca,3),('WRAPPER',0x402bb4,59)]:
+    for name,start,length in [('PREFIX',0x402a53,37),('EPILOG',0x402aca,3),('WRAPPER',0x402bb4,59),('COLD_FULL',0x402a53,160),('LOAD_HELPER',0x402af3,75)]:
         raw=mapped(image,start,length,executable=True)
         fixture=re.search(r'const\s+'+name+r'\s*:\s*&str\s*=\s*"([0-9a-f]+)"',lookup_source)
         if fixture is None or bytes.fromhex(fixture[1])!=raw:
             raise ValueError('C++ cached resolver code differs from original PE')
         file_regions['cxx-lookup-'+name.lower()]=sha(raw)
+    for address,name in [(0x41506c,'FreeLibrary'),(0x415070,'GetProcAddress'),(0x415074,'LoadLibraryExW')]:
+        if tuple(import_at_iat(image,address-base))!=('kernel32.dll',name):
+            raise ValueError('cold resolver module API identity changed')
     if mapped(image,0x415d54,12)!=b'FlsGetValue\0':
         raise ValueError('C++ dynamic lookup symbol changed')
     # A branch into this body is not a returning cleanup receipt. Preserve its
@@ -265,7 +268,7 @@ def check(original, observation, out, compare=None):
                              env=env,capture_output=True,timeout=180)
     (out/'cxx-record-components.stdout').write_bytes(cxx_run.stdout)
     (out/'cxx-record-components.stderr').write_bytes(cxx_run.stderr)
-    if cxx_run.returncode or b'2 passed' not in cxx_run.stdout:
+    if cxx_run.returncode or b'3 passed' not in cxx_run.stdout:
         raise ValueError('original C++ owned record component failed')
     for test in ['allocation_manager_registers_and_retires_original_eh4_under_startup_authority',
                  'inherited_producer_calls_original_manager_with_live_eh4_registration']:
@@ -340,7 +343,7 @@ def check(original, observation, out, compare=None):
                   main_activation_sha256=sha((out/'main-activate.bin').read_bytes()),
                   main_scope_header_sha256=sha((out/'Main-scope-header.bin').read_bytes()),
                   locale_state_evidence=locale_state_evidence(image),
-                  cxx_record_rust_tests=2, cxx_record_new_windows_pairs=0, ptd_component_rust_tests=7, ptd_new_windows_pairs=0, errno_router_component_cases=9, errno_router_new_windows_pairs=0, heap_calloc_component_cases=13, heap_calloc_new_windows_pairs=0, registered_manager_component_cases=6, registered_manager_new_windows_pairs=0, manager_component_cases=6, manager_new_windows_pairs=0, descriptor_lifecycle_component_cases=4, descriptor_lifecycle_new_windows_pairs=0, inherited_component_cases=7, inherited_new_windows_pairs=0, standard_handle_component_cases=25, standard_handle_new_windows_pairs=0,
+                  cxx_record_rust_tests=3, cxx_record_new_windows_pairs=0, ptd_component_rust_tests=7, ptd_new_windows_pairs=0, errno_router_component_cases=9, errno_router_new_windows_pairs=0, heap_calloc_component_cases=13, heap_calloc_new_windows_pairs=0, registered_manager_component_cases=6, registered_manager_new_windows_pairs=0, manager_component_cases=6, manager_new_windows_pairs=0, descriptor_lifecycle_component_cases=4, descriptor_lifecycle_new_windows_pairs=0, inherited_component_cases=7, inherited_new_windows_pairs=0, standard_handle_component_cases=25, standard_handle_new_windows_pairs=0,
                   original_printf_routing_sha256=sha((out/'printf-routing-live.bin').read_bytes()),
                   original_printf_context_sha256=sha((out/'printf-context-live.bin').read_bytes()),
                   original_printf_entry_sha256=sha((out/'printf-entry-live.bin').read_bytes()),
