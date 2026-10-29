@@ -23,6 +23,9 @@ impl CrtValue {
 struct CrtLock {anchor:guest_memory::Capability,thread:u64,serial:u64,depth:usize,record:u32}
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 struct CrtInitialization {anchor:guest_memory::Capability,thread:u64,serial:u64}
+/// Lifecycle identity only; does not initialize or attest locale data objects.
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+struct CrtLocale {anchor:guest_memory::Capability,thread:u64,generation:u64}
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 struct CrtDescriptorLock {anchor:guest_memory::Capability,thread:u64,serial:u64,depth:usize,id:CrtDescriptorId}
 /// Constructed only by the validated normal-return/owned-thread bridge.
@@ -336,9 +339,9 @@ impl CrtStreamRuntime {
   self.descriptor(id)?;let closed=backend.close_once(id)?;if closed{self.descriptors.iter_mut().find(|d|d.id==id).ok_or("CRT close identity")?.live=false;}Ok(closed)
  }
  fn set_errors(&mut self,lease:CrtLock,errno:Option<i32>,doserrno:Option<u32>)->Result<(),&'static str>{self.check_lock(lease)?;self.errno=errno;self.doserrno=doserrno;Ok(())}
- fn initialize_c_locale(&mut self,lease:CrtLock)->Result<u64,&'static str>{self.check_lock(lease)?;if self.locale_live{return Err("CRT duplicate locale ownership");}self.locale_generation=self.locale_generation.checked_add(1).ok_or("CRT locale generation")?;self.locale_live=true;Ok(self.locale_generation)}
- fn check_locale(&self,thread:u64,generation:u64)->Result<(),&'static str>{if thread!=self.thread||!self.locale_live||generation!=self.locale_generation{return Err("CRT locale thread/lifetime");}Ok(())}
- fn retire_locale(&mut self,lease:CrtLock,generation:u64)->Result<(),&'static str>{self.check_lock(lease)?;self.check_locale(self.thread,generation)?;self.locale_live=false;Ok(())}
+ fn initialize_c_locale(&mut self,lease:CrtLock)->Result<CrtLocale,&'static str>{self.check_lock(lease)?;if self.locale_live{return Err("CRT duplicate locale ownership");}self.locale_generation=self.locale_generation.checked_add(1).ok_or("CRT locale generation")?;self.locale_live=true;Ok(CrtLocale{anchor:self.anchor,thread:self.thread,generation:self.locale_generation})}
+ fn check_locale(&self,thread:u64,locale:CrtLocale)->Result<(),&'static str>{if self.closed||locale.anchor!=self.anchor||locale.thread!=self.thread||thread!=self.thread||!self.locale_live||locale.generation!=self.locale_generation{return Err("CRT locale thread/lifetime");}Ok(())}
+ fn retire_locale(&mut self,lease:CrtLock,locale:CrtLocale)->Result<(),&'static str>{self.check_lock(lease)?;self.check_locale(self.thread,locale)?;self.locale_live=false;Ok(())}
 }
 "#;
 
@@ -414,6 +417,23 @@ for _ in 1..16{rt.new_dispatcher(13,702).unwrap();}assert!(rt.new_dispatcher(13,
         );
     }
 
+    #[test]
+    fn locale_identity_rejects_another_runtime_with_equal_thread_and_generation() {
+        native(
+            r#"
+let mut a=CrtStreamRuntime::new(7,9,0x4000,32768).unwrap();let mut b=CrtStreamRuntime::new(7,9,0x4000,32768).unwrap();
+let al=a.lock(9).unwrap();let bl=b.lock(9).unwrap();let first=a.initialize_c_locale(al).unwrap();let other=b.initialize_c_locale(bl).unwrap();
+assert!(a.check_locale(9,other).is_err());assert!(b.check_locale(9,first).is_err());
+assert_eq!(first.generation,other.generation);assert_ne!(first.anchor,other.anchor);assert!(a.retire_locale(al,other).is_err());a.check_locale(9,first).unwrap();b.check_locale(9,other).unwrap();
+assert!(a.check_locale(10,first).is_err());let mut bad=first;bad.thread=10;assert!(a.check_locale(9,bad).is_err());
+a.retire_locale(al,first).unwrap();assert!(a.check_locale(9,first).is_err());let next=a.initialize_c_locale(al).unwrap();assert!(next.generation>first.generation);assert!(a.check_locale(9,first).is_err());a.check_locale(9,next).unwrap();
+let marker=a.map_region(0x5000,4,CrtRegionKind::Module,None).unwrap();assert!(a.load(marker,32).unwrap().known_scalar().is_err());a.check_locale(9,next).unwrap();assert!(a.load(marker,32).unwrap().known_scalar().is_err());
+assert!(a.retire_locale(bl,next).is_err());a.check_locale(9,next).unwrap();a.retire_locale(al,next).unwrap();a.locale_generation=u64::MAX;assert!(a.initialize_c_locale(al).is_err());assert!(!a.locale_live);
+a.unlock(al).unwrap();assert!(a.initialize_c_locale(al).is_err());b.unlock(bl).unwrap();
+let shutdown=b.begin_shutdown(CrtShutdownReceipt{anchor:b.anchor,thread:9,event:19}).unwrap();b.destroy_lock_shutdown(shutdown,b.file()).unwrap();b.end_shutdown(shutdown).unwrap();assert!(b.check_locale(9,other).is_err());
+"#,
+        );
+    }
     #[test]
     fn owned_cells_unknowns_alias_lifetime_and_explicit_lock_order() {
         native(

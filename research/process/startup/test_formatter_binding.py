@@ -2,7 +2,7 @@
 import struct
 import unittest
 
-from formatter_binding import code_rows, edges, mapped, operand, relative
+from formatter_binding import code_rows, edges, locale_state_evidence, mapped, operand, relative
 
 
 def image(flags=0x60000020, count=1):
@@ -26,6 +26,36 @@ def install(data, address, raw):
 
 
 class FormatterBindingTests(unittest.TestCase):
+    def test_locale_mutation_evidence_does_not_attest_runtime_initialization(self):
+        # Independent synthetic PE: pointer cells have raw bytes; the flag is
+        # virtual zero fill. Neither kind of image data proves a live object.
+        data = image()
+        data.extend(b'\0' * (0x17500-len(data)))
+        struct.pack_into('<IIII', data, 0xb8+8, 0x18000, 0x5000, 0x17300, 0x200)
+        for address, raw in [
+            (0x405219, '833d7cce4100007515'),
+            (0x405222, 'a130c24100'), (0x405227, '8b0d34c24100'),
+            (0x407126, '33c0b97cce4100408701c3'),
+            (0x40b2f2, '807b0c007505e829beffff'),
+            (0x40b367, '807b0c00740a8b43148b00a334c24100'),
+            (0x41c230, '78563412'), (0x41c234, 'efcdab09'),
+        ]:
+            install(data, address, bytes.fromhex(raw))
+        report = locale_state_evidence(data)
+        self.assertFalse(report['runtime_state_proven'])
+        self.assertFalse(report['emission_allowed'])
+        self.assertEqual([w['file_backed_bytes'] for w in report['words']], [0, 4, 4])
+        self.assertEqual([w['image_initial_word'] for w in report['words']],
+                         [0, 0x12345678, 0x09abcdef])
+        # Every effect-bearing edge and store must remain original. Mutating
+        # one cannot leave a stale explanation in an otherwise valid report.
+        for address in [0x405220, 0x40712e, 0x40b2f9, 0x40b36c, 0x40b373]:
+            with self.subTest(address=address):
+                changed = bytearray(data)
+                changed[0x200+address-0x405000] ^= 1
+                with self.assertRaises(ValueError):
+                    locale_state_evidence(changed)
+
     def test_modifier_entry_is_after_table_not_the_linear_disassembler_row(self):
         data = image()
         install(data, 0x40582b, bytes.fromhex('008a412d3c46'))

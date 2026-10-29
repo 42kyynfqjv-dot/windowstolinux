@@ -1157,3 +1157,67 @@ generated Rust SHA256
 All adc3c85 CI passed:40891737061,40891728505,40891728829. New-head CI remains
 required. PR45 stays draft. Full startup/rcedit remains unsupported and historical
 Windows process-exit timeout artifacts remain preserved and unexplained.
+
+### Runtime-bound locale identity and original mutation evidence
+
+Independent review of `dbb3edd` reproduced a concrete locale-token collision:
+two runtimes with identical numeric owner/thread/FILE address and first locale
+generation accepted each other's bare generation. `CrtLocale` now includes the
+unique guest-memory anchor, thread and generation. Validation also rejects a
+closed runtime. The new native regression first failed on the old implementation
+and now checks cross-runtime use/retirement, wrong thread, stale generation,
+expired FILE lock, exhausted generation and shutdown. Failed checks preserve
+the valid local token. A checked token leaves an unrelated unknown module word
+unknown: it is a lifecycle identity, not locale data initialization or formatter
+admission authority.
+
+All three `dbb3edd` workflows completed successfully:
+`40897169559`, `40897152314`, `40897152286`. Local verification of this review
+passed175 root,177 frame/unwind and173 CRT tests (one observation test is ignored
+in the default CRT suite and separately replayed by the artifact checker),
+Clippy and formatting. The startup Python suite passed55 tests with one separate
+skip. The added evidence regression distinguishes file-backed pointer cells from
+virtual zero fill and rejects changed mutation edges/stores. Existing owned
+scenarios remain202, not an additional202 independent Windows comparisons.
+
+`formatter_binding.py` and the cross-host wrapper report now retain
+`locale_state_evidence`, with `runtime_state_proven=false` and
+`emission_allowed=false`. Exact original instructions show the conditional
+branch-word mutation and multibyte-info store described in
+`REMAINING-CALLBACKS.md`. These are possible static effects, not proof of startup
+reachability, an exhaustive effect inventory or dynamic observations. The
+constructor's unknown-state rejection remains unchanged. Original FILE table
+storage, a valid lifecycle token and the existing stream-initializer certificate
+do not establish live locale data, FILE fields or unbound callee effects.
+
+The unchanged PE SHA256 remains
+`1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4`.
+Generated wrapper Rust SHA256 is
+`15f3b88828d72c78819fd47f493ffd4c2b100a7b2367fef332bc79a0cefc8dc7`.
+The artifact checker replays the five existing recorded Windows boundary
+comparisons; this review adds zero fresh Windows observations, zero full
+formatter-output comparisons and zero whole-PE translation pairs. Full formatter
+integration is blocked by the specific producer/effect obligations in the
+inventory, not by approval or tooling. PR45 stays draft and SUB-579 In Progress;
+full startup/rcedit and historical timeout causes remain unproved.
+
+The local projection checker retained a separate failure: its `owned` batch hit
+the unchanged15-second limit. The traceback and generated source/binary remain
+under the local `live-dispatch/locale-identity-20261029/projection` evidence. A
+separately instrumented diagnostic run completed all202 cases in12.896seconds;
+no case exceeded0.2seconds in that diagnostic. This suggests aggregate timing
+margin needs attention, but does not identify why the first run exceeded its
+limit or turn the failed check into a pass. No retry, timeout increase or result
+suppression was added. This Linux component timing observation is distinct from
+the historical original-Windows process-alive failures. New exact-head CI is
+still required; the review does not claim every local gate passed.
+
+Reproduction (with the documented Rust/Z3 environment and a writable TMPDIR):
+
+```sh
+cargo test --offline --locked --example crt_stream locale_identity_rejects_another_runtime
+python3 -m unittest discover -s research/process/startup -p test_formatter_binding.py -v
+python3 research/process/startup/formatter_binding.py ORIGINAL_DIR EVIDENCE_DIR
+python3 research/process/startup/check_normal_wrapper.py ORIGINAL_DIR OBSERVED_DIR NATIVE_DIR
+python3 research/process/startup/check_projection_boundary.py NATIVE_DIR/normal-wrapper.rs PROJECTION_DIR
+```

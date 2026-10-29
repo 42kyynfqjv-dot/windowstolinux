@@ -13,7 +13,7 @@ from pathlib import Path
 import struct
 
 from coff_binding import bind_function, cut, pe_sections, u32
-from frame_binding import instructions
+from frame_binding import instructions, module_word
 from reported_binding import extract as extract_reported
 
 
@@ -99,6 +99,44 @@ def relative(image, site, opcode):
     if not 0 <= target < 2**32:
         raise ValueError('formatter relative edge overflow')
     return target
+
+
+def locale_state_evidence(image):
+    """Record a concrete mutation hazard, never a complete writer inventory.
+
+    These raw original edges establish possible effects only. No reachability,
+    initializer order, PTD identity or object lifetime follows from extraction.
+    """
+    flag = operand(image, 0x405219, bytes.fromhex('833d'))
+    info = operand(image, 0x405222, b'\xa1')
+    multibyte = operand(image, 0x405227, bytes.fromhex('8b0d'))
+    forms = [
+        ('constructor_global_choice', 0x405219,
+         bytes.fromhex('833d')+struct.pack('<I', flag)+bytes.fromhex('007515')),
+        ('flag_exchange', 0x407126,
+         bytes.fromhex('33c0b9')+struct.pack('<I', flag)+bytes.fromhex('408701c3')),
+        ('conditional_flag_call', 0x40b2f2, bytes.fromhex('807b0c007505e829beffff')),
+        ('conditional_multibyte_store', 0x40b367,
+         bytes.fromhex('807b0c00740a8b43148b00a3')+struct.pack('<I', multibyte)),
+    ]
+    if relative(image, 0x40b2f8, 0xe8) != 0x407126:
+        raise ValueError('locale mutation dependency changed')
+    rows = []
+    for name, va, expected in forms:
+        raw = mapped(image, va, len(expected), executable=True)
+        if raw != expected:
+            raise ValueError('locale mutation instruction changed: '+name)
+        rows.append(dict(name=name, va=va, size=len(raw), sha256=sha(raw)))
+    return dict(
+        kind='static locale read/mutation evidence; not initialized runtime state',
+        words=[dict(va=va, **module_word(image, va, role)) for va, role in [
+            (flag, 'constructor branch word'), (info, 'locale-info pointer cell'),
+            (multibyte, 'multibyte-info pointer cell')]],
+        regions=rows,
+        effects=['Conditional CALL reaches a routine exchanging scalar 1 into the branch word.',
+                 'A distinct conditional path loads through an object pointer and stores into the multibyte-info cell.'],
+        limits='Neither path is proved reachable from startup; writers/aliases/callees are not exhaustively closed. Image pointer integers grant no typed object authority.',
+        runtime_state_proven=False, emission_allowed=False)
 
 
 def code_rows(image, index, begin, end):
@@ -269,7 +307,8 @@ def extract(original, output):
                             vc_tools_version=report['vc_tools_version'], windows_sdk_version=report['windows_sdk_version']),
         caller_object_bindings=[bind_function(obj, image, symbol) for symbol in ['_main', '_printf']],
         caller_evidence='caller-provenance/reported-binding.json',
-        regions=regions, original_call_edges=[dict(site=site, target=target) for site, target in expected_edges],
+        regions=regions, locale_state=locale_state_evidence(image),
+        original_call_edges=[dict(site=site, target=target) for site, target in expected_edges],
         table_operands=[dict(site=site, table=name, byte_offset=delta) for site, _, name, delta in bindings],
         modifier_entry_boundary_note='Actual CALL targets 0x40582c after 32-byte table; dumpbin linear row at 0x40582b overlaps it. Raw MOV AL,[ECX+0x2d];CMP AL,0x46 boundaries independently retained.',
         formatter_abi=dict(stack_words=['options_low', 'options_high', 'FILE_pointer', 'format_pointer', 'locale_pointer', 'varargs_pointer'],

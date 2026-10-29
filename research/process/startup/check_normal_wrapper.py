@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 import subprocess
 
-from formatter_binding import mapped
+from formatter_binding import mapped, locale_state_evidence
 from coff_binding import import_at_iat, pe_sections
 from observe_stdio import CASES, parse_events, summarize
 
@@ -202,6 +202,7 @@ def check(original, observation, out, compare=None):
                   inner_prolog_sha256=sha((out/'Inner-prolog.bin').read_bytes()),
                   main_activation_sha256=sha((out/'main-activate.bin').read_bytes()),
                   main_scope_header_sha256=sha((out/'Main-scope-header.bin').read_bytes()),
+                  locale_state_evidence=locale_state_evidence(image),
                   original_printf_routing_sha256=sha((out/'printf-routing-live.bin').read_bytes()),
                   original_printf_context_sha256=sha((out/'printf-context-live.bin').read_bytes()),
                   original_printf_entry_sha256=sha((out/'printf-entry-live.bin').read_bytes()),
@@ -231,6 +232,8 @@ def check(original, observation, out, compare=None):
                   scope='Live registry fixture; body EAX/flags inputs; original stack/FS/saved-state restoration only')
     if compare:
         previous = json.loads(compare.read_text())
+        if previous['locale_state_evidence'] != result['locale_state_evidence']:
+            raise ValueError('wrapper cross-host locale evidence differs')
         for key in ['live_finally_hashes', 'original_notification_sha256', 'original_cleanup_hashes', 'owned_local_body_sha256', 'local_level_store_sha256', 'pe_sha256', 'helper_sha256', 'epilog_sha256', 'handler_scope_store_sha256', 'handler_prolog_sha256', 'handler_installer_sha256', 'event_normalizer_sha256', 'guard_validator_sha256', 'security_check_sha256', 'scope_header_sha256', 'prefix_sha256', 'context_helper_sha256', 'filter_bridge_sha256', 'main_filter_sha256', 'main_prolog_sha256', 'inner_prolog_sha256', 'main_activation_sha256', 'main_scope_header_sha256', 'main_scope_table_sha256', 'complete_handler_sha256', 'global_wrapper_sha256', 'observation_sha256', 'vectors_sha256', 'rust_sha256', 'file_scope_code_sha256', 'file_scope_imports']:
             if previous[key] != result[key]:
                 raise ValueError('wrapper cross-host provenance differs: '+key)
