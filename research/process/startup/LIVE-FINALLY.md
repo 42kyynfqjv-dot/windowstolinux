@@ -253,3 +253,67 @@ test function. Local `/tmp` exhaustion interrupted one validation attempt; only
 old generated native harnesses were removed, workspace evidence was preserved,
 and affected checks were rerun successfully. This is distinct from historical
 original-Windows process timeouts, whose causes remain unresolved.
+
+## Separate search source and delivery target
+
+The live unwind view now borrows the selected search storage separately from the
+mutable delivery target. The source validation still checks Main's real guarded
+bytes, installed exception-pointer pair, captured CONTEXT, callback return and
+wrapper lifetime. The delivery lease also binds its target registration ID, so
+changing a lease's target cannot reuse another frame's authority. Nested pure
+helper calls preserve both views. Neither view is a copied storage snapshot.
+
+Search and unwind authority are explicit: selected search execution validates the
+registry target against the Machine selected index; delivery execution requires
+the next registry callback. A target switch requires a younger, disjoint frame
+in the same runtime/thread/stack, and fails if either live storage identity has
+expired. A delivery callback's arguments must fit below both its enclosing call's
+reserved stack extent and its target frame. The full prefix extent remains live
+across nested deliveries.
+
+Ordered pre-event acquisition can now initialize both original frame images.
+The existing instruction-proved Main prolog/activation and Inner prolog/scalar
+initializers produce their own byte-backed storage, oldest to youngest. This
+uses explicit initial call CPUs and does not claim to execute the intervening
+Main-to-Inner CALL or capture the OS exception context. Event issuance remains
+restricted to the youngest frame; acquiring an older image grants no raise or
+restoration authority. An independent Machine test covers that distinction,
+foreign identities and acquisition after event issuance. The native fixture
+also rejects out-of-order acquisition without modifying tags or registrations.
+
+The connected native component now executes Main's search/filter/global wrapper,
+then the unchanged unwind prefix and original normalizer, guard and context
+helpers against Inner. The compiler binds a guard proof for each admitted frame
+layout. The prefix reaches the original unwind branch at 0x4022bd, reads Inner's
+TryLevel 1 and owner EBP, and leaves Main's distinct guard/pair/captured context
+unchanged. Its following local-unwind call is still an integration boundary.
+
+Fifteen additional native scenarios cover the normal two-frame path, relocated
+Main/Inner, a nested delivery, wrong establisher, damaged source and target guards,
+expired source return, wrong target binding, changed saved or delivery CONTEXT,
+a target local write followed by failure, a nested full-prefix stack collision,
+a duplicate target return, a changed source pair and a forged lease target. The
+three positive cases reach the intended explicit unimplemented API completion
+barrier; negative cases fail earlier. The failed-write case retains 0xface in
+Inner's ordinary local while no restoration receipt is issued.
+
+The aggregate counts are 90 owned-frame scenarios, including 33 delivery-lifetime
+scenarios and 15 cross-frame scenarios (these counts overlap). The separate
+finally corpus remains 38 scenarios. Local recorded-observation replay still has
+five wrapper comparisons and zero whole-PE comparisons; new target cases are
+native component executions, not fresh Windows differential pairs. Local evidence
+uses unchanged PE SHA-256
+`1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4`
+and generated Rust SHA-256
+`95144770ead5a4f0f630e2c6ca0bc7fc1479509ecbaa544f8b2245a9dc353126`.
+
+Next, connect the original branch's local-unwind call to the already tested live
+cleanup adapter while retaining both storage views. The registry must be lent
+mutably for ordered handler/temporary-record effects, then revalidated before
+issuing completion and retiring Inner. Current `CrtOwnedFrameView` lends it
+immutably, so callback completion cannot yet perform that transition. Sol can
+review this boundary and attempt the scoped registry handoff; a further Astra
+pass is justified only by a concrete unresolved ownership transition. Initial
+OS delivery, API completion, selected continuation and full entry-to-exit proof
+remain gates. Full startup/rcedit stays rejected. Historical Windows timeouts
+remain unresolved.

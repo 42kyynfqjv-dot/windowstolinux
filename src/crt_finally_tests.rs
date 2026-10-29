@@ -258,7 +258,7 @@ fn live_finally_cases(){
    if mode==22{rt.store(rt.resolve_absolute(0x9900,CrtRegionKind::Stack)?,32,CrtValue::ProtectedReturn(946))?;}
    if mode==23{rt.consume_stack(sp,CrtValue::ProtectedReturn(946))?;}
    for(at,b)in finally_original_regions(){let at=rt.resolve_absolute(at,CrtRegionKind::Module)?;for(i,expected)in b.iter().enumerate(){if rt.load(rt.offset(at,i as i64)?,8)?.known_scalar()?!=u32::from(*expected){return Err("postcleanup original code changed");}}}
-   let mut view=CrtOwnedFrameView{rt:&mut rt,registry:r,machine:&m,storage:s,active:946,depth:0,calls:0,failed:false};
+   let mut view=CrtOwnedFrameView{rt:&mut rt,registry:r,machine:&m,storage:s,search_storage:None,search:false,active:946,depth:0,calls:0,failed:false};
    if mode>=24{view.call(&mut cpu,0x40226e,|view,child|{
     if mode==25{let alias=view.rt.resolve_absolute(0x9900,CrtRegionKind::Stack)?;view.rt.store(alias,32,CrtValue::ProtectedReturn(child.return_id))?;}
     original_inner_guard_call(view,child,0x40226e)?;child.finish(view.rt)

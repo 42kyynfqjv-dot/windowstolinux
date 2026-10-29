@@ -418,6 +418,15 @@ impl Machine {
         }
         Ok(())
     }
+    /// Validate an original frame image during ordered pre-event acquisition.
+    /// Unlike event issuance, acquisition includes older live frames.
+    fn check_initial_frame_binding(&self, binding: OwnedFrameBinding) -> Result<(), Error> {
+        self.check_raise_binding(self.owned_binding(self.current)?)?;
+        if self.owned_binding(binding.index)? != binding {
+            return Err(Error::Identity);
+        }
+        Ok(())
+    }
     fn issue_owned_event(&mut self, binding: OwnedFrameBinding) -> Result<(u64, u64), Error> {
         self.check_raise_binding(binding)?;
         self.event_issued = true;
@@ -1486,6 +1495,36 @@ mod owned_tests {
             legacy.execute_owned_cleanup(request, |_, _| panic!("legacy cells rebound")),
             Err(Error::Identity)
         );
+    }
+
+    #[test]
+    fn ordered_frame_acquisition_does_not_grant_older_raise_authority() {
+        let mut machine = Machine::new_dispatch_known(
+            vec![FrameSpec { scopes: vec![] }, FrameSpec { scopes: vec![] }],
+            0,
+            [None; 10],
+            Some(0),
+        )
+        .unwrap();
+        let older = machine.owned_binding(0).unwrap();
+        let younger = machine.owned_binding(1).unwrap();
+        assert_eq!(machine.check_initial_frame_binding(older), Ok(()));
+        assert_eq!(machine.check_initial_frame_binding(younger), Ok(()));
+        let mut foreign = older;
+        foreign.owner += 1;
+        assert_eq!(
+            machine.check_initial_frame_binding(foreign),
+            Err(Error::Identity)
+        );
+        assert_eq!(machine.issue_owned_event(older), Err(Error::Identity));
+        assert!(!machine.event_issued);
+        machine.issue_owned_event(younger).unwrap();
+        for binding in [older, younger] {
+            assert_eq!(
+                machine.check_initial_frame_binding(binding),
+                Err(Error::Phase)
+            );
+        }
     }
 
     #[test]
