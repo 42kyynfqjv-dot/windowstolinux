@@ -141,3 +141,13 @@ Sol review preserved the continuation single-use checks, ECX numeric-PC result,
 unknown-pointer rejection and TLS→FLS provenance correction. The next hard scope
 is this C++ record/state/cleanup adapter plus recursive allocation initialization;
 changing EH4 constants or treating the enum as implemented would be unsound.
+
+## Owned C++ prefix checkpoint
+
+The distinct record now has a checked metadata/state query and original handler
+prefix execution through guard validation and metadata load. It rejects at the
+common dispatcher, with no disposition/cleanup/restoration authority. Both actual
+unwind entries select `4026fc -> 40770c`, a PTD-dependent termination path, so a
+successful-return cleanup adapter would be incorrect. See
+[CXX-PTD-RECORD.md](CXX-PTD-RECORD.md) for exact binding, negative tests and the
+remaining dispatcher/termination contract. Registry admission remains rejected.

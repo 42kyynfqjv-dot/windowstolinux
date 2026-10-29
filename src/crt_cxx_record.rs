@@ -1,0 +1,213 @@
+//! Bounded three-word C++ record adapter. No dispatcher or cleanup effect grant.
+/// Validate independently supplied expected metadata before emitting a binding.
+/// This subset has no catches/IP map/exception-specification; all actions still
+/// require an execution/effect contract before any cleanup receipt can exist.
+pub(crate) fn emit(
+    metadata: &[u8],
+    address: u32,
+    map: &[u8],
+    map_address: u32,
+) -> Result<String, String> {
+    if metadata.len() != 36
+        || address == 0
+        || address % 4 != 0
+        || map_address == 0
+        || map_address % 4 != 0
+    {
+        return Err("C++ metadata shape/alignment".into());
+    }
+    let words: Vec<u32> = metadata
+        .chunks_exact(4)
+        .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
+        .collect();
+    let n = words[1] as usize;
+    if words[0] != 0x19930522
+        || n == 0
+        || n > 32
+        || words[2] != map_address
+        || words[3..8] != [0; 5]
+        || words[8] != 1
+        || map.len() != n * 8
+    {
+        return Err("C++ metadata unsupported fields/budget".into());
+    }
+    let end = address.checked_add(36).ok_or("C++ metadata overflow")?;
+    let me = map_address
+        .checked_add(map.len() as u32)
+        .ok_or("C++ map overflow")?;
+    if address < me && map_address < end {
+        return Err("C++ metadata/map alias".into());
+    }
+    let rows: Vec<(i32, u32)> = map
+        .chunks_exact(8)
+        .map(|b| {
+            (
+                i32::from_le_bytes(b[..4].try_into().unwrap()),
+                u32::from_le_bytes(b[4..].try_into().unwrap()),
+            )
+        })
+        .collect();
+    for (i, &(next, action)) in rows.iter().enumerate() {
+        if next < -1
+            || next >= i as i32
+            || action == 0
+            || (action >= address && action < end)
+            || (action >= map_address && action < me)
+        {
+            return Err("C++ nondecreasing state/unknown action/alias".into());
+        }
+    }
+    Ok(format!("{}\nfn cxx_bind(rt:&CrtStreamRuntime,cpu:&CrtCpu,frame:&CrtPtdFrame)->Result<CrtCxxRecord,&'static str>{{CrtCxxRecord::bind(rt,cpu,frame,{address},&{:?},{map_address},&{:?},&{:?})}}",TYPES,metadata,map,rows))
+}
+pub(crate) const HANDLER: &str = "90908b5424088d420c8b4af033c8e863cafeffb82cb44100e90fe5feff";
+pub(crate) const METADATA: &str =
+    "22059319020000001cb44100000000000000000000000000000000000000000001000000";
+pub(crate) const UNWIND_MAP: &str = "fffffffffc264000fffffffffc264000";
+pub(crate) const ACTION: &str = "e90b500000";
+
+/// Lift the original wrapper up to its external dispatcher. Guard mismatch and
+/// the dispatcher itself remain rejecting boundaries, never a disposition.
+fn handler_prefix(
+    bytes: &[u8],
+    origin: u32,
+    metadata: u32,
+    dispatcher: u32,
+    guard: &crate::crt_stream_callees::SecurityProof,
+) -> Result<String, String> {
+    let end = origin.checked_add(29).ok_or("C++ handler overflow")?;
+    let metadata_end = metadata
+        .checked_add(36)
+        .ok_or("C++ handler metadata overflow")?;
+    let cookie_end = guard
+        .cookie()
+        .checked_add(4)
+        .ok_or("C++ handler cookie overflow")?;
+    let mut expected = crate::crt_ptd::raw(HANDLER);
+    expected[15..19].copy_from_slice(&guard.target().wrapping_sub(origin + 19).to_le_bytes());
+    expected[20..24].copy_from_slice(&metadata.to_le_bytes());
+    expected[25..29].copy_from_slice(&dispatcher.wrapping_sub(end).to_le_bytes());
+    if bytes != expected
+        || origin == 0
+        || metadata == 0
+        || metadata % 4 != 0
+        || dispatcher == 0
+        || metadata < end && origin < metadata_end
+        || guard.cookie() < end && origin < cookie_end
+        || [metadata, dispatcher, guard.target(), guard.cookie()]
+            .iter()
+            .any(|p| (origin..end).contains(p))
+    {
+        return Err("C++ handler instruction/target identity".into());
+    }
+    let prefix = crate::crt_stream_ir::Graph::decode_linear_fragment(&bytes[..14], origin)?;
+    let tail = crate::crt_stream_ir::Graph::decode_linear_fragment(&bytes[19..24], origin + 19)?;
+    let prefix = crate::crt_stream_emit::emit_linear_fragment(&prefix, &Default::default())?;
+    let tail = crate::crt_stream_emit::emit_linear_fragment(&tail, &Default::default())?;
+    let cookie = guard.cookie();
+    let next = origin + 19;
+    let check = format!(
+        r#"cpu.call_activation(rt,{next},0,|rt,child|{{
+let expected=rt.load(rt.resolve_absolute({cookie},CrtRegionKind::Module)?,32)?.known_scalar()?;
+let actual=CrtCpu::number(child.r[1])?;
+child.binary(rt,7,CrtValue::scalar(actual),CrtValue::scalar(expected),32)?;
+if actual!=expected{{return Err("C++ security failure effect unbound");}}
+child.finish(rt)
+}})?;"#
+    );
+    Ok(format!(
+        r#"
+fn cxx_handler_prefix(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,owner:&CrtCpu,frame:&CrtPtdFrame,record:&CrtCxxRecord)->Result<CrtValue,&'static str>{{
+ record.state(rt,owner,frame)?;cpu.validate_active(rt)?;
+ if frame.handler!={origin}||frame.low!=rt.offset(frame.bp,-28)?||record.metadata.address()!={metadata}{{return Err("C++ handler/frame binding");}}
+ let sp=CrtCpu::pointer(cpu.r[4])?;
+ let call_low=rt.offset(sp,-4)?;rt.valid(call_low,16)?;
+ if cpu.return_id==owner.return_id||u64::from(call_low.address())<u64::from(frame.bp.address())+4&&u64::from(frame.low.address())<u64::from(call_low.address())+16{{return Err("C++ handler call/frame overlap");}}
+ if rt.load(rt.offset(sp,8)?,32)?!=CrtValue::Pointer(rt.offset(frame.bp,-12)?){{return Err("C++ establisher pointer identity");}}
+ let _=(||->Result<CrtValue,&'static str>{{{prefix}}})()?;
+ {check}
+ let _=(||->Result<CrtValue,&'static str>{{{tail}}})()?;
+ Err("C++ original dispatcher effect unbound")
+}}
+"#
+    ))
+}
+const TYPES: &str = r#"
+struct CrtCxxRecord{anchor:guest_memory::Capability,thread:u64,outer:u64,bp:CrtPointer,metadata:CrtPointer,map:CrtPointer,metadata_bytes:Vec<u8>,map_bytes:Vec<u8>,rows:Vec<(i32,u32)>}
+impl CrtCxxRecord{
+ fn bytes(rt:&CrtStreamRuntime,p:CrtPointer,expected:&[u8])->Result<(),&'static str>{for(i,b)in expected.iter().enumerate(){if rt.load(rt.offset(p,i as i64)?,8)?.known_scalar()?!=u32::from(*b){return Err("C++ metadata mutated/unknown");}}Ok(())}
+ fn bind(rt:&CrtStreamRuntime,cpu:&CrtCpu,frame:&CrtPtdFrame,address:u32,bytes:&[u8],map_address:u32,map_bytes:&[u8],rows:&[(i32,u32)])->Result<Self,&'static str>{
+  frame.live(rt,cpu)?;let metadata=rt.subrange(rt.resolve_absolute(address,CrtRegionKind::Module)?,bytes.len()as u32)?;let map=rt.subrange(rt.resolve_absolute(map_address,CrtRegionKind::Module)?,map_bytes.len()as u32)?;
+  let result=Self{anchor:rt.anchor,thread:rt.thread,outer:cpu.return_id,bp:frame.bp,metadata,map,metadata_bytes:bytes.to_vec(),map_bytes:map_bytes.to_vec(),rows:rows.to_vec()};result.state(rt,cpu,frame)?;Ok(result)
+ }
+ fn state(&self,rt:&CrtStreamRuntime,cpu:&CrtCpu,frame:&CrtPtdFrame)->Result<i32,&'static str>{
+  frame.live(rt,cpu)?;if rt.anchor!=self.anchor||rt.thread!=self.thread||cpu.return_id!=self.outer||frame.bp!=self.bp{return Err("C++ record owner/call identity");}
+  Self::bytes(rt,self.metadata,&self.metadata_bytes)?;Self::bytes(rt,self.map,&self.map_bytes)?;
+  let state=rt.load(rt.offset(self.bp,-4)?,32)?.known_scalar()? as i32;
+  if state< -1||state>=self.rows.len() as i32{return Err("C++ unknown/out-of-range state");}Ok(state)
+ }
+ fn required_action(&self,rt:&CrtStreamRuntime,cpu:&CrtCpu,frame:&CrtPtdFrame)->Result<Option<(i32,u32)>,&'static str>{let state=self.state(rt,cpu,frame)?;Ok(if state== -1{None}else{Some(self.rows[state as usize])})}
+ // Deliberately no completion receipt, cursor update, dispatcher disposition
+ // or registry registration: an action address does not prove its effects.
+}
+"#;
+#[test]
+fn owned_cxx_record_keeps_state_metadata_and_continuation_distinct() {
+    let meta = crate::crt_ptd::raw(METADATA);
+    let map = crate::crt_ptd::raw(UNWIND_MAP);
+    assert_eq!(crate::crt_ptd::raw(ACTION), [0xe9, 0x0b, 0x50, 0, 0]);
+    let security = crate::crt_stream_callees::prove_security(
+        &crate::crt_ptd::raw("3b0d00c041007501c3e97c020000"),
+        0x40154c,
+    )
+    .unwrap();
+    let handler = handler_prefix(
+        &crate::crt_ptd::raw(HANDLER),
+        0x414ad6,
+        0x41b42c,
+        0x403002,
+        &security,
+    )
+    .unwrap();
+    let extra = format!(
+        "{} {} {}",
+        crate::crt_ptd::helper_source(
+            &crate::crt_ptd::raw(crate::crt_ptd::PROLOG),
+            0x414268,
+            &crate::crt_ptd::raw(crate::crt_ptd::EPILOG),
+            0x414254,
+            0x41c000
+        )
+        .unwrap(),
+        emit(&meta, 0x41b42c, &map, 0x41b41c).unwrap(),
+        handler
+    );
+    let body = format!(
+        r#"
+let mut rt=CrtStreamRuntime::new(7,9,0x8000,65536).unwrap();rt.map_region(0x41c000,4,CrtRegionKind::Module,Some(&123u32.to_le_bytes())).unwrap();let meta=rt.map_region(0x41b42c,36,CrtRegionKind::Module,Some(&{meta:?})).unwrap();rt.map_region(0x41b41c,16,CrtRegionKind::Module,Some(&{map:?})).unwrap();let stack=rt.map_region(0x9000,1024,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,768).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(1)).unwrap();let mut cpu=CrtCpu::new(sp,1).unwrap();cpu.push(&mut rt,CrtValue::scalar(0)).unwrap();cpu.r[0]=CrtValue::scalar(0x414ad6);let previous=rt.thread_head(4,5,[1,2,3]).unwrap();let mut frame=CrtPtdFrame::new(&rt,&cpu,previous,0x414ad6,0x41c000).unwrap();ptd_prolog(&mut rt,&mut cpu,&mut frame,0x40a33e).unwrap();let binding=cxx_bind(&rt,&cpu,&frame).unwrap();assert_eq!(binding.required_action(&rt,&cpu,&frame).unwrap(),None);let state=rt.offset(frame.bp,-4).unwrap();
+let foreign=CrtStreamRuntime::new(7,9,0x8000,65536).unwrap();assert!(binding.state(&foreign,&cpu,&frame).is_err());
+let scratch=rt.map_region(0xa000,1024,CrtRegionKind::Stack,None).unwrap();
+for fault in 0..6{{let hs=rt.offset(scratch,512).unwrap();rt.store(hs,32,CrtValue::ProtectedReturn(123)).unwrap();rt.store(rt.offset(hs,8).unwrap(),32,if fault==1{{CrtValue::scalar(frame.bp.address()-12)}}else{{CrtValue::Pointer(rt.offset(frame.bp,if fault==2{{-8}}else{{-12}}).unwrap())}}).unwrap();let mut child=CrtCpu::new(hs,123).unwrap();if fault==5{{child.r[4]=CrtValue::Pointer(frame.low);}}let guard=rt.load(frame.low,32).unwrap();if fault==3{{rt.store(frame.low,32,CrtValue::scalar(0)).unwrap();}}if fault==4{{rt.store(frame.low,32,CrtValue::Scalar{{bits:0,known:0}}).unwrap();}}
+let result=cxx_handler_prefix(&mut rt,&mut child,&cpu,&frame,&binding);assert!(result.is_err());assert!(!child.returned);if fault==0{{assert_eq!(result.unwrap_err(),"C++ original dispatcher effect unbound");assert_eq!(child.r[0],CrtValue::scalar(0x41b42c));assert_eq!(child.r[1],CrtValue::scalar(123));}}rt.store(frame.low,32,guard).unwrap();rt.consume_stack(hs,CrtValue::ProtectedReturn(123)).unwrap();}}
+for n in [0,1]{{rt.store(state,32,CrtValue::scalar(n)).unwrap();assert_eq!(binding.required_action(&rt,&cpu,&frame).unwrap(),Some((-1,0x4026fc)));assert_eq!(rt.load(state,32).unwrap(),CrtValue::scalar(n));}}
+rt.store(state,32,CrtValue::Scalar{{bits:0,known:0}}).unwrap();assert!(binding.state(&rt,&cpu,&frame).is_err());rt.store(state,32,CrtValue::scalar(2)).unwrap();assert!(binding.state(&rt,&cpu,&frame).is_err());rt.store(state,32,CrtValue::scalar(1)).unwrap();let old=cpu.return_id;cpu.return_id+=1;assert!(binding.state(&rt,&cpu,&frame).is_err());cpu.return_id=old;rt.store(meta,32,CrtValue::scalar(0)).unwrap();assert!(binding.state(&rt,&cpu,&frame).is_err());rt.store(meta,32,CrtValue::scalar(0x19930522)).unwrap();ptd_epilog(&mut rt,&mut cpu,&mut frame,0x40a3b8).unwrap();assert!(binding.state(&rt,&cpu,&frame).is_err());cpu.finish(&mut rt).unwrap();
+"#
+    );
+    crate::crt_stream_callees_tests::native(&extra, &body, "cxx-record");
+    for i in [0, 4, 8, 12, 16, 20, 24, 28, 32] {
+        let mut bad = meta.clone();
+        bad[i] ^= 1;
+        assert!(emit(&bad, 0x41b42c, &map, 0x41b41c).is_err());
+    }
+    for i in 0..29 {
+        let mut code = crate::crt_ptd::raw(HANDLER);
+        code[i] ^= 1;
+        assert!(handler_prefix(&code, 0x414ad6, 0x41b42c, 0x403002, &security).is_err());
+    }
+    assert!(emit(&meta, 0xfffffff0, &map, 0x41b41c).is_err());
+    let mut aliased = meta.clone();
+    aliased[8..12].copy_from_slice(&0x41b430u32.to_le_bytes());
+    assert!(emit(&aliased, 0x41b42c, &map, 0x41b430).is_err());
+    let mut cycle = map.clone();
+    cycle[..4].copy_from_slice(&0i32.to_le_bytes());
+    assert!(emit(&meta, 0x41b42c, &cycle, 0x41b41c).is_err());
+}

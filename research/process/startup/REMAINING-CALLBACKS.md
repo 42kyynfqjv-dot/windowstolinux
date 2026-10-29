@@ -109,3 +109,12 @@ errno is invalidated on FLS mutation/slot retirement. Actual handler414ad6 uses
 three-word record/state and metadata41b42c (19930522); the registry only implements
 EH4 validation despite reserving a Cxx enum. A shared C++ state/unwind adapter and
 recursive allocation/initializer contracts are the next concrete integration gate.
+
+PTD C++ refinement: the actual three-word record and metadata now bind to the
+owned normal frame, and original handler prefix/guard instructions execute.
+The common dispatcher is still unbound. Both unwind entries lead to a
+PTD-dependent termination callback/abort path, not a returning cleanup. The
+adapter grants no disposition, cleanup receipt or registry admission; see
+[CXX-PTD-RECORD.md](CXX-PTD-RECORD.md). Original dispatcher selection, PTD+12 callback
+ownership, recursive PTD acquisition and termination effects are the concrete
+next contracts before lazy-initialization exception composition.

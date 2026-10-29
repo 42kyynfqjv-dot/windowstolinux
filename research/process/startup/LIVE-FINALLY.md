@@ -1890,3 +1890,36 @@ Windows boundary comparisons and zero new whole-PE pairs. Wrapper Rust SHA256:
 `4747748b1b1f775de195605cf2ca2e466d027c97978540abfc229708e17be489`.
 Historical Windows timeouts remain unresolved, including case16. New checkpoint
 CI must pass independently; no merge or formal approval is submitted.
+
+### Distinct PTD C++ record and original handler prefix
+
+The bounded adapter now binds the real three-word record, complete metadata and
+unwind map to a live PTD normal frame. The original handler load/LEA/XOR and
+metadata-load instructions execute with a fresh protected cookie-check call.
+Unknown/corrupt guards, forged establisher pointers, overlapping call/frame
+storage, stale/cross-runtime owner, invalid state, changed metadata/code and
+post-epilog reuse reject. There is no C++ registry admission or cleanup receipt.
+
+Both actual unwind entries select `4026fc -> 40770c`, a PTD-dependent termination
+path. This new static finding rules out treating them as successful returning
+cleanup. The common dispatcher and termination/callback effects remain unbound.
+See [CXX-PTD-RECORD.md](CXX-PTD-RECORD.md) for the connected implementation and next
+gate. Full formatter/startup/rcedit remains unsupported.
+
+Local verification: 199 CRT tests passed, one existing observation test separate;
+Clippy, format and diff checks passed. The final focused C++ test includes six
+handler call/guard scenarios, state/lifetime checks and byte-mutation negatives.
+Artifact replay passed seven prior PTD tests and the new C++ test, then the five
+previously recorded Windows wrapper comparisons. There are zero new Windows
+observations or whole-PE pairs. PE SHA256 remains
+`1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4`;
+wrapper Rust remains `4747748b1b1f775de195605cf2ca2e466d027c97978540abfc229708e17be489`.
+Handler SHA256 `b61580e10d4983c8a533aaa4a2770d4146f2de0e445b3b868c2584ddc96ba722`;
+metadata `90464cfd6bf7bc9a6f4ce0a354390f8194c197a2491a54990dd8fa4f6e642a44`;
+unwind map `dd42109d84842589ecaf204820e2fdf4b9a01fea8212769d04aed9b0e6066443`.
+
+Predecessor a182104 concluded: push Rust40928088917 and startup40928088993 passed;
+PR Rust40928096259 failed at original-Windows corpus case24. Its preserved
+process.wait timeout is unresolved. At this review, 89123fd startup40929659363
+passed and both Rust runs40929667611/40929659415 were still running. No failure
+has been removed, retried silently or explained by a different run passing.

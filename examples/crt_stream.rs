@@ -285,3 +285,7 @@ mod crt_global_lock;
 #[cfg(test)]
 #[path = "../src/crt_ptd.rs"]
 mod crt_ptd;
+
+#[cfg(test)]
+#[path = "../src/crt_cxx_record.rs"]
+mod crt_cxx_record;
