@@ -134,3 +134,10 @@ TEB or admitting unknown ESP. The protected call returns, original POP ECX consu
 the context argument, and execution rejects at actual PTD lookup4028c3. Actual
 Windows capture acquisition and INT29 failure semantics remain outside admission;
 remaining C++ dispatcher/termination callbacks have not been declared successful.
+
+Dispatcher PTD correction/connection: original4028c3/4028d1 now execute against an
+explicit protected lookup callback and require a live40-byte ThreadData root.
+The original PTD+0x20 comparison executes, rejecting unknown data. Actual lookup
+402bb4 resolves a dynamic backend or kernel32!TlsGetValue (not UCRT FlsGetValue).
+Resolver/index/thread acquisition, lazy setter/allocate/free and termination
+remain unbound; see CXX-DISPATCH-PTD.md. No successful cleanup is inferred.

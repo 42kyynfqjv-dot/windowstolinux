@@ -1978,3 +1978,34 @@ five previously recorded Windows wrapper comparisons. The PE and wrapper Rust
 hashes are unchanged from the preceding checkpoint; zero new Windows observations
 or whole-PE pairs. 77715cd startup40932819504 passed; Rust40932829428 and40932819895
 were still running at inspection. Historical Windows timeouts remain unexplained.
+
+### Distinct dispatcher PTD getter, extent and original field read
+
+Sol review retained captured-context/root/ESP rejection. Original dispatcher
+getter4028d1 and required-object wrapper4028c3 now execute, followed by the21
+original dispatcher bytes through CMP [PTD+0x20],ESI. This distinct object is
+allocated40 bytes and its lookup402bb4 resolves a dynamic function or TLS fallback
+(import415060 TlsGetValue); it is not the UCRT FLS/20-byte errno-prefix object.
+
+The lookup remains a protected explicit callable cut. Returning required objects
+must be exact live ThreadData roots with40-byte extent before field access.
+Fourteen independent PTD cases cover success,20/39-byte truncation, scalar/interior/
+unknown/wrong-kind/stale/foreign results, null/sentinel/invalid index, unknown
+LastError, lookup failure with preserved prior writes, and replay rejection.
+Nine connected handler cases include unknown PTD+0x20. Original null/sentinel
+termination edges and lazy setter/allocation/free calls reject at unbound effects;
+LastError restoration is not invented after a call that fails to return.
+
+Local200 CRT tests passed (one existing observation test separate); Clippy,
+format/diff passed. The next gate remains resolver/backend/index/thread identity
+and dispatcher branch/table effects, including termination callbacks. See
+[CXX-DISPATCH-PTD.md](CXX-DISPATCH-PTD.md). These are native component executions,
+not original Windows observations or whole-image translations. Historical Windows
+timeouts remain unresolved. a60666c startup40934310524 passed; both Rust runs
+40934321605/40934310614 remained active at inspection with final Linux jobs running.
+
+Artifact replay passed: both C++ Rust tests and seven prior PTD tests, followed
+by five previously recorded Windows wrapper comparisons. Original PE and wrapper
+Rust hashes remain unchanged above; zero new Windows observations/whole-PE pairs.
+The checker additionally binds both dispatcher getter/wrapper bodies, the actual
+PTD field-use bytes, and TLS fallback import identities.

@@ -289,3 +289,7 @@ mod crt_ptd;
 #[cfg(test)]
 #[path = "../src/crt_cxx_record.rs"]
 mod crt_cxx_record;
+
+#[cfg(test)]
+#[path = "../src/crt_cxx_ptd.rs"]
+mod crt_cxx_ptd;

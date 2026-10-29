@@ -106,3 +106,9 @@ bounds, out-of-bounds ESP and changed instruction/control-flow forms. The explic
 capture may be read repeatedly while live; it grants no event completion,
 restoration receipt or replayable control authority. Acquiring this capture from
 an actual Windows delivery remains unproved.
+
+The next connection executes original dispatcher getter4028d1 and required-PTD
+wrapper4028c3, then the first actual PTD+0x20 comparison. This object is40 bytes
+with a distinct TLS/resolver path; it is not the20-byte UCRT FLS errno prefix.
+Lookup acquisition remains an explicit protected callback and unresolved lazy
+and termination paths reject. See [CXX-DISPATCH-PTD.md](CXX-DISPATCH-PTD.md).
