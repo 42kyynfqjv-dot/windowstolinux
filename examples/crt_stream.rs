@@ -277,3 +277,7 @@ mod stdio_effect;
 #[cfg(test)]
 #[path = "../src/crt_standard_handles_tests.rs"]
 mod crt_standard_handles_tests;
+
+#[cfg(test)]
+#[path = "../src/crt_global_lock.rs"]
+mod crt_global_lock;

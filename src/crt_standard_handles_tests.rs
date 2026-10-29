@@ -200,6 +200,25 @@ for fault in 0..4 {
 }
 
 pub(super) fn manager_source() -> String {
+    let global_enter: Vec<u8> = "8bff558bec6b4508180550d1410050ff154c5041005dc3"
+        .as_bytes()
+        .chunks_exact(2)
+        .map(|x| u8::from_str_radix(std::str::from_utf8(x).unwrap(), 16).unwrap())
+        .collect();
+    let global_leave: Vec<u8> = "8bff558bec6b4508180550d1410050ff15505041005dc3"
+        .as_bytes()
+        .chunks_exact(2)
+        .map(|x| u8::from_str_radix(std::str::from_utf8(x).unwrap(), 16).unwrap())
+        .collect();
+    let enter = super::crt_global_lock::Proof::prove(&global_enter, 0x40bdcf, 0x41d150, 0x41504c)
+        .unwrap()
+        .emit("global_enter")
+        .unwrap();
+    let leave = super::crt_global_lock::Proof::prove(&global_leave, 0x40be17, 0x41d150, 0x415050)
+        .unwrap()
+        .emit("global_leave")
+        .unwrap();
+
     let manager:Vec<u8>="33f68975e46a07e863feffff598975fc8bfea108d14100897de03945087c1f3934bd08cf41007531e8edfeffff8904bd08cf410085c075146a0c5e8975e4c745fcfeffffffe815000000eba2a108d1410083c040a308d1410047ebbb".as_bytes().chunks_exact(2).map(|x|u8::from_str_radix(std::str::from_utf8(x).unwrap(),16).unwrap()).collect();
     let manager_cleanup: Vec<u8> = "6a07e851feffff59c3"
         .as_bytes()
@@ -207,14 +226,14 @@ pub(super) fn manager_source() -> String {
         .map(|x| u8::from_str_radix(std::str::from_utf8(x).unwrap(), 16).unwrap())
         .collect();
     let cg = Graph::decode(&manager_cleanup, 0x40bfbf).unwrap();
-    let cb=crt_stream_emit::emit_body(&cg,|pc,target|{if target!=Target::Direct(0x40be17){return Err("cleanup target changed".into());}let next=pc+cg.nodes[&pc].length;Ok(format!("cpu.call_activation(rt,{next},0,|rt,child|{{let sp=CrtCpu::pointer(child.r[4])?;if rt.load(rt.offset(sp,4)?,32)?.known_scalar()?!=7{{return Err(\"cleanup lock index\");}}let lease=held.ok_or(\"cleanup without manager lease\")?;rt.check_global(lease)?;if release_fails{{return Err(\"declared LeaveCriticalSection effect failed\");}}rt.unlock_global(lease)?;*held=None;events.push(2);child.clobber(CrtValue::Scalar{{bits:0,known:0}});child.finish(rt)}})?;"))},&Default::default(),64).unwrap();
+    let cb=crt_stream_emit::emit_body(&cg,|pc,target|{if target!=Target::Direct(0x40be17){return Err("cleanup target changed".into());}let next=pc+cg.nodes[&pc].length;Ok(format!("cpu.call_activation(rt,{next},0,|rt,child|{{global_leave(rt,child,|rt,index|{{let lease=held.ok_or(\"cleanup without manager lease\")?;if index!=lease.index{{return Err(\"cleanup lock index\");}}rt.check_global(lease)?;if release_fails{{return Err(\"declared LeaveCriticalSection effect failed\");}}rt.unlock_global(lease)?;*held=None;events.push(2);Ok(())}})}})?;"))},&Default::default(),64).unwrap();
     let graph = Graph::decode_with_exits(&manager, 0x40bf60, &[0x40bf4e]).unwrap();
     let body=crt_stream_emit::emit_body_with_exit(&graph,|pc,target|{let next=pc+graph.nodes[&pc].length;let code=match target {
- Target::Direct(0x40bdcf)=>"let sp=CrtCpu::pointer(child.r[4])?;if rt.load(rt.offset(sp,4)?,32)?.known_scalar()?!=7{return Err(\"manager lock index\");}if acquire_fails{return Err(\"declared EnterCriticalSection effect failed\");}*held=Some(rt.lock_global(rt.thread,7)?);events.push(1);child.clobber(CrtValue::Scalar{bits:0,known:0});child.finish(rt)",
+ Target::Direct(0x40bdcf)=>"global_enter(rt,child,|rt,index|{if index!=7{return Err(\"manager lock index\");}if acquire_fails{return Err(\"declared EnterCriticalSection effect failed\");}*held=Some(rt.lock_global(rt.thread,index)?);events.push(1);Ok(())})",
  Target::Direct(0x40be7a)=>"rt.check_global(held.ok_or(\"allocation without manager lock\")?)?;let mut calls=0;let mut allocated=None;construct(rt,child,init,allocations<successes,usize::MAX,&mut calls,&mut allocated)?;allocations+=1;Ok(child.r[0])",
  Target::Direct(0x40bfbf)=>"if rt.load(rt.offset(CrtCpu::pointer(child.r[5])?,-4)?,32)?.known_scalar()?!=u32::MAX-1{return Err(\"cleanup before scope disable\");}cleanup(rt,child,held,events,release_fails)",
  _=>return Err("manager call changed".into())};Ok(format!("cpu.call_activation(rt,{next},0,|rt,child|{{{code}}})?;"))},&std::collections::BTreeMap::from([(0x41cf08,"CrtRegionKind::Module".into()),(0x41d108,"CrtRegionKind::Module".into())]),16384,|_,_|Err("unbound FS".into()),|_,_|Ok(String::new()),|_,_|Ok(None),Some(0x40bf4e)).unwrap();
-    let extra=format!("{} fn cleanup(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,held:&mut Option<CrtGlobalLock>,events:&mut Vec<u32>,release_fails:bool)->Result<CrtValue,&'static str>{{{cb}}} fn manager(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,init:CrtInitialization,successes:usize,acquire_fails:bool,release_fails:bool,held:&mut Option<CrtGlobalLock>,events:&mut Vec<u32>)->Result<CrtValue,&'static str>{{let mut allocations=0;{body}}}",descriptor_source());
+    let extra=format!("{enter} {leave} {} fn cleanup(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,held:&mut Option<CrtGlobalLock>,events:&mut Vec<u32>,release_fails:bool)->Result<CrtValue,&'static str>{{{cb}}} fn manager(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,init:CrtInitialization,successes:usize,acquire_fails:bool,release_fails:bool,held:&mut Option<CrtGlobalLock>,events:&mut Vec<u32>)->Result<CrtValue,&'static str>{{let mut allocations=0;{body}}}",descriptor_source());
     extra
 }
 #[test]

@@ -162,6 +162,16 @@ def check(original, observation, out, compare=None):
     if fixture is None or bytes.fromhex(fixture[1]) != manager_epilog:
         raise ValueError('manager epilog fixture differs from original PE')
     file_regions['manager-epilog'] = sha(manager_epilog)
+    for name,start,iat,api in [('global_enter',0x40bdcf,0x41504c,'EnterCriticalSection'),
+                               ('global_leave',0x40be17,0x415050,'LeaveCriticalSection')]:
+        raw=mapped(image,start,23,executable=True)
+        fixture=re.search(r'let\s+'+name+r'\s*:\s*Vec<u8>\s*=\s*"([0-9a-f]+)"',test_source)
+        if fixture is None or bytes.fromhex(fixture[1])!=raw:
+            raise ValueError('indexed global-lock helper fixture differs from original PE')
+        if tuple(import_at_iat(image,iat-base))!=('kernel32.dll',api):
+            raise ValueError('indexed global-lock API identity changed')
+        file_regions[name]=sha(raw)
+
 
     for name, start, length in [('descriptor_constructor', 0x40be7a, 123), ('descriptor_destructor', 0x40bef5, 53), ('manager', 0x40bf60, 92), ('manager_cleanup', 0x40bfbf, 9)]:
         raw = mapped(image, start, length, executable=True)

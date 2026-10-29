@@ -77,12 +77,16 @@ The actual EH4 prolog/registration/epilog now execute under an exact live
 initialization token, and the inherited producer invokes this registered manager.
 Ordinary normal-call admission still rejects initialization. The bridge rejects
 request >=8192 before effects; the original invalid-request/errno branch remains
-unbound. Exception-driven cleanup invocation and Enter/Leave helper instructions
-remain to connect.
+unbound. Enter/Leave helper instructions now execute through a complete indexed-helper
+certificate and exact constructed module-object binding; API synchronization and
+exception effects remain declared component outcomes. Exception-driven cleanup
+invocation remains to connect.
 calloc/new-handler/errno (`407cf0`), free failure/errno (`407d50`), and continuation
 after failed critical-section initialization remain unresolved. Explicit inputs
 include global-lock initialization, frame/request, allocator availability and API
-outcomes. Next: bind the actual global-lock helpers and allocator/error effects on the
-same owner, then continue locale/FILE production. Sol can proceed; escalate only a
+outcomes. Next: bind actual heap acquisition, calloc/new-mode/errno and free failure effects
+on the same owner, then continue locale/FILE production. See
+[ALLOCATOR-EFFECTS.md](ALLOCATOR-EFFECTS.md) for exact instruction/API dependencies
+and independent acceptance requirements. Sol can proceed; escalate only a
 concrete missing exception-effect contract. Full startup/formatter/rcedit remains
 unsupported until unchanged-binary entry-to-exit evidence passes.

@@ -1586,3 +1586,58 @@ concrete unresolved semantic question.
 
 Registered-manager wrapper Rust SHA256: `8298843fe741e1f31a505d3b94e41acaefd744e4f5b484d30ed9988d6bd0870f`.
 The unchanged PE remains `1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4`.
+
+## Indexed global-lock helpers through the registered manager
+
+Review of `4c9a1d6` retained initialization-token lifetime, manager cleanup ordering,
+protected return and corruption checks. Startup workflow 40917003089 passed;
+Rust workflows 40917011420/40917003240 were still running at inspection. No
+historical Windows timeout has been diagnosed or discarded by these results.
+
+A reusable private helper certificate now validates the complete indexed cdecl
+helper, including its saved EBP, argument at EBP+8, IMUL stride24, ADD table base,
+API call and RET. It binds the supplied import/table roles and rejects truncated
+or changed argument, stride, import, saved-register/return and code/table/IAT
+alias forms. The original helper instructions execute in the shared native
+emitter. At the API boundary, the scalar computed address must agree with the
+exact constructed module-global object for its bounded index and table. No
+integer-address coincidence creates a capability or authorizes another object.
+
+The registered allocation manager and cleanup now call these original Enter and
+Leave helpers rather than shortcutting their instructions. API effect callbacks
+still own synchronization outcomes and exceptions. A failure after acquisition
+preserves the lease and earlier memory effects; it never fabricates epilog
+completion. The proof is shared by both helpers and permits relocated tables and
+imports under the same protocol, without application-name/hash dispatch.
+
+Two independent test functions cover changed complete helper forms and 40 native
+index/effect schedules across two module table locations, plus two mismatched
+object/table checks. Valid indexes0/7/31, index32/-1, unknown argument, absent
+constructed object, volatile-result knowledge, saved-register restoration and
+failure after acquisition are checked. Existing manager, inherited producer and
+EH4 lifecycle tests still pass. The helper module is currently wired into the
+component example's tests; this does not change whole-PE converter admission.
+
+Original helper hashes are
+`b2181e2d5d9e8fcb2ab12060b38d0efb1e11dc9bd4d29676179f7a521e8e7df1`
+and `9b394c6a93fd4e9ffa27b07f229bd21be454dae81f2812c6f5d451b8390ddcbf`.
+The wrapper checker binds both to the unchanged PE and the actual Enter/Leave
+imports. New wrapper Rust SHA256 is
+`b437fd1cd32cf422d64f473743ad310851f3932b79e5e334a7175a5ede885d7c`;
+PE SHA256 remains
+`1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4`.
+Five existing Windows boundaries replayed. There are no new Windows observations
+or whole-PE translation pairs. Local checks: 186 CRT passed (existing observation
+test separate), 181 frame/unwind and 175 root passed; Clippy and Python passed.
+
+[ALLOCATOR-EFFECTS.md](ALLOCATOR-EFFECTS.md) records the next cohesive gate from
+actual allocator, new-mode, heap-producer and free instructions plus primary
+Microsoft contracts. In particular, allocation failure does not imply an empty
+API effect: new-handler retry and thread-owned errno remain to connect. HeapAlloc
+failure does not set LastError; zero-request physical allocation is not authority
+to expose readable requested bytes. The pinned heap producer's IAT4150f8 is
+GetProcessHeap; allocation/free/error IATs415094/415098/415044 are HeapAlloc,
+HeapFree and GetLastError. Current descriptor allocation-result callbacks still
+replace those helper effects. Full formatter/startup/rcedit remains unsupported.
+Sol can continue the actual heap/allocator/error connection; no new architectural
+escalation is required merely for routine integration and verification.

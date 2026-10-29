@@ -107,6 +107,13 @@ impl CrtStreamRuntime {
   self.memory.forget(p.address,24).map_err(|_|"CRT global lock bytes")?;self.partial.retain(|&at,_|at<p.address||at>=p.address+24);self.last_os_error=None;
   if result!=0{self.global_objects.insert(index,self.subrange(p,24)?);}Ok(result!=0)
  }
+ /// An integer produced by a certified helper does not itself grant memory
+ /// authority. Bind it to the live module object for the exact table/index.
+ fn check_global_address(&self,index:u32,table:u32,address:u32)->Result<(),&'static str>{
+  if index>=32||table.checked_add(index*24)!=Some(address){return Err("CRT global index/address overflow");}
+  let p=*self.global_objects.get(&index).ok_or("CRT unconstructed indexed lock")?;
+  if p.address!=address||p.kind!=CrtRegionKind::Module{return Err("CRT global table/object mismatch");}self.identity_range(p,24)
+ }
  fn lock_global(&mut self,thread:u64,index:u32)->Result<CrtGlobalLock,&'static str>{
   let p=*self.global_objects.get(&index).ok_or("CRT unconstructed global lock")?;self.identity_range(p,24)?;
   if self.closed||thread!=self.thread||self.global_locks.len()>=32{return Err("CRT global lock thread/budget");}
