@@ -268,7 +268,7 @@ def check(original, observation, out, compare=None):
                              env=env,capture_output=True,timeout=180)
     (out/'cxx-record-components.stdout').write_bytes(cxx_run.stdout)
     (out/'cxx-record-components.stderr').write_bytes(cxx_run.stderr)
-    if cxx_run.returncode or b'7 passed' not in cxx_run.stdout:
+    if cxx_run.returncode or b'8 passed' not in cxx_run.stdout:
         raise ValueError('original C++ owned record component failed')
     for test in ['allocation_manager_registers_and_retires_original_eh4_under_startup_authority',
                  'inherited_producer_calls_original_manager_with_live_eh4_registration']:
@@ -343,11 +343,13 @@ def check(original, observation, out, compare=None):
                   main_activation_sha256=sha((out/'main-activate.bin').read_bytes()),
                   main_scope_header_sha256=sha((out/'Main-scope-header.bin').read_bytes()),
                   locale_state_evidence=locale_state_evidence(image),
+                  dispatcher_dynamic_source_sha256=sha((out/'dynamic-dispatcher-ptd.rs').read_bytes()),
+                  dispatcher_dynamic_native_cases=18, dispatcher_dynamic_new_windows_pairs=0,
                   dynamic_fls_source_sha256=sha((out/'dynamic-fls-component.rs').read_bytes()),
                   dynamic_fls_native_cases=19, dynamic_fls_new_windows_pairs=0,
                   cold_resolver_source_sha256=sha((out/'cold-resolver-component.rs').read_bytes()),
                   cold_resolver_scripted_cases=17, cold_resolver_new_windows_pairs=0,
-                  cxx_record_rust_tests=7, cxx_record_new_windows_pairs=0, ptd_component_rust_tests=7, ptd_new_windows_pairs=0, errno_router_component_cases=9, errno_router_new_windows_pairs=0, heap_calloc_component_cases=13, heap_calloc_new_windows_pairs=0, registered_manager_component_cases=6, registered_manager_new_windows_pairs=0, manager_component_cases=6, manager_new_windows_pairs=0, descriptor_lifecycle_component_cases=4, descriptor_lifecycle_new_windows_pairs=0, inherited_component_cases=7, inherited_new_windows_pairs=0, standard_handle_component_cases=25, standard_handle_new_windows_pairs=0,
+                  cxx_record_rust_tests=8, cxx_record_new_windows_pairs=0, ptd_component_rust_tests=7, ptd_new_windows_pairs=0, errno_router_component_cases=9, errno_router_new_windows_pairs=0, heap_calloc_component_cases=13, heap_calloc_new_windows_pairs=0, registered_manager_component_cases=6, registered_manager_new_windows_pairs=0, manager_component_cases=6, manager_new_windows_pairs=0, descriptor_lifecycle_component_cases=4, descriptor_lifecycle_new_windows_pairs=0, inherited_component_cases=7, inherited_new_windows_pairs=0, standard_handle_component_cases=25, standard_handle_new_windows_pairs=0,
                   original_printf_routing_sha256=sha((out/'printf-routing-live.bin').read_bytes()),
                   original_printf_context_sha256=sha((out/'printf-context-live.bin').read_bytes()),
                   original_printf_entry_sha256=sha((out/'printf-entry-live.bin').read_bytes()),
@@ -379,7 +381,7 @@ def check(original, observation, out, compare=None):
         previous = json.loads(compare.read_text())
         if previous['locale_state_evidence'] != result['locale_state_evidence']:
             raise ValueError('wrapper cross-host locale evidence differs')
-        for key in ['dynamic_fls_source_sha256', 'cold_resolver_source_sha256', 'live_finally_hashes', 'original_notification_sha256', 'original_cleanup_hashes', 'owned_local_body_sha256', 'local_level_store_sha256', 'pe_sha256', 'helper_sha256', 'epilog_sha256', 'handler_scope_store_sha256', 'handler_prolog_sha256', 'handler_installer_sha256', 'event_normalizer_sha256', 'guard_validator_sha256', 'security_check_sha256', 'scope_header_sha256', 'prefix_sha256', 'context_helper_sha256', 'filter_bridge_sha256', 'main_filter_sha256', 'main_prolog_sha256', 'inner_prolog_sha256', 'main_activation_sha256', 'main_scope_header_sha256', 'main_scope_table_sha256', 'complete_handler_sha256', 'global_wrapper_sha256', 'observation_sha256', 'vectors_sha256', 'rust_sha256', 'file_scope_code_sha256', 'file_scope_imports']:
+        for key in ['dispatcher_dynamic_source_sha256', 'dynamic_fls_source_sha256', 'cold_resolver_source_sha256', 'live_finally_hashes', 'original_notification_sha256', 'original_cleanup_hashes', 'owned_local_body_sha256', 'local_level_store_sha256', 'pe_sha256', 'helper_sha256', 'epilog_sha256', 'handler_scope_store_sha256', 'handler_prolog_sha256', 'handler_installer_sha256', 'event_normalizer_sha256', 'guard_validator_sha256', 'security_check_sha256', 'scope_header_sha256', 'prefix_sha256', 'context_helper_sha256', 'filter_bridge_sha256', 'main_filter_sha256', 'main_prolog_sha256', 'inner_prolog_sha256', 'main_activation_sha256', 'main_scope_header_sha256', 'main_scope_table_sha256', 'complete_handler_sha256', 'global_wrapper_sha256', 'observation_sha256', 'vectors_sha256', 'rust_sha256', 'file_scope_code_sha256', 'file_scope_imports']:
             if previous[key] != result[key]:
                 raise ValueError('wrapper cross-host provenance differs: '+key)
         result['matching_windows_native_report'] = str(compare)

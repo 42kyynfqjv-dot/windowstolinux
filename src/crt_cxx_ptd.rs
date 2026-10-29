@@ -4,6 +4,32 @@ use std::collections::BTreeMap;
 pub(crate) const REQUIRED: &str = "e80900000085c00f842f4f0000c3";
 pub(crate) const GETTER:&str="833d60c04100ff750333c0c35357ff1544504100ff3560c041008bf8e8c20200008bd85983fbff741785db75596affff3560c04100e8e4020000595985c0750433dbeb42566a286a01e8314f00008bf0595985f6741256ff3560c04100e8bc020000595985c0751233db53ff3560c04100e8a80200005959eb048bde33f656e8fb4d0000595e57ff15485041005f8bc35bc3";
 pub(crate) fn source(getter: &[u8], required: &[u8]) -> Result<String, String> {
+    emit_source(getter, required, false)
+}
+pub(crate) fn dynamic_source(getter: &[u8], required: &[u8]) -> Result<String, String> {
+    emit_source(getter, required, true)
+}
+fn emit_source(getter: &[u8], required: &[u8], dynamic: bool) -> Result<String, String> {
+    let parameters = if dynamic {
+        "init:CrtInitialization,fiber:CrtFiber,slot:CrtFlsSlot,api:&mut impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu,u32)->Result<CrtValue,&'static str>"
+    } else {
+        "lookup:&mut impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu)->Result<CrtValue,&'static str>"
+    };
+    let arguments = if dynamic {
+        "init,fiber,slot,api"
+    } else {
+        "lookup"
+    };
+    let lookup = if dynamic {
+        "cxx_dynamic_lookup"
+    } else {
+        "cxx_original_lookup"
+    };
+    let entry = if dynamic {
+        "rt.initialization(init)?;"
+    } else {
+        ""
+    };
     if getter != crate::crt_ptd::raw(GETTER) || required != crate::crt_ptd::raw(REQUIRED) {
         return Err("C++ PTD original code binding".into());
     }
@@ -16,13 +42,13 @@ pub(crate) fn source(getter: &[u8], required: &[u8]) -> Result<String, String> {
             Ok(match target{
  Target::Import(0x415044)=>format!("cpu.call_activation(rt,{next},0,|rt,child|{{child.clobber(rt.last_os_error.map(CrtValue::scalar).unwrap_or(CrtValue::Scalar{{bits:0,known:0}}));child.finish(rt)}})?;"),
  Target::Import(0x415048)=>format!("cpu.call_activation(rt,{next},4,|rt,child|{{let p=CrtCpu::pointer(child.r[4])?;let value=rt.load(rt.offset(p,4)?,32)?;if !matches!(value,CrtValue::Scalar{{..}}){{return Err(\"C++ LastError scalar\");}}rt.last_os_error=value.known_scalar().ok();child.clobber(CrtValue::Scalar{{bits:0,known:0}});child.finish_pop(rt,4)}})?;"),
- Target::Direct(0x402bb4)=>format!("cpu.call_activation(rt,{next},0,|rt,child|cxx_original_lookup(rt,child,lookup))?;"),
+ Target::Direct(0x402bb4)=>format!("cpu.call_activation(rt,{next},0,|rt,child|{lookup}(rt,child,{arguments}))?;"),
  _=>"return Err(\"C++ PTD lazy setter/allocation/free effect unbound\");".into()})
         },
         &roles,
         4096,
     )?;
-    let mut out=format!("fn cxx_ptd_get(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,lookup:&mut impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu)->Result<CrtValue,&'static str>)->Result<CrtValue,&'static str>{{{body}}}");
+    let mut out=format!("fn cxx_ptd_get(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,{parameters})->Result<CrtValue,&'static str>{{{entry}{body}}}");
     // This certified 14-byte wrapper has a conditional nonreturning exit.
     // Keep the generic decoder's JMP-only external-edge policy unchanged.
     let nodes = [(0, 5), (5, 7), (7, 13), (13, 14)]
@@ -45,10 +71,9 @@ pub(crate) fn source(getter: &[u8], required: &[u8]) -> Result<String, String> {
             if target != Target::Direct(0x4028d1) {
                 return Err("C++ required PTD target".into());
             }
-            Ok(
-                "cpu.call_activation(rt,0x4028c8,0,|rt,child|cxx_ptd_get(rt,child,lookup))?;"
-                    .into(),
-            )
+            Ok(format!(
+                "cpu.call_activation(rt,0x4028c8,0,|rt,child|cxx_ptd_get(rt,child,{arguments}))?;"
+            ))
         },
         &roles,
         4096,
@@ -62,12 +87,23 @@ pub(crate) fn source(getter: &[u8], required: &[u8]) -> Result<String, String> {
         },
         Some(0x4077ff),
     )?;
-    out.push_str(&format!("fn cxx_ptd_required(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,lookup:&mut impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu)->Result<CrtValue,&'static str>)->Result<CrtValue,&'static str>{{let value=(||->Result<CrtValue,&'static str>{{{body}}})()?;if cpu.returned{{return Ok(value);}}Err(\"C++ required PTD termination effect unbound\")}}"));
-    out.push_str(&crate::crt_cxx_lookup::source(
-        &crate::crt_ptd::raw(crate::crt_cxx_lookup::PREFIX),
-        &crate::crt_ptd::raw(crate::crt_cxx_lookup::EPILOG),
-        &crate::crt_ptd::raw(crate::crt_cxx_lookup::WRAPPER),
-    )?);
+    out.push_str(&format!("fn cxx_ptd_required(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,{parameters})->Result<CrtValue,&'static str>{{{entry}let value=(||->Result<CrtValue,&'static str>{{{body}}})()?;if cpu.returned{{return Ok(value);}}Err(\"C++ required PTD termination effect unbound\")}}"));
+    if dynamic {
+        out.push_str(&crate::crt_cxx_lookup::cold_source(
+            &crate::crt_ptd::raw(crate::crt_cxx_lookup::COLD_FULL),
+            &crate::crt_ptd::raw(crate::crt_cxx_lookup::LOAD_HELPER),
+        )?);
+        out.push_str(&crate::crt_cxx_lookup::dynamic_source(
+            &crate::crt_ptd::raw(crate::crt_cxx_lookup::WRAPPER),
+            &crate::crt_ptd::raw(crate::crt_cxx_lookup::INDIRECT_GUARD),
+        )?);
+    } else {
+        out.push_str(&crate::crt_cxx_lookup::source(
+            &crate::crt_ptd::raw(crate::crt_cxx_lookup::PREFIX),
+            &crate::crt_ptd::raw(crate::crt_cxx_lookup::EPILOG),
+            &crate::crt_ptd::raw(crate::crt_cxx_lookup::WRAPPER),
+        )?);
+    }
     Ok(out)
 }
 #[test]
@@ -119,6 +155,65 @@ for mode in 0..19{
             let mut b = [crate::crt_ptd::raw(GETTER), crate::crt_ptd::raw(REQUIRED)];
             b[which][i] ^= 1;
             assert!(source(&b[0], &b[1]).is_err());
+        }
+    }
+}
+
+#[test]
+fn dispatcher_getter_connects_dynamic_fls_without_losing_error_or_lifetime_checks() {
+    let getter = crate::crt_ptd::raw(GETTER);
+    let required = crate::crt_ptd::raw(REQUIRED);
+    let extra = dynamic_source(&getter, &required).unwrap();
+    if let Some(out) = std::env::var_os("W2L_EH4_EVIDENCE") {
+        std::fs::write(
+            std::path::Path::new(&out).join("dynamic-dispatcher-ptd.rs"),
+            format!(
+                "{}\n{}\n{}",
+                crate::crt_stream_runtime::EMITTED_TYPES,
+                crate::crt_stream_cpu::EMITTED_TYPES,
+                extra
+            ),
+        )
+        .unwrap();
+    }
+    crate::crt_stream_callees_tests::native(
+        &extra,
+        r#"
+for mode in 0..18 {
+ let(mut rt,init)=CrtStreamRuntime::new_initializing(23,45,0x8000,65536).unwrap();
+ let index=rt.map_region(0x41c060,4,CrtRegionKind::Module,Some(&(if mode==14{u32::MAX}else{7u32}).to_le_bytes())).unwrap();if mode==13{rt.store(index,32,CrtValue::Scalar{bits:0,known:0}).unwrap();}
+ let (m,reference)=rt.module_acquire_result(init,"unrelated dispatcher dependency",0x710000).unwrap();let f=rt.module_export_result(init,m,if mode==16{"WrongFunction"}else{"FlsGetValue"},0x711000).unwrap();
+ let cache_root=rt.map_region(0x41cd14,12,CrtRegionKind::Module,None).unwrap();let cache=rt.offset(cache_root,8).unwrap();rt.store(cache,32,if mode==17{CrtValue::scalar(0)}else{CrtValue::Function(f)}).unwrap();
+ let guard=rt.map_region(0x415128,4,CrtRegionKind::Module,Some(&0x401bf9u32.to_le_bytes())).unwrap();
+ rt.map_region(0x415d4c,8,CrtRegionKind::Input,Some(&[0,0,0,0,2,0,0,0])).unwrap();rt.map_region(0x415d54,12,CrtRegionKind::Input,Some(b"FlsGetValue\0")).unwrap();
+ let ptd=rt.map_region(0x7000,if mode==1{20}else if mode==2{39}else{40},CrtRegionKind::ThreadData,None).unwrap();let fiber=rt.bind_fiber(45).unwrap();let slot=rt.bind_fls(fiber,7,if mode==3{CrtValue::scalar(0)}else if mode==4{CrtValue::scalar(u32::MAX)}else{CrtValue::Pointer(ptd)}).unwrap();
+ let(mut other,_)=CrtStreamRuntime::new_initializing(23,45,0x8000,65536).unwrap();let foreign=other.bind_fiber(45).unwrap();
+ match mode{
+  5=>{rt.retire_fls(fiber,slot).unwrap();},6=>{rt.retire_fls(fiber,slot).unwrap();rt.bind_fls(fiber,7,CrtValue::Pointer(ptd)).unwrap();},
+  8|9=>{rt.module_release_result(init,reference,true).unwrap();if mode==9{rt.module_acquire_result(init,"unrelated dispatcher dependency",0x710000).unwrap();}},
+  10=>{rt.retire_region(ptd).unwrap();},11=>{rt.store(guard,32,CrtValue::scalar(0x401bfa)).unwrap();},12=>{rt.fls_set(fiber,slot,7,CrtValue::Pointer(ptd),false,Some(8)).unwrap();},
+  17=>{let cells=rt.map_region(0x41cd08,12,CrtRegionKind::Module,Some(&[0;12])).unwrap();rt.bind_loader_cell(init,cells,false).unwrap();rt.bind_loader_cell(init,cache,true).unwrap();let name=rt.map_region(0x6500,4,CrtRegionKind::Input,Some(&[97,0,0,0])).unwrap();let table=rt.map_region(0x415c80,12,CrtRegionKind::Module,None).unwrap();rt.store(table,32,CrtValue::Pointer(name)).unwrap();},_=>{}
+ }
+ let probe=rt.map_region(0x6600,4,CrtRegionKind::Module,Some(&0u32.to_le_bytes())).unwrap();rt.last_os_error=if mode==15{None}else{Some(55)};let initial=rt.last_os_error;
+ let stack=rt.map_region(0x9000,4096,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,3072).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(1)).unwrap();let mut cpu=CrtCpu::new(sp,1).unwrap();cpu.r[1]=CrtValue::Scalar{bits:0,known:0};let saved=cpu.r;
+ let result=cxx_ptd_required(&mut rt,&mut cpu,init,if mode==7{foreign}else{fiber},slot,&mut |rt,_,iat|{assert_eq!(mode,17);assert_eq!(iat,0x415074);rt.store(probe,32,CrtValue::scalar(77))?;rt.last_os_error=Some(99);Err("independent loader failure with earlier effects")});
+ if mode==0||mode==15{assert_eq!(result.unwrap(),CrtValue::Pointer(ptd));assert!(cpu.returned);for r in [3,5,6,7]{assert_eq!(cpu.r[r],saved[r]);}assert!(rt.load(rt.offset(ptd,16).unwrap(),32).unwrap().known_scalar().is_err());assert!(cxx_ptd_required(&mut rt,&mut cpu,init,fiber,slot,&mut |_,_,_|panic!("replay effect")).is_err());}
+ else{assert!(result.is_err(),"mode {mode}");assert!(!cpu.returned);}
+ assert_eq!(rt.last_os_error,if mode==3{None}else if mode==17{Some(99)}else{initial},"mode {mode}");if mode==17{assert_eq!(rt.load(probe,32).unwrap(),CrtValue::scalar(77));}
+}
+"#,
+        "connected-dispatcher-fls",
+    );
+    for (which, bytes) in [(0, &getter), (1, &required)] {
+        for i in 0..bytes.len() {
+            let mut changed = bytes.clone();
+            changed[i] ^= 1;
+            assert!(if which == 0 {
+                dynamic_source(&changed, &required)
+            } else {
+                dynamic_source(&getter, &changed)
+            }
+            .is_err());
         }
     }
 }

@@ -452,7 +452,7 @@ pub(crate) const INDIRECT_GUARD: &str = "c20000";
 /// Original wrapper with explicit loader and stationary-fiber input contracts.
 /// Only the byte-bound return-only guard domain is supported; a patched guard
 /// or a missing TLS fallback contract rejects at its original call site.
-fn dynamic_source(wrapper: &[u8], guard: &[u8]) -> Result<String, String> {
+pub(crate) fn dynamic_source(wrapper: &[u8], guard: &[u8]) -> Result<String, String> {
     if wrapper != crate::crt_ptd::raw(WRAPPER) || guard != crate::crt_ptd::raw(INDIRECT_GUARD) {
         return Err("C++ dynamic lookup/guard binding".into());
     }

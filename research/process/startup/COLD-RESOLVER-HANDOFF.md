@@ -128,9 +128,20 @@ the slot reject later while retaining both load/export effects and references.
 All59 wrapper and3 guard bytes reject individual mutations. These are component
 cases, with no new original-Windows FLS observations or whole-PE pairs.
 
-Next connect this variant to the distinct dispatcher PTD getter's protected
-lookup call. The existing getter still uses its legacy cached/TLS effect cut;
-these components must not be reported as that composition until integrated.
+The dispatcher PTD getter now has a dynamic variant produced by the same emitter
+as the legacy variant. Original required wrapper4028c3 and getter4028d1 execute
+the protected dynamic lookup call, actual LastError save/restore and complete
+40-byte root check. Eighteen connected cases cover success with known/unknown
+LastError, truncated storage, null/sentinel, stale/reused slots, foreign fiber,
+stale/reloaded module, guard/slot/index corruption, wrong symbol and earlier
+effects on a failing cold loader callback. Required-return replay rejects.
+All160 getter/wrapper bytes reject individual mutations. Unknown PTD fields stay
+unknown; successful FLS access supplies no field initialization proof.
+
+The C++ common handler still uses the legacy getter binding. Next route its
+protected call to the dynamic getter, preserving captured-context revalidation,
+the first PTD field read and all original dispatch/termination branches. Do not
+promote the getter result to a handler disposition or resumption receipt.
 Bind actual module/API-set/forwarder identity, loader initializer/detach effects
 and original FLS allocation before removing explicit producer assumptions. The
 legacy TLS fallback remains separately tested; this dynamic variant rejects at
@@ -151,3 +162,12 @@ atomic equivalence is outside the component domain.
 Sol can resume substantive review and the bounded original comparator/lookup
 connection. Escalate only a concrete loader/forwarder or concurrency uncertainty. Unwind/termination, original
 startup, rcedit, ordinary CRT and historical Windows timeouts remain unresolved.
+
+A concrete caller-phase boundary remains: the new dynamic getter requires the
+explicit startup-initialization lease, while the existing common-handler fixture
+uses a normal runtime. That lease must not be invented for a post-startup call.
+Before routing the caller, separate read-only cached lookup/FLS authority from
+cold load/publication authority, or prove a real initializing caller domain.
+A cached call after initialization must not gain permission to publish or load;
+a missing cache then needs a justified loader contract or rejection. This is a
+bounded Sol design/implementation question, not evidence of full startup closure.

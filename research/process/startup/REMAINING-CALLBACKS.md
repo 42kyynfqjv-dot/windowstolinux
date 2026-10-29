@@ -187,3 +187,11 @@ on later guard/slot failure and preserve unknown PTD bytes. Actual loader/FLS
 producers remain explicit. Next wire this variant into the dispatcher PTD getter;
 the existing getter still uses the legacy lookup cut. See the current cold
 resolver handoff for this precise composition boundary.
+
+
+Dispatcher PTD connection: the shared getter emitter now selects either legacy
+lookup or the checked dynamic wrapper at generation time. Eighteen connected
+native cases retain the original LastError routing, protected returns, 40-byte
+root check and rejection of unbound lazy/termination effects. Captured fiber/slot
+inputs and loader effects remain explicit. The C++ common handler still selects
+the legacy getter; connecting that protected caller is the next bounded step.

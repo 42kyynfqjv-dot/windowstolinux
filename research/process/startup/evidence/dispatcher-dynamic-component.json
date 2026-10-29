@@ -1,0 +1,14 @@
+{
+  "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "rust_sha256": "1d4353871658ac3470ff65cd4be5703d8bea347fed26ef5413801ba861ef5300",
+  "dispatcher_dynamic_source_sha256": "ad524818925f18e302a5fae7887413ef2aa2b9979033f00021d9aea7bd36f804",
+  "dispatcher_dynamic_native_cases": 18,
+  "dispatcher_dynamic_new_windows_pairs": 0,
+  "cxx_record_rust_tests": 8,
+  "comparisons": 5,
+  "whole_pe_translation_pairs": 0,
+  "scope": "Linux component replay with supplied loader/module/fiber inputs; recorded Windows wrapper boundaries only",
+  "crt_tests": 206,
+  "crt_ignored": 1,
+  "changed_getter_wrapper_bytes_rejected": 160
+}

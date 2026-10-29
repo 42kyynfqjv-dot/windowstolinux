@@ -2152,3 +2152,39 @@ identity, loader initialization/detach, actual FLS allocation, unwind/terminatio
 and full startup/rcedit remain unproven. At inspection,2ad289f startup40944120217
 passed; Rust40944128252/40944120075 remained active. Historical Windows hello and
 other process-exit timeouts remain preserved and unresolved.
+
+### Dispatcher PTD getter bound to owned dynamic FLS
+
+The shared getter emitter now selects the legacy or dynamic lookup at generation
+time. The dynamic component executes original required wrapper/getter through the
+checked resolver/guard/FLS chain, preserving protected calls, saved registers,
+actual LastError routing and the complete40-byte PTD root check. Eighteen connected
+cases cover known/unknown LastError, truncated roots, null/sentinel, stale/reused
+slots, foreign fiber, stale/reloaded module, stale PTD, changed guard, failed setter
+knowledge, invalid index, wrong symbol, replay and earlier loader effects on later
+failure. All160 getter/required-wrapper bytes reject individual mutations.
+Unknown PTD bytes remain unknown. Lazy setter/allocation/free and termination
+still reject at their original calls.
+
+Local206 CRT tests passed (one existing observation test separate), plus Clippy,
+format/diff and Python syntax checks. An initial replay failed because the checker
+expected eight tests from the unchanged seven-test PTD group. The expectation
+was corrected to seven for PTD and eight for the expanded C++ group; both original
+logs and corrected replay remain local evidence. This was a checker defect, not a
+runtime or original-Windows timeout diagnosis.
+
+The common C++ handler still selects the legacy getter. Before routing that caller,
+separate read-only cached access from cold load/publication authority: the dynamic
+component currently requires initialization, while the common-handler fixture is
+normal runtime. An initialization lease cannot be invented for the latter. Actual
+loader/FLS acquisition, initializer/detach effects, unwind/termination, full startup
+and rcedit remain unproved. At inspection,046b5d1 startup40945826106 passed; both
+Rust40945836423/40945826200 had only the final compiler-native-linux job active at
+Compare independent LLVM outcomes. Historical Windows timeout evidence remains
+preserved and unresolved.
+
+Corrected artifact replay passed eight C++ checks, seven prior PTD checks and five
+recorded Windows wrapper comparisons. Zero new Windows observations or whole-PE
+pairs. Original-byte and generated-source hashes are preserved in
+[evidence/dispatcher-dynamic-component.json](evidence/dispatcher-dynamic-component.json)
+and enforced across hosts by the checker.
