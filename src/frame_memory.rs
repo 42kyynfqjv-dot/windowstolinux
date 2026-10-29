@@ -33,6 +33,9 @@ impl<'a,P> FrameMemory<'a,P> {
   if offset%4!=0 || !self.ordinary.contains(&offset) {return Err("frame memory protected word");}
   self.key(offset)
  }
+ fn read_predecessor(&self,offset:i32)->Result<P,&'static str> where P:Clone{match self.image.words.get(&self.key(offset)?){Some(FrameWord::Borrowed(p))=>Ok(p.clone()),_=>Err("completion predecessor ownership")}}
+ fn read_saved(&self,offset:i32,reg:u8)->Result<Option<u32>,&'static str>{match self.image.words.get(&self.key(offset)?){Some(FrameWord::Saved(r,v))if *r==reg=>Ok(*v),_=>Err("completion saved ownership")}}
+ fn require_return(&self,offset:i32)->Result<(),&'static str>{if matches!(self.image.words.get(&self.key(offset)?),Some(FrameWord::Return)){Ok(())}else{Err("completion protected return")}}
  fn frame_pointer(&self)->u32{self.image.ebp}
  fn stack_pointer(&self)->u32{self.image.esp}
  fn preflight_call_stack(&self,bytes:u32)->Result<(),&'static str>{

@@ -256,8 +256,14 @@ mod crt_finally_tests;
 mod restore_instruction;
 
 #[allow(dead_code)]
+#[path = "../src/crt_main_completion.rs"]
+mod crt_main_completion;
+#[allow(dead_code)]
 #[path = "../src/frame_init.rs"]
 mod frame_init;
+#[allow(dead_code)]
+#[path = "../src/main_completion.rs"]
+mod main_completion;
 #[allow(dead_code)]
 #[path = "../src/raise_call.rs"]
 mod raise_call;

@@ -1029,3 +1029,77 @@ No write retry, alternate write route or denied optional PR comment was attempte
 These pushed records preserve both the 55b680a and current results. A concise,
 reviewed description reconciliation should preserve history through repository
 links; do not claim it succeeded without readback.
+
+### Shared owner executes Main reporting and protected epilog
+
+`main_completion::prove_owned` now uses the same instruction analysis as the
+existing completion compiler while emitting calls to one mutable host. The
+legacy compiler remains tested. Protected predecessor/saved/return reads use
+explicit methods rather than direct emitter access to image words. The new host
+owns canonical CRT memory, the live CPU, `NormalReturnSession` and a scoped native
+callee binding. No memory borrow survives across the callee or effect calls.
+
+Original argument PUSHes and cleanup act on the actual guest stack at their
+instruction points. Known register writes are reflected in the live CPU before
+callee entry; unknown flags remain unknown. Global and ordinary reads use live
+bytes, while saved/predecessor/guard reads validate original metadata against
+actual protected tags. The original security helper is separately proved and
+executed through a fresh protected CALL; its safe CMP/conditional-RET path checks
+runtime bytes and cookie identity. Unproved security failure remains rejection.
+Original POPs, FS predecessor restoration and RET update live storage/control
+state together with the return session. A successful RET consumes Main's existing
+root once and issues the existing normal-return receipt.
+
+The connected event test now executes the actual 357 Main completion bytes from
+0x4013b7 through 0x40151b. It verifies all17 variadic words and independent original
+address offsets, plus EAX/ECX/EDX at native callee entry. Its component state returns
+1, not an assumed zero exit. A native callee return of -1 is ignored by original
+Main and yields the same return. Eight negative paths reject a failing callee
+cut after an observable effect, corrupted guard after the call, unknown global,
+changed Main code, scalar-forged module pointer, changed format, changed security
+code and duplicate Main return authority. Earlier output-boundary observations,
+register writes, pushes and POPs are preserved on later failure; no normal return
+receipt is produced for a failed path. These are overlapping native component
+scenarios, not new whole-program comparisons.
+
+Two explicit cuts remain in this connected test. The native callee callback
+records the actual arguments and performs a protected RET; it does NOT execute
+the original printf wrapper/formatter or assert physical stdout bytes. Three
+outer-frame globals missing from this two-frame fixture are initialized zero as
+an entry premise; original Outer effects are not inferred or replaced by expected
+report values. Other cleanup state and report arguments come from the connected
+live execution. Consequently the two Main returns and eight failures establish
+owner/control composition, not unchanged-binary entry-to-exit equivalence.
+
+Verification passed:175 root,176 frame/unwind and168 CRT tests, one separately
+replayed prior recorded observation, formatting,Clippy, original-artifact wrapper
+and projection checks.194 owned-frame scenarios overlap the new two returns and
+eight failures. The unchanged PE SHA256 is
+`1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4`;
+Main completion SHA256
+`560d19417b61b35507c2dfda962493687a1749a2a942b39c70fe99b35dc2d1ec`;
+generated Rust SHA256
+`fbcc4ba4344f9915a3cbff73e929d41c7a6f62d1dfba58d1fe3751af83cffebc`.
+All996647c CI passed:40885458557,40885447321,40885447371. No new Windows differential
+or whole-PE translation pairs are claimed. Historical Windows timeouts remain
+unresolved; no retries/threshold changes were used to hide them.
+
+Next bind the actual original printf wrapper/formatter to the host's native
+callee interface, including its nested frame/lock/FILE effects and buffering,
+short-write,error/flush behavior. Then connect the remaining original outer-frame
+invocation and module/thread entry conditions. Preserve actual event acquisition,
+incoming-handler and collided-unwind barriers; do not admit a program merely
+because this callback/entry-state component passes. The one-owner interface now
+allows these native components to share the same runtime without snapshots or
+simultaneous mutable borrows. A focused Sol review can audit this boundary before
+the formatter's larger control/lifetime integration; use bounded Astra only for a
+specific unresolved effect/ownership question. PR45 stays draft; full startup and
+rcedit remain unsupported.
+
+Tracker reconciliation completed separately: the previous248170-character
+SUB-579 description was preserved verbatim in SUB-579-HISTORY.md at533558e and
+pushed before replacement. A concise description with durable evidence links,
+acceptance criteria and unresolved blockers was accepted and read back. This
+resolves the tracker write; the discarded earlier response still prevents an
+exact retrospective error/denial diagnosis. No denied optional PR comment was
+retried or sent through another route.

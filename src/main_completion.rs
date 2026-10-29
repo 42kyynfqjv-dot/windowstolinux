@@ -105,7 +105,7 @@ fn full_range(base: u32, size: u32, address: u32, bytes: u32) -> bool {
             address >= base && address.checked_add(bytes).is_some_and(|a| a <= end)
         })
 }
-fn memory(i: &Instruction) -> Result<Option<i32>, String> {
+fn memory_operand(i: &Instruction) -> Result<Option<i32>, String> {
     if i.memory_index() != Register::None || i.memory_size() != iced_x86::MemorySize::UInt32 {
         return Err("completion: full-word nonindexed address required".into());
     }
@@ -115,13 +115,34 @@ fn memory(i: &Instruction) -> Result<Option<i32>, String> {
         _ => Err("completion: address owner".into()),
     }
 }
+#[derive(Clone, Copy)]
+struct EmitInterface {
+    memory: &'static str,
+    print: &'static str,
+    effect: &'static str,
+    host: bool,
+}
+const LEGACY: EmitInterface = EmitInterface {
+    memory: "memory",
+    print: "printf",
+    effect: "effects",
+    host: false,
+};
+const OWNED: EmitInterface = EmitInterface {
+    memory: "host",
+    print: "host.printf",
+    effect: "host.effect",
+    host: true,
+};
 fn read(
     i: &Instruction,
     n: u32,
     s: &State,
     l: &Layout,
     b: &Bindings,
+    e: EmitInterface,
 ) -> Result<(Ty, String), String> {
+    let memory = e.memory;
     match i.op_kind(n) {
         OpKind::Register => {
             let r = reg(i.op_register(n))?;
@@ -146,15 +167,18 @@ fn read(
             if i.segment_prefix() != Register::None {
                 return Err("completion: unbound segment read".into());
             }
-            if let Some(at) = memory(i)? {
+            if let Some(at) = memory_operand(i)? {
                 if at % 4 != 0 {
                     return Err("completion: unaligned word".into());
                 }
                 if at == l.predecessor {
-                    return Ok((Ty::Borrowed,format!("{{predecessor=Some(match memory.image.words.get(&memory.key({at})?){{Some(FrameWord::Borrowed(p))=>p.clone(),_=>return Err(\"completion predecessor ownership\")}});0u32}}")));
+                    return Ok((
+                        Ty::Borrowed,
+                        format!("{{predecessor=Some({memory}.read_predecessor({at})?);0u32}}"),
+                    ));
                 }
                 if l.guards.contains(&at) {
-                    return Ok((Ty::Guard(at),format!("{{let(gf,gc,gb)=memory.read_guard({at})?;if gf!=memory.frame_pointer()||gc!=cookie{{return Err(\"completion protected cookie\");}}gb}}")));
+                    return Ok((Ty::Guard(at),format!("{{let(gf,gc,gb)={memory}.read_guard({at})?;if gf!={memory}.frame_pointer()||gc!=cookie{{return Err(\"completion protected cookie\");}}gb}}")));
                 }
                 let (t, method) = match l.words.get(&at) {
                     Some(Word::Scalar) => (Ty::Scalar(None), "read_u32"),
@@ -166,13 +190,17 @@ fn read(
                     Some(Word::Continuation) => (Ty::Pointer, "read_continuation"),
                     _ => return Err("completion: uninitialized/protected frame read".into()),
                 };
-                Ok((t, format!("memory.{method}({at})?")))
+                Ok((t, format!("{memory}.{method}({at})?")))
             } else {
                 let at = i.memory_displacement32();
                 let index = b.globals.get(&at).ok_or("completion: unbound global")?;
                 Ok((
                     Ty::Scalar(None),
-                    format!("*globals.get({index}).ok_or(\"completion global bounds\")?"),
+                    if e.host {
+                        format!("host.read_global({index})?")
+                    } else {
+                        format!("*globals.get({index}).ok_or(\"completion global bounds\")?")
+                    },
                 ))
             }
         }
@@ -216,6 +244,29 @@ pub(crate) fn prove(
     l: &Layout,
     b: &Bindings,
 ) -> Result<ProvenCompletion, String> {
+    prove_with_interface(code, origin, l, b, LEGACY)
+}
+/// One mutable host owns live memory, output and return effects. Methods are
+/// invoked sequentially; no memory borrow survives a formatter/effect call.
+pub(crate) fn prove_owned(
+    code: &[u8],
+    origin: u32,
+    l: &Layout,
+    b: &Bindings,
+) -> Result<ProvenCompletion, String> {
+    prove_with_interface(code, origin, l, b, OWNED)
+}
+fn prove_with_interface(
+    code: &[u8],
+    origin: u32,
+    l: &Layout,
+    b: &Bindings,
+    e: EmitInterface,
+) -> Result<ProvenCompletion, String> {
+    let memory = e.memory;
+    let print = e.print;
+    let effect = e.effect;
+    let owned = e.host;
     if code.is_empty()
         || code.len() > 2048
         || origin == 0
@@ -337,7 +388,7 @@ pub(crate) fn prove(
                     {
                         return Err("completion: FS predecessor restoration".into());
                     }
-                    out.push_str("effects(CompletionEffect::RestorePredecessor(predecessor.as_ref().ok_or(\"completion missing predecessor\")?))?;\n");
+                    out.push_str(&format!("{effect}(CompletionEffect::RestorePredecessor(predecessor.as_ref().ok_or(\"completion missing predecessor\")?))?;\n"));
                     s.unlinked = true;
                     if unlink_site.replace(pc).is_some() {
                         return Err("completion: multiple predecessor restore sites".into());
@@ -353,12 +404,15 @@ pub(crate) fn prove(
                             return Err("completion: invalid final stack restoration".into());
                         }
                         s.sp = 0;
-                        out.push_str("r[4]=memory.frame_pointer();\n");
+                        if owned {
+                            out.push_str("host.restore_frame_stack()?;\n");
+                        }
+                        out.push_str(&format!("r[4]={memory}.frame_pointer();\n"));
                     } else {
                         if dst == 5 {
                             return Err("completion: EBP overwrite".into());
                         }
-                        let (t, e) = read(i, 1, &s, l, b)?;
+                        let (t, e) = read(i, 1, &s, l, b, e)?;
                         s.regs[dst] = t;
                         out.push_str(&format!("r[{dst}]={e};\n"));
                     }
@@ -366,15 +420,15 @@ pub(crate) fn prove(
                     if i.segment_prefix() != Register::None {
                         return Err("completion: segment write".into());
                     }
-                    let at = memory(i)?.ok_or("completion: global stores not admitted")?;
+                    let at = memory_operand(i)?.ok_or("completion: global stores not admitted")?;
                     if !matches!(l.words.get(&at), Some(Word::Scalar | Word::Uninitialized)) {
                         return Err("completion: protected/non-scalar store".into());
                     }
-                    let (t, e) = read(i, 1, &s, l, b)?;
+                    let (t, e) = read(i, 1, &s, l, b, e)?;
                     if !scalar(t) {
                         return Err("completion: pointer scalar store".into());
                     }
-                    out.push_str(&format!("memory.write_u32({at},{e})?;\n"));
+                    out.push_str(&format!("{memory}.write_u32({at},{e})?;\n"));
                     s.initialized.insert(at);
                 }
             }
@@ -401,8 +455,8 @@ pub(crate) fn prove(
             }
             Mnemonic::Sub => {
                 let dst = reg(i.op0_register())?;
-                let (a, x) = read(i, 0, &s, l, b)?;
-                let (c, y) = read(i, 1, &s, l, b)?;
+                let (a, x) = read(i, 0, &s, l, b, e)?;
+                let (c, y) = read(i, 1, &s, l, b, e)?;
                 if matches!(dst, 4 | 5)
                     || !((a == Ty::Pointer && c == Ty::Module) || (scalar(a) && scalar(c)))
                 {
@@ -418,8 +472,8 @@ pub(crate) fn prove(
                 s.flags = true;
             }
             Mnemonic::Cmp => {
-                let (a, x) = read(i, 0, &s, l, b)?;
-                let (c, y) = read(i, 1, &s, l, b)?;
+                let (a, x) = read(i, 0, &s, l, b, e)?;
+                let (c, y) = read(i, 1, &s, l, b, e)?;
                 if !((scalar(a) && scalar(c)) || (a == Ty::Stack && c == Ty::Stack)) {
                     return Err("completion: comparison provenance".into());
                 }
@@ -446,7 +500,7 @@ pub(crate) fn prove(
                 if s.printed || s.pending.len() >= 32 {
                     return Err("completion: unexpected arguments".into());
                 }
-                let (t, e) = read(i, 0, &s, l, b)?;
+                let (t, e) = read(i, 0, &s, l, b, e)?;
                 if !scalar(t) && t != Ty::Pointer {
                     return Err("completion: invalid variadic word".into());
                 }
@@ -455,6 +509,9 @@ pub(crate) fn prove(
                         && i.immediate(0) as u32 == b.format;
                 s.pending.push(t);
                 s.sp = s.sp.checked_sub(4).ok_or("push overflow")?;
+                if owned {
+                    out.push_str(&format!("host.push({e},{})?;\n", s.format_known));
+                }
                 out.push_str(&format!("args.push({e});\n"));
                 scratch = scratch.max((l.esp - s.sp) as u32);
             }
@@ -479,7 +536,7 @@ pub(crate) fn prove(
                         return Err("completion: multiple printf sites".into());
                     }
                     scratch = scratch.max((l.esp - s.sp + 4) as u32);
-                    out.push_str(&format!("if args.pop()!=Some({}u32){{return Err(\"completion format identity\");}}args.reverse();let _opaque_printf_return=printf(PrintRequest{{call_pc:{pc},target:{target},format:{},arguments:&args}})?;args.clear();\n",b.format,b.format));
+                    out.push_str(&format!("if args.pop()!=Some({}u32){{return Err(\"completion format identity\");}}args.reverse();let _opaque_printf_return={print}(PrintRequest{{call_pc:{pc},target:{target},format:{},arguments:&args}})?;args.clear();\n",b.format,b.format));
                     s.printed = true;
                     s.regs[0] = Ty::Unknown;
                     s.regs[1] = Ty::Unknown;
@@ -500,7 +557,7 @@ pub(crate) fn prove(
                     if cookie_site.replace(offset).is_some() {
                         return Err("completion: multiple cookie check sites".into());
                     }
-                    out.push_str(&format!("if r[1]!=cookie{{return Err(\"completion cookie mismatch\");}}effects(CompletionEffect::Cookie{{offset:{offset},frame:r[5],cookie,bits:r[1]^r[5],target:{target}}})?;\n"));
+                    out.push_str(&format!("if r[1]!=cookie{{return Err(\"completion cookie mismatch\");}}{effect}(CompletionEffect::Cookie{{offset:{offset},frame:r[5],cookie,bits:r[1]^r[5],target:{target}}})?;\n"));
                     s.checked = true;
                     s.flags = false;
                 } else {
@@ -519,6 +576,9 @@ pub(crate) fn prove(
                 s.sp =
                     s.sp.checked_add((s.pending.len() * 4) as i32)
                         .ok_or("cleanup overflow")?;
+                if owned {
+                    out.push_str(&format!("host.cleanup({})?;\n", s.pending.len() * 4));
+                }
                 s.pending.clear();
                 s.format_known = false;
                 s.flags = false;
@@ -554,13 +614,16 @@ pub(crate) fn prove(
                     if saved as usize != dst || s.restored & (1 << dst) != 0 {
                         return Err("completion: saved-register order".into());
                     }
-                    out.push_str(&format!("restored[{dst}]=match memory.image.words.get(&memory.key({})?){{Some(FrameWord::Saved({dst},v))=>*v,_=>return Err(\"completion saved ownership\")}};\n",s.sp));
-                    out.push_str(&format!("effects(CompletionEffect::Pop{{offset:{},register:{dst},saved:restored[{dst}],guard:false}})?;\n",s.sp));
+                    out.push_str(&format!(
+                        "restored[{dst}]={memory}.read_saved({}, {dst})?;\n",
+                        s.sp
+                    ));
+                    out.push_str(&format!("{effect}(CompletionEffect::Pop{{offset:{},register:{dst},saved:restored[{dst}],guard:false}})?;\n",s.sp));
                     pops.push((s.sp, dst as u8, false));
                     s.restored |= 1 << dst;
                     s.regs[dst] = Ty::Saved(saved);
                 } else if l.guards.contains(&s.sp) && dst == 1 && !s.checked {
-                    out.push_str(&format!("let(gf,gc,_gb)=memory.read_guard({})?;if gf!=memory.frame_pointer()||gc!=cookie{{return Err(\"completion discarded guard ownership\");}}effects(CompletionEffect::Pop{{offset:{},register:{dst},saved:None,guard:true}})?;\n",s.sp,s.sp));
+                    out.push_str(&format!("let(gf,gc,_gb)={memory}.read_guard({})?;if gf!={memory}.frame_pointer()||gc!=cookie{{return Err(\"completion discarded guard ownership\");}}{effect}(CompletionEffect::Pop{{offset:{},register:{dst},saved:None,guard:true}})?;\n",s.sp,s.sp));
                     pops.push((s.sp, dst as u8, true));
                     s.regs[dst] = Ty::Unknown;
                 } else {
@@ -581,7 +644,7 @@ pub(crate) fn prove(
                 {
                     return Err("completion: return obligations".into());
                 }
-                out.push_str("if !matches!(memory.image.words.get(&memory.key(4)?),Some(FrameWord::Return)){return Err(\"completion protected return\");}let caller_sp=frame_address(memory.frame_pointer(),8)?;effects(CompletionEffect::Return{offset:4,value:r[0],saved:restored,caller_sp})?;return Ok(CompletionOutcome{value:r[0],saved:restored,predecessor:predecessor.take().ok_or(\"completion predecessor\")?,caller_sp});\n");
+                out.push_str(&format!("{memory}.require_return(4)?;let caller_sp=frame_address({memory}.frame_pointer(),8)?;{effect}(CompletionEffect::Return{{offset:4,value:r[0],saved:restored,caller_sp}})?;return Ok(CompletionOutcome{{value:r[0],saved:restored,predecessor:predecessor.take().ok_or(\"completion predecessor\")?,caller_sp}});\n"));
                 successors.clear();
                 returns += 1;
                 return_pc = pc;
@@ -600,9 +663,29 @@ pub(crate) fn prove(
         {
             return Err("completion: segment prefix".into());
         }
+        if owned
+            && matches!(
+                i.mnemonic(),
+                Mnemonic::Mov | Mnemonic::Lea | Mnemonic::Xor | Mnemonic::Sub | Mnemonic::Sete
+            )
+            && i.op0_kind() == OpKind::Register
+        {
+            let dst = match i.op0_register() {
+                Register::AL => 0,
+                Register::CL => 1,
+                Register::DL => 2,
+                r => reg(r)?,
+            };
+            if dst != 4 && dst != 5 {
+                out.push_str(&format!("host.scalar_register({dst},r[{dst}])?;\n"));
+            }
+        }
+        if owned && matches!(i.mnemonic(), Mnemonic::Xor | Mnemonic::Sub | Mnemonic::Cmp) {
+            out.push_str("host.unknown_flags();\n");
+        }
         if matches!(i.mnemonic(), Mnemonic::Push | Mnemonic::Pop | Mnemonic::Add) {
             out.push_str(&format!(
-                "r[4]=frame_address(memory.frame_pointer(),{})?;\n",
+                "r[4]=frame_address({memory}.frame_pointer(),{})?;\n",
                 s.sp
             ));
         }
@@ -631,7 +714,12 @@ pub(crate) fn prove(
         return Err("completion: no protected return".into());
     }
     let (printf_pc, argument_count) = print_site.ok_or("completion: missing printf")?;
-    let mut source=format!("{{memory.preflight_call_stack({scratch})?;let mut r=[0u32;8];r[5]=memory.frame_pointer();r[4]=memory.stack_pointer();if r[4]!=frame_address(r[5],{})?{{return Err(\"completion initial stack\");}}let mut zf=false;let mut args=Vec::<u32>::new();let mut predecessor=None;let mut restored=[None;8];let mut pc={origin}u32;loop{{match pc{{",l.esp);
+    let prefix = if e.host {
+        "let cookie=host.cookie()?;"
+    } else {
+        ""
+    };
+    let mut source=format!("{{{prefix}{memory}.preflight_call_stack({scratch})?;let mut r=[0u32;8];r[5]={memory}.frame_pointer();r[4]={memory}.stack_pointer();if r[4]!=frame_address(r[5],{})?{{return Err(\"completion initial stack\");}}let mut zf=false;let mut args=Vec::<u32>::new();let mut predecessor=None;let mut restored=[None;8];let mut pc={origin}u32;loop{{match pc{{",l.esp);
     for (pc, body) in bodies {
         source.push_str(&format!("{pc}=>{{{body}}},"));
     }
