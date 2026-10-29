@@ -455,10 +455,72 @@ fn owned_landing_context(frame:&mut CrtOwnedFrameView<'_>,cpu:&mut CrtCpu,ready:
  let target=frame.rt.resolve_absolute(0x4013a5,CrtRegionKind::Module)?;
  // Scope is already -2, so its original repeated store preserves metadata.
  for offset in [-752,-568,-564,-560,-548]{{let p=frame.rt.offset(ready.owner,offset)?;frame.rt.valid(p,4)?;if p.address()<ready.sp.address()||p.address().checked_add(4).is_none_or(|n|n>ready.owner.address()-28)||!frame.rt.overlapping_tags(p.address(),4).is_empty(){{return Err("landing context field ownership/alias");}}}}
- frame.storage.selected_jump=None;
+ frame.storage.selected_jump=None;frame.storage.prepared_context=Some(ready.id);
  landing_context_instructions(frame.rt,cpu)?;
  frame.validate()?;
  Ok(CrtPreparedContext{{ready,context,target}})
+ }})();if result.is_err(){{frame.failed=true;}}result}}
+"#
+    ))
+}
+
+/// Nonreturning original Restore CALL and checked observation continuation.
+/// This executes owned instructions; it does not certify the incoming OS event.
+pub(crate) fn emit_context_transfer(
+    call: &[u8],
+    restore: &[u8],
+    landing: &[u8],
+) -> Result<String, String> {
+    if call != [0x51, 0xe8, 0xb2, 0xfe, 0xff, 0xff]
+        || landing
+            != [
+                0x89, 0x85, 0x0c, 0xfd, 0xff, 0xff, 0x89, 0xa5, 0x08, 0xfd, 0xff, 0xff, 0x89, 0xad,
+                0x04, 0xfd, 0xff, 0xff,
+            ]
+    {
+        return Err("context transfer caller/landing contract".into());
+    }
+    // Independently validates the original context loads and terminal jump.
+    super::restore_instruction::restore_body(restore, 0x401250)?;
+    // Keep the actual observed register-owner form; the shared decoder emits loads.
+    if restore
+        != [
+            0x8b, 0x4c, 0x24, 4, 0x8b, 0x81, 0xb0, 0, 0, 0, 0x8b, 0xa1, 0xc4, 0, 0, 0, 0x8b, 0xa9,
+            0xb4, 0, 0, 0, 0xff, 0xa1, 0xb8, 0, 0, 0,
+        ]
+    {
+        return Err("context transfer restore form".into());
+    }
+    let prefix = super::crt_stream_ir::Graph::decode_linear_fragment(&restore[..22], 0x401250)?;
+    let loads = crt_stream_emit::emit_linear_fragment(&prefix, &BTreeMap::new())?;
+    let graph = super::crt_stream_ir::Graph::decode_linear_fragment(landing, 0x4013a5)?;
+    let stores = crt_stream_emit::emit_linear_fragment(&graph, &BTreeMap::new())?;
+    Ok(format!(
+        r#"
+fn original_restore_loads(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->RegistryResult<CrtValue>{{{loads}}}
+fn restored_landing_stores(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->RegistryResult<CrtValue>{{{stores}}}
+struct CrtRestoredLanding{{anchor:guest_memory::Capability,event:u64,source:RegistrationId,target:CrtPointer,registers:[CrtValue;8]}}
+fn owned_context_transfer(frame:&mut CrtOwnedFrameView<'_>,cpu:&mut CrtCpu,prepared:CrtPreparedContext)->RegistryResult<CrtRestoredLanding>{{let result=(||{{
+ frame.validate()?;let ready=&prepared.ready;
+ if ready.anchor!=frame.rt.anchor||ready.event!=frame.machine.event||ready.source!=frame.storage.id||frame.storage.prepared_context!=Some(ready.id)||frame.owner_frame()?!=ready.owner||frame.registry.target_ready()?!=ready.source||frame.machine.current!=frame.machine.selected||frame.storage.image.try_level!= -2||cpu.returned||cpu.r[4]!=CrtValue::Pointer(ready.sp)||cpu.r[5]!=CrtValue::Pointer(ready.owner)||cpu.r[1]!=CrtValue::Pointer(prepared.context)||cpu.r[0]!=CrtValue::Pointer(prepared.target)||prepared.context!=frame.rt.offset(ready.owner,-744)?||prepared.target!=frame.rt.resolve_absolute(0x4013a5,CrtRegionKind::Module)?{{return Err("restore prepared ownership/registers");}}
+ for(at,bytes)in [(0x401398u32,&{call:?}[..]),(0x401250u32,&{restore:?}[..]),(0x4013a5u32,&{landing:?}[..])]{{let p=frame.rt.resolve_absolute(at,CrtRegionKind::Module)?;for(i,b)in bytes.iter().enumerate(){{if frame.rt.load(frame.rt.offset(p,i as i64)?,8)?.known_scalar()?!=*b as u32{{return Err("restore changed original code");}}}}}}
+ for(offset,value)in [(176,CrtValue::scalar(77)),(196,CrtValue::Pointer(ready.sp)),(180,CrtValue::Pointer(ready.owner)),(184,CrtValue::Pointer(prepared.target))]{{if frame.rt.load(frame.rt.offset(prepared.context,offset)?,32)?!=value{{return Err("restore context changed");}}}}
+ // Validate the live Main root, not the retired handler's return identity.
+ if frame.rt.load(frame.storage.entry,32)?!=CrtValue::ProtectedReturn(frame.storage.return_id)||frame.rt.tags.values().filter(|&&v|v==CrtValue::ProtectedReturn(frame.storage.return_id)).count()!=1{{return Err("restore Main root");}}
+ let low=frame.rt.offset(ready.sp,-8)?;frame.rt.valid(low,8)?;frame.registry.range(low.address(),u64::from(ready.sp.address()))?;
+ if !frame.rt.overlapping_tags(low.address(),8).is_empty(){{return Err("restore call scratch occupied");}}
+ for offset in [-756,-760,-764]{{let p=frame.rt.offset(ready.owner,offset)?;frame.rt.valid(p,4)?;if p.address()<ready.sp.address()||!frame.rt.overlapping_tags(p.address(),4).is_empty(){{return Err("restore landing field authority");}}}}
+ let generation=frame.rt.generation.checked_add(1).filter(|n|*n<1u64<<63).ok_or("restore call identity exhausted")?;let id=generation|(1u64<<63);
+ if frame.rt.tags.values().any(|v|*v==CrtValue::ProtectedReturn(id)){{return Err("restore call identity collision");}}
+ frame.storage.prepared_context=None;frame.rt.generation=generation;
+ // Original PUSH ECX and CALL stack effects. CALL is abandoned by JMP, never RET.
+ cpu.tick(128)?;cpu.push(frame.rt,cpu.r[1])?;cpu.tick(128)?;cpu.push(frame.rt,CrtValue::ProtectedReturn(id))?;
+ original_restore_loads(frame.rt,cpu)?;
+ let target=CrtCpu::pointer(frame.rt.load(frame.rt.offset(CrtCpu::pointer(cpu.r[1])?,184)?,32)?)?;cpu.tick(128)?;
+ if target!=prepared.target||cpu.r[4]!=CrtValue::Pointer(ready.sp)||cpu.r[5]!=CrtValue::Pointer(ready.owner)||cpu.r[0]!=CrtValue::scalar(77)||frame.rt.load(low,32)?!=CrtValue::ProtectedReturn(id){{return Err("restore terminal transfer");}}
+ frame.rt.consume_stack(low,CrtValue::ProtectedReturn(id))?;frame.rt.consume_stack(frame.rt.offset(low,4)?,CrtValue::Pointer(prepared.context))?;
+ restored_landing_stores(frame.rt,cpu)?;frame.validate()?;
+ Ok(CrtRestoredLanding{{anchor:ready.anchor,event:ready.event,source:ready.source,target,registers:cpu.r}})
  }})();if result.is_err(){{frame.failed=true;}}result}}
 "#
     ))

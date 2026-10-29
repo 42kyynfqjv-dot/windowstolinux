@@ -380,7 +380,7 @@ fn owned_local_cases(){
 }
 
 fn owned_main_cases(){
- for mode in 0..172{
+ for mode in 0..178{
   let mut m=Machine::new_dispatch_known((0..if mode>=75{2}else{1}).map(|_|FrameSpec{scopes:vec![]}).collect(),0,[None;10],Some(0)).unwrap();
   let mut r=ThreadRegistry::new(m.owner(),0x8000,0xf000,&[(0x400000,0x420000)],0x41c000).unwrap();let mut rt=runtime(&r);
   let entry=rt.resolve_absolute(if mode==23||mode==32||mode==41||mode==76{0xe800}else{0xe000},CrtRegionKind::Stack).unwrap();rt.store(entry,32,CrtValue::ProtectedReturn(71)).unwrap();let cpu=CrtCpu::new(entry,71).unwrap();
@@ -706,10 +706,24 @@ fn owned_main_cases(){
              let before=c.r;let prepared=owned_landing_context(&mut view,&mut c,ready);
              assert_eq!(view.rt.load(guard,32).unwrap(),guard_before);assert_eq!(view.rt.load(untouched,32).unwrap(),untouched_before);
              assert_eq!((c.flags.cf,c.flags.zf,c.flags.sf,c.flags.of),(Some(true),None,Some(false),Some(true)));
-             if mode==158{let prepared=prepared.unwrap();assert!(view.storage.selected_jump.is_none());assert_eq!(view.rt.load(view.rt.offset(prepared.ready.owner,-752).unwrap(),32).unwrap(),CrtValue::scalar(1));assert_eq!(view.rt.load(view.rt.offset(prepared.context,176).unwrap(),32).unwrap(),CrtValue::scalar(77));assert_eq!(view.rt.load(view.rt.offset(prepared.context,196).unwrap(),32).unwrap(),CrtValue::Pointer(prepared.ready.sp));assert_eq!(view.rt.load(view.rt.offset(prepared.context,180).unwrap(),32).unwrap(),CrtValue::Pointer(prepared.ready.owner));assert_eq!(view.rt.load(view.rt.offset(prepared.context,184).unwrap(),32).unwrap(),CrtValue::Pointer(prepared.target));assert_eq!(view.machine.phase,Phase::Cleanup);assert!(c.validate_active(view.rt).is_err());
+             if mode==158||mode>=172{let mut prepared=prepared.unwrap();assert!(view.storage.selected_jump.is_none());assert_eq!(view.rt.load(view.rt.offset(prepared.ready.owner,-752).unwrap(),32).unwrap(),CrtValue::scalar(1));assert_eq!(view.rt.load(view.rt.offset(prepared.context,176).unwrap(),32).unwrap(),CrtValue::scalar(77));assert_eq!(view.rt.load(view.rt.offset(prepared.context,196).unwrap(),32).unwrap(),CrtValue::Pointer(prepared.ready.sp));assert_eq!(view.rt.load(view.rt.offset(prepared.context,180).unwrap(),32).unwrap(),CrtValue::Pointer(prepared.ready.owner));assert_eq!(view.rt.load(view.rt.offset(prepared.context,184).unwrap(),32).unwrap(),CrtValue::Pointer(prepared.target));assert_eq!(view.machine.phase,Phase::Cleanup);assert!(c.validate_active(view.rt).is_err());
               assert!(untouched_before.known_scalar().is_err());
-              let replay=CrtLandingReady{anchor:prepared.ready.anchor,event:prepared.ready.event,source:prepared.ready.source,owner:prepared.ready.owner,sp:prepared.ready.sp,id:prepared.ready.id};
-              assert!(owned_landing_context(&mut view,&mut c,replay).is_err());}
+              map_context_transfer(view.rt).unwrap();let flags=c.flags;let preserved=[c.r[2],c.r[3],c.r[6],c.r[7]];
+              if mode==172{prepared.ready.event+=1;}
+              if mode==173{let p=view.rt.offset(prepared.context,184).unwrap();view.rt.store(p,32,CrtValue::scalar(0x4013a5)).unwrap();}
+              if mode==174{view.rt.store(view.rt.resolve_absolute(0x401250,CrtRegionKind::Module).unwrap(),8,CrtValue::scalar(0x90)).unwrap();}
+              if mode==175{view.rt.store(view.rt.offset(prepared.ready.sp,-4).unwrap(),32,CrtValue::ProtectedReturn(999)).unwrap();}
+              if mode==176{view.rt.store(view.rt.resolve_absolute(0x4013a5,CrtRegionKind::Module).unwrap(),8,CrtValue::scalar(0x90)).unwrap();}
+              if mode==177{view.storage.prepared_context=None;}
+              let duplicate=CrtPreparedContext{ready:CrtLandingReady{anchor:prepared.ready.anchor,event:prepared.ready.event,source:prepared.ready.source,owner:prepared.ready.owner,sp:prepared.ready.sp,id:prepared.ready.id},context:prepared.context,target:prepared.target};
+              let registers=c.r;let transfer=owned_context_transfer(&mut view,&mut c,prepared);
+              if mode>=172{assert!(transfer.is_err(),"restore mode {mode}");assert_eq!(c.r,registers);continue;}
+              let done=transfer.unwrap();
+              assert_eq!(done.anchor,view.rt.anchor);assert_eq!(done.event,view.machine.event);assert_eq!(done.source,view.storage.id);assert_eq!(done.target.address(),0x4013a5);assert_eq!(done.registers,c.r);
+              assert_eq!([c.r[2],c.r[3],c.r[6],c.r[7]],preserved);assert_eq!((c.flags.cf,c.flags.zf,c.flags.sf,c.flags.of),(flags.cf,flags.zf,flags.sf,flags.of));
+              for(offset,value)in [(-756,CrtValue::scalar(77)),(-760,c.r[4]),(-764,c.r[5])]{assert_eq!(view.rt.load(view.rt.offset(CrtCpu::pointer(done.registers[5]).unwrap(),offset).unwrap(),32).unwrap(),value);}
+              assert!(!c.returned);assert!(c.validate_active(view.rt).is_err());assert!(view.storage.prepared_context.is_none());assert_eq!(view.machine.phase,Phase::Cleanup);let before=c.r;assert!(owned_context_transfer(&mut view,&mut c,duplicate).is_err());assert_eq!(before,c.r);}
+
              else{assert!(prepared.is_err(),"context mode {mode}");assert_eq!(c.r,before);}
             }
             else{assert!(pivot.is_err(),"landing mode {mode}");assert_eq!(c.r,before);assert!(view.storage.pair_return.is_some());}
@@ -1308,7 +1322,11 @@ cpu.call_activation(rt,0x402799,0,|rt,child|match target{{{cases}_=>Err("origina
         callback_source.push_str(&crate::crt_owned_search::emit_selected(&selected,0x402820,&notification_code,0x402a30,binding).unwrap());
         let pivot=handler_bytes("original-landing-pivot.bin","8b65e8");callback_source.push_str(&crate::crt_owned_search::emit_landing_pivot(&pivot,0x40135c).unwrap());assert!(crate::crt_owned_search::emit_landing_pivot(&[0x8b,0x65,0xe4],0x40135c).is_err());
         let context=handler_bytes("original-landing-context.bin","c78510fdffff01000000c745fcfeffffff8d8d18fdffffc781b00000004d00000089a1c400000089a9b40000008d05a51340008981b8000000");callback_source.push_str(&crate::crt_owned_search::emit_landing_context(&context,0x40135f).unwrap());let mut bad=context.clone();bad[19]^=1;assert!(crate::crt_owned_search::emit_landing_context(&bad,0x40135f).is_err());
-        callback_source.push_str(&format!("fn map_landing_context(rt:&mut CrtStreamRuntime)->RegistryResult<()>{{rt.map_region(0x40135f,{},CrtRegionKind::Module,Some(&{context:?}))?;rt.map_region(0x4013a5,1,CrtRegionKind::Module,Some(&[0x89]))?;Ok(())}}",context.len()));
+        callback_source.push_str(&format!("fn map_landing_context(rt:&mut CrtStreamRuntime)->RegistryResult<()>{{rt.map_region(0x40135f,{},CrtRegionKind::Module,Some(&{context:?}))?;rt.map_region(0x4013a5,18,CrtRegionKind::Module,Some(&[0x89,0x85,0x0c,0xfd,0xff,0xff,0x89,0xa5,0x08,0xfd,0xff,0xff,0x89,0xad,0x04,0xfd,0xff,0xff]))?;Ok(())}}",context.len()));
+        let restore_call=handler_bytes("original-restore-call.bin","51e8b2feffff");let restore=handler_bytes("original-restore.bin","8b4c24048b81b00000008ba1c40000008ba9b4000000ffa1b8000000");let landing=handler_bytes("original-restored-landing.bin","89850cfdffff89a508fdffff89ad04fdffff");
+        callback_source.push_str(&crate::crt_owned_search::emit_context_transfer(&restore_call,&restore,&landing).unwrap());
+        for offset in [2,8,14,20,24]{let mut changed=restore.clone();changed[offset]^=1;assert!(crate::crt_owned_search::emit_context_transfer(&restore_call,&changed,&landing).is_err());}
+        callback_source.push_str(&format!("fn map_context_transfer(rt:&mut CrtStreamRuntime)->RegistryResult<()>{{rt.map_region(0x401398,6,CrtRegionKind::Module,Some(&{restore_call:?}))?;rt.map_region(0x401250,28,CrtRegionKind::Module,Some(&{restore:?}))?;Ok(())}}"));
         for offset in [9,24]{let mut bad=selected.clone();bad[offset]^=1;assert!(crate::crt_owned_search::emit_selected(&bad,0x402820,&notification_code,0x402a30,binding).is_err());}
         callback_source.push_str(&format!("fn map_selected_regions(rt:&mut CrtStreamRuntime)->RegistryResult<()>{{rt.map_region(0x402820,{},CrtRegionKind::Module,Some(&{selected:?}))?;rt.map_region(0x40135c,3,CrtRegionKind::Module,Some(&[0x8b,0x65,0xe8]))?;Ok(())}}",selected.len()));
         callback_source.push_str(r#"fn fixture_notify_invoke(rt:&mut CrtStreamRuntime,storage:&mut CrtOwnedStorage,record:&mut LocalRecord<'_>,target:u32,reason:u32,fault:usize)->RegistryResult<()>{

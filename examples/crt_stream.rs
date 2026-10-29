@@ -250,3 +250,7 @@ mod crt_finally_fields;
 #[cfg(test)]
 #[path = "../src/crt_finally_tests.rs"]
 mod crt_finally_tests;
+
+#[allow(dead_code)]
+#[path = "../src/restore_instruction.rs"]
+mod restore_instruction;

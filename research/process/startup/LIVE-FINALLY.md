@@ -799,3 +799,54 @@ Historical original-Windows process-exit timeouts remain unresolved. This change
 adds component execution only: zero new Windows differential pairs and zero
 whole-PE translations. Actual delivery acquisition and collided-unwind effects
 remain independent unresolved contracts; full startup and rcedit stay rejected.
+
+### Original Restore transfer and observation continuation (2026-10-29)
+
+The owned landing now connects original `PUSH ECX; CALL 0x401250` to Restore's
+context loads and indirect jump at `0x401266`, then executes the original three
+observation stores at `0x4013a5`. The shared Restore instruction validator was
+extracted without changing its policy so both the existing unwind proof and the
+live-storage emitter use it. Actual MOV loads/stores use the shared decoder and
+emitter; the validated terminal jump reads its typed target from live context.
+
+A separate single-use prepared-context token binds the registration, event and
+pivot. Before effects, the adapter checks unchanged caller/Restore/landing bytes,
+context pointer identity and EAX/ESP/EBP/EIP fields, the unique still-live Main
+return root, empty eight-byte call scratch, and ordinary destination ownership.
+The original PUSH/CALL effects allocate a fresh protected call identity. The
+nonreturning jump consumes that exact identity and argument word; it never
+reports a successful RET. Replay rejects. It does not revive the retired
+handler's entry snapshot or manufacture a normal Main return.
+
+Seven transfer scenarios overlap 178 owned-frame scenarios: normal execution,
+stale event, scalar-forged EIP, changed Restore bytes, occupied protected scratch,
+changed destination bytes and missing receipt. Additional assertions cover
+single-use replay, flags and unchanged registers, exact observed restored values,
+and rejected active-call validation on the old handler. Compile-time mutations
+cover context argument, field offsets and indirect target binding. These are
+component checks; five prior Windows wrapper observations are separately replayed.
+There are zero new Windows differential pairs and zero new whole-PE admissions.
+
+Local root tests (175), CRT tests (158 plus the separately replayed observation),
+Clippy, formatting and artifact/projection checkers pass. Predecessor e5d4ff0's
+startup run 40876551200 passed; both full workflows 40876551080 and 40876558358
+have eight completed successful jobs and the final compiler-native-linux job
+still running at the review checkpoint. No failure was hidden or retried.
+
+Next is to bind this checked transfer result to the normal-source activation and
+Machine event completion, then execute Main's continuation reporting and epilog.
+The returned receipt records component execution only and cannot independently
+complete Machine restoration. Actual OS delivery acquisition and collided-unwind
+API effects remain unresolved, as do the retained original-Windows process-exit
+timeouts. Full startup and rcedit stay unsupported. Sol can continue this bounded
+normal-frame/event-completion integration; a particular conflicting ownership
+invariant would justify a narrowly scoped Astra review.
+
+Artifact replay provenance: unchanged PE SHA256
+`1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4`;
+Restore block SHA256
+`e238bcd04d8b025e87cefed2b36fd842431c052c11bd8ff6fb274225e3f69666`;
+continuation stores SHA256
+`06481e5466a0c6e04e96b89dbdd6fba40646f5af3373f2a55f16ebc917800590`;
+generated Rust SHA256
+`271b757b15ba5f57a7118c3b084d67d1ac5e509adbd80270bbdd90438b08bb69`.

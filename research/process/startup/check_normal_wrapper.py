@@ -102,6 +102,9 @@ def check(original, observation, out, compare=None):
     (out/'handler-complete.bin').write_bytes(mapped(image, 0x402210, 350, executable=True))
     (out/'original-landing-pivot.bin').write_bytes(mapped(image,0x40135c,3,executable=True))
     (out/'original-landing-context.bin').write_bytes(mapped(image,0x40135f,57,executable=True))
+    (out/'original-restore-call.bin').write_bytes(mapped(image,0x401398,6,executable=True))
+    (out/'original-restore.bin').write_bytes(mapped(image,0x401250,28,executable=True))
+    (out/'original-restored-landing.bin').write_bytes(mapped(image,0x4013a5,18,executable=True))
     (out/'original-selected-transfer.bin').write_bytes(mapped(image,0x402820,25,executable=True))
     (out/'global-wrapper.bin').write_bytes(mapped(image, 0x402840, 26, executable=True))
     if tuple(import_at_iat(image,0x415040-pe_sections(image)[0]))!=('kernel32.dll','RtlUnwind'): raise ValueError('original RtlUnwind import identity changed')
@@ -189,9 +192,11 @@ def check(original, observation, out, compare=None):
                   main_activation_sha256=sha((out/'main-activate.bin').read_bytes()),
                   main_scope_header_sha256=sha((out/'Main-scope-header.bin').read_bytes()),
                   landing_pivot_sha256=sha((out/'original-landing-pivot.bin').read_bytes()),
+                  restore_sha256=sha((out/'original-restore.bin').read_bytes()),
+                  restored_landing_sha256=sha((out/'original-restored-landing.bin').read_bytes()),
                   landing_context_sha256=sha((out/'original-landing-context.bin').read_bytes()),
-                  owned_frame_native_cases=172, owned_local_store_cases=10, original_notification_sha256=sha((out/'owned-notification.bin').read_bytes()), owned_local_loop_cases=13, original_cleanup_loop_cases=21, owned_local_body_sha256=sha((out/'owned-local-body.bin').read_bytes()), local_level_store_sha256=sha(local_store), original_cleanup_hashes={name:sha((out/('owned-'+name+'.bin')).read_bytes()) for name in ['CleanupA','CleanupB','CleanupC']},
-                  owned_delivery_lifetime_cases=114, cross_frame_delivery_cases=96, connected_cleanup_retirement_cases=81, native_local_stack_cases=81, native_local_loop_cases=81, live_callback_cases=81, conditional_resume_cases=39, post_global_caller_cases=31, opaque_dispatcher_cases=10, selected_bridge_cases=21, landing_pivot_cases=14, landing_context_cases=5, unwind_continuation_input_cut_cases=4, cleanup_continuation_boundary_cases=2,
+                  owned_frame_native_cases=178, owned_local_store_cases=10, original_notification_sha256=sha((out/'owned-notification.bin').read_bytes()), owned_local_loop_cases=13, original_cleanup_loop_cases=21, owned_local_body_sha256=sha((out/'owned-local-body.bin').read_bytes()), local_level_store_sha256=sha(local_store), original_cleanup_hashes={name:sha((out/('owned-'+name+'.bin')).read_bytes()) for name in ['CleanupA','CleanupB','CleanupC']},
+                  owned_delivery_lifetime_cases=120, cross_frame_delivery_cases=102, connected_cleanup_retirement_cases=87, native_local_stack_cases=87, native_local_loop_cases=87, live_callback_cases=87, conditional_resume_cases=45, post_global_caller_cases=37, opaque_dispatcher_cases=10, selected_bridge_cases=27, landing_pivot_cases=20, landing_context_cases=11, context_transfer_cases=7, unwind_continuation_input_cut_cases=4, cleanup_continuation_boundary_cases=2,
                   branch_obligation_native_cases=3,
                   ordinary_call_boundary_cases=1,
                   global_wrapper_sha256=sha((out/'global-wrapper.bin').read_bytes()), unwind_caller_sha256=sha((out/'original-unwind-caller.bin').read_bytes()), local_wrapper_sha256=sha((out/'original-local-wrapper.bin').read_bytes()),
