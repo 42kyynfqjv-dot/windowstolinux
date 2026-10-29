@@ -209,6 +209,50 @@ fn extended(i: &Instruction, raw: &[u8], tables: &[JumpTable<'_>]) -> Result<Op,
             Operand::Immediate(i.immediate8to16() as u16 as u32),
         )));
     }
+    // Word TEST/CMP forms used by bounded UTF-16 traversal. Decode only;
+    // live initialized read authority remains an execution obligation.
+    if matches!(i.code(), Code::Test_rm16_r16 | Code::Cmp_r16_rm16)
+        && raw.first() == Some(&0x66)
+        && !i.has_lock_prefix()
+        && i.segment_prefix() == Register::None
+    {
+        let word_reg = |r| -> Result<Operand, String> {
+            let index = match r {
+                Register::AX => 0,
+                Register::CX => 1,
+                Register::DX => 2,
+                Register::BX => 3,
+                Register::SP => 4,
+                Register::BP => 5,
+                Register::SI => 6,
+                Register::DI => 7,
+                _ => return Err("CRT word register".into()),
+            };
+            Ok(Operand::Reg(Reg {
+                index,
+                width: 16,
+                shift: 0,
+            }))
+        };
+        let operand = |n| -> Result<Operand, String> {
+            if i.op_kind(n) == OpKind::Register {
+                return word_reg(i.op_register(n));
+            }
+            let Operand::Memory(a, _) = operand_from_move(i, n)? else {
+                return Err("CRT word operand".into());
+            };
+            Ok(Operand::Memory(a, 16))
+        };
+        return Ok(Op::Ordinary(Operation::Binary(
+            if i.code() == Code::Test_rm16_r16 {
+                Binary::Test
+            } else {
+                Binary::Compare
+            },
+            operand(0)?,
+            operand(1)?,
+        )));
+    }
     if raw
         .first()
         .is_some_and(|b| matches!(b, 0x66 | 0x67 | 0x26 | 0x2e | 0x36 | 0x3e | 0x64 | 0x65))

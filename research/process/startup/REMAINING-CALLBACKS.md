@@ -166,7 +166,14 @@ now execute with typed module/reference/export lifetimes and checked, serialized
 word publication. Thirteen native scripted outcomes plus independent lifetime,
 replay, alias, flags and corruption checks exercise this boundary. Actual loader
 callbacks, API-set/forwarder dependencies and concurrency remain unproved; the
-error-87 prefix helper and dynamic FLS invocation still reject. See
+error-87 prefix helper now executes original instructions; dynamic FLS invocation still rejects. See
 [COLD-RESOLVER-HANDOFF.md](COLD-RESOLVER-HANDOFF.md) for the exact contract and next
 Sol-sized comparator/lookup connection. This does not supply original Windows
 loader evidence or full startup admission.
+
+
+Retry-helper review: original4078e0 now executes through the cold load helper,
+including bounded UTF-16 prefix reads and the original nonmatching-prefix retry.
+Seventeen scripted loader outcomes and eleven independent comparator cases pass;
+loader initialization/detach and dynamic FLS still require explicit contracts.
+The original failing hello run at5c3c2b5 remains preserved and unexplained.

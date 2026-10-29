@@ -32,10 +32,11 @@ branches, calls, error tests, exchanges and returns execute with checked storage
 Load/export/release callbacks are still explicit effect cuts. Their argument
 bounds/types and returned lifetime authority are checked, and successful load and
 release must show the matching one-reference change. A numerical success result
-alone fails. Earlier effects are preserved on later rejection. The error-87
-prefix-comparison/retry branch still rejects at its original helper call.
+alone fails. Earlier effects are preserved on later rejection. The error-87 branch now calls the original 67-byte UTF-16 prefix comparator
+and follows its actual retry decision. Counts above260 reject in this bounded
+component; no loader initializer effect is inferred.
 
-Thirteen scripted native scenarios cover fresh success, failed load, error 87,
+Seventeen scripted native scenarios cover fresh success, failed load, error 87,
 retained-reference publication, failure after acquisition, absent export, scalar
 export forgery, unload during lookup, wrong symbol, unknown LastError, false load
 success, false release success and failure reported after acquisition. The retained
@@ -43,7 +44,13 @@ reference case supplies a serialized callback publication, not evidence of actua
 thread races. Independent registry/exchange tests use a different module and
 symbol, covering unload/reload, replay, foreign runtime, aliasing, partial access,
 truncated/unknown storage, expired initialization, flags and failed-release poison.
-All 235 bytes of the two bound bodies are individually mutation-tested.
+All 302 bytes of the three bound bodies are individually mutation-tested.
+Eleven independent comparator cases cover zero/one/multiple-word counts,
+unsigned UTF-16 units, early mismatch/NUL, high surrogate units, truncated and
+unknown storage and the count cap. The comparator compares code units; it does
+not normalize, case-fold or replace malformed UTF-16. Loader name validation
+remains a separate contract. Retry success, failure, second-call failure ordering
+and matching api-ms- suppression are tested through the original load helper.
 
 The checker records cold-resolver generated-source SHA256 and compares it across
 hosts. These are component executions with scripted API results. There are zero
@@ -93,9 +100,11 @@ proof of original Windows delivery or arbitrary DLL callback effects.
 
 ## Next connected implementation scope
 
-Sol can review the implementation and CI, then lift original prefix comparator
-4078e0 and finish the flags800/error87 retry decision with independent strings,
-length and encoding cases. Keep the supplied loader effects explicit.
+Sol review now connects the original prefix comparator4078e0 through protected
+CALL/RET and the actual flags800/error87/flags0 retry sequence. Word TEST/CMP
+normalize into shared width-aware operations, with checked initialized reads.
+The module-prefix immediate refines only after exact live input bytes validate.
+Keep the supplied loader effects explicit.
 
 Next bind the checked function result through the original indirect-call guard
 and lookup wrapper into the distinct dispatcher PTD backend. This requires actual

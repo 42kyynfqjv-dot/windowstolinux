@@ -158,10 +158,22 @@ fn cold_resolution_has_atomic_publication_and_owned_loader_dependencies() {
     );
 }
 
+pub(crate) const WIDE_COMPARE:&str="8bff558bec8b551085d2750433c05dc38b4d0c8b45085683ea01741c0f1f40000fb7306685f67410663b31750b83c00283c10283ea0175e80fb7000fb7092bc15e5dc3";
+
 /// Mechanically execute the complete resolver and load helper under an explicit
 /// startup-exclusive component domain. Loader API effects remain a checked cut;
 /// the error-87 comparison/retry path is rejected until its helper is lifted.
 pub(crate) fn cold_source(resolver: &[u8], load: &[u8]) -> Result<String, String> {
+    cold_source_with_compare(resolver, load, &crate::crt_ptd::raw(WIDE_COMPARE))
+}
+fn cold_source_with_compare(
+    resolver: &[u8],
+    load: &[u8],
+    compare: &[u8],
+) -> Result<String, String> {
+    if compare != crate::crt_ptd::raw(WIDE_COMPARE) {
+        return Err("C++ original prefix comparator binding".into());
+    }
     if resolver != crate::crt_ptd::raw(COLD_FULL) || load != crate::crt_ptd::raw(LOAD_HELPER) {
         return Err("C++ cold original code binding".into());
     }
@@ -169,6 +181,7 @@ pub(crate) fn cold_source(resolver: &[u8], load: &[u8]) -> Result<String, String
     for (bytes, origin, name) in [
         (resolver, 0x402a53, "cxx_cold_resolver"),
         (load, 0x402af3, "cxx_load_helper"),
+        (compare, 0x4078e0, "cxx_compare_prefix"),
     ] {
         let graph = Graph::decode(bytes, origin)?;
         let roles = BTreeMap::from([
@@ -182,6 +195,7 @@ pub(crate) fn cold_source(resolver: &[u8], load: &[u8]) -> Result<String, String
                 let next = pc + graph.nodes[&pc].length;
                 Ok(match target {
                 Target::Direct(0x402af3)=>format!("cpu.call_activation(rt,{next},0,|rt,child|cxx_load_helper(rt,child,init,api))?;"),
+                Target::Direct(0x4078e0)=>format!("let sp=CrtCpu::pointer(cpu.r[4])?;let slot=rt.offset(sp,4)?;if rt.load(slot,32)?.known_scalar()?!=0x415d18{{return Err(\"C++ retry prefix address\");}}let prefix=rt.resolve_absolute(0x415d18,CrtRegionKind::Input)?;for (i,b) in [97u8,0,112,0,105,0,45,0,109,0,115,0,45,0].iter().enumerate(){{if rt.load(rt.offset(prefix,i as i64)?,8)?.known_scalar()?!=u32::from(*b){{return Err(\"C++ retry prefix bytes\");}}}}rt.store(slot,32,CrtValue::Pointer(prefix))?;cpu.call_activation(rt,{next},0,|rt,child|cxx_compare_prefix(rt,child,init,api))?;"),
                 Target::Import(0x415044)=>format!("cpu.call_activation(rt,{next},0,|rt,child|{{child.clobber(rt.last_os_error.map(CrtValue::scalar).unwrap_or(CrtValue::Scalar{{bits:0,known:0}}));child.finish(rt)}})?;"),
                 Target::Import(iat @ (0x415074|0x415070|0x41506c))=>{
                     let pop=match iat{0x415074=>12,0x415070=>8,_=>4};
@@ -195,6 +209,7 @@ pub(crate) fn cold_source(resolver: &[u8], load: &[u8]) -> Result<String, String
             |_, _| Err("C++ cold thread effect".into()),
             |pc, _| {
                 Ok(match pc{
+            0x4078e0=>"let sp=CrtCpu::pointer(cpu.r[4])?;if rt.load(rt.offset(sp,12)?,32)?.known_scalar()?>260{return Err(\"C++ prefix comparison count bound\");}".into(),
             0x402a68=>"match cpu.r[0]{CrtValue::Function(f)=>rt.function_identity(f,None)?,CrtValue::Scalar{bits:0|u32::MAX,known:u32::MAX}=>{},_=>return Err(\"C++ function cache authority\")}".into(),
             0x402a8d=>"match cpu.r[6]{CrtValue::Module(m)=>rt.module_identity(m)?,CrtValue::Scalar{bits:0|u32::MAX,known:u32::MAX}=>{},_=>return Err(\"C++ module cache authority\")}".into(),
             _=>String::new()
@@ -269,13 +284,14 @@ fn cold_original_execution_preserves_module_export_and_publication_authority() {
         .unwrap();
     }
     let body = r#"
-for scenario in 0..13 {
+for scenario in 0..17 {
  let(mut rt,init)=CrtStreamRuntime::new_initializing(11,29,0x8000,65536).unwrap();
  let cache=rt.map_region(0x41cd08,20,CrtRegionKind::Module,Some(&[0;20])).unwrap();
  let module_cell=cache;let function_cell=rt.offset(cache,12).unwrap();
  rt.bind_loader_cell(init,module_cell,false).unwrap();rt.bind_loader_cell(init,function_cell,true).unwrap();
  let list=rt.map_region(0x6000,4,CrtRegionKind::Module,Some(&0u32.to_le_bytes())).unwrap();
- let name=rt.map_region(0x6100,14,CrtRegionKind::Input,Some(&[b'a',0,b'l',0,b'p',0,b'h',0,b'a',0,0,0,0,0])).unwrap();
+ rt.map_region(0x415d18,16,CrtRegionKind::Input,Some(&[97,0,112,0,105,0,45,0,109,0,115,0,45,0,0,0])).unwrap();
+ let text=if scenario==16{vec![97,0,112,0,105,0,45,0,109,0,115,0,45,0,120,0,0,0]}else{vec![b'a',0,b'l',0,b'p',0,b'h',0,b'a',0,0,0,0,0]};let name=rt.map_region(0x6100,text.len() as u32,CrtRegionKind::Input,Some(&text)).unwrap();
  let symbol=rt.map_region(0x6200,12,CrtRegionKind::Input,Some(b"FlsGetValue\0")).unwrap();
  let names=rt.map_region(0x415c80,4,CrtRegionKind::Module,None).unwrap();rt.store(names,32,CrtValue::Pointer(name)).unwrap();
  let stack=rt.map_region(0x9000,4096,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,3072).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(1)).unwrap();
@@ -285,8 +301,10 @@ for scenario in 0..13 {
   calls.push(iat);let sp=CrtCpu::pointer(cpu.r[4])?;
   let value=match iat{
    0x415074=>{
-    assert_eq!(rt.load(rt.offset(sp,4)?,32)?,CrtValue::Pointer(name));assert_eq!(rt.load(rt.offset(sp,8)?,32)?,CrtValue::scalar(0));assert_eq!(rt.load(rt.offset(sp,12)?,32)?,CrtValue::scalar(0x800));
-    if scenario==10{CrtValue::Module(retained.unwrap().0)}else if scenario==1||scenario==2||scenario==9{rt.last_os_error=if scenario==9{None}else{Some(if scenario==2{87}else{126})};CrtValue::scalar(0)}else{
+    let retry=rt.load(rt.offset(sp,12)?,32)?.known_scalar()?==0;
+    if retry{assert!(scenario==2||scenario>=13);}
+    assert_eq!(rt.load(rt.offset(sp,4)?,32)?,CrtValue::Pointer(name));assert_eq!(rt.load(rt.offset(sp,8)?,32)?,CrtValue::scalar(0));assert_eq!(rt.load(rt.offset(sp,12)?,32)?,CrtValue::scalar(if retry{0}else{0x800}));
+    if !retry && scenario>=13{rt.last_os_error=Some(87);CrtValue::scalar(0)}else if retry&&scenario==14{rt.last_os_error=Some(126);CrtValue::scalar(0)}else if retry&&scenario==15{return Err("retry failure after first call effects");}else if scenario==10{CrtValue::Module(retained.unwrap().0)}else if scenario==1||scenario==2||scenario==9{rt.last_os_error=if scenario==9{None}else{Some(if scenario==2{87}else{126})};CrtValue::scalar(0)}else{
      let(m,r)=rt.module_acquire_result(init,"independent alpha identity",0x700000)?;acquisitions.push(r);
      if matches!(scenario,3|11){let (winner,_)=retained.unwrap();rt.store(module_cell,32,CrtValue::Module(winner))?;}
      if scenario==4{return Err("independent loader failure after acquisition");}
@@ -306,14 +324,14 @@ for scenario in 0..13 {
   };cpu.clobber(value);cpu.finish_pop(rt,match iat{0x415074=>12,0x415070=>8,_=>4})
  }));
  match scenario{
-  0|3=>{let CrtValue::Function(f)=result.unwrap()else{panic!()};rt.function_identity(f,Some("FlsGetValue")).unwrap();assert_eq!(rt.load(function_cell,32).unwrap(),CrtValue::Function(f));assert_eq!(rt.module_references.len(),1);cpu.discard(&mut rt,16).unwrap();cpu.finish(&mut rt).unwrap();
-   assert_eq!(calls,if scenario==3{vec![0x415074,0x41506c,0x415070]}else{vec![0x415074,0x415070]});
+  0|3|13=>{let CrtValue::Function(f)=result.unwrap()else{panic!()};rt.function_identity(f,Some("FlsGetValue")).unwrap();assert_eq!(rt.load(function_cell,32).unwrap(),CrtValue::Function(f));assert_eq!(rt.module_references.len(),1);cpu.discard(&mut rt,16).unwrap();cpu.finish(&mut rt).unwrap();
+   assert_eq!(calls,if scenario==3{vec![0x415074,0x41506c,0x415070]}else if scenario==13{vec![0x415074,0x415074,0x415070]}else{vec![0x415074,0x415070]});
    rt.store(sp,32,CrtValue::ProtectedReturn(2)).unwrap();let mut cached=CrtCpu::new(sp,2).unwrap();cached.r[1]=CrtValue::Scalar{bits:0,known:0};let end=rt.offset(list,4).unwrap();cached.push(&mut rt,CrtValue::Pointer(end)).unwrap();cached.push(&mut rt,CrtValue::Pointer(list)).unwrap();cached.push(&mut rt,CrtValue::Pointer(symbol)).unwrap();cached.push(&mut rt,CrtValue::scalar(0)).unwrap();
    let hit=cached.call_activation(&mut rt,0x1234,0,|rt,child|cxx_cold_resolver(rt,child,init,&mut |_,_,_|panic!("cached hit invoked loader"))).unwrap();assert_eq!(hit,CrtValue::Function(f));cached.discard(&mut rt,16).unwrap();cached.finish(&mut rt).unwrap();
   },
-  1=>{assert_eq!(result.unwrap(),CrtValue::scalar(0));assert_eq!(rt.load(module_cell,32).unwrap(),CrtValue::scalar(u32::MAX));assert_eq!(rt.load(function_cell,32).unwrap(),CrtValue::scalar(u32::MAX));},
+  1|2|14|16=>{assert_eq!(result.unwrap(),CrtValue::scalar(0));assert_eq!(rt.load(module_cell,32).unwrap(),CrtValue::scalar(u32::MAX));assert_eq!(rt.load(function_cell,32).unwrap(),CrtValue::scalar(u32::MAX));assert_eq!(calls.len(),if scenario==2||scenario==14{2}else{1});},
   5=>{assert_eq!(result.unwrap(),CrtValue::scalar(0));assert_eq!(rt.load(function_cell,32).unwrap(),CrtValue::scalar(u32::MAX));assert_eq!(rt.module_references.len(),1);},
-  _=>{assert!(result.is_err(),"scenario {scenario}");if scenario==4{assert_eq!(rt.module_references.len(),1);assert_eq!(rt.load(module_cell,32).unwrap(),CrtValue::scalar(0));}}
+  _=>{assert!(result.is_err(),"scenario {scenario}");if scenario==15{assert_eq!(rt.last_os_error,Some(87));assert_eq!(calls.len(),2);}if scenario==4{assert_eq!(rt.module_references.len(),1);assert_eq!(rt.load(module_cell,32).unwrap(),CrtValue::scalar(0));}}
  }
 }
 "#;
@@ -382,5 +400,50 @@ let fresh=rt.map_region(0x7000,4,CrtRegionKind::Module,Some(&[0;4])).unwrap();rt
         &[0x67, 0x87, 0x01],
     ] {
         assert!(Graph::decode_instruction(bytes, 0x1000).is_err());
+    }
+}
+
+#[test]
+fn original_prefix_compare_has_independent_word_bounds_and_short_circuit_cases() {
+    let extra = cold_source(
+        &crate::crt_ptd::raw(COLD_FULL),
+        &crate::crt_ptd::raw(LOAD_HELPER),
+    )
+    .unwrap();
+    crate::crt_stream_callees_tests::native(
+        &extra,
+        r#"
+let cases:Vec<(Vec<u16>,Vec<u16>,u32,Option<u32>)>=vec![
+ (vec![],vec![],0,Some(0)),(vec![1],vec![1],1,Some(0)),
+ (vec![0x100],vec![0xff],1,Some(1)),(vec![1],vec![2],7,Some(u32::MAX)),
+ (vec![0],vec![9],200,Some(0u32.wrapping_sub(9))),
+ (vec![4,5,6],vec![4,5,8],2,Some(0)),(vec![4,5,6],vec![4,5,8],3,Some(u32::MAX-1)),
+ (vec![0xd800],vec![0xd801],1,Some(u32::MAX)),
+ (vec![1],vec![1],2,None),(vec![1],vec![],1,None),(vec![1],vec![1],261,None)
+];
+for (left,right,count,expected) in cases {
+ let(mut rt,init)=CrtStreamRuntime::new_initializing(41,63,0x8000,16384).unwrap();
+ let bytes=|v:&[u16]|v.iter().flat_map(|n|n.to_le_bytes()).collect::<Vec<_>>();
+ let left_bytes=bytes(&left);let right_bytes=bytes(&right);
+ let a=rt.map_region(0x5000,((left.len()*2).max(1))as u32,CrtRegionKind::Input,if left.is_empty(){None}else{Some(&left_bytes)}).unwrap();
+ let b=rt.map_region(0x6000,((right.len()*2).max(1))as u32,CrtRegionKind::Input,if right.is_empty(){None}else{Some(&right_bytes)}).unwrap();
+ let stack=rt.map_region(0x9000,256,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,192).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(1)).unwrap();let mut cpu=CrtCpu::new(sp,1).unwrap();
+ cpu.push(&mut rt,CrtValue::scalar(count)).unwrap();cpu.push(&mut rt,CrtValue::Pointer(b)).unwrap();cpu.push(&mut rt,CrtValue::Pointer(a)).unwrap();
+ let result=cpu.call_activation(&mut rt,0x1111,0,|rt,c|cxx_compare_prefix(rt,c,init,&mut |_,_,_|panic!("comparator called API")));
+ match expected{Some(n)=>{assert_eq!(result.unwrap(),CrtValue::scalar(n));cpu.discard(&mut rt,12).unwrap();cpu.finish(&mut rt).unwrap();},None=>assert!(result.is_err())}
+}
+"#,
+        "prefix-word-comparison",
+    );
+    let original = crate::crt_ptd::raw(WIDE_COMPARE);
+    for index in 0..original.len() {
+        let mut changed = original.clone();
+        changed[index] ^= 1;
+        assert!(cold_source_with_compare(
+            &crate::crt_ptd::raw(COLD_FULL),
+            &crate::crt_ptd::raw(LOAD_HELPER),
+            &changed
+        )
+        .is_err());
     }
 }

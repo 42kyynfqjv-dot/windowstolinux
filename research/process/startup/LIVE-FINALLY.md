@@ -2100,3 +2100,27 @@ no local ZIP verification or process-state interpretation is claimed. The exact
 log evidence is preserved in
 [windows-hello-5c3c2b5.json](evidence/windows-hello-5c3c2b5.json).
 Historical Windows timeouts, ordinary startup and rcedit remain unresolved.
+
+### Original error-87 retry-helper connection
+
+Review of74b4bbf retained module/export lifetime, replay and cache publication
+checks. Original67-byte4078e0 now executes through the load helper's actual
+error87 branch and protected CALL/RET, using shared16-bit TEST/CMP semantics.
+The prefix immediate refines to live input authority only after its exact bytes
+validate. The original matching-prefix branch suppresses retry; nonmatching
+prefixes use flags0. Failed second calls and exceptions preserve prior effects.
+The comparison is bounded to260 UTF-16 units and retains unsigned code-unit
+subtraction, early NUL and mismatch behavior without case folding.
+
+Local204 CRT tests passed (one existing observation test separate), six focused
+C++ checks, Clippy including tests, format/diff and syntax checks passed.
+Seventeen scripted loader scenarios and eleven independent word-comparison cases
+cover retry outcomes, ordering, truncation, unknown bytes and count limits.
+All302 bound body bytes reject individual mutations. Artifact replay passes six
+C++ checks, seven prior PTD checks and five recorded Windows wrapper comparisons;
+zero new Windows observations or whole-PE pairs. Selected hashes are in
+[evidence/cold-resolver-component.json](evidence/cold-resolver-component.json).
+At review,74b4bbf startup40942487315 passed; full Rust40942499571/40942487466 remained
+in progress. The preserved original-Windows hello timeout remains unexplained.
+Next: checked indirect guard/lookup and dynamic FLS binding; actual loader effects,
+forwarder lifetime and full startup/rcedit remain unsupported.
