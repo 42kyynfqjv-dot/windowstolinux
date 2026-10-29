@@ -66,6 +66,14 @@ Astra High pass after independent Sol review; routine verification stays on Sol.
 
 Current concrete allocator integration: `40bf2a` calls the `40be7a` block
 constructor. Its 64 descriptor records have stride 56 and critical sections at
-record offset 0, while FILE locks use offset 32. Implement checked allocation-role
-and record-lock ownership, retaining heap identity and failure effects; do not
-reinterpret a Buffer pointer or reuse FILE locking as descriptor authority.
+record offset 0, while FILE locks use offset 32. Checked typed allocation issuance and distinct record-lock ownership now execute
+with original constructor/destructor instructions, followed by the inherited and
+standard-handle bodies in native component tests. No existing Buffer alias is
+relabelled. The allocation manager itself (`40bf2a`), its global lock 7/EH4
+cleanup, calloc/new-handler/errno effects (`407cf0`), free failure/errno effects
+(`407d50`), and continuation after a failed critical-section initialization remain
+unbound. The component supplies allocation availability, API outcomes, live
+initialization authority, zeroed allocation semantics and descriptor table/capacity
+publication. These are not a complete startup proof. Sol can review this slice
+and connect the manager using the existing protected-frame machinery; escalate
+only a concrete missing global-lock or exception-effect contract.

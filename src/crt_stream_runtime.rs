@@ -27,6 +27,8 @@ struct CrtInitialization {anchor:guest_memory::Capability,thread:u64,serial:u64}
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 struct CrtLocale {anchor:guest_memory::Capability,thread:u64,generation:u64}
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
+struct CrtRecordLock {anchor:guest_memory::Capability,thread:u64,serial:u64,depth:usize,record:CrtPointer}
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
 struct CrtDescriptorLock {anchor:guest_memory::Capability,thread:u64,serial:u64,depth:usize,id:CrtDescriptorId}
 /// Constructed only by the validated normal-return/owned-thread bridge.
 /// Non-Clone: consuming it is a one-way phase transition, not an input boolean.
@@ -47,7 +49,7 @@ struct CrtStreamRuntime {
  memory:guest_memory::Space,owner:u64,thread:u64,anchor:guest_memory::Capability,
  dispatchers:std::collections::BTreeMap<u64,CrtDispatcherContext>,regions:Vec<CrtRegion>,retired:Vec<CrtPointer>,tags:std::collections::BTreeMap<u32,CrtValue>,
  partial:std::collections::BTreeMap<u32,(u8,u8)>,descriptors:Vec<CrtDescriptor>,
- locks:Vec<CrtLock>,descriptor_locks:Vec<CrtDescriptorLock>,serial:u64,generation:u64,errno:Option<i32>,doserrno:Option<u32>,last_os_error:Option<u32>,
+ record_objects:Vec<CrtPointer>,record_locks:Vec<CrtRecordLock>,locks:Vec<CrtLock>,descriptor_locks:Vec<CrtDescriptorLock>,serial:u64,generation:u64,errno:Option<i32>,doserrno:Option<u32>,last_os_error:Option<u32>,
  locale_generation:u64,locale_live:bool,initialization:Option<u64>,shutdown:Option<CrtShutdown>,closed:bool,lock_objects:std::collections::BTreeSet<u32>,
 }
 impl CrtStreamRuntime {
@@ -60,7 +62,7 @@ impl CrtStreamRuntime {
   let mut memory=guest_memory::Space::new(byte_limit,64).map_err(|_|"CRT memory budget")?;
   let anchor=memory.map(file_address,size,guest_memory::Owner::Module(owner),guest_memory::Permissions::READ_WRITE,false).map_err(|_|"CRT FILE mapping")?;
   let pointer=CrtPointer{cap:anchor,owner:guest_memory::Owner::Module(owner),base:file_address,size,address:file_address,kind:CrtRegionKind::File};
-  Ok(Self{memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([file_address])})
+  Ok(Self{memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([file_address])})
  }
  /// Separate startup-exclusive storage authority, with no preconstructed lock.
  /// Ending it does not attest that original CRT initialization has completed.
@@ -72,17 +74,17 @@ impl CrtStreamRuntime {
  fn initialization(&self,token:CrtInitialization)->Result<(),&'static str>{
   if token.anchor!=self.anchor||token.thread!=self.thread||self.initialization!=Some(token.serial){return Err("CRT initialization owner/lifetime");}Ok(())
  }
- fn end_initialization(&mut self,token:CrtInitialization)->Result<(),&'static str>{self.initialization(token)?;if !self.locks.is_empty()||!self.descriptor_locks.is_empty(){return Err("CRT initialization with live lock lease");}self.initialization=None;Ok(())}
+ fn end_initialization(&mut self,token:CrtInitialization)->Result<(),&'static str>{self.initialization(token)?;if !self.locks.is_empty()||!self.descriptor_locks.is_empty()||!self.record_locks.is_empty(){return Err("CRT initialization with live lock lease");}self.initialization=None;Ok(())}
  /// The receipt attests only this component's caller/thread lifecycle. It
  /// cannot assert process-wide Windows shutdown or unrelated thread quiescence.
  fn begin_shutdown(&mut self,receipt:CrtShutdownReceipt)->Result<CrtShutdown,&'static str>{
-  if receipt.anchor!=self.anchor||receipt.thread!=self.thread||receipt.event==0||self.initialization.is_some()||self.shutdown.is_some()||self.closed||!self.locks.is_empty()||!self.descriptor_locks.is_empty(){return Err("CRT shutdown receipt/phase/active lease");}
+  if receipt.anchor!=self.anchor||receipt.thread!=self.thread||receipt.event==0||self.initialization.is_some()||self.shutdown.is_some()||self.closed||!self.locks.is_empty()||!self.descriptor_locks.is_empty()||!self.record_locks.is_empty(){return Err("CRT shutdown receipt/phase/active lease");}
   let serial=self.serial.checked_add(1).ok_or("CRT shutdown generation")?;let token=CrtShutdown{anchor:self.anchor,thread:self.thread,serial,event:receipt.event};self.serial=serial;self.shutdown=Some(token);Ok(token)
  }
  fn shutdown(&self,token:CrtShutdown)->Result<(),&'static str>{if self.closed||self.shutdown!=Some(token){return Err("CRT shutdown owner/lifetime");}Ok(())}
  fn destroy_lock_shutdown(&mut self,token:CrtShutdown,file:CrtPointer)->Result<(),&'static str>{self.shutdown(token)?;self.file_record(file)?;if self.locks.iter().any(|l|l.record==file.address)||!self.lock_objects.remove(&file.address){return Err("CRT shutdown lock still leased/missing");}Ok(())}
  fn free_shutdown(&mut self,token:CrtShutdown,p:CrtPointer)->Result<(),&'static str>{self.shutdown(token)?;self.free_allocation(p)}
- fn end_shutdown(&mut self,token:CrtShutdown)->Result<(),&'static str>{self.shutdown(token)?;if !self.locks.is_empty()||!self.descriptor_locks.is_empty()||!self.lock_objects.is_empty(){return Err("CRT shutdown remaining lock authority");}self.shutdown=None;self.closed=true;Ok(())}
+ fn end_shutdown(&mut self,token:CrtShutdown)->Result<(),&'static str>{self.shutdown(token)?;if !self.locks.is_empty()||!self.descriptor_locks.is_empty()||!self.record_locks.is_empty()||!self.lock_objects.is_empty()||!self.record_objects.is_empty(){return Err("CRT shutdown remaining lock authority");}self.shutdown=None;self.closed=true;Ok(())}
  fn construct_lock(&mut self,token:CrtInitialization,file:CrtPointer)->Result<(),&'static str>{
   self.initialization(token)?;self.file_record(file)?;if !self.lock_objects.insert(file.address){return Err("CRT duplicate lock construction");}Ok(())
  }
@@ -97,6 +99,7 @@ impl CrtStreamRuntime {
   if result!=0{self.construct_lock(token,file)?;}Ok(result!=0)
  }
  fn ordinary_file_bytes(&self,p:CrtPointer,size:u32)->Result<(),&'static str>{
+  if self.record_objects.iter().any(|r|r.cap==p.cap&&u64::from(p.address)<u64::from(r.address)+24&&u64::from(r.address)<u64::from(p.address)+u64::from(size)){return Err("CRT opaque descriptor lock bytes");}
   if p.kind==CrtRegionKind::File&&self.lock_objects.iter().any(|&at|u64::from(p.address)<u64::from(at)+56&&u64::from(at)+32<u64::from(p.address)+u64::from(size)){return Err("CRT opaque critical section bytes");}Ok(())
  }
  fn destroy_lock(&mut self,token:CrtInitialization,file:CrtPointer)->Result<(),&'static str>{
@@ -148,7 +151,7 @@ impl CrtStreamRuntime {
   if self.closed{return Err("CRT retired stream lifecycle");}
   if self.initialization.is_none()&&self.shutdown.is_none(){
    if p.kind==CrtRegionKind::File{let record=region.pointer.base+(p.address-region.pointer.base)/56*56;if size!=0&&((p.address-region.pointer.base)%56)+size>56{return Err("CRT access crosses FILE records");}if !self.locks.iter().any(|l|l.record==record){return Err("CRT unlocked FILE record access");}}
-   if p.kind==CrtRegionKind::Descriptor{
+   if p.kind==CrtRegionKind::Descriptor&&!self.record_locks.iter().any(|l|l.record.cap==p.cap&&p.address>=l.record.address&&u64::from(p.address)+u64::from(size)<=u64::from(l.record.address)+56){
     let owner=self.descriptors.iter().find(|d|d.live&&d.record.is_some_and(|r|r.cap==p.cap&&p.address>=r.address&&u64::from(p.address)+u64::from(size)<=u64::from(r.address)+56)).ok_or("CRT unbound descriptor record access")?;
     if !self.descriptor_locks.iter().any(|l|l.id==owner.id){return Err("CRT unlocked descriptor record access");}
    }
@@ -158,6 +161,13 @@ impl CrtStreamRuntime {
  fn offset(&self,p:CrtPointer,delta:i64)->Result<CrtPointer,&'static str>{
   self.identity_range(p,0)?;let address=i64::from(p.address).checked_add(delta).and_then(|n|u32::try_from(n).ok()).ok_or("CRT pointer arithmetic overflow")?;
   let q=CrtPointer{address,..p};self.identity_range(q,0)?;Ok(q)
+ }
+ /// x86 address formation is not a memory access. Keep the original capability
+ /// and complete subrange even for a temporary out-of-range effective address.
+ /// Only the instruction address path uses this; loads/stores and transport
+ /// still require the resulting complete range to belong to that capability.
+ fn effective_address(&self,p:CrtPointer,address:u32)->Result<CrtPointer,&'static str>{
+  self.identity_range(CrtPointer{address:p.base,..p},0)?;Ok(CrtPointer{address,..p})
  }
  fn subrange(&self,p:CrtPointer,size:u32)->Result<CrtPointer,&'static str>{
   if size==0{return Err("CRT empty subrange");}self.identity_range(p,size)?;Ok(CrtPointer{base:p.address,size,..p})
@@ -260,7 +270,7 @@ impl CrtStreamRuntime {
  fn claim_file_buffer(&mut self,p:CrtPointer,record:u32)->Result<(),&'static str>{
   self.pointer_transport(p)?;
   if let Some(region)=self.regions.iter_mut().find(|r|r.pointer.cap==p.cap&&r.heap){
-   if region.file_owner.is_some_and(|owner|owner!=record){return Err("CRT cross-FILE buffer ownership");}
+   if region.pointer.kind!=CrtRegionKind::Buffer||region.file_owner.is_some_and(|owner|owner!=record){return Err("CRT cross-FILE buffer ownership");}
    region.file_owner=Some(record);
   }Ok(())
  }
@@ -272,13 +282,51 @@ impl CrtStreamRuntime {
   let cap=self.memory.heap_capability(heap,base).map_err(|_|"CRT allocation identity")?;
   let p=CrtPointer{cap,owner:guest_memory::Owner::Heap(0),base,size,address:base,kind:CrtRegionKind::Buffer};self.regions.push(CrtRegion{pointer:p,heap:true,file_owner:None});Ok(Some(p))
  }
+ /// The role is selected at allocation issuance, before any pointer escapes.
+ /// No existing Buffer alias is relabelled or allowed to bypass record locks.
+ fn alloc_descriptor_block(&mut self,token:CrtInitialization,count:u32,available:bool)->Result<Option<CrtPointer>,&'static str>{
+  self.initialization(token)?;if count==0||count>64{return Err("CRT descriptor allocation count");}
+  let Some(p)=self.allocate(count*56,true,available)? else{return Ok(None)};
+  let q=CrtPointer{kind:CrtRegionKind::Descriptor,..p};
+  self.regions.last_mut().ok_or("CRT allocation issuance")?.pointer=q;Ok(Some(q))
+ }
+ fn descriptor_slot(&self,p:CrtPointer)->Result<(),&'static str>{
+  self.identity_range(p,56)?;
+  let root=self.regions.iter().find(|r|r.pointer.cap==p.cap).ok_or("CRT descriptor slot identity")?.pointer;
+  if p.kind!=CrtRegionKind::Descriptor||root.size%56!=0||(p.address-root.base)%56!=0{return Err("CRT descriptor slot alignment/role");}Ok(())
+ }
+ fn construct_record_lock_result(&mut self,token:CrtInitialization,p:CrtPointer,flags:u32,result:u32)->Result<bool,&'static str>{
+  self.initialization(token)?;self.descriptor_slot(p)?;
+  if flags!=0||self.record_objects.iter().any(|r|r.cap==p.cap&&r.address==p.address)||!self.overlapping_tags(p.address,24).is_empty(){return Err("CRT descriptor lock flags/duplicate/alias");}
+  self.memory.forget(p.address,24).map_err(|_|"CRT descriptor lock range")?;
+  self.partial.retain(|&at,_|at<p.address||at>=p.address+24);self.last_os_error=None;
+  if result!=0{self.record_objects.push(self.subrange(p,56)?);}Ok(result!=0)
+ }
+ fn record_lock_live(&self,p:CrtPointer)->Result<(),&'static str>{
+  self.descriptor_slot(p)?;
+  if !self.record_objects.iter().any(|r|r.cap==p.cap&&r.address==p.address){return Err("CRT descriptor lock not constructed");}Ok(())
+ }
+ fn lock_record(&mut self,thread:u64,p:CrtPointer)->Result<CrtRecordLock,&'static str>{
+  self.record_lock_live(p)?;if self.closed||thread!=self.thread||self.record_locks.len()>=32{return Err("CRT record lock thread/budget");}
+  let serial=self.serial.checked_add(1).ok_or("CRT record lock generation")?;
+  let lease=CrtRecordLock{anchor:self.anchor,thread,serial,depth:self.record_locks.len(),record:self.subrange(p,56)?};self.record_locks.push(lease);self.serial=serial;Ok(lease)
+ }
+ fn unlock_record(&mut self,lease:CrtRecordLock)->Result<(),&'static str>{
+  if self.record_locks.last()!=Some(&lease){return Err("CRT stale/foreign/unordered record unlock");}self.record_locks.pop();Ok(())
+ }
+ fn destroy_record_lock(&mut self,token:CrtInitialization,p:CrtPointer)->Result<(),&'static str>{
+  self.initialization(token)?;self.record_lock_live(p)?;
+  if self.record_locks.iter().any(|l|l.record.cap==p.cap&&l.record.address==p.address)||self.descriptors.iter().any(|d|d.record.is_some_and(|r|r.cap==p.cap&&r.address==p.address)&&(d.live||self.descriptor_locks.iter().any(|l|l.id==d.id))){return Err("CRT live descriptor record destruction");}
+  self.record_objects.retain(|r|r.cap!=p.cap||r.address!=p.address);Ok(())
+ }
  fn free_buffer(&mut self,lease:CrtLock,p:CrtPointer)->Result<(),&'static str>{self.check_lock(lease)?;
   if !self.regions.iter().any(|r|r.pointer.cap==p.cap&&r.heap&&r.file_owner==Some(lease.record)){return Err("CRT buffer free requires owning FILE");}
   self.free_allocation(p)}
  fn free_initialization(&mut self,token:CrtInitialization,p:CrtPointer)->Result<(),&'static str>{self.initialization(token)?;self.free_allocation(p)}
  fn free_allocation(&mut self,p:CrtPointer)->Result<(),&'static str>{
-  self.valid(p,0)?;if p.kind!=CrtRegionKind::Buffer||p.address!=p.base{return Err("CRT allocation base required");}
-  let index=self.regions.iter().position(|r|r.pointer.cap==p.cap&&r.heap).ok_or("CRT allocation ownership")?;let root=self.regions[index].pointer;self.reserve_retirement()?;
+  self.valid(p,0)?;if !matches!(p.kind,CrtRegionKind::Buffer|CrtRegionKind::Descriptor)||p.address!=p.base{return Err("CRT allocation base required");}
+  let index=self.regions.iter().position(|r|r.pointer.cap==p.cap&&r.heap).ok_or("CRT allocation ownership")?;let root=self.regions[index].pointer;
+  if p.base!=root.base||(p.kind==CrtRegionKind::Descriptor&&p.size!=root.size)||self.record_objects.iter().any(|r|r.cap==p.cap)||self.record_locks.iter().any(|l|l.record.cap==p.cap)||self.descriptors.iter().any(|d|d.live&&d.record.is_some_and(|r|r.cap==p.cap)){return Err("CRT allocation incomplete/live record ownership");}self.reserve_retirement()?;
   self.memory.heap_free(self.memory.process_heap(),0,p.base).map_err(|_|"CRT allocation lifetime")?;self.regions.remove(index);self.retired.push(root);
   self.tags.retain(|&at,_|at<root.base||u64::from(at)>=u64::from(root.base)+u64::from(root.size));self.partial.retain(|&at,_|at<root.base||u64::from(at)>=u64::from(root.base)+u64::from(root.size));Ok(())
  }
@@ -302,7 +350,7 @@ impl CrtStreamRuntime {
   self.descriptor_identity(id)?;if self.initialization.is_none()&&self.shutdown.is_none()&&!self.descriptor_locks.iter().any(|l|l.id==id){return Err("CRT exact descriptor lock required");}Ok(())
  }
  fn lock_descriptor(&mut self,thread:u64,id:CrtDescriptorId)->Result<CrtDescriptorLock,&'static str>{
-  self.descriptor_identity(id)?;if thread!=self.thread||self.descriptor_locks.len()>=32{return Err("CRT descriptor lock thread/budget");}
+  self.descriptor_identity(id)?;if let Some(p)=self.descriptors.iter().find(|d|d.id==id).and_then(|d|d.record){if self.regions.iter().any(|r|r.heap&&r.pointer.cap==p.cap){self.record_lock_live(p)?;}}if thread!=self.thread||self.descriptor_locks.len()>=32{return Err("CRT descriptor lock thread/budget");}
   let serial=self.serial.checked_add(1).ok_or("CRT descriptor lock generation")?;
   let lease=CrtDescriptorLock{anchor:self.anchor,thread,serial,depth:self.descriptor_locks.len(),id};self.descriptor_locks.push(lease);self.serial=serial;Ok(lease)
  }
@@ -314,6 +362,7 @@ impl CrtStreamRuntime {
  fn claim_descriptor_record(&mut self,thread:u64,id:CrtDescriptorId,record:CrtPointer)->Result<CrtDescriptorLock,&'static str>{
   self.descriptor_identity(id)?;self.identity_range(record,56)?;
   if record.kind!=CrtRegionKind::Descriptor||record.address%4!=0||self.descriptors.iter().any(|d|d.record.is_some_and(|p|p.cap==record.cap&&u64::from(p.address)<u64::from(record.address)+56&&u64::from(record.address)<u64::from(p.address)+56))||self.descriptors.iter().any(|d|d.id==id&&d.record.is_some()){return Err("CRT descriptor record alias/role");}
+  if self.regions.iter().any(|r|r.heap&&r.pointer.cap==record.cap){self.record_lock_live(record)?;}
   let lease=self.lock_descriptor(thread,id)?;
   self.descriptors.iter_mut().find(|d|d.id==id).ok_or("CRT descriptor identity")?.record=Some(record);Ok(lease)
  }
@@ -334,7 +383,7 @@ impl CrtStreamRuntime {
   if self.load(self.offset(record,40)?,8)?.known_scalar()?!=0x81||self.load(self.offset(record,41)?,8)?.known_scalar()?!=0{return Err("CRT descriptor is not owned open nonappend narrow text");}Ok(record)
  }
  fn write_once(&mut self,id:CrtDescriptorId,source:CrtPointer,count:u32,backend:&mut impl CrtBackend)->Result<CrtWriteResult,&'static str>{
-  self.descriptor(id)?;if count>16384{return Err("CRT WriteFile source budget");}self.valid(source,count)?;
+  self.descriptor(id)?;if count>16384{return Err("CRT WriteFile source budget");}self.valid(source,count)?;self.ordinary_file_bytes(source,count)?;
   if !self.overlapping_tags(source.address,count).is_empty(){return Err("CRT WriteFile exposes typed object bytes");}
   let bytes=if count==0{&[][..]}else{self.memory.read(source.address,count).map_err(|_|"CRT WriteFile initialized full range")?};
   let outcome=backend.write_once(id,bytes)?;
@@ -444,6 +493,48 @@ for result in [0,1,7,u32::MAX]{
 let(mut r,init)=CrtStreamRuntime::new_initializing(1,2,0x5000,32768).unwrap();let f=r.file();let p=r.offset(f,32).unwrap();let(_,foreign)=CrtStreamRuntime::new_initializing(1,2,0x5000,32768).unwrap();
 assert!(r.construct_lock_result(foreign,p,0,1).is_err());assert!(r.construct_lock_result(init,r.offset(p,4).unwrap(),0,1).is_err());assert!(r.construct_lock_result(init,r.subrange(p,20).unwrap(),0,1).is_err());assert!(r.construct_lock_result(init,p,1,1).is_err());
 r.store(p,32,CrtValue::Pointer(f)).unwrap();assert!(r.construct_lock_result(init,p,0,1).is_err());assert_eq!(r.load(p,32).unwrap(),CrtValue::Pointer(f));assert!(r.lock_objects.is_empty());
+"#,
+        );
+    }
+
+    #[test]
+    fn descriptor_allocations_and_locks_preserve_identity_before_handle_binding() {
+        native(
+            r#"
+let(mut r,init)=CrtStreamRuntime::new_initializing(1,2,0x4000,32768).unwrap();
+let(mut foreign,other)=CrtStreamRuntime::new_initializing(1,2,0x4000,32768).unwrap();
+assert!(r.alloc_descriptor_block(other,2,true).is_err());for n in [0,65,u32::MAX]{assert!(r.alloc_descriptor_block(init,n,true).is_err());}
+let before=r.regions.len();assert!(r.alloc_descriptor_block(init,2,false).unwrap().is_none());assert_eq!(r.regions.len(),before);
+let block=r.alloc_descriptor_block(init,3,true).unwrap().unwrap();let second=r.offset(block,56).unwrap();let third=r.offset(block,112).unwrap();
+assert!(r.claim_file_buffer(block,0x4000).is_err());assert!(r.valid(CrtPointer{kind:CrtRegionKind::Buffer,..block},4).is_err());assert!(r.free_initialization(init,r.subrange(block,56).unwrap()).is_err());assert!(r.lock_record(2,block).is_err());
+for invalid in [r.offset(block,4).unwrap(),r.subrange(block,24).unwrap(),r.file()]{assert!(r.construct_record_lock_result(init,invalid,0,1).is_err());}
+assert!(r.construct_record_lock_result(other,block,0,1).is_err());assert!(r.construct_record_lock_result(init,block,1,1).is_err());
+r.store(block,32,CrtValue::Pointer(second)).unwrap();assert!(r.construct_record_lock_result(init,block,0,1).is_err());assert_eq!(r.load(block,32).unwrap(),CrtValue::Pointer(second));r.store(block,32,CrtValue::scalar(9)).unwrap();
+assert!(!r.construct_record_lock_result(init,third,0,0).unwrap());assert!(r.lock_record(2,third).is_err());assert!(r.load(third,32).unwrap().known_scalar().is_err());
+assert!(r.construct_record_lock_result(init,block,0,1).unwrap());assert!(r.construct_record_lock_result(init,second,0,7).unwrap());assert!(r.construct_record_lock_result(init,block,0,1).is_err());
+assert!(r.load(block,8).is_err());assert!(r.store(r.offset(block,23).unwrap(),16,CrtValue::scalar(0)).is_err());assert!(r.construct_lock_result(init,r.offset(block,32).unwrap(),0,1).is_err());assert!(foreign.lock_record(2,block).is_err());assert!(r.lock_record(3,block).is_err());
+let a=r.lock_record(2,block).unwrap();let b=r.lock_record(2,second).unwrap();assert!(r.unlock_record(a).is_err());assert!(r.destroy_record_lock(init,block).is_err());assert!(r.end_initialization(init).is_err());assert!(r.free_initialization(init,block).is_err());r.unlock_record(b).unwrap();r.unlock_record(a).unwrap();assert!(r.unlock_record(a).is_err());
+let id=r.bind_descriptor(0,44).unwrap();let dl=r.claim_descriptor_record(2,id,block).unwrap();assert!(r.destroy_record_lock(init,block).is_err());r.unlock_descriptor(dl).unwrap();assert!(r.destroy_record_lock(init,block).is_err());
+r.construct_lock(init,r.file()).unwrap();let fl=r.lock(2).unwrap();let dl=r.lock_descriptor(2,id).unwrap();r.store(r.offset(block,24).unwrap(),32,CrtValue::Handle(id)).unwrap();r.store(r.offset(block,40).unwrap(),8,CrtValue::scalar(0x81)).unwrap();r.store(r.offset(block,41).unwrap(),8,CrtValue::scalar(0)).unwrap();r.bind_descriptor_record(fl,id,block).unwrap();assert_eq!(r.require_narrow_descriptor(id).unwrap(),block);
+struct Backend;impl CrtBackend for Backend{fn write_once(&mut self,_:CrtDescriptorId,_:&[u8])->Result<CrtWriteResult,&'static str>{panic!("opaque lock escaped");}fn close_once(&mut self,_:CrtDescriptorId)->Result<bool,&'static str>{Ok(true)}}
+assert!(r.write_once(id,block,1,&mut Backend).is_err());assert!(r.close_once(id,&mut Backend).unwrap());assert!(r.destroy_record_lock(init,block).is_err());r.unlock_descriptor(dl).unwrap();r.unlock(fl).unwrap();r.destroy_record_lock(init,block).unwrap();r.destroy_record_lock(init,second).unwrap();assert!(r.destroy_record_lock(init,second).is_err());r.free_initialization(init,block).unwrap();assert!(r.offset(block,0).is_err());assert!(r.lock_record(2,second).is_err());assert!(r.construct_record_lock_result(init,second,0,1).is_err());
+let fresh=r.alloc_descriptor_block(init,2,true).unwrap().unwrap();assert_ne!(fresh.cap,block.cap);
+// A record lease authorizes exactly its slot after exclusive initialization ends.
+r.construct_record_lock_result(init,fresh,0,1).unwrap();r.end_initialization(init).unwrap();assert!(r.load(r.offset(fresh,24).unwrap(),32).is_err());let lease=r.lock_record(2,fresh).unwrap();assert_eq!(r.load(r.offset(fresh,24).unwrap(),32).unwrap(),CrtValue::scalar(0));assert!(r.load(r.offset(fresh,56+24).unwrap(),32).is_err());assert!(r.load(r.offset(fresh,54).unwrap(),32).is_err());r.unlock_record(lease).unwrap();assert!(r.load(r.offset(fresh,24).unwrap(),32).is_err());
+"#,
+        );
+    }
+
+    #[test]
+    fn effective_addresses_never_expand_memory_or_transport_authority() {
+        native(
+            r#"
+let(mut r,init)=CrtStreamRuntime::new_initializing(1,2,0x4000,32768).unwrap();let p=r.alloc_descriptor_block(init,2,true).unwrap().unwrap();
+let neighbour=r.map_region(p.address+112,64,CrtRegionKind::Result,Some(&[23;64])).unwrap();let beyond=r.effective_address(p,p.address+144).unwrap();
+assert!(r.load(beyond,32).is_err());assert!(r.store(beyond,32,CrtValue::scalar(9)).is_err());assert!(r.pointer_transport(beyond).is_err());assert!(r.offset(p,144).is_err());assert!(r.free_initialization(init,beyond).is_err());
+let back=r.effective_address(beyond,p.address+80).unwrap();assert_eq!(r.load(back,32).unwrap(),CrtValue::scalar(0));assert_eq!(r.load(neighbour,8).unwrap(),CrtValue::scalar(23));
+let narrow=r.subrange(p,56).unwrap();let escaped=r.effective_address(narrow,p.address+80).unwrap();assert!(r.load(escaped,8).is_err());assert!(r.effective_address(CrtPointer{kind:CrtRegionKind::Buffer,..p},p.address).is_err());
+r.free_initialization(init,p).unwrap();assert!(r.effective_address(beyond,p.address).is_err());assert!(r.load(back,32).is_err());
 "#,
         );
     }

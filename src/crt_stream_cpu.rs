@@ -22,6 +22,9 @@ impl CrtCpu{
  /// base (or an explicitly bound image displacement) can supply authority;
  /// wrapping index arithmetic never manufactures a different capability.
  fn address(&self,rt:&CrtStreamRuntime,base:Option<usize>,index:Option<usize>,scale:u32,displacement:u32,absolute:Option<CrtRegionKind>)->Result<CrtPointer,&'static str>{
+  let p=self.form_address(rt,base,index,scale,displacement,absolute)?;rt.identity_range(p,0)?;Ok(p)
+ }
+ fn form_address(&self,rt:&CrtStreamRuntime,base:Option<usize>,index:Option<usize>,scale:u32,displacement:u32,absolute:Option<CrtRegionKind>)->Result<CrtPointer,&'static str>{
   if !matches!(scale,1|2|4|8){return Err("CRT address scale");}
   let (p,extra)=if let Some(b)=base{
    match self.r[b]{
@@ -31,7 +34,7 @@ impl CrtCpu{
       else{return Err("CRT scalar address lacks provenance");}}
    }
   }else{let p=rt.resolve_absolute(displacement,absolute.ok_or("CRT unbound absolute role")?)?;let extra=if let Some(i)=index{if matches!(self.r[i],CrtValue::Pointer(_)){return Err("CRT absolute index adds pointer");}Self::number(self.r[i])?.wrapping_mul(scale)}else{0};(p,extra)};
-  let address=p.address().wrapping_add(extra);rt.offset(p,i64::from(address)-i64::from(p.address()))
+  let address=p.address().wrapping_add(extra);rt.effective_address(p,address)
  }
  fn push(&mut self,rt:&mut CrtStreamRuntime,v:CrtValue)->Result<(),&'static str>{let p=rt.offset(Self::pointer(self.r[4])?,-4)?;rt.store(p,32,v)?;self.r[4]=CrtValue::Pointer(p);Ok(())}
  fn pop(&mut self,rt:&mut CrtStreamRuntime)->Result<CrtValue,&'static str>{let p=Self::pointer(self.r[4])?;let v=rt.load(p,32)?;rt.consume_stack(p,v)?;self.r[4]=CrtValue::Pointer(rt.offset(p,4)?);Ok(v)}
@@ -127,7 +130,7 @@ impl CrtCpu{
  /// LEA with a real capability keeps it. Scalar address bits stay scalar even
  /// if their numeric value coincides with a mapped region: no provenance mint.
  fn lea(&self,rt:&CrtStreamRuntime,base:Option<usize>,index:Option<usize>,scale:u32,displacement:u32,absolute:Option<CrtRegionKind>)->Result<CrtValue,&'static str>{
-  if base.is_some_and(|r|matches!(self.r[r],CrtValue::Pointer(_)))||index.is_some_and(|r|matches!(self.r[r],CrtValue::Pointer(_)))||base.is_none()&&absolute.is_some(){return Ok(CrtValue::Pointer(self.address(rt,base,index,scale,displacement,absolute)?));}
+  if base.is_some_and(|r|matches!(self.r[r],CrtValue::Pointer(_)))||index.is_some_and(|r|matches!(self.r[r],CrtValue::Pointer(_)))||base.is_none()&&absolute.is_some(){return Ok(CrtValue::Pointer(self.form_address(rt,base,index,scale,displacement,absolute)?));}
   if !matches!(scale,1|2|4|8){return Err("CRT LEA scale");}
   let a=base.map(|r|self.r[r]).unwrap_or(CrtValue::scalar(0));
   let b=if let Some(r)=index{let(bits,known)=Self::bits(self.r[r])?;let shift=scale.trailing_zeros();CrtValue::Scalar{bits:bits.wrapping_shl(shift),known:known.wrapping_shl(shift)|(scale-1)}}else{CrtValue::scalar(0)};

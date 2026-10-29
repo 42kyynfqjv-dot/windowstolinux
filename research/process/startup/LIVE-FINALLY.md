@@ -1389,3 +1389,85 @@ or whole-PE translations were added. PE SHA256 remains
 `1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4`;
 generated wrapper Rust SHA256 is
 `d470d50085cbed3e52c08ca11b4b8bbdfeaa8abf618e00b798284a021f4341cb`.
+
+## Descriptor allocation, distinct lock lifetime and connected original bodies
+
+The private CRT memory kernel now issues a descriptor role at allocation time,
+before exposing the capability. It does not relabel an escaped Buffer pointer.
+The bounded request is 1..64 records of 56 bytes with checked heap availability
+and zero initialization supplied by the calloc effect contract. The constructor's
+actual calloc helper also has new-handler and errno paths; those complete effects
+remain unbound. Null-return tests are component boundaries, not complete helper
+failure equivalence.
+
+Descriptor critical sections occupy offset 0..24, unlike FILE offset 32..56.
+Construction consumes a checked external BOOL outcome and forgets opaque bytes;
+FALSE creates no lock. Record locks have runtime/capability/thread/serial identity
+independent of a not-yet-imported handle. Record access after initialization needs
+the exact record lease or existing exact descriptor lease. Lock destruction and
+allocation release reject live leases/bindings; a descriptor allocation must be
+released through its full root. Existing base-pointer Buffer free behavior remains
+unchanged. Opaque lock bytes cannot become ordinary loads, stores or output bytes.
+
+The unchanged constructor `40be7a..40bef5` and destructor `40bef5..40bf2a` now run
+through the shared decoder/emitter and protected calls. The produced block feeds
+the original inherited parser and standard-handle initializer in the same runtime.
+Four component schedules cover full construction/import/destruction, null allocation,
+second-lock failure retaining the first record's writes, and destruction blocked
+at a live second-record lease after the first lock has already been destroyed.
+The original constructor ignores the lock API BOOL; continuation after FALSE is
+still explicitly rejected, not substituted with an invented original return.
+The manager/table publication/global-lock effects remain declared component inputs.
+
+Original constructor address traversal briefly creates an address 32 bytes beyond
+the block before subtracting back. `LEA` now retains capability/subrange identity
+through such address calculation. Ordinary effective addresses still validate
+range, and every load/store validates its full width. Out-of-range pointer storage,
+neighbour-allocation access, foreign role and stale lifetime remain rejected.
+The existing signed-index memory rejection test remains unchanged and passes.
+Unknown entry ECX is an explicit volatile scalar, not a protected saved-register
+slot or a fabricated zero.
+
+Two independent native regression functions cover count/resource limits, failed
+allocation atomicity, typed alias rejection, distinct FILE/descriptor offsets,
+foreign tokens, unknown opaque bytes, duplicate construction, ordered/stale leases,
+handle binding, close/destruction/free ordering, exact slot boundaries, adjacent
+regions, narrowed subranges and stale computed addresses. The original four-case
+composition is additional component evidence; it supplies no new Windows pairs.
+
+Local verification: 180 CRT tests passed (one recorded-observation test run
+separately by the artifact checker), 180 frame/unwind tests and 175 root tests
+passed. The five existing recorded Windows boundary comparisons replayed. Full
+formatter/startup/rcedit admission remains rejected; whole-PE pairs remain zero.
+The unchanged PE hash is
+`1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4`;
+new generated wrapper Rust hash is
+`5e3ac4dbfe36db78e5719e9bd7083b5a253e97db0e566dc6a5e25f9159c59e5f`.
+Constructor hash `ed3f4e10179a221e87069b15899a9a8f57b49cc8b3c7e78da2c81dfdff1e03ba`
+and destructor hash `adf905229815b123eeba9374e8e869b070327b72bbbb884fbb55ec5f7cf72042`
+are checked against the original PE, including DeleteCriticalSection import identity.
+
+### Projection failure measurement, with failure preserved
+
+For `c44f2a3`, both full Rust workflows 40909024429/40909012580 passed. Startup
+40909012601 failed the unchanged 15-second owned projection batch, job 123574640413;
+all its other jobs passed. The uploaded artifact 12914070783 has ZIP SHA256
+`2f7dc5316a1d0bc1092c952b897f0315d0e5a0c7ccdb57f77d527ea4abaf7c5b`.
+Its original timing records and provenance are retained in
+[evidence/projection-c44f2a3](evidence/projection-c44f2a3/).
+The batch completed cases 0..198 and started 199 at timeout. Completed durations
+sum to 14.938595 seconds; the largest was 0.194904 seconds (case 196). This is
+observed aggregate budget exhaustion with ongoing progress, not evidence that one
+case hung. It does not explain the original-Windows process-exit timeouts.
+
+The projection harness now compiles with `-Copt-level=1`, explicitly retaining
+`-Coverflow-checks=yes` and `-Cdebug-assertions=yes`. Every case, assertion, checked
+memory operation, 15-second deadline and fail-on-timeout rule remains. A controlled
+local run of the same saved c44 generated source completed all 202 cases in
+1.516212 seconds. This is a measured harness performance change, not a retry erasing
+the prior failure. Build commands and per-case output continue to be retained.
+
+Earlier `a5db451` push CI 40906539904 passed; PR CI 40906552121 failed the imported
+output original-Windows fixture at its 15-second process timeout (job 123562781377).
+That failure and startup projection failure 40906539916 remain in the history.
+No claim that either historical timeout family has been generally eliminated.

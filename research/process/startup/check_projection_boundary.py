@@ -56,7 +56,13 @@ println!("projected=-2 live=0 suspended=true");'''
     file = output/'projection-probe.rs'
     file.write_text(text)
     binary = output/'projection-probe'
-    subprocess.run(['rustc', '--edition=2021', '-Awarnings', str(file), '-o', str(binary)], check=True)
+    # The retained unoptimized failure completed 199/202 cases in 15 seconds.
+    # Optimize the batch while retaining debug/overflow checks, every case and
+    # the original timeout. No retry or altered failure classification.
+    build = ['rustc', '--edition=2021', '-Awarnings', '-Copt-level=1',
+             '-Coverflow-checks=yes', '-Cdebug-assertions=yes', str(file), '-o', str(binary)]
+    (output/'build-command.json').write_text(json.dumps(build)+'\n')
+    subprocess.run(build, check=True)
     result = subprocess.run([str(binary.resolve()), 'pending'], capture_output=True, check=True, timeout=15)
     if result.stdout.splitlines() != [b'projected=-2 live=0 suspended=true']*2 or result.stderr:
         raise ValueError('projection boundary expectations differ')

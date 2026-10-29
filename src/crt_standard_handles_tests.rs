@@ -41,8 +41,7 @@ for (kind,want,valid) in [(1,0x81,true),(2,0xc1,true),(3,0x89,true),(0x8002,0xc1
     );
 }
 
-#[test]
-fn original_inherited_records_feed_standard_initialization_with_checked_bounds() {
+fn inherited_source() -> String {
     let inherited:Vec<u8>="8bff558bec83ec488d45b850ff153850410066837dea000f8491000000578b7dec85ff0f84840000008b0753568d5f04be0020000003d83bc60f4cf056e8b13900003b3508d14100590f4f3508d141008975fc33f68b45fc85c0744f833bff7442833bfe743d8a4c3e04f6c1017434f6c108750cff33ff15bc50410085c074208bc68bce83e03fc1f9066bd0388b0303148d08cf41008942188a443e048842288b45fc4683c3043bf075b15e5b5fc9c3".as_bytes().chunks_exact(2).map(|x|u8::from_str_radix(std::str::from_utf8(x).unwrap(),16).unwrap()).collect();
     let graph = Graph::decode(&inherited, 0x408537).unwrap();
     let body=crt_stream_emit::emit_body(&graph,|pc,target|{
@@ -55,7 +54,11 @@ fn original_inherited_records_feed_standard_initialization_with_checked_bounds()
  let pop=if target==Target::Direct(0x40bf2a){0}else{4};
  Ok(format!("cpu.call_activation(rt,{next},{pop},|rt,child|{{let sp=CrtCpu::pointer(child.r[4])?;child.clobber(CrtValue::Scalar{{bits:0,known:0}});{code}}})?;"))
  },&std::collections::BTreeMap::from([(0x41cf08,"CrtRegionKind::Module".into()),(0x41d108,"CrtRegionKind::Module".into())]),4096).unwrap();
-    let extra=format!("{}\nfn inherit(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,serialized:CrtPointer,disabled:bool,allocations:&mut Vec<u32>,queries:&mut Vec<u32>)->Result<CrtValue,&'static str>{{{body}}}",standard_source());
+    format!("{}\nfn inherit(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,serialized:CrtPointer,disabled:bool,allocations:&mut Vec<u32>,queries:&mut Vec<u32>)->Result<CrtValue,&'static str>{{{body}}}",standard_source())
+}
+#[test]
+fn original_inherited_records_feed_standard_initialization_with_checked_bounds() {
+    let extra = inherited_source();
     super::crt_stream_callees_tests::native(
         &extra,
         r#"
@@ -126,5 +129,55 @@ let mut rt=CrtStreamRuntime::new(1,2,0x4000,32768).unwrap();let p=rt.map_region(
 assert!(greater(&mut rt,&mut c).is_err());assert!(!c.returned);assert_eq!(rt.load(s,32).unwrap(),CrtValue::ProtectedReturn(1));c.flags=CrtFlags::unknown();assert!(unknown(&mut rt,&mut c).is_err());assert!(word(&mut rt,&mut c).is_err());assert!(!c.returned);
 "#,
         "word-and-signed",
+    );
+}
+
+#[test]
+fn original_descriptor_construction_connects_inheritance_and_destruction() {
+    let descriptor_constructor:Vec<u8>="8bff558bec515153566a386a40e864beffff8bf033db8975f8595985f675048bf3eb4b8d86000e00003bf07441578d7e208bf05368a00f00008d47e050e8bdc1ffff834ff8ff80670df8891f8d7f38895fcc8d47e0c747d000000a0ac647d40a895fd6885fda3bc675c98b75f85f53e862beffff598bc65e5bc9c3".as_bytes().chunks_exact(2).map(|x|u8::from_str_radix(std::str::from_utf8(x).unwrap(),16).unwrap()).collect();
+    let descriptor_destructor:Vec<u8>="8bff558bec568b750885f67425538d9e000e0000578bfe3bf3740e57ff155450410083c7383bfb75f256e82cbeffff595f5b5e5dc3".as_bytes().chunks_exact(2).map(|x|u8::from_str_radix(std::str::from_utf8(x).unwrap(),16).unwrap()).collect();
+    let mut extra = inherited_source();
+    for (bytes, entry, name) in [
+        (&descriptor_constructor, 0x40be7a, "construct"),
+        (&descriptor_destructor, 0x40bef5, "destroy"),
+    ] {
+        let graph = Graph::decode(bytes, entry).unwrap();
+        let body=crt_stream_emit::emit_body(&graph,|pc,target|{
+            let next=pc+graph.nodes[&pc].length;
+            let (pop,code)=match target {
+                Target::Direct(0x407cf0)=>(0,"let n=rt.load(rt.offset(sp,4)?,32)?.known_scalar()?;let size=rt.load(rt.offset(sp,8)?,32)?.known_scalar()?;if size!=56{return Err(\"descriptor allocator element size\");}child.r[0]=match rt.alloc_descriptor_block(init,n,available)?{Some(p)=>{*allocated=Some(p);CrtValue::Pointer(p)},None=>CrtValue::scalar(0)};child.finish(rt)"),
+                Target::Direct(0x408079)=>(12,"let p=CrtCpu::pointer(rt.load(rt.offset(sp,4)?,32)?)?;if rt.load(rt.offset(sp,8)?,32)?.known_scalar()?!=4000{return Err(\"descriptor spin count\");}let flags=rt.load(rt.offset(sp,12)?,32)?.known_scalar()?;let result=if *calls==fail_at{0}else{1};*calls+=1;if !rt.construct_record_lock_result(init,p,flags,result)?{return Err(\"original continuation after failed lock is unclosed\");}child.r[0]=CrtValue::scalar(result);child.finish_pop(rt,12)"),
+                Target::Import(0x415054)=>(4,"let p=CrtCpu::pointer(rt.load(rt.offset(sp,4)?,32)?)?;rt.destroy_record_lock(init,p)?;*calls+=1;child.finish_pop(rt,4)"),
+                Target::Direct(0x407d50)=>(0,"match rt.load(rt.offset(sp,4)?,32)?{CrtValue::Scalar{bits:0,known:u32::MAX}=>{},CrtValue::Pointer(p)=>rt.free_initialization(init,p)?,_=>return Err(\"free provenance\")};child.finish(rt)"),
+                _=>return Err("descriptor call unbound".into()),
+            };
+            Ok(format!("cpu.call_activation(rt,{next},{pop},|rt,child|{{let sp=CrtCpu::pointer(child.r[4])?;child.clobber(CrtValue::Scalar{{bits:0,known:0}});{code}}})?;"))
+        },&Default::default(),8192).unwrap();
+        extra.push_str(&format!("fn {name}(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,init:CrtInitialization,available:bool,fail_at:usize,calls:&mut usize,allocated:&mut Option<CrtPointer>)->Result<CrtValue,&'static str>{{{body}}}"));
+    }
+    super::crt_stream_callees_tests::native(
+        &extra,
+        r#"
+for fault in 0..4 {
+ let(mut rt,init)=CrtStreamRuntime::new_initializing_array(1,2,0x4000,3,32768).unwrap();
+ let stack=rt.map_region(0xa000,4096,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,3072).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(1)).unwrap();let mut cpu=CrtCpu::new(sp,1).unwrap();cpu.r[1]=CrtValue::Scalar{bits:0,known:0};let saved=cpu.r;let(mut calls,mut allocated)=(0,None);
+ let result=construct(&mut rt,&mut cpu,init,fault!=1,if fault==2{1}else{usize::MAX},&mut calls,&mut allocated);
+ if fault==1{assert_eq!(result.unwrap(),CrtValue::scalar(0));assert!(cpu.returned);assert_eq!(calls,0);assert!(allocated.is_none());continue;}
+ let block=allocated.unwrap();assert_eq!(block.kind,CrtRegionKind::Descriptor);
+ if fault==2{assert!(result.is_err());assert!(!cpu.returned);assert_eq!(calls,2);assert_eq!(rt.record_objects.len(),1);assert_eq!(rt.load(rt.offset(block,24).unwrap(),32).unwrap(),CrtValue::scalar(u32::MAX));assert!(rt.load(rt.offset(block,56).unwrap(),32).unwrap().known_scalar().is_err());assert!(rt.free_initialization(init,block).is_err());continue;}
+ assert_eq!(result.unwrap(),CrtValue::Pointer(block));assert_eq!(calls,64);for r in [3,5,6,7]{assert_eq!(cpu.r[r],saved[r]);}
+ for i in 0..64 {let record=rt.offset(block,i*56).unwrap();assert!(rt.load(record,8).is_err());for(offset,width,value)in[(24,32,u32::MAX),(32,32,0),(36,32,0),(40,32,0x0a0a0000),(44,8,10),(46,32,0),(50,8,0)]{assert_eq!(rt.load(rt.offset(record,offset).unwrap(),width).unwrap(),CrtValue::scalar(value));}}
+ let dt=rt.map_region(0x41cf08,4,CrtRegionKind::Module,None).unwrap();rt.store(dt,32,CrtValue::Pointer(block)).unwrap();rt.map_region(0x41d108,4,CrtRegionKind::Module,Some(&64u32.to_le_bytes())).unwrap();rt.map_region(0x41cd30,4,CrtRegionKind::Module,Some(&[0;4])).unwrap();
+ let ids=[rt.bind_descriptor(0,44).unwrap(),rt.bind_descriptor(1,45).unwrap(),rt.bind_descriptor(2,46).unwrap()];
+ let serialized=rt.map_region(0x9000,19,CrtRegionKind::Result,None).unwrap();rt.store(serialized,32,CrtValue::scalar(3)).unwrap();for(i,f)in[1,9,1].into_iter().enumerate(){rt.store(rt.offset(serialized,4+i as i64).unwrap(),8,CrtValue::scalar(f)).unwrap();}
+ for(i,v)in[CrtValue::Handle(ids[0]),CrtValue::Handle(ids[1]),CrtValue::scalar(u32::MAX)].into_iter().enumerate(){rt.store(rt.offset(serialized,7+i as i64*4).unwrap(),32,v).unwrap();}
+ rt.store(sp,32,CrtValue::ProtectedReturn(2)).unwrap();let mut cpu=CrtCpu::new(sp,2).unwrap();let(mut alloc,mut queries)=(vec![],vec![]);inherit(&mut rt,&mut cpu,serialized,false,&mut alloc,&mut queries).unwrap();assert_eq!(queries,[0]);assert_eq!(alloc,[3]);
+ rt.store(sp,32,CrtValue::ProtectedReturn(3)).unwrap();let mut cpu=CrtCpu::new(sp,3).unwrap();let mut events=vec![];original(&mut rt,&mut cpu,[CrtValue::Scalar{bits:0,known:0},CrtValue::Scalar{bits:0,known:0},CrtValue::Handle(ids[2])],[CrtValue::Scalar{bits:0,known:0},CrtValue::Scalar{bits:0,known:0},CrtValue::scalar(3)],&mut events).unwrap();assert_eq!(events,[(0,2),(1,2)]);for(i,want)in[0x81,0x89,0x89].into_iter().enumerate(){assert_eq!(rt.load(rt.offset(block,i as i64*56+40).unwrap(),8).unwrap(),CrtValue::scalar(want));}
+ let held=if fault==3{Some(rt.lock_record(2,rt.offset(block,56).unwrap()).unwrap())}else{None};
+ rt.store(sp,32,CrtValue::ProtectedReturn(4)).unwrap();rt.store(rt.offset(sp,4).unwrap(),32,CrtValue::Pointer(block)).unwrap();let mut cpu=CrtCpu::new(sp,4).unwrap();calls=0;let result=destroy(&mut rt,&mut cpu,init,true,usize::MAX,&mut calls,&mut allocated);
+ if let Some(held)=held{assert!(result.is_err());assert_eq!(calls,1);assert_eq!(rt.record_objects.len(),63);assert!(rt.load(rt.offset(block,24).unwrap(),32).is_ok());rt.unlock_record(held).unwrap();assert!(!cpu.returned);}else{result.unwrap();assert_eq!(calls,64);assert!(rt.record_objects.is_empty());assert!(rt.offset(block,0).is_err());assert!(rt.free_initialization(init,block).is_err());}
+}
+"#,
+        "descriptor-construction",
     );
 }
