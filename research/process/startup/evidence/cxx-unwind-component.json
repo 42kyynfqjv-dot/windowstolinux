@@ -1,12 +1,12 @@
 {
   "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
-  "rust_sha256": "bf5d3d377c0a894e7de001f85ce1f5938765b132d4ddf343e8e52a0be938d82e",
-  "unwind_binding_source_sha256": "065fad6cf9b6f035084be0f63130393351b7e684f89327edb6a8dfce676c9fe0",
+  "rust_sha256": "2f3cd95ce33732ebdb1745c567f68d49c37c580c114a0c2796ca9eaf9671abf2",
+  "unwind_binding_source_sha256": "30d4650aed942ad0a75e691ecd7f4c4891d0468c95f91c6048a48c8e474638ca",
   "unwind_native_cases": 24,
   "unwind_new_windows_pairs": 0,
   "unwind_binding_rust_tests": 1,
-  "kind": "Registered original C++ unwind component with supplied PTD and completed-event registry; not whole-PE conversion",
-  "rust_crt_tests_passed": 210,
+  "kind": "Registered original C++ unwind with original cached PTD getter; supplied module/FLS acquisition and completed-event registry; not whole-PE conversion",
+  "rust_crt_tests_passed": 211,
   "existing_observation_test_separate": true,
   "byte_mutations_rejected": 415,
   "recorded_wrapper_pairs": 5,
@@ -21,10 +21,12 @@
     "cxx-unwind-notice_tail": "b924bf20557c8dd755a060af55fd4e2d19f5e80a265c3c28ab54f2a621485ea2"
   },
   "remaining": [
-    "actual PTD acquisition binding",
+    "actual module/export/fiber/slot acquisition",
     "pending-exception registry phase",
     "terminate40770c/abort4077ff effects",
     "exceptional funclet delivery"
   ],
-  "reproduction": "python3 research/process/startup/check_normal_wrapper.py ORIGINAL OBSERVED NEW_OUTPUT"
+  "reproduction": "python3 research/process/startup/check_normal_wrapper.py ORIGINAL OBSERVED NEW_OUTPUT",
+  "cached_unwind_native_cases": 14,
+  "cached_unwind_new_windows_pairs": 0
 }

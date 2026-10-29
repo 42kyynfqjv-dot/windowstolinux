@@ -19,7 +19,11 @@ registry, and the original FS restoration, saved-register pops and RET. The C++
 owner retains its distinct PTD-frame protocol. Its record, map and metadata are
 checked against live bytes; they are not projected back after callbacks.
 
-PTD acquisition remains an explicit provider cut. Every successful result must
+The connected cached entry now executes original required/getter4028c3/4028d1,
+lookup402bb4, guard and FlsGetValue on the live owned slot. It exposes no PTD
+provider or loader callback. The legacy provider entry is retained only for
+independent mutation/failure-order tests. Module/export and fiber/slot acquisition
+remain supplied initial contracts. Every successful result must
 be the same live ThreadData root with at least40 bytes, and its counter at+24
 must retain its known value across provider calls. The original INC/CMP/DEC
 instructions execute. The bounded initial counter domain is0..2147483646;
@@ -62,14 +66,30 @@ delivery, fresh Windows unwind observations, loader acquisition, concurrent PTD
 access, or the exceptional funclet behavior.
 
 The native harness starts from an explicitly completed-event registry fixture
-and supplies checked PTD acquisition. This is not proof that the new body can be
+and supplies module/export/fiber/slot acquisition. The connected entry executes
+the actual cached getter. This is not proof that the new body can be
 entered from a pending Windows exception. That registry-phase connection remains
 an admission gate, alongside actual delivery and termination effects.
 
 ## Next connected gate
 
-Wire the existing original cached PTD getter into this provider boundary and
-establish the normal-registry versus pending-exception activation contract.
+The cached PTD binding is connected. Fourteen additional native scenarios cover
+normal and unknown-LastError return, the pending action, null FLS result, retired
+and reused slots, unloaded modules, foreign fibers, cache miss, interior PTD
+corruption, truncated/retired PTD, changed guard, unknown and sentinel indices.
+Cache bytes, module reference count and initialization phase remain unchanged.
+A completed call cannot be replayed. Existing getter/lookup mutation checks still
+bind the original code and imports to the retained PE.
+
+The next concrete gate is a registry-phase adapter: `NormalCallEpoch::state`
+currently rejects `pending_exception.is_some()`. This correctly protects the
+interrupted normal frame. Binding an EH4 child under that epoch would require
+separate delivery-owned child authority, keeping the interrupted frame suspended,
+with independent nested-handler return, failure and restoration checks. Removing
+that check or treating the finished-event permit as pending delivery is unsound.
+This is a bounded ownership transition design suitable for Astra High if Sol
+cannot establish it from existing delivery leases. No bypass is implemented.
+
 Then execute terminate40770c's own EH4 frame and PTD+12 callback/guard contract,
 followed by abort4077ff's signal/lock/debug/exit dependencies. Cleanup exceptions
 must enter the actual scope funclets with owned delivery state; no successful

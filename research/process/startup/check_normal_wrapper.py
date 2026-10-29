@@ -332,6 +332,11 @@ def check(original, observation, out, compare=None):
     (out/'live-finally-cargo.stdout').write_bytes(finally_run.stdout)
     (out/'live-finally-cargo.stderr').write_bytes(finally_run.stderr)
     if finally_run.returncode or b'1 passed' not in finally_run.stdout: raise ValueError('original finally live field checks failed')
+    cached_unwind=subprocess.run(['cargo','test','--locked','--example','crt_stream','original_cxx_unwind_uses_cached_ptd_getter_without_loader_authority'],env=env,capture_output=True,timeout=180)
+    (out/'cxx-cached-unwind.stdout').write_bytes(cached_unwind.stdout)
+    (out/'cxx-cached-unwind.stderr').write_bytes(cached_unwind.stderr)
+    if cached_unwind.returncode or b'1 passed' not in cached_unwind.stdout:
+        raise ValueError('cached C++ unwind integration failed')
     expected = [[w['return_eax'], w['return_flags'], w['caller_stack_delta'], *w['saved']] for w in observed]
     actual = [[int(n) for n in line.split()] for line in (out/'normal-wrapper-results.txt').read_text().splitlines()]
     if actual != expected:
@@ -356,7 +361,7 @@ def check(original, observation, out, compare=None):
                   main_scope_header_sha256=sha((out/'Main-scope-header.bin').read_bytes()),
                   locale_state_evidence=locale_state_evidence(image),
                   unwind_binding_source_sha256=sha((out/'cxx-unwind-connected.rs').read_bytes()),
-                  unwind_native_cases=24, unwind_new_windows_pairs=0, unwind_binding_rust_tests=1,
+                  unwind_native_cases=24, cached_unwind_native_cases=14, cached_unwind_new_windows_pairs=0, unwind_new_windows_pairs=0, unwind_binding_rust_tests=1,
                   unwind_state_source_sha256=sha((out/'unwind-state-live.rs').read_bytes()),
                   unwind_state_native_cases=12, unwind_state_new_windows_pairs=0,
                   cached_common_source_sha256=sha((out/'cached-common-handler.rs').read_bytes()),

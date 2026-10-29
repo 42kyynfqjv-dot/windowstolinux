@@ -354,3 +354,20 @@ fn original_unwind_binding_rejects_changed_control_scope_and_actions() {
         }
     }
 }
+
+/// Connect the original required getter with cached-only resolver authority.
+/// No caller-provided lookup or loader callback can produce an unwind PTD here.
+pub(crate) fn cached_source() -> Result<String, String> {
+    let getter = crate::crt_cxx_ptd::dynamic_source(
+        &crate::crt_ptd::raw(crate::crt_cxx_ptd::GETTER),
+        &crate::crt_ptd::raw(crate::crt_cxx_ptd::REQUIRED),
+    )?;
+    Ok(format!(
+        r#"{getter}
+fn cxx_unwind_cached(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,epoch:&mut NormalCallEpoch<'_>,owner:&CrtCpu,frame:&CrtPtdFrame,record:&CrtCxxRecord,fiber:CrtFiber,slot:CrtFlsSlot)->RegistryResult<CrtValue>{{
+ epoch.state()?;cpu.validate_active(rt)?;
+ cxx_unwind_wrapper(rt,cpu,epoch,owner,frame,record,&mut |rt,child|cxx_ptd_required(rt,child,CrtResolverAccess::Cached,fiber,slot,&mut |_,_,_|Err("C++ cached unwind cannot load")))
+}}
+"#
+    ))
+}

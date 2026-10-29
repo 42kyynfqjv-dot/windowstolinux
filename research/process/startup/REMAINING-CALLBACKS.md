@@ -231,3 +231,12 @@ The PTD provider and completed-event normal registry remain explicit component
 inputs. Pending-exception entry, terminate/abort and exceptional funclets are the
 next connected gates. See [CXX-UNWIND.md](CXX-UNWIND.md) for24 native scenarios,
 original-byte checks and zero new Windows/whole-PE pairs.
+
+
+Cached unwind PTD connection: the new entry executes the original required
+getter, dynamic cached lookup/guard and owned FLS access without a provider or
+loader callback. Fourteen additional native cases retain failure and lifetime
+rejection. Module/export and fiber/slot producers remain supplied. The next
+registry gate is explicit: NormalCallEpoch::state rejects a pending exception;
+a delivery-owned child adapter must preserve suspension of the interrupted
+frame. Terminate/abort effects remain unbound. See CXX-UNWIND.md.
