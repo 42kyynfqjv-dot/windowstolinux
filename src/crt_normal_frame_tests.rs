@@ -380,7 +380,7 @@ fn owned_local_cases(){
 }
 
 fn owned_main_cases(){
- for mode in 0..168{
+ for mode in 0..172{
   let mut m=Machine::new_dispatch_known((0..if mode>=75{2}else{1}).map(|_|FrameSpec{scopes:vec![]}).collect(),0,[None;10],Some(0)).unwrap();
   let mut r=ThreadRegistry::new(m.owner(),0x8000,0xf000,&[(0x400000,0x420000)],0x41c000).unwrap();let mut rt=runtime(&r);
   let entry=rt.resolve_absolute(if mode==23||mode==32||mode==41||mode==76{0xe800}else{0xe000},CrtRegionKind::Stack).unwrap();rt.store(entry,32,CrtValue::ProtectedReturn(71)).unwrap();let cpu=CrtCpu::new(entry,71).unwrap();
@@ -669,6 +669,7 @@ fn owned_main_cases(){
         if mode==132||mode==139||mode==141||mode==147||mode>=151{assert_eq!(transferred.unwrap(),CrtValue::scalar(0x40135c));assert_eq!(view.storage.image.try_level,-2);assert!(view.storage.post_authority.is_none());assert!(post.validate(&view,&c).is_err());if mode==139{assert!(owned_post_global_caller(&mut view,&mut c,&mut post).is_err());assert_eq!(view.storage.image.try_level,-2);}assert!(!c.returned);assert_eq!(view.machine.phase,Phase::Cleanup);
          if mode>=151{
           map_selected_regions(view.rt).unwrap();
+          map_landing_context(view.rt).unwrap();
           if mode==152{view.rt.store(view.rt.resolve_absolute(0x402820,CrtRegionKind::Module).unwrap(),8,CrtValue::scalar(0x90)).unwrap();}
           if mode==153{view.rt.store(view.rt.resolve_absolute(0x402a30,CrtRegionKind::Module).unwrap(),8,CrtValue::scalar(0x90)).unwrap();}
           if mode==154{c.r[2]=CrtValue::Pointer(view.rt.resolve_absolute(delivery_target.as_ref().unwrap().image.ebp,CrtRegionKind::Stack).unwrap());}
@@ -693,7 +694,24 @@ fn owned_main_cases(){
             if mode==167{let p=view.rt.map_region(0x7000,4,CrtRegionKind::Result,None).unwrap();view.rt.store(p,32,CrtValue::Pointer(slot)).unwrap();}
             if mode==164{let p=view.rt.offset(old_entry,-4).unwrap();let v=view.rt.load(p,32).unwrap();view.rt.consume_stack(p,v).unwrap();view.rt.store(p,32,CrtValue::scalar(123)).unwrap();}
             let pivot=owned_landing_pivot(&mut view,&mut c,jump);
-            if mode==158{pivot.unwrap();assert_eq!(c.r[4],CrtValue::Pointer(view.rt.resolve_absolute(view.storage.image.esp,CrtRegionKind::Stack).unwrap()));assert!(view.storage.pair_return.is_none());assert!(view.storage.selected_jump.is_none());assert!(view.rt.load(slot,32).unwrap().known_scalar().is_err());assert!(view.rt.load(old_entry,32).unwrap().known_scalar().is_err());assert!(!c.returned);}
+            if mode==158||mode>=168{let mut ready=pivot.unwrap();assert_eq!(c.r[4],CrtValue::Pointer(view.rt.resolve_absolute(view.storage.image.esp,CrtRegionKind::Stack).unwrap()));assert!(view.storage.pair_return.is_none());assert!(view.rt.load(slot,32).unwrap().known_scalar().is_err());assert!(view.rt.load(old_entry,32).unwrap().known_scalar().is_err());assert!(!c.returned);
+             assert!(!view.rt.tags.values().any(|v|matches!(v,CrtValue::Pointer(p) if p.cap==slot.cap&&p.address()>=slot.address()&&p.address()<view.storage.image.esp)));
+             if mode==168{ready.event+=1;}
+             if mode==169{view.rt.store(view.rt.resolve_absolute(0x40135f,CrtRegionKind::Module).unwrap(),8,CrtValue::scalar(0x90)).unwrap();}
+             if mode==170{let p=view.rt.offset(ready.owner,-560).unwrap();view.rt.store(p,32,CrtValue::Pointer(slot)).unwrap();}
+             if mode==171{c.r[4]=CrtValue::scalar(ready.sp.address());}
+             let guard=view.rt.offset(ready.owner,-28).unwrap();let guard_before=view.rt.load(guard,32).unwrap();
+             let untouched=view.rt.offset(ready.owner,-744).unwrap();let untouched_before=view.rt.load(untouched,32).unwrap();
+             c.flags=CrtFlags{cf:Some(true),zf:None,sf:Some(false),of:Some(true)};
+             let before=c.r;let prepared=owned_landing_context(&mut view,&mut c,ready);
+             assert_eq!(view.rt.load(guard,32).unwrap(),guard_before);assert_eq!(view.rt.load(untouched,32).unwrap(),untouched_before);
+             assert_eq!((c.flags.cf,c.flags.zf,c.flags.sf,c.flags.of),(Some(true),None,Some(false),Some(true)));
+             if mode==158{let prepared=prepared.unwrap();assert!(view.storage.selected_jump.is_none());assert_eq!(view.rt.load(view.rt.offset(prepared.ready.owner,-752).unwrap(),32).unwrap(),CrtValue::scalar(1));assert_eq!(view.rt.load(view.rt.offset(prepared.context,176).unwrap(),32).unwrap(),CrtValue::scalar(77));assert_eq!(view.rt.load(view.rt.offset(prepared.context,196).unwrap(),32).unwrap(),CrtValue::Pointer(prepared.ready.sp));assert_eq!(view.rt.load(view.rt.offset(prepared.context,180).unwrap(),32).unwrap(),CrtValue::Pointer(prepared.ready.owner));assert_eq!(view.rt.load(view.rt.offset(prepared.context,184).unwrap(),32).unwrap(),CrtValue::Pointer(prepared.target));assert_eq!(view.machine.phase,Phase::Cleanup);assert!(c.validate_active(view.rt).is_err());
+              assert!(untouched_before.known_scalar().is_err());
+              let replay=CrtLandingReady{anchor:prepared.ready.anchor,event:prepared.ready.event,source:prepared.ready.source,owner:prepared.ready.owner,sp:prepared.ready.sp,id:prepared.ready.id};
+              assert!(owned_landing_context(&mut view,&mut c,replay).is_err());}
+             else{assert!(prepared.is_err(),"context mode {mode}");assert_eq!(c.r,before);}
+            }
             else{assert!(pivot.is_err(),"landing mode {mode}");assert_eq!(c.r,before);assert!(view.storage.pair_return.is_some());}
            }
           }else{assert!(jump.is_err());if mode!=153{assert_eq!(c.r,before);}}
@@ -1289,6 +1307,8 @@ cpu.call_activation(rt,0x402799,0,|rt,child|match target{{{cases}_=>Err("origina
         let binding=crate::unwind_bridges::NotificationBinding{target_word:0x41c074,action_word:0x41c078,frame_word:0x41c07c};
         callback_source.push_str(&crate::crt_owned_search::emit_selected(&selected,0x402820,&notification_code,0x402a30,binding).unwrap());
         let pivot=handler_bytes("original-landing-pivot.bin","8b65e8");callback_source.push_str(&crate::crt_owned_search::emit_landing_pivot(&pivot,0x40135c).unwrap());assert!(crate::crt_owned_search::emit_landing_pivot(&[0x8b,0x65,0xe4],0x40135c).is_err());
+        let context=handler_bytes("original-landing-context.bin","c78510fdffff01000000c745fcfeffffff8d8d18fdffffc781b00000004d00000089a1c400000089a9b40000008d05a51340008981b8000000");callback_source.push_str(&crate::crt_owned_search::emit_landing_context(&context,0x40135f).unwrap());let mut bad=context.clone();bad[19]^=1;assert!(crate::crt_owned_search::emit_landing_context(&bad,0x40135f).is_err());
+        callback_source.push_str(&format!("fn map_landing_context(rt:&mut CrtStreamRuntime)->RegistryResult<()>{{rt.map_region(0x40135f,{},CrtRegionKind::Module,Some(&{context:?}))?;rt.map_region(0x4013a5,1,CrtRegionKind::Module,Some(&[0x89]))?;Ok(())}}",context.len()));
         for offset in [9,24]{let mut bad=selected.clone();bad[offset]^=1;assert!(crate::crt_owned_search::emit_selected(&bad,0x402820,&notification_code,0x402a30,binding).is_err());}
         callback_source.push_str(&format!("fn map_selected_regions(rt:&mut CrtStreamRuntime)->RegistryResult<()>{{rt.map_region(0x402820,{},CrtRegionKind::Module,Some(&{selected:?}))?;rt.map_region(0x40135c,3,CrtRegionKind::Module,Some(&[0x8b,0x65,0xe8]))?;Ok(())}}",selected.len()));
         callback_source.push_str(r#"fn fixture_notify_invoke(rt:&mut CrtStreamRuntime,storage:&mut CrtOwnedStorage,record:&mut LocalRecord<'_>,target:u32,reason:u32,fault:usize)->RegistryResult<()>{

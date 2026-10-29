@@ -391,7 +391,8 @@ pub(crate) fn emit_landing_pivot(code: &[u8], origin: u32) -> Result<String, Str
     Ok(format!(
         r#"
 fn landing_pivot_instruction(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->RegistryResult<CrtValue>{{{body}}}
-fn owned_landing_pivot(frame:&mut CrtOwnedFrameView<'_>,cpu:&mut CrtCpu,jump:CrtSelectedJump)->RegistryResult<()>{{let result=(||{{
+struct CrtLandingReady{{anchor:guest_memory::Capability,event:u64,source:RegistrationId,owner:CrtPointer,sp:CrtPointer,id:u64}}
+fn owned_landing_pivot(frame:&mut CrtOwnedFrameView<'_>,cpu:&mut CrtCpu,jump:CrtSelectedJump)->RegistryResult<CrtLandingReady>{{let result=(||{{
  frame.validate()?;
  let entry=CrtCpu::pointer(jump.entry[4])?;let owner=frame.owner_frame()?;
  if jump.anchor!=frame.rt.anchor||jump.event!=frame.machine.event||jump.source!=frame.storage.id||frame.storage.selected_jump!=Some(jump.id)||frame.registry.target_ready()?!=jump.source||frame.machine.current!=frame.machine.selected||jump.owner!=owner||jump.landing.address()!={origin}||cpu.entry!=jump.entry||cpu.return_id!=jump.caller||frame.active!=jump.caller||cpu.returned||cpu.r[4]!=CrtValue::Pointer(jump.slot)||cpu.r[5]!=CrtValue::Pointer(owner)||cpu.r[6]!=CrtValue::scalar({origin}){{return Err("landing stale jump/activation");}}
@@ -414,12 +415,50 @@ fn owned_landing_pivot(frame:&mut CrtOwnedFrameView<'_>,cpu:&mut CrtCpu,jump:Crt
  // immediately executed MOV reads only the already-protected saved-ESP word.
  frame.rt.memory.forget(jump.slot.address(),n).map_err(|_|"landing retirement range")?;
  frame.rt.tags.retain(|at,_|*at<jump.slot.address()||*at>=expected.address());frame.rt.partial.retain(|at,_|*at<jump.slot.address()||*at>=expected.address());
+ // Lower scratch keeps numeric bytes, but cannot carry a dereference lease
+ // into abandoned storage when that interval is subsequently reused.
+ frame.rt.tags.retain(|_,v|!matches!(*v,CrtValue::Pointer(p) if p.cap==jump.slot.cap&&p.address()>=jump.slot.address()&&p.address()<expected.address()));
  // The original frame's exception-pair field keeps its numeric bytes, but
  // its ended handler borrow cannot retain dereference authority.
  frame.rt.tags.remove(&pair_slot.address());
- frame.storage.input=None;frame.storage.pair_return=None;frame.storage.selected_jump=None;
+ frame.storage.input=None;frame.storage.pair_return=None;
  landing_pivot_instruction(frame.rt,cpu)?;
- if cpu.r[4]!=CrtValue::Pointer(expected){{return Err("landing pivot result");}}frame.validate()?;Ok(())
+ if cpu.r[4]!=CrtValue::Pointer(expected){{return Err("landing pivot result");}}frame.validate()?;Ok(CrtLandingReady{{anchor:jump.anchor,event:jump.event,source:jump.source,owner,sp:expected,id:jump.id}})
+ }})();if result.is_err(){{frame.failed=true;}}result}}
+"#
+    ))
+}
+
+/// Original landing stores only. The following nonlocal CALL remains unbound.
+pub(crate) fn emit_landing_context(code: &[u8], origin: u32) -> Result<String, String> {
+    let expected = [
+        0xc7, 0x85, 0x10, 0xfd, 0xff, 0xff, 1, 0, 0, 0, 0xc7, 0x45, 0xfc, 0xfe, 0xff, 0xff, 0xff,
+        0x8d, 0x8d, 0x18, 0xfd, 0xff, 0xff, 0xc7, 0x81, 0xb0, 0, 0, 0, 0x4d, 0, 0, 0, 0x89, 0xa1,
+        0xc4, 0, 0, 0, 0x89, 0xa9, 0xb4, 0, 0, 0, 0x8d, 0x05, 0xa5, 0x13, 0x40, 0, 0x89, 0x81,
+        0xb8, 0, 0, 0,
+    ];
+    if code != expected {
+        return Err("landing context instruction contract".into());
+    }
+    let graph = super::crt_stream_ir::Graph::decode_linear_fragment(code, origin)?;
+    let roles = BTreeMap::from([(0x4013a5, "CrtRegionKind::Module".to_string())]);
+    let body = crt_stream_emit::emit_linear_fragment(&graph, &roles)?;
+    Ok(format!(
+        r#"
+fn landing_context_instructions(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->RegistryResult<CrtValue>{{{body}}}
+struct CrtPreparedContext{{ready:CrtLandingReady,context:CrtPointer,target:CrtPointer}}
+fn owned_landing_context(frame:&mut CrtOwnedFrameView<'_>,cpu:&mut CrtCpu,ready:CrtLandingReady)->RegistryResult<CrtPreparedContext>{{let result=(||{{
+ frame.validate()?;
+ if ready.anchor!=frame.rt.anchor||ready.event!=frame.machine.event||ready.source!=frame.storage.id||frame.storage.selected_jump!=Some(ready.id)||frame.owner_frame()?!=ready.owner||cpu.returned||cpu.r[4]!=CrtValue::Pointer(ready.sp)||cpu.r[5]!=CrtValue::Pointer(ready.owner)||frame.storage.image.try_level!= -2||frame.storage.input.is_some()||frame.storage.pair_return.is_some(){{return Err("landing context stale receipt/state");}}
+ let code=frame.rt.resolve_absolute({origin},CrtRegionKind::Module)?;for(i,b)in {code:?}.into_iter().enumerate(){{if frame.rt.load(frame.rt.offset(code,i as i64)?,8)?.known_scalar()?!=b as u32{{return Err("landing context changed code");}}}}
+ let context=frame.rt.offset(ready.owner,-744)?;frame.rt.valid(context,716)?;
+ let target=frame.rt.resolve_absolute(0x4013a5,CrtRegionKind::Module)?;
+ // Scope is already -2, so its original repeated store preserves metadata.
+ for offset in [-752,-568,-564,-560,-548]{{let p=frame.rt.offset(ready.owner,offset)?;frame.rt.valid(p,4)?;if p.address()<ready.sp.address()||p.address().checked_add(4).is_none_or(|n|n>ready.owner.address()-28)||!frame.rt.overlapping_tags(p.address(),4).is_empty(){{return Err("landing context field ownership/alias");}}}}
+ frame.storage.selected_jump=None;
+ landing_context_instructions(frame.rt,cpu)?;
+ frame.validate()?;
+ Ok(CrtPreparedContext{{ready,context,target}})
  }})();if result.is_err(){{frame.failed=true;}}result}}
 "#
     ))

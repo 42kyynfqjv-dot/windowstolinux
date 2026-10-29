@@ -741,3 +741,61 @@ provenance and a validated restoration transition; this landing receipt does not
 authorize arbitrary context stores or guest resumption.  Actual delivery
 acquisition and collided-unwind effects remain separate unresolved API gates.
 Full startup and rcedit conversion remain unsupported.
+
+### Original landing CONTEXT construction (2026-10-29)
+
+Review of `9001109` found that completed lower callback scratch could retain a
+typed pointer into the abandoned handler interval. The pivot now revokes those
+tags while preserving their numerical bytes. Live Main and external aliases
+still reject before retirement. The regression checks that no dereference
+authority into the retired interval survives, including lower scratch.
+
+The connected path now executes the original 57 bytes at `0x40135f` through the
+shared instruction decoder/emitter: handled marker, repeated scope disable,
+CONTEXT address calculation, and EAX/ESP/EBP/EIP stores. It does not substitute
+observed output. A single-use receipt from the checked saved-ESP pivot binds the
+process, event, registration, frame and saved stack pointer. Each written word
+must be within live ordinary Main storage, outside the guard/protected slots,
+and free of overlapping typed authority. Source bytes are checked at execution.
+
+Independent assertions check scalar EAX 77 and typed ESP/EBP/EIP at the Windows
+x86 CONTEXT offsets 176/196/180/184. Other context bytes remain unknown; the
+guard and flags are unchanged. Stale-event, changed-code, typed-field collision,
+scalar-forged ESP and receipt replay reject. There are 172 owned-frame native
+scenarios, including five context scenarios; these overlap the existing cleanup,
+selected-bridge and pivot scenarios and must not be added as disjoint totals.
+
+Local verification: 175 root tests and 158 CRT tests passed, with the one
+observation-dependent CRT test separately replayed by `check_normal_wrapper.py`.
+Formatting, Clippy and the projection regression checker passed. The unchanged
+PE SHA256 is `1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4`;
+the extracted context block SHA256 is
+`988ea57d977dd3965f777c5ee431dc1a17c2320956c2200ec4cae3f06b483e94`;
+generated Rust SHA256 is
+`7b71b8025bbb2b9b8d142b27ab6d3b1109af950c277c96e61212ea6b835504b4`.
+The five wrapper observations replay prior recorded Windows evidence. They are
+not five new original-Windows executions or context-restoration comparisons.
+
+The boundary remains before `PUSH ECX; CALL 0x401250`. The existing handler CPU
+cannot validate its active CALL after that CALL root was retired, and the test
+requires that rejection. A prepared context is not permission to resume guest
+execution. Only the context fields written by the original instructions are
+initialized; this is not a captured complete Windows CONTEXT. The selected
+target is bound as an image pointer, not yet certified as an executed continuation.
+
+The next connected gate is a normal-frame continuation bound to Main's still-live
+original protected return and saved state, followed by the original Restore
+argument/CALL/load/indirect-JMP instructions. It must consume the prepared receipt
+once, retire its abandoned CALL/argument words, validate the actual continuation
+bytes, and preserve the untouched registers/flags and unknown fields. Reusing the
+retired handler's `return_id`, manufacturing a successful RET, or copying the
+older projected `FrameMemory` result into live storage is not an acceptable bridge.
+Sol can review this checkpoint and implement the bounded continuation binding;
+escalate only an identified ownership-transition uncertainty.
+
+All three predecessor `9001109` workflows completed successfully:
+startup `40873570540`, full push `40873570612`, full PR `40873578922`.
+Historical original-Windows process-exit timeouts remain unresolved. This change
+adds component execution only: zero new Windows differential pairs and zero
+whole-PE translations. Actual delivery acquisition and collided-unwind effects
+remain independent unresolved contracts; full startup and rcedit stay rejected.
