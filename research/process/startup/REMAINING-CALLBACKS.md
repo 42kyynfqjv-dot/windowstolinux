@@ -250,3 +250,10 @@ record/context and cached PTD. Eight native cases and byte mutations preserve
 rejection at all other search/indirect targets. The prefix entry, captured objects
 and loader/FLS producers remain supplied; termination and actual Windows delivery
 remain unbound. Positive delivery checks explicitly require callback success.
+
+Original prefix delivery connection: prefix414ad6 computes its guard operand and
+metadata register before entering the same common/dispatcher/unwind path under
+child authority. Fourteen native cases preserve parent suspension, negative
+ownership/guard/context checks and actual result1. The remaining cut is handler
+invocation/delivery acquisition, not common-entry EAX. Terminate/abort and incoming
+chain effects remain unresolved; no whole-PE pairs are added.

@@ -11,7 +11,7 @@ It is not whole-image conversion evidence. rcedit remains a later independent ga
 | Entry and module/thread startup | Selected initialization components | Actual header-entry composition, loader effects, incoming thread/handler chain, module and FLS producers |
 | Main, RaiseException, delivery | Main/handler/restore slices and owned activation machinery | Original delivery/context acquisition and incoming-chain containment; no replacement of saved exception context by call registers |
 | Normal C++ handler | Prefix414ad6, common403002, thunk403e78, dispatcher403d76, checked context/guard, dynamic PTD/FLS getter and normal epilog form one component path | Bound module/function, live fiber/index/slot and captured delivery inputs. Normal return is ContinueSearch1, not resumed guest execution |
-| C++ unwind | Wrapper4041a4/body4041bc register their original EH4 frame, execute state helpers, counter and traversal, and retire normally for state-1; pending actions reach original bridge/notification writes | Original cached PTD getter/FLS is connected; module/export/fiber/slot acquisition remain supplied. A scoped child grant now supports the original body during a pending component exception without unsuspending its parent. Original common dispatcher call403de2 is connected under child authority; original prefix entry composition, actual delivery and exceptional funclets remain unbound; action4026fc reaches unbound terminate40770c. See [component contract](CXX-UNWIND.md) |
+| C++ unwind | Wrapper4041a4/body4041bc register their original EH4 frame, execute state helpers, counter and traversal, and retire normally for state-1; pending actions reach original bridge/notification writes | Original cached PTD getter/FLS is connected; module/export/fiber/slot acquisition remain supplied. A scoped child grant now supports the original body during a pending component exception without unsuspending its parent. Original common dispatcher call403de2 is connected under child authority; original prefix414ad6 is connected under the same child authority; actual handler invocation/delivery and exceptional funclets remain unbound; action4026fc reaches unbound terminate40770c. See [component contract](CXX-UNWIND.md) |
 | Required-PTD / terminate / abort | Static targets and original normal getter null/sentinel branches are bound | Required-PTD null reaches4077ff. This needs signal query40cbcf/40cafd, lock/EH4 effects, encoded signal callback, flags41c128, signal22, fast-fail/debug and exit effects; never substitute successful cleanup |
 | printf and output | Wrapper/accessors, owned FILE/lock, low-I/O and writer components | Actual locale/FILE initialization, complete formatter driver/parser/destruction, callback/exception paths and physical stream composition |
 | Return and exit | Main report/epilog and shutdown components | Original exit registrations, flush/close/error/status and process termination from the same live entry state |
@@ -48,8 +48,9 @@ scoped delivery-child grant now supports its registered body while the interrupt
 frame remains suspended (14 ownership cases and four connected original-body
 cases). No nested exception or restoration is authorized by child completion.
 The actual common dispatcher call403de2 → wrapper4041a4 is connected with eight
-additional native cases. Next propagate child authority through the original
-handler prefix; the component still supplies common entry and metadata register.
+additional native cases. The original handler prefix now carries the same child
+authority through guard and metadata production (14 more native cases). The
+component supplies handler invocation, owner/context and exception state.
 Close terminate40770c's PTD+12 callback/guard and abort4077ff signal/lock/exit
 effects; retain rejection for exceptional funclets until their delivery and
 cleanup are justified. Actual delivery acquisition and incoming-chain containment

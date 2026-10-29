@@ -124,13 +124,29 @@ explicitly: propagating a failure to an intentionally rejecting outer fixture
 cannot count as successful execution. The actual common result is checked before
 returning it.
 
-The component still supplies the common entry and its metadata register as
-produced by the separately validated prefix. Next thread child authority through
-that original prefix, replacing this entry cut. The C++ context, exception bytes,
-module/export/fiber/slot and interrupted-frame fixture remain supplied. Actual
+The connected entry now executes original prefix414ad6 → common403002 →
+dispatcher403d76 → unwind wrapper4041a4 with the same live child authority. The
+prefix computes the guard operand, performs its proved guard call, writes the
+metadata register and tail-transfers to the common handler. Unknown or incorrect
+incoming EAX is overwritten by the original MOV; the harness no longer supplies
+the common metadata register. Epoch authority is checked before prefix effects.
+
+Fourteen prefix scenarios repeat the eight dispatcher cases and add corrupt
+guard, stale owner, unknown/wrong incoming EAX, changed metadata, and a parent-stack alias rejected before prefix effects. The three
+positive paths explicitly require success and original scalar result1. Mutation
+checks cover every prefix byte in this delivery emitter mode. Adjacent live-handler
+and handler-receipt tests now also explicitly require success before testing
+invalid consumption or returning an intentionally rejecting outer fixture.
+
+The supplied boundary is now original handler invocation: the C++ owner/context,
+exception bytes, module/export/fiber/slot and interrupted-frame fixture. The C++ context binds its
+owner activation; a producer must still bind that invocation and its exception/
+context objects to the same pending event and live C++ registration. Address
+equality alone cannot supply that relation. Actual
 Windows delivery acquisition, nested/collided-unwind effects and incoming-chain
-containment are unproved. These eight cases add no fresh Windows observations or
-whole-PE pairs.
+containment remain unproved. The 14 added native cases include no fresh Windows
+observations or whole-PE pairs. Normal returns preserve suspension; they authorize
+no guest resumption.
 
 Then execute terminate40770c's own EH4 frame and PTD+12 callback/guard contract,
 followed by abort4077ff's signal/lock/debug/exit dependencies. Cleanup exceptions

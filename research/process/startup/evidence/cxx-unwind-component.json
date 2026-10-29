@@ -1,12 +1,12 @@
 {
   "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
-  "rust_sha256": "7c915378222ad7a4272bd34edff2491676ede01d1c0328f6f06d1babb3698fb1",
-  "unwind_binding_source_sha256": "8fbe7ed00d3454b986562da0f95ea2b9616ac5dc123d731d58764828af4e2b05",
+  "rust_sha256": "fade3058c624559b23aad8158887baaac7af728f2ac0036ab6031633578b0f77",
+  "unwind_binding_source_sha256": "d6986926e1da65808edb5e6f4423a3697c31c8619014264c9c8a76cbc9e9415e",
   "unwind_native_cases": 24,
   "unwind_new_windows_pairs": 0,
   "unwind_binding_rust_tests": 1,
-  "kind": "Original common dispatcher unwind call under scoped pending-delivery child authority; supplied prefix entry/context/module/FLS acquisition; not whole-PE conversion",
-  "rust_crt_tests_passed": 214,
+  "kind": "Original prefix/common/dispatcher unwind under scoped pending-delivery child authority; supplied handler invocation/context/module/FLS acquisition; not whole-PE conversion",
+  "rust_crt_tests_passed": 215,
   "existing_observation_test_separate": true,
   "byte_mutations_rejected": 415,
   "recorded_wrapper_pairs": 5,
@@ -21,7 +21,7 @@
     "cxx-unwind-notice_tail": "b924bf20557c8dd755a060af55fd4e2d19f5e80a265c3c28ab54f2a621485ea2"
   },
   "remaining": [
-    "original prefix entry and metadata register production under child authority",
+    "original handler invocation and same-event captured delivery acquisition",
     "actual module/export/fiber/slot acquisition",
     "Windows delivery/incoming-chain and nested/collided-unwind effects",
     "terminate40770c/abort4077ff effects",
@@ -33,7 +33,6 @@
   "delivery_child_native_cases": 14,
   "delivery_cached_unwind_native_cases": 4,
   "delivery_new_windows_pairs": 0,
-  "root_tests_passed": 175,
   "delivery_checks": [
     "parent suspension/retirement exclusion",
     "child and nested helper return",
@@ -47,5 +46,10 @@
   ],
   "dispatcher_delivery_unwind_native_cases": 8,
   "dispatcher_delivery_new_windows_pairs": 0,
-  "positive_case_rejection_cannot_count_as_success": true
+  "positive_case_rejection_cannot_count_as_success": true,
+  "prefix_delivery_unwind_native_cases": 14,
+  "prefix_delivery_new_windows_pairs": 0,
+  "positive_assertion_review": "Live handler and receipt tests now require successful callback/result explicitly before an intentionally rejected outer component boundary.",
+  "prefix_stack_alias_preflight": "Parent stack alias rejects before prefix register or call-identity changes.",
+  "prior_root_tests_passed": 175
 }

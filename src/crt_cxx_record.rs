@@ -291,6 +291,43 @@ fn handler_prefix_bound(
     guard: &crate::crt_stream_callees::SecurityProof,
     cached: bool,
 ) -> Result<String, String> {
+    handler_prefix_mode(bytes, origin, metadata, dispatcher, guard, cached, false)
+}
+pub(crate) fn delivered_prefix_source() -> Result<String, String> {
+    let guard = crate::crt_stream_callees::prove_security(
+        &crate::crt_ptd::raw("3b0d00c041007501c3e97c020000"),
+        0x40154c,
+    )?;
+    handler_prefix_mode(
+        &crate::crt_ptd::raw(HANDLER),
+        0x414ad6,
+        0x41b42c,
+        0x403002,
+        &guard,
+        true,
+        true,
+    )
+}
+fn handler_prefix_mode(
+    bytes: &[u8],
+    origin: u32,
+    metadata: u32,
+    dispatcher: u32,
+    guard: &crate::crt_stream_callees::SecurityProof,
+    cached: bool,
+    delivery: bool,
+) -> Result<String, String> {
+    let epoch_parameter = if delivery {
+        "epoch:&mut NormalCallEpoch<'_>,"
+    } else {
+        ""
+    };
+    let epoch_argument = if delivery { "epoch," } else { "" };
+    let preflight = if delivery {
+        "epoch.state()?;if epoch.delivery.is_none(){return Err(\"C++ prefix requires delivery child authority\");}let entry=CrtCpu::pointer(cpu.entry[4])?;epoch.delivery_range(rt.offset(entry,-4)?.address(),u64::from(entry.address())+20)?;"
+    } else {
+        ""
+    };
     let parameters = if cached {
         "fiber:CrtFiber,slot:CrtFlsSlot"
     } else {
@@ -339,8 +376,8 @@ child.finish(rt)
     );
     Ok(format!(
         r#"
-fn cxx_handler_prefix(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,owner:&CrtCpu,frame:&CrtPtdFrame,record:&CrtCxxRecord,context:&CrtCxxContext,{parameters})->Result<CrtValue,&'static str>{{
- record.state(rt,owner,frame)?;cpu.validate_active(rt)?;
+fn cxx_handler_prefix(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,owner:&CrtCpu,frame:&CrtPtdFrame,record:&CrtCxxRecord,context:&CrtCxxContext,{epoch_parameter}{parameters})->Result<CrtValue,&'static str>{{
+ {preflight}record.state(rt,owner,frame)?;cpu.validate_active(rt)?;
  if frame.handler!={origin}||frame.low!=rt.offset(frame.bp,-28)?||record.metadata.address()!={metadata}{{return Err("C++ handler/frame binding");}}
  let sp=CrtCpu::pointer(cpu.r[4])?;
  let call_low=rt.offset(sp,-4)?;rt.valid(call_low,16)?;
@@ -349,7 +386,7 @@ fn cxx_handler_prefix(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,owner:&CrtCpu,fra
  let _=(||->Result<CrtValue,&'static str>{{{prefix}}})()?;
  {check}
  let _=(||->Result<CrtValue,&'static str>{{{tail}}})()?;
- cxx_common(rt,cpu,owner,frame,context,record,{arguments})
+ cxx_common(rt,cpu,owner,frame,context,record,{epoch_argument}{arguments})
 }}
 "#
     ))
@@ -593,6 +630,10 @@ for mode in 0..20{{
         changed[i] ^= 1;
         assert!(
             handler_prefix_bound(&changed, 0x414ad6, 0x41b42c, 0x403002, &security, true).is_err()
+        );
+        assert!(
+            handler_prefix_mode(&changed, 0x414ad6, 0x41b42c, 0x403002, &security, true, true)
+                .is_err()
         );
     }
 }
