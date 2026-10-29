@@ -465,3 +465,37 @@ then preserve complete cleanup/retirement and selected restoration. OS delivery
 and full entry-to-exit proof remain gates. Full startup/rcedit remains rejected;
 Sol can attempt the next connected callback-body scope. Prior Windows timeout
 causes remain unresolved.
+
+## Live notification body and finally bridge
+
+The connected notification now executes its original instructions on the issued
+child CPU, including the real saves, argument load, record stores, restores and
+RET4. A compiler proof binds the record layout. The module-data capability is
+issued after the decoded MOV that establishes its numeric address (rather than
+an assumed instruction offset). Every store checks its actual value and exact
+record destination. Source owner, target, reason, code bytes, argument word,
+stack extent and protected scratch are validated before executing stores.
+
+The finally bridge is independently extracted/proved as original CALL EAX;RET.
+It validates the live target/abnormal/owner registers and original bytes, creates
+a second protected funclet call on the live stack, and consumes both actual
+return identities in order. The notification uses its actual flags/register
+results; finally-provider volatile effects remain conservatively unknown.
+The private finally function body/dispatcher remains a checked provider, so this
+does not claim that its complete nested stack or instructions are already lifted.
+
+Eight new connected cases cover changed notification code, protected notification
+scratch, changed reason argument, duplicate notification return, changed bridge
+code, changed handler target row, changed finally code and wrong live owner EBP.
+They reject before finally effects or retain already executed notification
+stores as applicable. Existing nested/source/delivery/temporary lifetime and
+failure cases run through the live notification body and bridge as well.
+Overlapping counts:118 owned-frame,61 delivery-lifetime,43 cross-frame and28
+connected callback/loop/stack cases. They add zero Windows differential pairs or
+whole-PE pairs; the existing five recorded wrapper comparisons remain separate.
+
+Next connect the finally funclet and nested dispatcher bodies to this live child
+CPU rather than the private effect backend and scratch. The source/captured vs
+delivery ownership and validated cleanup/retirement gates stay required, followed
+by selected restoration and OS delivery. Full startup/rcedit stays unsupported.
+Sol can attempt that next scope; no concrete escalation need is established yet.

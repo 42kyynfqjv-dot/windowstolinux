@@ -226,7 +226,7 @@ fn connected_inner_cleanup(session:&CrtOwnedUnwind<'_>,frame:&mut CrtOwnedFrameV
   if entry.cap!=storage.entry.cap||rt.overlapping_tags(low.address(),40).iter().any(|(_,v)|matches!(v,CrtValue::ProtectedReturn(_)|CrtValue::ThreadHead(_)|CrtValue::OpaqueSaved(_))){return Err("native local prolog protected scratch");}
   original_local_stack_entry(rt,record,cpu)?;
   let actual=CrtOwnedTemporary::bind_native(rt,record,storage,cpu)?;let body_return=cpu.return_id;let body_entry=CrtCpu::pointer(cpu.entry[4])?;
-  let mut effects=CrtOwnedLocalEffects{rt,record,machine,storage,rows:&rows,native_stack:true,installation_seen:false,temporary:Some(actual),pending:None,written:false,notified:false,
+  let mut effects=CrtOwnedLocalEffects{rt,record,machine,storage,rows:&rows,native_stack:true,native_notification:Some(if fault==23{duplicate_notify_return}else{original_notify_child}),native_finally_bridge:Some((0x402a50,original_finally_bridge_bytes())),installation_seen:false,temporary:Some(actual),pending:None,written:false,notified:false,
    notification:|target,reason,rt:&mut CrtStreamRuntime,s:&mut CrtOwnedStorage,record:&mut LocalRecord<'_>|{fixture_notify_invoke(rt,s,record,target,reason,0)},
    finally:|target,_,rt:&mut CrtStreamRuntime,s:&mut CrtOwnedStorage,record:&mut LocalRecord<'_>|{
     original_finally_effects(rt,record,machine,s,target,0)?;
@@ -272,7 +272,7 @@ fn live_finally_cases(){
    let mut cpu=CrtCpu::new(sp,946)?;let exception=rt.map_region(0x7000,80,CrtRegionKind::Context,Some(&[0;80]))?;rt.store(rt.offset(sp,4)?,32,CrtValue::Pointer(exception))?;
    handler_saved_entry(&mut rt,&mut cpu)?;handler_disposition_init(&mut rt,&mut cpu)?;assert_eq!(cpu.steps,8);assert!(!cpu.returned);cpu.validate_active(&rt)?;
    r.execute_local(id,s,LocalEntry{entry_sp:0xc000,handler:0x4027b0,cookie_address:0x41c000,cookie:0x12345678,target_level:-2},|record,s|{
-   let mut effects=CrtOwnedLocalEffects{rt:&mut rt,record,machine:&m,storage:s,rows:&rows,native_stack:false,installation_seen:false,temporary:None,pending:None,written:false,notified:false,
+   let mut effects=CrtOwnedLocalEffects{rt:&mut rt,record,machine:&m,storage:s,rows:&rows,native_stack:false,native_notification:None,native_finally_bridge:None,installation_seen:false,temporary:None,pending:None,written:false,notified:false,
     notification:|target,reason,rt:&mut CrtStreamRuntime,s:&mut CrtOwnedStorage,record:&mut LocalRecord<'_>|{cpu.validate_active(rt)?;fixture_notify_invoke(rt,s,record,target,reason,0)},
     finally:|target,_,rt:&mut CrtStreamRuntime,s:&mut CrtOwnedStorage,record:&mut LocalRecord<'_>|{
      cpu.validate_active(rt)?;

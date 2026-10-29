@@ -56,6 +56,59 @@ pub(crate) fn emit_notification(
     {
         return Err("notification contiguous live record/continuation".into());
     }
+    let graph = super::crt_stream_ir::Graph::decode(code, origin)?;
+    let data_bindings = graph
+        .nodes
+        .iter()
+        .filter_map(|(&pc, node)| match &node.op {
+            super::crt_stream_ir::Op::Ordinary(super::graph::Operation::Binary(
+                super::graph::Binary::Move,
+                super::graph::Operand::Reg(reg),
+                super::graph::Operand::Immediate(value),
+            )) if reg.index == 3 && reg.width == 32 && reg.shift == 0 && *value == record_base => {
+                Some(pc + node.length)
+            }
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    if data_bindings.len() != 1 {
+        return Err("notification native data provenance instruction".into());
+    }
+    let data_binding_end = data_bindings[0];
+    let native_body = super::crt_stream_emit::emit_body_with_store(
+        &graph,
+        |_, _| Err("notification unexpected call".into()),
+        &Default::default(),
+        128,
+        |_, _| Err("notification thread effect".into()),
+        |pc, _| {
+            Ok(if pc == data_binding_end {
+                format!("if cpu.r[3].known_scalar()? != {record_base}{{return Err(\"notification data address\");}}cpu.r[3]=CrtValue::Pointer(rt.resolve_absolute({record_base},CrtRegionKind::Module)?);")
+            } else {
+                String::new()
+            })
+        },
+        |_, _| Ok(None),
+        None,
+        |_, address, width| {
+            if width != 32 || address.base != Some(3) || address.index.is_some() {
+                return Err("notification store operand".into());
+            }
+            let at = record_base
+                .checked_add(address.displacement)
+                .ok_or("notification store overflow")?;
+            let expected = if at == binding.target_word {
+                "CrtValue::Pointer(target)"
+            } else if at == binding.action_word {
+                "CrtValue::scalar(reason)"
+            } else if at == binding.frame_word {
+                "CrtValue::Pointer(frame)"
+            } else {
+                return Err("notification store outside record".into());
+            };
+            Ok(Some(format!("if v!={expected}{{return Err(\"notification native store authority\");}}rt.store(rt.resolve_absolute({at},CrtRegionKind::Module)?,32,v)?;")))
+        },
+    )?;
     Ok(format!(
         r#"fn map_original_notification(rt:&mut CrtStreamRuntime)->RegistryResult<()>{{rt.map_region({record_base},16,CrtRegionKind::Module,None)?;rt.map_region({origin},{length},CrtRegionKind::Module,Some(&{code:?}))?;Ok(())}}
 fn original_notify_invoke(rt:&mut CrtStreamRuntime,storage:&mut CrtOwnedStorage,record:&mut LocalRecord<'_>,cpu:&mut CrtCpu,target:u32,reason:u32)->RegistryResult<()>{{
@@ -72,10 +125,20 @@ let result=(||->RegistryResult<BridgeExit<CrtValue>>{{type T=CrtValue;{body}}})(
 if cleanup!=4||registers[4]!=BridgeValue::PrivateStack(0){{return Err("notification original ABI");}}for(i,v)in registers.into_iter().enumerate(){{if i!=4{{cpu.r[i]=match v{{BridgeValue::Capability(v)=>v,BridgeValue::Scalar(v)=>CrtValue::scalar(v),_=>return Err("notification register knowledge")}};}}}}cpu.finish_pop(rt,4)
 }})?;require_original_notification(rt,storage,target.address(),reason)
 }}
+fn original_notify_child(rt:&mut CrtStreamRuntime,storage:&mut CrtOwnedStorage,record:&mut LocalRecord<'_>,cpu:&mut CrtCpu,target:u32,reason:u32)->RegistryResult<CrtValue>{{
+record.validate_binding(storage.binding,&storage.image)?;cpu.validate_active(rt)?;let entry=CrtCpu::pointer(cpu.entry[4])?;
+let target=rt.resolve_absolute(target,CrtRegionKind::Module)?;let frame=rt.resolve_absolute(storage.image.ebp,CrtRegionKind::Stack)?;
+if cpu.r!=cpu.entry||cpu.return_pop!=4||reason!=0x101||cpu.r[0].known_scalar()?!=target.address()||cpu.r[5]!=CrtValue::Pointer(frame)||rt.load(rt.offset(entry,4)?,32)?!=CrtValue::scalar(reason){{return Err("notification native entry arguments");}}
+let low=rt.offset(entry,-{scratch})?;rt.valid(low,{scratch})?;record.registry.range(low.address(),u64::from(entry.address()))?;
+if entry.cap!=storage.entry.cap||entry.address()>=storage.image.esp||rt.overlapping_tags(low.address(),{scratch}).iter().any(|(_,v)|matches!(v,CrtValue::ProtectedReturn(_)|CrtValue::ThreadHead(_)|CrtValue::OpaqueSaved(_)))||record.registry.temporary.iter().any(|t|u64::from(low.address())<t.high&&u64::from(t.low)<u64::from(entry.address())){{return Err("notification native protected scratch");}}
+let p=rt.resolve_absolute({origin},CrtRegionKind::Module)?;for(i,b)in {code:?}.into_iter().enumerate(){{if rt.load(rt.offset(p,i as i64)?,8)?.known_scalar()?!=b as u32{{return Err("notification native code changed");}}}}
+cpu.r[0]=CrtValue::Pointer(target);{native_body}
+}}
 fn require_original_notification(rt:&CrtStreamRuntime,storage:&CrtOwnedStorage,target:u32,reason:u32)->RegistryResult<()>{{let frame=rt.resolve_absolute(storage.image.ebp,CrtRegionKind::Stack)?;let target=rt.resolve_absolute(target,CrtRegionKind::Module)?;for(at,v)in [({target_word},CrtValue::Pointer(target)),({action_word},CrtValue::scalar(reason)),({frame_word},CrtValue::Pointer(frame))]{{if rt.load(rt.resolve_absolute(at,CrtRegionKind::Module)?,32)?!=v{{return Err("notification live result changed");}}}}Ok(())}}
 "#,
         length = code.len(),
         code = code,
+        native_body = native_body,
         body = proof.body(),
         target_word = binding.target_word,
         action_word = binding.action_word,
@@ -521,9 +584,10 @@ impl CrtOwnedTemporary{
  fn discard(self,rt:&mut CrtStreamRuntime)->RegistryResult<()>{for(i,v)in self.words.into_iter().enumerate(){rt.consume_stack(rt.offset(self.base,i as i64*4)?,v)?;}Ok(())}
 }
 
+type CrtNativeNotification=fn(&mut CrtStreamRuntime,&mut CrtOwnedStorage,&mut LocalRecord<'_>,&mut CrtCpu,u32,u32)->RegistryResult<CrtValue>;
 struct CrtOwnedLocalEffects<'a,'r,F,N>{
  rt:&'a mut CrtStreamRuntime,record:&'a mut LocalRecord<'r>,machine:&'a Machine,storage:&'a mut CrtOwnedStorage,
- rows:&'a[LocalScope],native_stack:bool,installation_seen:bool,temporary:Option<CrtOwnedTemporary>,pending:Option<(i32,LocalScope)>,written:bool,notified:bool,finally:F,notification:N,
+ rows:&'a[LocalScope],native_stack:bool,native_notification:Option<CrtNativeNotification>,native_finally_bridge:Option<(u32,&'static[u8])>,installation_seen:bool,temporary:Option<CrtOwnedTemporary>,pending:Option<(i32,LocalScope)>,written:bool,notified:bool,finally:F,notification:N,
 }
 impl<F,N> CrtOwnedLocalEffects<'_,'_,F,N>
 where F:FnMut(u32,i32,&mut CrtStreamRuntime,&mut CrtOwnedStorage,&mut LocalRecord<'_>)->RegistryResult<()>,N:FnMut(u32,u32,&mut CrtStreamRuntime,&mut CrtOwnedStorage,&mut LocalRecord<'_>)->RegistryResult<()>{
@@ -539,13 +603,20 @@ where F:FnMut(u32,i32,&mut CrtStreamRuntime,&mut CrtOwnedStorage,&mut LocalRecor
  fn notify_call(&mut self,cpu:&mut CrtCpu,target:u32,reason:u32,continuation:u32)->RegistryResult<()>{
   let(_,row)=self.pending.ok_or("native notification without row")?;
   if !self.written||self.notified||row.filter!=0||row.handler!=target||reason!=0x101||self.read_try_level()?!=row.parent||self.rt.load(CrtCpu::pointer(cpu.r[4])?,32)?!=CrtValue::scalar(reason){return Err("native notification original arguments/order");}
-  cpu.call_activation(self.rt,continuation,4,|rt,child|{(self.notification)(target,reason,rt,self.storage,self.record)?;child.clobber(CrtValue::Scalar{bits:0,known:0});child.finish_pop(rt,4)})?;
+  cpu.call_activation(self.rt,continuation,4,|rt,child|{if let Some(native)=self.native_notification{return native(rt,self.storage,self.record,child,target,reason);}(self.notification)(target,reason,rt,self.storage,self.record)?;child.clobber(CrtValue::Scalar{bits:0,known:0});child.finish_pop(rt,4)})?;
   self.validate_source()?;self.notified=true;Ok(())
  }
  fn finally_call(&mut self,cpu:&mut CrtCpu,target:u32,abnormal:u32,continuation:u32)->RegistryResult<()>{
   let(level,row)=self.pending.ok_or("native finally without row")?;
   if !self.written||!self.notified||row.filter!=0||row.handler!=target||abnormal!=1||self.read_try_level()?!=row.parent{return Err("native finally original arguments/order");}
-  cpu.call_activation(self.rt,continuation,0,|rt,child|{(self.finally)(target,level,rt,self.storage,self.record)?;child.clobber(CrtValue::Scalar{bits:0,known:0});child.finish(rt)})?;
+  cpu.call_activation(self.rt,continuation,0,|rt,child|{
+   if let Some((origin,code))=self.native_finally_bridge{
+    if code!=[0xff,0xd0,0xc3]||origin.checked_add(3).is_none()||!self.record.registry.module_contains_address(origin)||child.r[0].known_scalar()?!=target||child.r[1].known_scalar()?!=abnormal||child.r[5]!=CrtValue::Pointer(rt.resolve_absolute(self.storage.image.ebp,CrtRegionKind::Stack)?){return Err("native finally bridge entry/code contract");}
+    let p=rt.resolve_absolute(origin,CrtRegionKind::Module)?;for(i,b)in code.iter().enumerate(){if rt.load(rt.offset(p,i as i64)?,8)?.known_scalar()?!=*b as u32{return Err("native finally bridge bytes changed");}}
+    child.tick(u32::MAX)?;child.call_activation(rt,origin+2,0,|rt,funclet|{(self.finally)(target,level,rt,self.storage,self.record)?;funclet.clobber(CrtValue::Scalar{bits:0,known:0});funclet.finish(rt)})?;
+    child.tick(u32::MAX)?;return child.finish(rt);
+   }
+   (self.finally)(target,level,rt,self.storage,self.record)?;child.clobber(CrtValue::Scalar{bits:0,known:0});child.finish(rt)})?;
   if self.read_try_level()?!=row.parent{return Err("native finally changed parent");}self.pending=None;self.written=false;self.notified=false;Ok(())
  }
 
