@@ -956,3 +956,76 @@ all actual Windows delivery, incoming-handler containment and collided-unwind
 assumptions explicit. This component event represents the bounded closed,
 same-thread delivery contract; it is not OS-captured-register acquisition. Full
 startup/rcedit and ordinary third-party compatibility remain unsupported.
+
+### Live Main initialization and original-root continuation binding
+
+The existing `frame_init` certificate is now emitted against canonical CRT byte
+storage. It proves the original caller at 0x4012b9–0x401316, all bounded fill-helper
+feature/alignment paths, initialized range and current-module API arguments. The
+adapter writes ordinary scalar words, fills the 716 context bytes and writes a
+typed current-module pointer directly to live storage. TryLevel changes update
+both the protected live word and registry image metadata through `scope_store`.
+No detached ordinary scalar image becomes a second source of truth. Runtime
+checks retain original caller/helper bytes, protected-word exclusion, complete
+byte bounds, typed aliases, scratch ownership and the pre-event phase.
+
+The artifact checker extracts the original helper and verifies the
+GetModuleHandleW IAT identity. Local tests without retained code use the existing
+independently authored scalar-fill encoding; retained-artifact replay proves the
+actual optimized original helper, including its initialized-but-unknown feature
+words. The bounded current-module, valid stack, DF-clear, flat-ES and instruction
+availability assumptions from CONNECTED.md remain explicit.
+
+Five initialization negatives exercise changed code, a pointer inside the fill
+range, occupied protected scratch, invalid module identity and replay. Earlier
+writes survive a later fill/API-domain rejection; the guard stays unchanged.
+The connected event path now observes actual zero-filled untouched context bytes;
+other component paths continue rejecting unknown untouched bytes. No unknown
+value was replaced by zero without an original initialization proof.
+
+After the same event finishes, `bind_main_continuation` validates the restored
+register projection and target, the unique live Main return, and all four original
+saved-register tags. It binds CPU entry state to those existing tags and root,
+without changing the live registers/flags or consuming a return. The old retired
+handler remains invalid; the resulting Main CPU passes ordinary active-call
+validation and repeated binding rejects. `NormalReturnSession` still stops before
+reporting/epilog in this test; abandoning it must block rather than produce a
+return receipt. No new output, process exit or whole-PE comparison is claimed.
+
+Verification: 175 root tests, 165 CRT tests and one separately replayed recorded
+observation passed; formatting, Clippy, original-artifact wrapper and projection
+checkers passed using TMPDIR=/workspace/w2l-build-tmp. Five Main-init negatives
+and one connected continuation binding overlap earlier component scenarios.
+Original PE SHA256 remains
+`1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4`;
+initializer SHA256 `a35583ed76b1854b7121e1a48b12c5280ff185cf3df7b72360258f38225d3d3f`;
+fill helper SHA256 `3586be7f6dac27b94938fabc1acb198c1d5ef385a43c4ec5abf110bfd81b8a97`;
+generated Rust SHA256
+`27b635946e338d07deee5e85a08328df783b685a9d3d8e50adc9e78fa351f8be`.
+All predecessor 55b680a workflows passed:40882025279,40882015998,40882016170.
+Historical Windows process-exit timeouts remain unresolved and preserved.
+
+The remaining report/epilog integration is a concrete emitter boundary:
+`main_completion` accesses `memory.image.words` for protected metadata and uses
+separate `memory`, `printf` and `effects` mutable interfaces. The native formatter
+needs the same live runtime while memory holds it; the effect callbacks must
+also consume live POP/RET tags in the original order. The next coherent change
+should give completion, formatter and return effects one live owner with scoped
+reborrows (or emit through shared typed CPU operations), rather than copying
+ordinary bytes into FrameMemory and accepting a projected success. Preserve
+writes and output if a later flush/guard/RET fails. Cover original report bytes,
+nonzero/error return paths, short output, stale capture and corrupted saved words.
+A bounded Astra design pass is appropriate if this shared-ownership interface
+cannot be resolved on Sol. Full startup/rcedit stays unsupported until unchanged
+entry-to-exit behavior is demonstrated; actual OS delivery and collided-unwind
+assumptions remain separate gates.
+
+Tracker reconciliation: the last Linear write returned an error, but its wrapper
+retained only `isError` and discarded the response text. Exact failure/denial
+classification cannot be recovered from the available tools. Readback shows
+SUB-579 still begins at 16ec19c and its description has 248170 characters; the
+proposed prepend would grow it further. A size limit is plausible, not established.
+No write retry, alternate write route or denied optional PR comment was attempted.
+These pushed records preserve both the 55b680a and current results. A concise,
+reviewed description reconciliation should preserve history through repository
+links; do not claim it succeeded without readback.

@@ -829,3 +829,49 @@ impl CrtOwnedGuardView<'_,'_>{
 }
 
 "#;
+
+/// Reuse the instruction proof while writing the canonical byte-backed runtime.
+pub(crate) fn emit_main_initialization(
+    proof: &super::frame_init::ProvenInitialization,
+    code: &[u8],
+    origin: u32,
+    helper: &super::frame_init::FillHelper<'_>,
+) -> String {
+    let body = proof.body();
+    let helper_code = helper.code;
+    let helper_at = helper.origin;
+    format!(
+        r#"
+struct CrtMainInitMemory<'a>{{rt:&'a mut CrtStreamRuntime,r:&'a ThreadRegistry,m:&'a Machine,storage:&'a mut CrtOwnedStorage}}
+impl CrtMainInitMemory<'_>{{
+ fn at(&self,offset:i32,n:u32)->RegistryResult<CrtPointer>{{let owner=self.rt.offset(self.storage.entry,i64::from(self.storage.image.ebp)-i64::from(self.storage.image.entry_sp))?;let p=self.rt.offset(owner,i64::from(offset))?;self.rt.valid(p,n)?;for i in 0..n{{let at=i64::from(offset)+i64::from(i);let word=i32::try_from(at.div_euclid(4)*4).map_err(|_|"Main init word overflow")?;if !self.storage.ordinary.contains(&word){{return Err("Main init protected destination");}}}}if !self.rt.overlapping_tags(p.address(),n).is_empty(){{return Err("Main init typed destination alias");}}Ok(p)}}
+ fn preflight_call_stack(&self,bytes:u32)->RegistryResult<()>{{self.m.check_initial_frame_binding(self.storage.binding).map_err(|_|"Main init phase")?;self.storage.validate_storage(self.rt,self.r,self.m)?;if bytes==0||bytes>64||self.storage.image.try_level!= -2||self.r.head()?!=RegistryHead::Owned(self.storage.id){{return Err("Main init call/lifetime");}}let sp=self.rt.resolve_absolute(self.storage.image.esp,CrtRegionKind::Stack)?;let low=self.rt.offset(sp,-i64::from(bytes))?;self.rt.valid(low,bytes)?;self.r.range(low.address(),u64::from(sp.address()))?;if !self.rt.overlapping_tags(low.address(),bytes).is_empty()||self.r.frames.iter().any(|f|f.live&&f.id!=self.storage.id&&u64::from(low.address())<f.high&&u64::from(f.low)<u64::from(sp.address())){{return Err("Main init scratch alias");}}Ok(())}}
+ fn write_u32(&mut self,offset:i32,value:u32)->RegistryResult<()>{{let p=self.at(offset,4)?;self.rt.store(p,32,CrtValue::scalar(value))}}
+ fn write_module(&mut self,offset:i32,module:CrtPointer)->RegistryResult<()>{{if module.kind!=CrtRegionKind::Module||module.address()%4096!=0||self.r.bound.first().is_none_or(|b|b.0!=module.address()){{return Err("Main init current-module identity");}}self.rt.valid(module,1)?;let p=self.at(offset,4)?;self.rt.store(p,32,CrtValue::Pointer(module))}}
+ fn fill(&mut self,offset:i32,length:u32,value:u8)->RegistryResult<()>{{if length>16384{{return Err("Main init fill budget");}}let p=self.at(offset,length)?;for i in 0..length{{self.rt.store(self.rt.offset(p,i64::from(i))?,8,CrtValue::scalar(u32::from(value)))?;}}Ok(())}}
+ fn write_try_level(&mut self,value:i32)->RegistryResult<()>{{self.storage.scope_store(self.rt,self.r,self.m,-2,value)}}
+}}
+fn initialize_main_live(rt:&mut CrtStreamRuntime,r:&ThreadRegistry,m:&Machine,storage:&mut CrtOwnedStorage,module:CrtPointer)->RegistryResult<()>{{
+ for(at,bytes)in [({origin}u32,&{code:?}[..]),({helper_at}u32,&{helper_code:?}[..])]{{let p=rt.resolve_absolute(at,CrtRegionKind::Module)?;for(i,b)in bytes.iter().enumerate(){{if rt.load(rt.offset(p,i as i64)?,8)?.known_scalar()?!=*b as u32{{return Err("Main init changed instructions");}}}}}}
+ let memory=&mut CrtMainInitMemory{{rt,r,m,storage}};{body}
+}}
+"#
+    )
+}
+
+pub(crate) const NORMAL_CONTINUATION: &str = r#"
+/// Rebind only to the still-live original Main root after the same event finished.
+/// This grants no printf/API effect and does not execute a RET.
+fn bind_main_continuation(rt:&CrtStreamRuntime,r:&ThreadRegistry,m:&Machine,s:&CrtOwnedStorage,event:&OwnedExceptionEvent,cpu:&mut CrtCpu)->RegistryResult<()>{
+ s.validate_storage(rt,r,m)?;event.selected_identity(m,r)?;
+ if event.captured.lifetime.get()!=EventLifetime::Finished||event.normal_permit.borrow().is_none()||m.phase!=Phase::Done||s.binding.index!=m.selected||r.target_ready()?!=s.id||cpu.returned||cpu.return_id==s.return_id||s.restored_landing.is_some()||s.prepared_context.is_some()||s.input.is_some()||s.pair_return.is_some(){return Err("Main continuation unfinished/stale event");}
+ let projection=m.owned_context.ok_or("Main continuation missing restored context")?;
+ for i in [0,4,5]{if projection[i]!=Some(CrtCpu::number(cpu.r[i])?){return Err("Main continuation changed registers");}}
+ if projection[8]!=Some(0x4013a5)||cpu.r[4]!=CrtValue::Pointer(rt.resolve_absolute(s.image.esp,CrtRegionKind::Stack)?)||cpu.r[5]!=CrtValue::Pointer(rt.resolve_absolute(s.image.ebp,CrtRegionKind::Stack)?){return Err("Main continuation target/frame");}
+ let mut entry=std::array::from_fn(|i|CrtValue::OpaqueSaved(i as u8));entry[4]=CrtValue::Pointer(s.entry);let mut seen=std::collections::BTreeSet::new();
+ for(&offset,word)in &s.image.words{if let FrameWord::Saved(reg,_)=word{if ![3,5,6,7].contains(reg)||!seen.insert(*reg){return Err("Main continuation original saved schema");}entry[*reg as usize]=*s.protected.get(&offset).ok_or("Main continuation saved authority")?;}}
+ if seen!=std::collections::BTreeSet::from([3,5,6,7])||rt.load(s.entry,32)?!=CrtValue::ProtectedReturn(s.return_id)||rt.tags.values().filter(|&&v|v==CrtValue::ProtectedReturn(s.return_id)).count()!=1{return Err("Main continuation original root");}
+ // All validation precedes the change. No observed register array is authority.
+ cpu.entry=entry;cpu.return_id=s.return_id;cpu.return_pop=0;cpu.validate_active(rt)
+}
+"#;

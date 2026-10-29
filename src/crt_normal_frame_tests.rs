@@ -393,7 +393,7 @@ fn owned_main_cases(){
   let mut storage=if mode==1{initialize_inner_owned(&mut rt,&mut r,&m,binding,&cpu)}else{initialize_main_owned(&mut rt,&mut r,&m,binding,&cpu)}.unwrap();
   let level=rt.resolve_absolute(storage.image.record+12,CrtRegionKind::Stack).unwrap();
   if mode==13{rt.store(level,32,CrtValue::scalar(7)).unwrap();assert!(activate_main_owned(&mut rt,&r,&m,&mut storage).is_err());assert_eq!(rt.load(level,32).unwrap(),CrtValue::scalar(7));continue;}
-  let activated=activate_main_owned(&mut rt,&r,&m,&mut storage);
+  let activated=if mode>=183{let module=map_main_initial(&mut rt).unwrap();initialize_main_live(&mut rt,&r,&m,&mut storage,module)}else{activate_main_owned(&mut rt,&r,&m,&mut storage)};
   if mode==1{assert!(activated.is_err());}else{activated.unwrap();assert_eq!(rt.load(level,32).unwrap(),CrtValue::scalar(0));assert!(activate_main_owned(&mut rt,&r,&m,&mut storage).is_err());}
   let mut initial_event=None;let mut capture_alias=None;
   let mut delivery_target=if mode>=75{
@@ -709,7 +709,7 @@ fn owned_main_cases(){
              assert_eq!(view.rt.load(guard,32).unwrap(),guard_before);assert_eq!(view.rt.load(untouched,32).unwrap(),untouched_before);
              assert_eq!((c.flags.cf,c.flags.zf,c.flags.sf,c.flags.of),(Some(true),None,Some(false),Some(true)));
              if mode==158||mode>=172{let mut prepared=prepared.unwrap();assert!(view.storage.selected_jump.is_none());assert_eq!(view.rt.load(view.rt.offset(prepared.ready.owner,-752).unwrap(),32).unwrap(),CrtValue::scalar(1));assert_eq!(view.rt.load(view.rt.offset(prepared.context,176).unwrap(),32).unwrap(),CrtValue::scalar(77));assert_eq!(view.rt.load(view.rt.offset(prepared.context,196).unwrap(),32).unwrap(),CrtValue::Pointer(prepared.ready.sp));assert_eq!(view.rt.load(view.rt.offset(prepared.context,180).unwrap(),32).unwrap(),CrtValue::Pointer(prepared.ready.owner));assert_eq!(view.rt.load(view.rt.offset(prepared.context,184).unwrap(),32).unwrap(),CrtValue::Pointer(prepared.target));assert_eq!(view.machine.phase,Phase::Cleanup);assert!(c.validate_active(view.rt).is_err());
-              assert!(untouched_before.known_scalar().is_err());
+              if mode>=183{assert_eq!(untouched_before,CrtValue::scalar(0));}else{assert!(untouched_before.known_scalar().is_err());}
               map_context_transfer(view.rt).unwrap();let flags=c.flags;let preserved=[c.r[2],c.r[3],c.r[6],c.r[7]];
               if mode==172{prepared.ready.event+=1;}
               if mode==173{let p=view.rt.offset(prepared.context,184).unwrap();view.rt.store(p,32,CrtValue::scalar(0x4013a5)).unwrap();}
@@ -737,6 +737,8 @@ fn owned_main_cases(){
               if mode==184{assert!(completion.is_err());assert_eq!(view.machine.phase,Phase::Restore);assert!(view.registry.normal_authority.get().is_none());continue;}
               let projection=completion.unwrap();if mode==183{assert_eq!(initial_event.as_ref().unwrap().captured.lifetime.get(),EventLifetime::Finished);assert!(capture_alias.as_ref().unwrap().preflight(view.machine.owner()).is_err());assert!(initial_event.as_ref().unwrap().normal_permit.borrow().is_some());}else{assert!(view.registry.normal_authority.get().is_none());}assert_eq!(view.machine.phase,Phase::Done);assert_eq!(projection[0],Some(77));assert_eq!(projection[4],Some(view.storage.image.esp));assert_eq!(projection[5],Some(view.storage.image.ebp));assert_eq!(projection[8],Some(0x4013a5));for i in [1,2,3,6,7,9]{assert_eq!(projection[i],None);}assert!(view.storage.restored_landing.is_none());
               if mode==183{
+               let registers=c.r;let flags=c.flags;let mut corrupted=CrtCpu::new(view.storage.entry,view.storage.return_id).unwrap();corrupted.r=c.r;assert!(bind_main_continuation(view.rt,view.registry,view.machine,view.storage,initial_event.as_ref().unwrap(),&mut corrupted).is_err());
+               bind_main_continuation(view.rt,view.registry,view.machine,view.storage,initial_event.as_ref().unwrap(),&mut c).unwrap();assert_eq!(c.r,registers);assert_eq!((c.flags.cf,c.flags.zf,c.flags.sf,c.flags.of),(flags.cf,flags.zf,flags.sf,flags.of));assert_eq!(c.return_id,view.storage.return_id);c.validate_active(view.rt).unwrap();assert!(bind_main_continuation(view.rt,view.registry,view.machine,view.storage,initial_event.as_ref().unwrap(),&mut c).is_err());
                let plan=NormalReturnPlan{pops:vec![(-796,1,true),(-792,7,false),(-788,6,false),(-784,3,false),(0,5,false)],cookie_offset:-28,security_target:0x40154c,return_offset:4};
                let session=NormalReturnSession::new(view.machine,view.registry,view.storage.binding,&view.storage.image,initial_event.as_ref().unwrap(),plan).unwrap();
                assert_eq!(session.phase,NormalReturnPhase::Linked);assert_eq!(session.machine.phase,Phase::Returning);
@@ -1194,6 +1196,16 @@ fn reject_normal_exception(){
   }).unwrap();
  }
 }
+fn main_initial_rejections(){for mode in 0..5{
+ let m=Machine::new_dispatch_known(vec![FrameSpec{scopes:vec![]}],0,[None;10],Some(0)).unwrap();let mut r=ThreadRegistry::new(m.owner(),0x8000,0xf000,&[(0x400000,0x420000)],0x41c000).unwrap();let mut rt=runtime(&r);let sp=rt.resolve_absolute(0xe000,CrtRegionKind::Stack).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(71)).unwrap();let c=CrtCpu::new(sp,71).unwrap();let mut storage=initialize_main_owned(&mut rt,&mut r,&m,m.owned_binding(0).unwrap(),&c).unwrap();let mut module=map_main_initial(&mut rt).unwrap();let owner=rt.resolve_absolute(storage.image.ebp,CrtRegionKind::Stack).unwrap();let guard=rt.offset(owner,-28).unwrap();let prior=rt.load(guard,32).unwrap();
+ if mode==0{rt.store(rt.resolve_absolute(0x4012b9,CrtRegionKind::Module).unwrap(),8,CrtValue::scalar(0x90)).unwrap();}
+ if mode==1{rt.store(rt.offset(owner,-744).unwrap(),32,CrtValue::Pointer(storage.entry)).unwrap();}
+ if mode==2{let p=rt.resolve_absolute(storage.image.esp,CrtRegionKind::Stack).unwrap();rt.store(rt.offset(p,-4).unwrap(),32,CrtValue::ProtectedReturn(999)).unwrap();}
+ if mode==3{module=storage.entry;}
+ if mode==4{initialize_main_live(&mut rt,&r,&m,&mut storage,module).unwrap();}
+ assert!(initialize_main_live(&mut rt,&r,&m,&mut storage,module).is_err(),"main init mode {mode}");assert_eq!(rt.load(guard,32).unwrap(),prior);assert!(!m.event_issued);
+ if mode==1||mode==3{assert_eq!(rt.load(rt.offset(owner,-768).unwrap(),32).unwrap(),CrtValue::scalar(300));assert_eq!(storage.image.try_level,-2);}
+}}
 fn initial_raise_rejections(){for mode in 0..6{
  let mut m=Machine::new_dispatch_known(vec![FrameSpec{scopes:vec![]}],0,[None;10],Some(0)).unwrap();let mut r=ThreadRegistry::new(m.owner(),0x8000,0xf000,&[(0x400000,0x420000)],0x41c000).unwrap();let mut rt=runtime(&r);let sp=rt.resolve_absolute(0xe000,CrtRegionKind::Stack).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(72)).unwrap();let mut c=CrtCpu::new(sp,72).unwrap();let b=m.owned_binding(0).unwrap();let mut storage=initialize_initial_raise_owned(&mut rt,&mut r,&m,b,&c).unwrap();map_initial_raise(&mut rt).unwrap();
  if mode==0{rt.store(rt.resolve_absolute(0x401117,CrtRegionKind::Module).unwrap(),8,CrtValue::scalar(0x90)).unwrap();}
@@ -1204,7 +1216,7 @@ fn initial_raise_rejections(){for mode in 0..6{
  if mode==5{let p=rt.offset(storage.entry,i64::from(storage.image.esp)-i64::from(storage.image.entry_sp)+12).unwrap();rt.store(p,32,CrtValue::Pointer(storage.entry)).unwrap();}
  let before=c.r;let generation=rt.generation;assert!(issue_initial_raise(&mut rt,&r,&mut m,&mut storage,&mut c).is_err(),"initial mode {mode}");assert!(!m.event_issued);assert_eq!(c.r,before);assert_eq!(rt.generation,generation);assert!(storage.raise_call.is_none());
 }}
-fn main(){match std::env::args().nth(1).unwrap().as_str(){"live-finally"=>live_finally_cases(),"owned-loop"=>owned_loop_cases(),"owned-local"=>owned_local_cases(),"owned"=>{initial_raise_rejections();owned_main_cases()},"path-edges"=>path_edges(),"live"=>live_dispatch(),"objects"=>captured_objects(),"handler"=>pending_handler_activation(),"pending"=>pending_normal_exception(),"pending-reject"=>reject_normal_exception(),"file"=>file_scope_normal(),"file-failure"=>file_scope_failure(),"nested"=>nested_actual(),"mutations"=>mutations(),"consumed"=>consumed_mutation(),"failure"=>body_failure(),"certificate"=>wrong_certificate(),"observed"=>observed(),_=>panic!("case")}}
+fn main(){match std::env::args().nth(1).unwrap().as_str(){"live-finally"=>live_finally_cases(),"owned-loop"=>owned_loop_cases(),"owned-local"=>owned_local_cases(),"owned"=>{main_initial_rejections();initial_raise_rejections();owned_main_cases()},"path-edges"=>path_edges(),"live"=>live_dispatch(),"objects"=>captured_objects(),"handler"=>pending_handler_activation(),"pending"=>pending_normal_exception(),"pending-reject"=>reject_normal_exception(),"file"=>file_scope_normal(),"file-failure"=>file_scope_failure(),"nested"=>nested_actual(),"mutations"=>mutations(),"consumed"=>consumed_mutation(),"failure"=>body_failure(),"certificate"=>wrong_certificate(),"observed"=>observed(),_=>panic!("case")}}
 "#;
 
 fn run(case: &str) {
@@ -1270,6 +1282,12 @@ fn run(case: &str) {
         let mut bad_bridge=bridge_bytes.clone();bad_bridge[17]=0xd0;assert!(crate::unwind_bridges::prove_filter(&bad_bridge,0x402800).is_err());
         let main_bytes=handler_bytes("main-prolog.bin","558bec6afe6818b24100681022400064a1000000005081c404fdffffa100c041003145f833c58945e4535657508d45f064a3000000008965e8");
         let main=crate::frame_proof::prove_frame(&main_bytes,0x401280,0x41c000,&std::collections::BTreeSet::from([0x41b218]),&std::collections::BTreeSet::from([0x402210])).unwrap();
+        let main_initial_code=handler_bytes("main-initial-live.bin","c78500fdffff2c010000c78510fdffff0000000068cc0200006a008d8518fdffff50e89010000083c40cc7850cfdffff00000000c78508fdffff00000000c78504fdffff000000006a00ff1508504100898514fdffffc745fc00000000");
+        let main_fill=handler_bytes("main-fill-live.bin","8b4c240c0fb64424088bd78b7c240485c9740888074783e90175f88b4424048bfac3");
+        let fill=crate::frame_init::FillHelper{code:&main_fill,origin:0x402370,feature_words:[0x41ccbc,0x41c058]};
+        let main_initial=crate::frame_init::prove_initializer(&main,&main_initial_code,0x4012b9,&fill,0x415008).unwrap();
+        let main_initial_live=format!("{}\n{}",crate::crt_owned_frame::emit_main_initialization(&main_initial,&main_initial_code,0x4012b9,&fill),crate::crt_owned_frame::NORMAL_CONTINUATION);
+        let main_initial_map=format!("fn map_main_initial(rt:&mut CrtStreamRuntime)->RegistryResult<CrtPointer>{{rt.map_region(0x4012b9,{},CrtRegionKind::Module,Some(&{main_initial_code:?}))?;rt.map_region(0x402370,{},CrtRegionKind::Module,Some(&{main_fill:?}))?;rt.map_region(0x400000,1,CrtRegionKind::Module,Some(&[0x4d]))}}",main_initial_code.len(),main_fill.len());
         let inner_bytes=handler_bytes("Inner-prolog.bin","558bec6afe68d0b14100681022400064a1000000005083ec10535657a100c041003145f833c5508d45f064a300000000");
         let inner=crate::frame_proof::prove_frame(&inner_bytes,0x4010c0,0x41c000,&std::collections::BTreeSet::from([0x41b1d0]),&std::collections::BTreeSet::from([0x402210])).unwrap();
         let initial_pushes=handler_bytes("initial-raise-pushes.bin","6a006a006a0068424242e0");
@@ -1508,7 +1526,7 @@ if fault==1{{cpu.condition(0)?;}}
         let context_check=context_proof.normal_object_check();
         let finally_source=crate::crt_finally_tests::emit();
         let finally_cases=crate::crt_finally_tests::CASES;
-        let source = format!("#![allow(dead_code)]\nmod guest_memory{{{memory}}}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{fixture}\n{initial_raise_types}\n{initial_raise_init}\n{initial_raise}\n{initial_raise_map}\n{file_scope}\n{context_types}\n{context_check}\n{scope_store}\n{permuted_store}\n{install}\n{handler_prolog}\n{filter_source}\n{false_filter_source}\n{normalizer_source}\n{guard_source}\n{header_source}\n{prefix_normalizer}\n{prefix_front}\n{guard_prefix}\n{prefix_caller}\n{bridge_native}\n{local_types}\n{owned_types}\n{local_source}\n{callback_source}\n{finally_source}\n{finally_cases}\n{original_local_store}\n{main_init}\n{inner_init}\n{owned_filter}\n{owned_bridge}\n{main_filter_bytes}\n{activation}\n{owned_prolog}\n{owned_prefix}\n{delivery_prefix}
+        let source = format!("#![allow(dead_code)]\nmod guest_memory{{{memory}}}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{fixture}\n{main_initial_live}\n{main_initial_map}\n{initial_raise_types}\n{initial_raise_init}\n{initial_raise}\n{initial_raise_map}\n{file_scope}\n{context_types}\n{context_check}\n{scope_store}\n{permuted_store}\n{install}\n{handler_prolog}\n{filter_source}\n{false_filter_source}\n{normalizer_source}\n{guard_source}\n{header_source}\n{prefix_normalizer}\n{prefix_front}\n{guard_prefix}\n{prefix_caller}\n{bridge_native}\n{local_types}\n{owned_types}\n{local_source}\n{callback_source}\n{finally_source}\n{finally_cases}\n{original_local_store}\n{main_init}\n{inner_init}\n{owned_filter}\n{owned_bridge}\n{main_filter_bytes}\n{activation}\n{owned_prolog}\n{owned_prefix}\n{delivery_prefix}
 {inner_data}
 {unwind_caller}
 {stack_source}

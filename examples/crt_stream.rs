@@ -256,5 +256,8 @@ mod crt_finally_tests;
 mod restore_instruction;
 
 #[allow(dead_code)]
+#[path = "../src/frame_init.rs"]
+mod frame_init;
+#[allow(dead_code)]
 #[path = "../src/raise_call.rs"]
 mod raise_call;
