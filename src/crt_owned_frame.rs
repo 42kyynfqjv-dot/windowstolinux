@@ -156,7 +156,7 @@ struct CrtHandlerExit {anchor:guest_memory::Capability,id:RegistrationId,event:u
 struct CrtOwnedStorage {
  anchor:guest_memory::Capability,identity:RegistryIdentity,binding:OwnedFrameBinding,id:RegistrationId,event:u64,
  entry:CrtPointer,return_id:u64,image:FrameImage<RegistryHead>,ordinary:std::collections::BTreeSet<i32>,
- protected:std::collections::BTreeMap<i32,CrtValue>,input:Option<(Option<CrtPointer>,CrtPointer,CrtPointer,u32)>,pair_return:Option<(CrtPointer,u64)>,unwind_epoch:Option<u64>,
+ protected:std::collections::BTreeMap<i32,CrtValue>,input:Option<(Option<CrtPointer>,CrtPointer,CrtPointer,u32)>,pair_return:Option<(CrtPointer,u64)>,unwind_epoch:Option<u64>,resume_ticket:Option<u64>,
 }
 impl RegistryFrameStorage for CrtOwnedStorage{fn registry_image(&self)->&FrameImage<RegistryHead>{&self.image}}
 impl CrtOwnedStorage {
@@ -193,7 +193,7 @@ impl CrtOwnedStorage {
   // No external callback occurs before final registry installation.
   for(p,value)in writes{rt.store(p,32,value)?;}
   let id=r.install_frame(binding,&image)?;
-  Ok(Self{anchor:rt.anchor,identity:r.identity,binding,id,event:m.event,entry,return_id:cpu.return_id,image,ordinary:ordinary.iter().copied().collect(),protected,input:None,pair_return:None,unwind_epoch:None})
+  Ok(Self{anchor:rt.anchor,identity:r.identity,binding,id,event:m.event,entry,return_id:cpu.return_id,image,ordinary:ordinary.iter().copied().collect(),protected,input:None,pair_return:None,unwind_epoch:None,resume_ticket:None})
  }
  fn retire_completed(&mut self,rt:&mut CrtStreamRuntime,r:&mut ThreadRegistry,m:&mut Machine,completion:HandlerCompletion,exit:CrtHandlerExit)->RegistryResult<()>{
   let result=(||{
@@ -279,7 +279,7 @@ impl CrtOwnedStorage {
   self.input=Some((None,record,context,code));self.validate_search(rt,r,m)
  }
 }
-struct CrtOwnedFrameView<'a>{rt:&'a mut CrtStreamRuntime,registry:&'a mut ThreadRegistry,machine:&'a Machine,storage:&'a mut CrtOwnedStorage,search_storage:Option<&'a CrtOwnedStorage>,search:bool,active:u64,depth:u32,calls:u32,failed:bool}
+struct CrtOwnedFrameView<'a>{rt:&'a mut CrtStreamRuntime,registry:&'a mut ThreadRegistry,machine:&'a mut Machine,storage:&'a mut CrtOwnedStorage,search_storage:Option<&'a CrtOwnedStorage>,search:bool,active:u64,depth:u32,calls:u32,failed:bool}
 impl CrtOwnedFrameView<'_>{
  fn scope_address(&self)->u32{self.storage.image.scope_va}
  fn cookie_address(&self)->u32{self.registry.cookie_address}
@@ -408,7 +408,7 @@ impl CrtOwnedPrefixInput {
 /// context is retained for identity checks and is never used as call registers.
 struct CrtOwnedUnwind<'a>{
  source:&'a CrtOwnedPrefixInput,epoch:u64,wrapper_entry:CrtPointer,wrapper_id:u64,api_sp:CrtPointer,
- captured:Vec<CrtValue>,active:Vec<(u64,CrtPointer,CrtPointer,u64,RegistrationId)>,stack_extents:std::cell::RefCell<std::collections::BTreeMap<u64,u32>>,used:Vec<CrtPointer>,serial:u64,failed:bool,
+ captured:Vec<CrtValue>,active:Vec<(u64,CrtPointer,CrtPointer,u64,RegistrationId)>,stack_extents:std::cell::RefCell<std::collections::BTreeMap<u64,u32>>,used:Vec<CrtPointer>,serial:u64,failed:bool,completed:bool,
 }
 struct CrtUnwindDelivery{
  epoch:u64,serial:u64,target:RegistrationId,context:CrtPointer,entry:CrtPointer,callback:u64,captured_esp:u32,snapshot:Vec<CrtValue>,
@@ -433,14 +433,17 @@ impl CrtOwnedUnwind<'_>{
   let captured=Self::context_words(frame.rt,source.context)?;
   let epoch=frame.rt.generation.checked_add(1).ok_or("unwind generation exhausted")?;
   frame.rt.generation=epoch;frame.storage.unwind_epoch=Some(epoch);
-  Ok(CrtOwnedUnwind{source,epoch,wrapper_entry:entry,wrapper_id:cpu.return_id,api_sp,captured,active:vec![],stack_extents:std::cell::RefCell::new(std::collections::BTreeMap::new()),used:vec![],serial:0,failed:false})
+  Ok(CrtOwnedUnwind{source,epoch,wrapper_entry:entry,wrapper_id:cpu.return_id,api_sp,captured,active:vec![],stack_extents:std::cell::RefCell::new(std::collections::BTreeMap::new()),used:vec![],serial:0,failed:false,completed:false})
  }
  fn validate(&self,frame:&CrtOwnedFrameView<'_>)->RegistryResult<()>{
-  if self.failed||frame.search_storage.unwrap_or(frame.storage).unwind_epoch!=Some(self.epoch){return Err("unwind stale/failed lifetime");}
-  self.source.validate_source_fields(frame,2)?;
-  if frame.rt.load(self.wrapper_entry,32)?!=CrtValue::ProtectedReturn(self.wrapper_id)
-   ||frame.rt.tags.values().filter(|&&v|v==CrtValue::ProtectedReturn(self.wrapper_id)).count()!=1
-   ||Self::context_words(frame.rt,self.source.context)?!=self.captured{return Err("unwind captured context/wrapper changed");}
+  frame.validate()?;self.validate_parts(frame.rt,frame.registry,frame.machine,frame.search_storage.unwrap_or(frame.storage))
+ }
+ fn validate_parts(&self,rt:&CrtStreamRuntime,r:&ThreadRegistry,m:&Machine,source:&CrtOwnedStorage)->RegistryResult<()>{
+  if self.failed||source.unwind_epoch!=Some(self.epoch){return Err("unwind stale/failed lifetime");}
+  self.source.validate_source_storage(rt,r,m,source,2)?;
+  if rt.load(self.wrapper_entry,32)?!=CrtValue::ProtectedReturn(self.wrapper_id)
+   ||rt.tags.values().filter(|&&v|v==CrtValue::ProtectedReturn(self.wrapper_id)).count()!=1
+   ||Self::context_words(rt,self.source.context)?!=self.captured{return Err("unwind captured context/wrapper changed");}
   Ok(())
  }
  /// Scoped explicit delivery cut. The provider must independently establish
@@ -508,6 +511,14 @@ impl CrtOwnedUnwind<'_>{
    if frame.rt.load(frame.rt.offset(self.api_sp,i as i64*4)?,32)?!=v{return Err("unwind continuation arguments changed");}
   }Ok(())
  }
+ /// Conditional component boundary: supplies no Windows API-effect certificate.
+ fn resume_cut(&mut self,frame:&mut CrtOwnedFrameView<'_>,cpu:&CrtCpu,target:u32)->RegistryResult<CrtUnwindResumeCut>{
+  self.check_cleanup_boundary(frame,cpu,target)?;
+  if self.completed||frame.storage.resume_ticket.is_some()||!self.stack_extents.try_borrow().map_err(|_|"unwind resume stack extent borrow")?.is_empty()||frame.machine.current!=frame.machine.selected||frame.machine.frames.iter().skip(frame.machine.selected+1).any(|f|f.live){return Err("unwind resume cut incomplete/replayed event");}
+  CrtUnwindResumeCut::check_saved(frame.rt,cpu,self.wrapper_entry)?;
+  let ticket=frame.rt.generation.checked_add(1).ok_or("unwind resume ticket exhausted")?;frame.rt.generation=ticket;frame.storage.resume_ticket=Some(ticket);self.completed=true;
+  Ok(CrtUnwindResumeCut{anchor:frame.rt.anchor,identity:frame.registry.identity,event:frame.machine.event,source:frame.storage.id,epoch:self.epoch,ticket,wrapper_entry:self.wrapper_entry,wrapper_id:self.wrapper_id,api_sp:self.api_sp,target,record:self.source.record,context:self.source.context,code:self.source.code,captured:self.captured.clone()})
+ }
  fn validate_delivery(&self,frame:&CrtOwnedFrameView<'_>,cpu:&CrtCpu,token:&CrtUnwindDelivery)->RegistryResult<()>{
   self.validate(frame)?;
   if token.target!=frame.storage.id||token.epoch!=self.epoch||self.active.last()!=Some(&(token.serial,token.context,token.entry,token.callback,token.target))
@@ -524,6 +535,27 @@ impl CrtOwnedUnwind<'_>{
  }
 }
 
+/// Single-use continuation-input cut. Read-only snapshots never restore registers.
+struct CrtUnwindResumeCut{anchor:guest_memory::Capability,identity:RegistryIdentity,event:u64,source:RegistrationId,epoch:u64,ticket:u64,wrapper_entry:CrtPointer,wrapper_id:u64,api_sp:CrtPointer,target:u32,record:CrtPointer,context:CrtPointer,code:u32,captured:Vec<CrtValue>}
+impl CrtUnwindResumeCut{
+ fn check_saved(rt:&CrtStreamRuntime,cpu:&CrtCpu,entry:CrtPointer)->RegistryResult<()>{
+  if cpu.returned||CrtCpu::pointer(cpu.entry[4])?!=entry||rt.load(entry,32)?!=CrtValue::ProtectedReturn(cpu.return_id)||rt.tags.values().filter(|&&v|v==CrtValue::ProtectedReturn(cpu.return_id)).count()!=1{return Err("unwind resume caller lifetime");}
+  for(offset,reg)in [(-4,5),(-8,3),(-12,6),(-16,7)]{if rt.load(rt.offset(entry,offset)?,32)?!=cpu.entry[reg]{return Err("unwind resume saved register changed");}}Ok(())
+ }
+ fn apply(self,frame:&mut CrtOwnedFrameView<'_>,cpu:&mut CrtCpu,expected_target:u32)->RegistryResult<()>{
+  let result=(||{
+   frame.validate()?;
+   if self.anchor!=frame.rt.anchor||self.identity!=frame.registry.identity||self.event!=frame.machine.event||self.source!=frame.storage.id||frame.storage.unwind_epoch!=Some(self.epoch)||frame.storage.resume_ticket!=Some(self.ticket)||self.target!=expected_target||frame.active!=self.wrapper_id||cpu.return_id!=self.wrapper_id||cpu.r[4]!=CrtValue::Pointer(self.api_sp)||frame.registry.target_ready()?!=self.source||frame.machine.current!=frame.machine.selected||frame.machine.frames.iter().skip(frame.machine.selected+1).any(|f|f.live){return Err("unwind resume cut ownership/target");}
+   Self::check_saved(frame.rt,cpu,self.wrapper_entry)?;
+   if frame.rt.offset(self.api_sp,16)?!=frame.rt.offset(self.wrapper_entry,-16)?||CrtOwnedUnwind::context_words(frame.rt,self.context)?!=self.captured||frame.storage.input.is_none_or(|(_,record,context,_)|record!=self.record||context!=self.context){return Err("unwind resume captured/stack changed");}
+   for(offset,value)in [(0,self.code),(4,2),(8,0),(16,0)]{if frame.rt.load(frame.rt.offset(self.record,offset)?,32)?.known_scalar()?!=value{return Err("unwind resume record changed");}}
+   let owner=frame.rt.resolve_absolute(frame.storage.image.record,CrtRegionKind::Stack)?;
+   for(i,v)in [CrtValue::Pointer(owner),CrtValue::scalar(self.target),CrtValue::Pointer(self.record),CrtValue::scalar(0)].into_iter().enumerate(){if frame.rt.load(frame.rt.offset(self.api_sp,i as i64*4)?,32)?!=v{return Err("unwind resume arguments changed");}}
+   cpu.discard(frame.rt,16)?;let sp=cpu.r[4];cpu.r=[CrtValue::Scalar{bits:0,known:0};8];cpu.r[4]=sp;cpu.r[0]=CrtValue::scalar(0);cpu.flags=CrtFlags::unknown();frame.storage.resume_ticket=None;Ok(())
+  })();if result.is_err(){frame.failed=true;}result
+ }
+}
+
 /// Borrowed live delivery authority. It never substitutes the saved CONTEXT.
 struct CrtOwnedDeliveryPrefix<'a,'b,'c>{session:&'a CrtOwnedUnwind<'b>,token:&'c CrtUnwindDelivery,record:CrtPointer,context:CrtPointer}
 impl<'a,'b,'c> CrtOwnedDeliveryPrefix<'a,'b,'c>{
@@ -536,10 +568,13 @@ impl<'a,'b,'c> CrtOwnedDeliveryPrefix<'a,'b,'c>{
   Ok(Self{session,token,record:session.source.record,context:token.context})
  }
  fn validate_prefix_source(&self,frame:&CrtOwnedFrameView<'_>)->RegistryResult<()>{
-  self.session.validate(frame)?;let token=self.token;
-  if token.target!=frame.storage.id||self.session.active.last()!=Some(&(token.serial,token.context,token.entry,token.callback,token.target))||token.epoch!=self.session.epoch||self.record!=self.session.source.record||self.context!=token.context||frame.rt.load(token.entry,32)?!=CrtValue::ProtectedReturn(token.callback)||frame.rt.tags.values().filter(|&&v|v==CrtValue::ProtectedReturn(token.callback)).count()!=1||CrtOwnedUnwind::context_words(frame.rt,token.context)?!=token.snapshot{return Err("delivery prefix stale lease/context");}
-  let owner=frame.rt.resolve_absolute(frame.storage.image.record,CrtRegionKind::Stack)?;
-  for(i,v)in [CrtValue::Pointer(self.record),CrtValue::Pointer(owner),CrtValue::Pointer(self.context),CrtValue::scalar(0)].into_iter().enumerate(){if frame.rt.load(frame.rt.offset(token.entry,4+i as i64*4)?,32)?!=v{return Err("delivery prefix callback arguments changed");}}Ok(())
+  frame.validate()?;self.validate_live(frame.rt,frame.registry,frame.machine,frame.storage,frame.search_storage.unwrap_or(frame.storage))
+ }
+ fn validate_live(&self,rt:&CrtStreamRuntime,r:&ThreadRegistry,m:&Machine,storage:&CrtOwnedStorage,source:&CrtOwnedStorage)->RegistryResult<()>{
+  storage.validate(rt,r,m)?;self.session.validate_parts(rt,r,m,source)?;let token=self.token;
+  if token.target!=storage.id||self.session.active.last()!=Some(&(token.serial,token.context,token.entry,token.callback,token.target))||token.epoch!=self.session.epoch||self.record!=self.session.source.record||self.context!=token.context||rt.load(token.entry,32)?!=CrtValue::ProtectedReturn(token.callback)||rt.tags.values().filter(|&&v|v==CrtValue::ProtectedReturn(token.callback)).count()!=1||CrtOwnedUnwind::context_words(rt,token.context)?!=token.snapshot{return Err("delivery prefix stale lease/context");}
+  let owner=rt.resolve_absolute(storage.image.record,CrtRegionKind::Stack)?;
+  for(i,v)in [CrtValue::Pointer(self.record),CrtValue::Pointer(owner),CrtValue::Pointer(self.context),CrtValue::scalar(0)].into_iter().enumerate(){if rt.load(rt.offset(token.entry,4+i as i64*4)?,32)?!=v{return Err("delivery prefix callback arguments changed");}}Ok(())
  }
 }
 

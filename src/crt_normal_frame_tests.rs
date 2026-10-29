@@ -380,7 +380,7 @@ fn owned_local_cases(){
 }
 
 fn owned_main_cases(){
- for mode in 0..124{
+ for mode in 0..132{
   let mut m=Machine::new_dispatch_known((0..if mode>=75{2}else{1}).map(|_|FrameSpec{scopes:vec![]}).collect(),0,[None;10],Some(0)).unwrap();
   let mut r=ThreadRegistry::new(m.owner(),0x8000,0xf000,&[(0x400000,0x420000)],0x41c000).unwrap();let mut rt=runtime(&r);
   let entry=rt.resolve_absolute(if mode==23||mode==32||mode==41||mode==76{0xe800}else{0xe000},CrtRegionKind::Stack).unwrap();rt.store(entry,32,CrtValue::ProtectedReturn(71)).unwrap();let cpu=CrtCpu::new(entry,71).unwrap();
@@ -426,7 +426,7 @@ fn owned_main_cases(){
   let bridge_sp=if mode==12{entry}else{runtime.resolve_absolute(if mode==23||mode==32||mode==41||mode==76{0xb000}else{0xc000},CrtRegionKind::Stack).unwrap()};let return_id=if mode==12{71}else{200};if mode!=12{runtime.store(bridge_sp,32,CrtValue::ProtectedReturn(return_id)).unwrap();}
   let mut c=CrtCpu::new(bridge_sp,return_id).unwrap();let target_code=original_main_filter_bytes();let target=runtime.map_region(0x401333,target_code.len()as u32,CrtRegionKind::Module,Some(&target_code)).unwrap();
   c.r[1]=CrtValue::Pointer(target);c.r[2]=CrtValue::Pointer(bp);
-  let mut view=CrtOwnedFrameView{rt:runtime,registry:&mut r,machine:&m,storage:&mut storage,search_storage:None,search:true,active:c.return_id,depth:0,calls:0,failed:false};
+  let mut view=CrtOwnedFrameView{rt:runtime,registry:&mut r,machine:&mut m,storage:&mut storage,search_storage:None,search:true,active:c.return_id,depth:0,calls:0,failed:false};
   if mode>=14{
    let (record,context)=if mode==19{
     let other_record=view.rt.map_region(0x53000,80,CrtRegionKind::Context,None).unwrap();let other_context=view.rt.map_region(0x54000,716,CrtRegionKind::Context,None).unwrap();
@@ -478,7 +478,7 @@ fn owned_main_cases(){
      if mode==38{view.rt.consume_stack(bridge_sp,CrtValue::ProtectedReturn(return_id)).unwrap();}
      if mode==39{view.rt.store(view.rt.offset(hbp,-8).unwrap(),32,CrtValue::scalar(table.address())).unwrap();}
      if mode==40{c.r[6]=CrtValue::Pointer(hbp);}
-     let snapshot=c.r;let saved=m.owned_context;
+     let snapshot=c.r;let saved=view.machine.owned_context;
      let result=owned_search_to_global_call(&mut view,&mut c,&input);
      if (34..=40).contains(&mode){
       assert!(result.is_err(),"owned search mode {mode}");assert!(view.failed);
@@ -488,14 +488,14 @@ fn owned_main_cases(){
      result.unwrap();input.validate(&view,&c).unwrap();
      assert_eq!(c.r[1],CrtValue::Pointer(view.rt.offset(bp,-16).unwrap()));assert_eq!(c.r[2],CrtValue::Pointer(record));
      assert_eq!(c.r[3],CrtValue::scalar((-2i32)as u32));assert_eq!(c.r[7],CrtValue::scalar(0));assert_eq!(c.r[4],CrtValue::Pointer(view.rt.offset(hbp,-40).unwrap()));
-     assert_eq!(view.calls,5);assert_eq!(view.storage.image.try_level,0);assert_eq!(m.owned_context,saved);assert_eq!(m.phase,Phase::Cleanup);
+     assert_eq!(view.calls,5);assert_eq!(view.storage.image.try_level,0);assert_eq!(view.machine.owned_context,saved);assert_eq!(view.machine.phase,Phase::Cleanup);
      for offset in [-776,-780]{assert_eq!(view.read(offset).unwrap(),CrtValue::scalar(0xe0424242));}
      if (51..=65).contains(&mode)||mode>=70{
       let captured_before=CrtOwnedUnwind::context_words(view.rt,context).unwrap();
       let delivery=view.rt.map_region(0x55000,716,CrtRegionKind::Context,None).unwrap();
       if mode!=55{view.rt.store(view.rt.offset(delivery,0xc4).unwrap(),32,CrtValue::scalar(0x9600)).unwrap();}
       let nested_context=view.rt.map_region(0x56000,716,CrtRegionKind::Context,None).unwrap();view.rt.store(view.rt.offset(nested_context,0xc4).unwrap(),32,CrtValue::scalar(0x9700)).unwrap();
-      let mut reached=0;let mut marker=None;let mut retirement=None;
+      let before_wrapper=c.r;let mut reached=0;let mut marker=None;let mut retirement=None;
       let result=view.call(&mut c,0x402337,|f,wrapper|original_global_delivery_cut(f,wrapper,&input,|f,wrapper,session|{
        // Explicit independently supplied unwind delivery input. This is not
        // an implementation of RtlUnwind's writes or Windows context capture.
@@ -538,7 +538,19 @@ fn owned_main_cases(){
           if disposition!=1||!child.returned{return Err("connected original handler return");}
           Ok(CrtHandlerExit{anchor:source.rt.anchor,id:target.id,event:source.machine.event,disposition,completion_generation:source.registry.generation.checked_add(1).ok_or("handler completion generation overflow")?})
          });
-         let(exit,completion)=result?;retirement=Some((exit,completion));return Ok(());
+         let(exit,completion)=result?;
+         if mode>=124{
+          target.retire_completed(f.rt,f.registry,f.machine,completion,exit)?;
+          let cut=session.resume_cut(f,wrapper,if mode==125{0x402856}else{0x402855})?;
+          if mode==127{assert!(session.resume_cut(f,wrapper,0x402855).is_err());}
+          if mode==126{f.rt.store(f.rt.offset(session.wrapper_entry,-8)?,32,CrtValue::scalar(1))?;}
+          if mode==128{wrapper.return_id+=1;}
+          if mode==129{f.rt.consume_stack(session.wrapper_entry,CrtValue::ProtectedReturn(session.wrapper_id))?;}
+          if mode==130{f.machine.current=1;}
+          if mode==131{f.rt.store(f.rt.offset(context,0xb8)?,32,CrtValue::scalar(7))?;}
+          return Ok(Some(cut));
+         }
+         retirement=Some((exit,completion));return Ok(None);
         }
         let result=session.with_target_delivery(f,target,&mut child,delivery,|session,t,child,token|{
          reached+=1;assert_eq!(token.target,t.storage.id);assert_ne!(token.target,input.id);
@@ -558,8 +570,8 @@ fn owned_main_cases(){
           session.with_delivery(t,&mut nested,nested_context,|session,t,nested,note|{reached+=1;assert_eq!(owned_delivery_prefix_helpers::execute(session,t,nested,note)?,0x4022bd);session.validate_delivery(t,nested,note)})?;
          }Ok(())
         });
-        if mode==75||mode==76||mode==77{result?;assert_eq!(f.storage.input,source_pair);assert_eq!(f.rt.load(source_guard,32)?,guard_before);assert_eq!(CrtOwnedUnwind::context_words(f.rt,context)?,captured_before);assert!(session.check_cleanup_boundary(f,wrapper,0x402855).is_err());return Ok(());}
-        assert!(result.is_err(),"cross-frame case {mode}");return result;
+        if mode==75||mode==76||mode==77{result?;assert_eq!(f.storage.input,source_pair);assert_eq!(f.rt.load(source_guard,32)?,guard_before);assert_eq!(CrtOwnedUnwind::context_words(f.rt,context)?,captured_before);assert!(session.check_cleanup_boundary(f,wrapper,0x402855).is_err());return Ok(None);}
+        assert!(result.is_err(),"cross-frame case {mode}");return result.map(|_|None);
        }
        let context_arg=if mode==53{context}else if mode==54{record}else{delivery};
        let sp=f.rt.resolve_absolute(0xa000,CrtRegionKind::Stack)?;
@@ -601,8 +613,13 @@ fn owned_main_cases(){
        session.check_cleanup_boundary(f,wrapper,0x402855)?;
 
        assert_eq!(CrtOwnedUnwind::context_words(f.rt,context)?,captured_before);
-       Ok(())
+       Ok(None)
       }));
+      if mode>=124{
+       if mode==124||mode==127{assert_eq!(result.unwrap(),CrtValue::scalar(0));assert!(!view.failed);assert!(view.storage.resume_ticket.is_none());for reg in [3,5,6,7]{assert_eq!(c.r[reg],before_wrapper[reg]);}assert!(c.flags.zf.is_none());assert!(c.r[1].known_scalar().is_err());assert!(input.validate_prefix_source(&view).is_err());}
+       else{assert!(result.is_err());assert!(view.failed);assert_ne!(result.unwrap_err(),"RtlUnwind requires owned continuation and effect contract");}
+       assert_eq!(view.registry.target_ready().unwrap(),view.storage.id);assert!(!view.machine.frames[1].live);assert_eq!(view.rt.load(view.rt.resolve_absolute(0x41c948,CrtRegionKind::Module).unwrap(),32).unwrap(),CrtValue::scalar(1298));assert_eq!(view.machine.owned_context,saved);continue;
+      }
       if mode>=90{
        assert!(result.is_err());assert!(view.failed);
        if mode==90||mode==93||mode==122{
@@ -626,7 +643,7 @@ fn owned_main_cases(){
        if [78,79,80,82,87].contains(&mode){assert_eq!(reached,0);}
        if mode==86{assert_eq!(error,"unwind delivery callback stack");assert_eq!(reached,1);}
        if mode==85{assert_eq!(error,"independent target failure after write");assert_eq!(view.rt.load(marker.unwrap(),32).unwrap(),CrtValue::scalar(0xface));}
-       assert_eq!(m.owned_context,saved);assert_eq!(m.phase,Phase::Cleanup);continue;
+       assert_eq!(view.machine.owned_context,saved);assert_eq!(view.machine.phase,Phase::Cleanup);continue;
       }
       if mode==70||mode==72||mode==73||mode==74{assert_ne!(result.as_ref().unwrap_err(),&"RtlUnwind requires owned continuation and effect contract");}
       assert!(result.is_err());assert!(view.failed);assert!(view.storage.unwind_epoch.is_some());
@@ -635,7 +652,7 @@ fn owned_main_cases(){
       if let Some(p)=marker{assert_eq!(view.rt.load(p,32).unwrap(),CrtValue::scalar(0xface));}
       if mode==57{assert_eq!(view.rt.load(view.rt.offset(context,0xb8).unwrap(),32).unwrap(),CrtValue::scalar(7));}
       if mode==58{assert_eq!(view.rt.load(view.rt.offset(delivery,0xb8).unwrap(),32).unwrap(),CrtValue::scalar(8));}
-      assert_eq!(m.owned_context,saved);assert_eq!(m.phase,Phase::Cleanup);continue;
+      assert_eq!(view.machine.owned_context,saved);assert_eq!(view.machine.phase,Phase::Cleanup);continue;
      }
      if (66..=69).contains(&mode){
       // Explicit API continuation input, distinct from an executed API. The
@@ -643,14 +660,14 @@ fn owned_main_cases(){
       let old=c.r;let result=view.call(&mut c,0x402337,|f,wrapper|original_global_tail_cut(f,wrapper,&input,(mode-66)as u32));
       if mode==66{assert_eq!(result.unwrap(),CrtValue::scalar(0));for reg in [3,5,6,7]{assert_eq!(c.r[reg],old[reg]);}assert!(c.flags.zf.is_none());for reg in [1,2]{assert!(c.r[reg].known_scalar().is_err());}}
       else{assert!(result.is_err());assert!(view.failed);}
-      assert_eq!(m.owned_context,saved);assert_eq!(m.phase,Phase::Cleanup);continue;
+      assert_eq!(view.machine.owned_context,saved);assert_eq!(view.machine.phase,Phase::Cleanup);continue;
      }
-     if mode==50{view.rt.store(view.rt.offset(record,4).unwrap(),32,CrtValue::scalar(2)).unwrap();assert!(input.validate(&view,&c).is_err());assert_eq!(view.rt.load(view.rt.offset(record,4).unwrap(),32).unwrap(),CrtValue::scalar(2));assert_eq!(m.owned_context,saved);continue;}
+     if mode==50{view.rt.store(view.rt.offset(record,4).unwrap(),32,CrtValue::scalar(2)).unwrap();assert!(input.validate(&view,&c).is_err());assert_eq!(view.rt.load(view.rt.offset(record,4).unwrap(),32).unwrap(),CrtValue::scalar(2));assert_eq!(view.machine.owned_context,saved);continue;}
      if mode==42{
       let sp=CrtCpu::pointer(c.r[4]).unwrap();let old=c.r;let result=view.call(&mut c,0x402337,|f,child|original_global_to_api(f,child,&input));
       assert_eq!(result.unwrap_err(),"RtlUnwind requires owned continuation and effect contract");assert!(view.failed);
       assert_eq!(c.r[4],CrtValue::Pointer(view.rt.offset(sp,-36).unwrap()));let transient=view.rt.load(view.rt.offset(sp,-4).unwrap(),32).unwrap();assert!(matches!(transient,CrtValue::ProtectedReturn(id) if id!=return_id)); // transient CALL remains live on failure
-      assert_eq!(view.storage.image.try_level,0);assert_eq!(m.owned_context,saved);assert_eq!(c.r[3],old[3]);continue;
+      assert_eq!(view.storage.image.try_level,0);assert_eq!(view.machine.owned_context,saved);assert_eq!(c.r[3],old[3]);continue;
      }
      if (43..=49).contains(&mode){
       // Separate original MOV fragment entry; no claim that RtlUnwind returned.
@@ -663,7 +680,7 @@ fn owned_main_cases(){
       if (44..=47).contains(&mode){assert!(result.is_err());assert_eq!(view.storage.image.try_level,0);assert_eq!(view.rt.load(view.rt.offset(bp,-4).unwrap(),32).unwrap(),CrtValue::scalar(0));continue;}
       result.unwrap();assert_eq!(view.storage.image.try_level,-2);assert_eq!(view.rt.load(view.rt.offset(bp,-4).unwrap(),32).unwrap(),CrtValue::scalar((-2i32)as u32));
       if mode==48{assert!(owned_selected_scope_store(&mut view,&fragment).is_err());}
-      assert_eq!(m.phase,Phase::Cleanup);assert_eq!(m.owned_context,saved);
+      assert_eq!(view.machine.phase,Phase::Cleanup);assert_eq!(view.machine.owned_context,saved);
       drop(view);assert!(m.restore_owned(0x40135c,|_,_|panic!("scope store cannot authorize restoration")).is_err());assert_eq!(m.owned_context,saved);continue;
      }
      drop(view);
@@ -686,7 +703,7 @@ fn owned_main_cases(){
    assert_eq!(result.unwrap(),CrtValue::scalar(1));
    for offset in [-776,-780]{assert_eq!(view.rt.load(view.rt.offset(bp,offset).unwrap(),32).unwrap().known_scalar().unwrap(),0xe0424242);}
    assert!(matches!(view.storage.image.words.get(&-780),Some(FrameWord::Unknown))); // cache has no write authority
-   assert_eq!(m.phase,Phase::Cleanup);assert_eq!(view.rt.load(entry,32).unwrap(),CrtValue::ProtectedReturn(71));
+   assert_eq!(view.machine.phase,Phase::Cleanup);assert_eq!(view.rt.load(entry,32).unwrap(),CrtValue::ProtectedReturn(71));
   }else{assert!(result.is_err(),"owned mode {mode}");}
  }
 }
@@ -1280,9 +1297,9 @@ fn map_local_wrapper(rt:&mut CrtStreamRuntime)->RegistryResult<()>{{rt.map_regio
         let global_private=global_proof.calls[0].entry_depth.checked_sub(4).unwrap();
         let delivery_body=crate::crt_stream_emit::emit_body_with_hooks(&global_graph,|pc,target|{
          assert_eq!((pc,target),(0x40284f,crate::crt_stream_ir::Target::Import(0x415040)));
-         Ok(format!("{argument_check}let mut pending=CrtOwnedUnwind::begin(frame,cpu,objects,{global_private})?;probe(frame,cpu,&mut pending)?;return Err(\"RtlUnwind requires owned continuation and effect contract\");"))
+         Ok(format!("{argument_check}let mut pending=CrtOwnedUnwind::begin(frame,cpu,objects,{global_private})?;let cut=probe(frame,cpu,&mut pending)?;if let Some(cut)=cut{{cut.apply(frame,cpu,0x402855)?;}}else{{return Err(\"RtlUnwind requires owned continuation and effect contract\");}}"))
         },&Default::default(),64,|_,_|Err("unexpected thread effect".into()),|_,op|Ok(if matches!(op,crate::crt_stream_ir::Op::Call(_)){String::new()}else{"let rt=&mut *frame.rt;".into()}),|_,_|Ok(None)).unwrap();
-        let delivery_source=format!("fn original_global_delivery_cut<F>(frame:&mut CrtOwnedFrameView<'_>,cpu:&mut CrtCpu,objects:&CrtOwnedPrefixInput,mut probe:F)->RegistryResult<CrtValue> where F:FnMut(&mut CrtOwnedFrameView<'_>,&mut CrtCpu,&mut CrtOwnedUnwind<'_>)->RegistryResult<()>{{frame.preflight_bridge(cpu,{})?;{delivery_body}}}",global_proof.temporary_bytes);
+        let delivery_source=format!("fn original_global_delivery_cut<F>(frame:&mut CrtOwnedFrameView<'_>,cpu:&mut CrtCpu,objects:&CrtOwnedPrefixInput,mut probe:F)->RegistryResult<CrtValue> where F:FnMut(&mut CrtOwnedFrameView<'_>,&mut CrtCpu,&mut CrtOwnedUnwind<'_>)->RegistryResult<Option<CrtUnwindResumeCut>>{{frame.preflight_bridge(cpu,{})?;{delivery_body}}}",global_proof.temporary_bytes);
         let tail_body=crate::crt_stream_emit::emit_body_with_hooks(&global_graph,|pc,target|{
          assert_eq!((pc,target),(0x40284f,crate::crt_stream_ir::Target::Import(0x415040)));
          Ok(format!(r#"{argument_check}

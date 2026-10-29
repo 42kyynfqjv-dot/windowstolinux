@@ -545,3 +545,47 @@ resumption; it cannot by itself authorize guest restoration. OS delivery, full
 startup and rcedit remain unsupported until entry-to-exit evidence establishes
 those semantics. Sol can review this native integration and attempt the bounded
 completion handoff, escalating only a concrete unresolved semantic question.
+
+## Conditional owned wrapper resumption after retirement
+
+This remains a component continuation-input cut, not an RtlUnwind implementation
+or API-effect/admission certificate. The supplied delivery CONTEXT and preserved
+API-boundary footprint are explicit assumptions; production API binding still
+rejects the original call without its complete effect contract.
+
+The frame view now lends the event Machine mutably as well as registry/storage.
+Readonly callback validation uses common shared source/target checks rather than
+constructing a second mutable event view. This lets the live pending wrapper
+retire Inner using its real handler-completion/epilog receipts before testing
+continuation readiness. The prior test retired it only after wrapper rejection.
+
+A non-Clone, single-use continuation-cut token binds runtime/thread/event/source,
+unwind epoch, issued ticket, wrapper return, exact argument stack, original
+TargetIp and readonly captured-context comparison. Issuance requires no active
+delivery/stack leases, all younger registry and Machine frames retired, and the
+selected source ready. Applying it rechecks those identities, the full captured
+CONTEXT, record fields, original four arguments and actual wrapper save slots.
+The ticket is consumed once; the search input stays permanently suspended.
+
+At this explicit cut the four actual API arguments are consumed, EAX receives
+original ReturnValue0, ESP becomes the validated continuation stack, and other
+working registers/flags become unknown. The unchanged wrapper's real POP/RET
+instructions then restore its own saved nonvolatiles and pass ordinary protected
+return checks. No saved-context shadow array authorizes guest restoration, and
+normal CALL/RET ABI validation is unchanged. Native results are compared to the
+wrapper's own entry state, not an earlier handler state.
+
+Eight new cases cover successful connected resumption, wrong TargetIp, changed
+saved word, denied duplicate issuance with a still-valid original token, wrong
+wrapper identity, expired wrapper return, wrong Machine current frame and
+changed captured CONTEXT. The negative cases retain completed cleanup writes and
+younger retirement but cannot resume. These are native conditional-cut cases,
+not new Windows differential or whole-PE pairs. Counts overlap:132 owned-frame,
+75 delivery,57 cross-frame,42 connected native callback/loop/stack,8 resume-cut.
+Five existing recorded wrapper comparisons remain separate.
+
+Next establish the global API footprint/continuation certificate against the
+original delivery and saved-state acquisition contract, including independent
+multi-frame original evidence. Conditional context/footprint inputs cannot be
+silently promoted to that certificate. Selected handler cleanup/transfer and OS
+entry-to-exit composition remain gates; full startup/rcedit stays unsupported.

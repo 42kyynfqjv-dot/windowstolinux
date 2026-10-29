@@ -293,7 +293,7 @@ let value=original_native_finally(rt,s,record,m,cpu,target)?;rt.store(rt.resolve
 fn connected_inner_cleanup(session:&CrtOwnedUnwind<'_>,frame:&mut CrtOwnedFrameView<'_>,cpu:&mut CrtCpu,token:&CrtUnwindDelivery,fault:usize,source_guard:CrtPointer)->RegistryResult<()>{
  CrtOwnedDeliveryPrefix{session,token,record:session.source.record,context:token.context}.validate_prefix_source(frame)?;cpu.validate_active(frame.rt)?;
  let rows=[LocalScope{parent:-2,filter:0,handler:0x40117f},LocalScope{parent:0,filter:0,handler:0x40116e}];
- let rt=&mut *frame.rt;let machine=frame.machine;
+ let rt=&mut *frame.rt;let machine=&*frame.machine;
  frame.registry.execute_local(frame.storage.id,frame.storage,LocalEntry{entry_sp:CrtCpu::pointer(cpu.entry[4])?.address(),handler:0x4027b0,cookie_address:0x41c000,cookie:0x12345678,target_level:-2},|record,storage|{
   let entry=CrtCpu::pointer(cpu.entry[4])?;let low=rt.offset(entry,-40)?;rt.valid(low,44)?;
   if fault==14{rt.store(rt.offset(entry,-8)?,32,CrtValue::ProtectedReturn(9999))?;}
@@ -312,8 +312,7 @@ fn connected_inner_cleanup(session:&CrtOwnedUnwind<'_>,frame:&mut CrtOwnedFrameV
     if fault==4{rt.store(rt.offset(token.context,0xb8)?,32,CrtValue::scalar(8))?;}
     if fault==5{rt.store(source_guard,32,CrtValue::scalar(0))?;}
     if fault==6{rt.store(rt.resolve_absolute(0xa100,CrtRegionKind::Stack)?,32,CrtValue::ProtectedReturn(token.callback))?;}
-    let check=CrtOwnedFrameView{rt,registry:record.registry,machine,storage:s,search_storage:frame.search_storage,search:false,active:frame.active,depth:frame.depth,calls:frame.calls,failed:false};
-    CrtOwnedDeliveryPrefix{session,token,record:session.source.record,context:token.context}.validate_prefix_source(&check)
+    CrtOwnedDeliveryPrefix{session,token,record:session.source.record,context:token.context}.validate_live(rt,record.registry,machine,s,frame.search_storage.unwrap_or(s))
    }};original_native_local_loop(&mut effects,cpu,fault)?;
   let temporary=effects.temporary.take().ok_or("native temporary missing after loop")?;drop(effects);temporary.validate(rt,record)?;if fault==13{let entry=CrtCpu::pointer(cpu.entry[4])?;rt.store(rt.offset(entry,-4)?,32,CrtValue::scalar(0))?;}original_local_stack_exit(rt,record,cpu)?;Ok(())
  })?;
@@ -363,7 +362,7 @@ fn live_finally_cases(){
    if mode==22{rt.store(rt.resolve_absolute(0x9900,CrtRegionKind::Stack)?,32,CrtValue::ProtectedReturn(946))?;}
    if mode==23{rt.consume_stack(sp,CrtValue::ProtectedReturn(946))?;}
    for(at,b)in finally_original_regions(){let at=rt.resolve_absolute(at,CrtRegionKind::Module)?;for(i,expected)in b.iter().enumerate(){if rt.load(rt.offset(at,i as i64)?,8)?.known_scalar()?!=u32::from(*expected){return Err("postcleanup original code changed");}}}
-   let mut view=CrtOwnedFrameView{rt:&mut rt,registry:r,machine:&m,storage:s,search_storage:None,search:false,active:946,depth:0,calls:0,failed:false};
+   let mut view=CrtOwnedFrameView{rt:&mut rt,registry:r,machine:&mut m,storage:s,search_storage:None,search:false,active:946,depth:0,calls:0,failed:false};
    if mode>=24{view.call(&mut cpu,0x40226e,|view,child|{
     if mode==25{let alias=view.rt.resolve_absolute(0x9900,CrtRegionKind::Stack)?;view.rt.store(alias,32,CrtValue::ProtectedReturn(child.return_id))?;}
     original_inner_guard_call(view,child,0x40226e)?;child.finish(view.rt)
