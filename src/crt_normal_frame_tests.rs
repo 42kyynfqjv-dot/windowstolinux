@@ -380,7 +380,7 @@ fn owned_local_cases(){
 }
 
 fn owned_main_cases(){
- for mode in 0..158{
+ for mode in 0..168{
   let mut m=Machine::new_dispatch_known((0..if mode>=75{2}else{1}).map(|_|FrameSpec{scopes:vec![]}).collect(),0,[None;10],Some(0)).unwrap();
   let mut r=ThreadRegistry::new(m.owner(),0x8000,0xf000,&[(0x400000,0x420000)],0x41c000).unwrap();let mut rt=runtime(&r);
   let entry=rt.resolve_absolute(if mode==23||mode==32||mode==41||mode==76{0xe800}else{0xe000},CrtRegionKind::Stack).unwrap();rt.store(entry,32,CrtValue::ProtectedReturn(71)).unwrap();let cpu=CrtCpu::new(entry,71).unwrap();
@@ -675,12 +675,27 @@ fn owned_main_cases(){
           if mode==155{view.storage.selected_cut=None;}
           if mode==157{c.r[4]=CrtValue::Pointer(view.rt.offset(CrtCpu::pointer(c.r[4]).unwrap(),-4).unwrap());}
           let before=c.r;let jump=owned_selected_bridge(&mut view,&mut c);
-          if mode==151||mode==156{
+          if mode==151||mode==156||mode>=158{
            let jump=jump.unwrap();assert_eq!(jump.landing.address(),0x40135c);assert_eq!(jump.owner,view.owner_frame().unwrap());assert!(jump.ticket>0);
            assert_eq!(view.rt.load(jump.slot,32).unwrap(),CrtValue::ProtectedReturn(jump.id));
            for reg in [0,1,2,3,7]{assert_eq!(c.r[reg],CrtValue::scalar(0));}assert_eq!(c.r[6],CrtValue::scalar(0x40135c));assert_eq!(c.r[5],CrtValue::Pointer(jump.owner));
            require_original_notification(view.rt,view.storage,0x40135c,1).unwrap();
            if mode==156{assert!(owned_selected_bridge(&mut view,&mut c).is_err());}
+           if mode>=158{
+            let slot=jump.slot;let old_entry=CrtCpu::pointer(c.entry[4]).unwrap();let saved_sp=view.rt.offset(jump.owner,-24).unwrap();let before=c.r;
+            if mode==159{view.rt.store(saved_sp,32,CrtValue::scalar(view.storage.image.esp)).unwrap();}
+            if mode==160{view.rt.store(view.rt.resolve_absolute(0x40135c,CrtRegionKind::Module).unwrap(),8,CrtValue::scalar(0x90)).unwrap();}
+            if mode==161{view.rt.store(view.rt.offset(slot,-4).unwrap(),32,CrtValue::ProtectedReturn(jump.id)).unwrap();}
+            if mode==162{view.rt.store(view.rt.offset(old_entry,24).unwrap(),32,CrtValue::ProtectedReturn(99999)).unwrap();}
+            if mode==163{view.storage.selected_jump=None;}
+            if mode==165{let p=view.rt.map_region(0x70000,4,CrtRegionKind::Result,None).unwrap();view.rt.store(p,32,CrtValue::Pointer(slot)).unwrap();}
+            if mode==166{let p=view.rt.offset(jump.owner,-96).unwrap();view.rt.store(p,32,CrtValue::Pointer(slot)).unwrap();}
+            if mode==167{let p=view.rt.map_region(0x7000,4,CrtRegionKind::Result,None).unwrap();view.rt.store(p,32,CrtValue::Pointer(slot)).unwrap();}
+            if mode==164{let p=view.rt.offset(old_entry,-4).unwrap();let v=view.rt.load(p,32).unwrap();view.rt.consume_stack(p,v).unwrap();view.rt.store(p,32,CrtValue::scalar(123)).unwrap();}
+            let pivot=owned_landing_pivot(&mut view,&mut c,jump);
+            if mode==158{pivot.unwrap();assert_eq!(c.r[4],CrtValue::Pointer(view.rt.resolve_absolute(view.storage.image.esp,CrtRegionKind::Stack).unwrap()));assert!(view.storage.pair_return.is_none());assert!(view.storage.selected_jump.is_none());assert!(view.rt.load(slot,32).unwrap().known_scalar().is_err());assert!(view.rt.load(old_entry,32).unwrap().known_scalar().is_err());assert!(!c.returned);}
+            else{assert!(pivot.is_err(),"landing mode {mode}");assert_eq!(c.r,before);assert!(view.storage.pair_return.is_some());}
+           }
           }else{assert!(jump.is_err());if mode!=153{assert_eq!(c.r,before);}}
          }
         }
@@ -1189,7 +1204,7 @@ fn run(case: &str) {
         let target_failure=crate::selection::prove_filter(&target_filter,0x401333,&crate::selection::FilterLayout{start:-32,end:0,exception_pointers_offset:-20,writable_words:vec![-28]},0xe0420042).err().unwrap();
         assert_eq!(target_failure,"selection: unowned frame word");
         let mut bad_bridge=bridge_bytes.clone();bad_bridge[17]=0xd0;assert!(crate::unwind_bridges::prove_filter(&bad_bridge,0x402800).is_err());
-        let main_bytes=handler_bytes("main-prolog.bin","558bec6afe6818b24100681022400064a1000000005081c404fdffffa100c041003145f833c58945e4535657508d45f064a300000000");
+        let main_bytes=handler_bytes("main-prolog.bin","558bec6afe6818b24100681022400064a1000000005081c404fdffffa100c041003145f833c58945e4535657508d45f064a3000000008965e8");
         let main=crate::frame_proof::prove_frame(&main_bytes,0x401280,0x41c000,&std::collections::BTreeSet::from([0x41b218]),&std::collections::BTreeSet::from([0x402210])).unwrap();
         let inner_bytes=handler_bytes("Inner-prolog.bin","558bec6afe68d0b14100681022400064a1000000005083ec10535657a100c041003145f833c5508d45f064a300000000");
         let inner=crate::frame_proof::prove_frame(&inner_bytes,0x4010c0,0x41c000,&std::collections::BTreeSet::from([0x41b1d0]),&std::collections::BTreeSet::from([0x402210])).unwrap();
@@ -1273,6 +1288,7 @@ cpu.call_activation(rt,0x402799,0,|rt,child|match target{{{cases}_=>Err("origina
         let selected=handler_bytes("original-selected-transfer.bin","8bea8bf18bc16a01e80302000033c033db33c933d233ffffe6");
         let binding=crate::unwind_bridges::NotificationBinding{target_word:0x41c074,action_word:0x41c078,frame_word:0x41c07c};
         callback_source.push_str(&crate::crt_owned_search::emit_selected(&selected,0x402820,&notification_code,0x402a30,binding).unwrap());
+        let pivot=handler_bytes("original-landing-pivot.bin","8b65e8");callback_source.push_str(&crate::crt_owned_search::emit_landing_pivot(&pivot,0x40135c).unwrap());assert!(crate::crt_owned_search::emit_landing_pivot(&[0x8b,0x65,0xe4],0x40135c).is_err());
         for offset in [9,24]{let mut bad=selected.clone();bad[offset]^=1;assert!(crate::crt_owned_search::emit_selected(&bad,0x402820,&notification_code,0x402a30,binding).is_err());}
         callback_source.push_str(&format!("fn map_selected_regions(rt:&mut CrtStreamRuntime)->RegistryResult<()>{{rt.map_region(0x402820,{},CrtRegionKind::Module,Some(&{selected:?}))?;rt.map_region(0x40135c,3,CrtRegionKind::Module,Some(&[0x8b,0x65,0xe8]))?;Ok(())}}",selected.len()));
         callback_source.push_str(r#"fn fixture_notify_invoke(rt:&mut CrtStreamRuntime,storage:&mut CrtOwnedStorage,record:&mut LocalRecord<'_>,target:u32,reason:u32,fault:usize)->RegistryResult<()>{

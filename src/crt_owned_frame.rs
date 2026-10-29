@@ -164,7 +164,7 @@ struct CrtHandlerExit {anchor:guest_memory::Capability,id:RegistrationId,event:u
 struct CrtOwnedStorage {
  anchor:guest_memory::Capability,identity:RegistryIdentity,binding:OwnedFrameBinding,id:RegistrationId,event:u64,
  entry:CrtPointer,return_id:u64,image:FrameImage<RegistryHead>,ordinary:std::collections::BTreeSet<i32>,
- protected:std::collections::BTreeMap<i32,CrtValue>,input:Option<(Option<CrtPointer>,CrtPointer,CrtPointer,u32)>,pair_return:Option<(CrtPointer,u64)>,unwind_epoch:Option<u64>,resume_ticket:Option<u64>,post_unwind:Option<(u64,u64,u64)>,post_authority:Option<u64>,selected_cut:Option<(u64,u32,u64,CrtPointer)>,
+ protected:std::collections::BTreeMap<i32,CrtValue>,input:Option<(Option<CrtPointer>,CrtPointer,CrtPointer,u32)>,pair_return:Option<(CrtPointer,u64)>,unwind_epoch:Option<u64>,resume_ticket:Option<u64>,post_unwind:Option<(u64,u64,u64)>,post_authority:Option<u64>,selected_cut:Option<(u64,u32,u64,CrtPointer)>,selected_jump:Option<u64>,
 }
 impl RegistryFrameStorage for CrtOwnedStorage{fn registry_image(&self)->&FrameImage<RegistryHead>{&self.image}}
 impl CrtOwnedStorage {
@@ -201,7 +201,7 @@ impl CrtOwnedStorage {
   // No external callback occurs before final registry installation.
   for(p,value)in writes{rt.store(p,32,value)?;}
   let id=r.install_frame(binding,&image)?;
-  Ok(Self{anchor:rt.anchor,identity:r.identity,binding,id,event:m.event,entry,return_id:cpu.return_id,image,ordinary:ordinary.iter().copied().collect(),protected,input:None,pair_return:None,unwind_epoch:None,resume_ticket:None,post_unwind:None,post_authority:None,selected_cut:None})
+  Ok(Self{anchor:rt.anchor,identity:r.identity,binding,id,event:m.event,entry,return_id:cpu.return_id,image,ordinary:ordinary.iter().copied().collect(),protected,input:None,pair_return:None,unwind_epoch:None,resume_ticket:None,post_unwind:None,post_authority:None,selected_cut:None,selected_jump:None})
  }
  fn retire_completed(&mut self,rt:&mut CrtStreamRuntime,r:&mut ThreadRegistry,m:&mut Machine,completion:HandlerCompletion,exit:CrtHandlerExit)->RegistryResult<()>{
   let result=(||{

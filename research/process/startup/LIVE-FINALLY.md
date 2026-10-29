@@ -700,3 +700,44 @@ not a root-cause diagnosis. Artifact12877700855 ZIP SHA256
 is preserved locally alongside the failure JSON/process state. The independent
 exit controls and 18 launch samples passed earlier. No retry/threshold change
 was made and parallel success does not resolve this timeout.
+
+### Saved-ESP landing pivot and abandoned-call retirement
+
+The selected jump receipt now binds the issuing process anchor, owned frame,
+event, activation, entry registers and single-use protected CALL identity.  The
+first original landing instruction at VA `0x40135c`, `MOV ESP,[EBP-24]`, executes
+only after the expanded original Main prolog proves that `[EBP-24]` is the typed
+saved ESP for this frame.  A scalar with the same numeric value is rejected.
+
+Before the pivot, the adapter validates the original handler's saved EBX/EBP/ESI/
+EDI words, unique handler and selected-bridge return identities, unchanged
+landing bytes, complete stack bounds and all protected control words in the
+abandoned interval.  It rejects changed code, consumed saved words, duplicated
+or foreign returns, replayed jump receipts, and pointer escapes into live Main
+or external storage.  After those checks, the abandoned handler and selected
+CALL bytes are forgotten, the ended exception-pair borrow is stripped, and the
+original instruction loads ESP.  Completed lower delivery callback scratch is
+not treated as a live Main alias; an explicit live-Main alias and an external
+result-region alias both reject.
+
+Ten landing-pivot cases overlap 17 selected-bridge cases in 168 owned-frame
+native scenarios.  Root tests are 175 passed; CRT tests are 158 passed plus one
+separately replayed original observation; Clippy, formatting, the artifact-bound
+wrapper checker and projection checker pass.  The unchanged PE SHA256 remains
+`1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4`;
+the generated Rust SHA256 is
+`0387414071df8c43bdcab9b696b9709dbaa49e7f77f96509aea7103144757c1e`.
+This is checked component execution with zero new Windows differential pairs
+and zero whole-PE translation pairs.
+
+All three selected-bridge head `de5bbaa1` workflows passed: startup
+`40829869997`, push CI `40829870000`, and PR CI `40829877570`.  Fresh landing
+head CI remains required after publication.  Existing Windows timeout artifacts
+and their unresolved process-exit cause are unchanged.
+
+The next connected instructions write the handled marker and build the original
+restoration CONTEXT before the call at VA `0x401250`.  They need owned field
+provenance and a validated restoration transition; this landing receipt does not
+authorize arbitrary context stores or guest resumption.  Actual delivery
+acquisition and collided-unwind effects remain separate unresolved API gates.
+Full startup and rcedit conversion remain unsupported.

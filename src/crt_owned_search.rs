@@ -354,7 +354,7 @@ pub(crate) fn emit_selected(
     let continuation = call.next_ip() as u32;
     Ok(format!(
         r#"
-struct CrtSelectedJump{{ticket:u64,slot:CrtPointer,id:u64,owner:CrtPointer,landing:CrtPointer}}
+struct CrtSelectedJump{{ticket:u64,slot:CrtPointer,id:u64,owner:CrtPointer,landing:CrtPointer,anchor:guest_memory::Capability,event:u64,source:RegistrationId,entry:[CrtValue;8],caller:u64}}
 fn selected_prefix(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->RegistryResult<CrtValue>{{{prefix}}}
 fn selected_tail(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->RegistryResult<CrtValue>{{{tail}}}
 fn owned_selected_bridge(frame:&mut CrtOwnedFrameView<'_>,cpu:&mut CrtCpu)->RegistryResult<CrtSelectedJump>{{let result=(||{{
@@ -367,13 +367,59 @@ fn owned_selected_bridge(frame:&mut CrtOwnedFrameView<'_>,cpu:&mut CrtCpu)->Regi
  if sp.cap!=frame.storage.entry.cap||sp.address()>=frame.storage.image.esp||frame.rt.overlapping_tags(low.address(),64).iter().any(|(_,v)|matches!(v,CrtValue::ProtectedReturn(_)|CrtValue::OpaqueSaved(_)|CrtValue::ThreadHead(_))){{return Err("selected occupied scratch");}}
  let id=frame.rt.generation.checked_add(1).filter(|n|*n<1u64<<63).ok_or("selected call identity exhausted")?;frame.rt.generation=id;let id=id|(1u64<<63);
  if frame.rt.tags.values().any(|v|*v==CrtValue::ProtectedReturn(id)){{return Err("selected call identity collision");}}
- frame.storage.selected_cut=None;cpu.push(frame.rt,CrtValue::ProtectedReturn(id))?;let slot=CrtCpu::pointer(cpu.r[4])?;
+ frame.storage.selected_cut=None;frame.storage.selected_jump=Some(id);cpu.push(frame.rt,CrtValue::ProtectedReturn(id))?;let slot=CrtCpu::pointer(cpu.r[4])?;
  selected_prefix(frame.rt,cpu)?;
  // Original CALL executes with its actual child stack and RET 4 cleanup.
  frame.call_pop(cpu,{continuation},4,|f,k|selected_notify_child(f,k,target))?;
  selected_tail(frame.rt,cpu)?;
  if cpu.r[4]!=CrtValue::Pointer(slot)||cpu.r[5]!=CrtValue::Pointer(owner)||cpu.r[6]!=CrtValue::scalar(landing)||frame.rt.load(slot,32)?!=CrtValue::ProtectedReturn(id){{return Err("selected jump state changed");}}
- Ok(CrtSelectedJump{{ticket,slot,id,owner,landing:target}})
+ Ok(CrtSelectedJump{{ticket,slot,id,owner,landing:target,anchor:frame.rt.anchor,event:frame.machine.event,source:frame.storage.id,entry:cpu.entry,caller:cpu.return_id}})
+ }})();if result.is_err(){{frame.failed=true;}}result}}
+"#
+    ))
+}
+
+/// Bind the original first landing instruction. Further context stores and
+/// continuation activation remain a separate owned transition.
+pub(crate) fn emit_landing_pivot(code: &[u8], origin: u32) -> Result<String, String> {
+    let graph = super::crt_stream_ir::Graph::decode_linear_fragment(code, origin)?;
+    // Only the proven saved-ESP pivot; no supplied register snapshot can replace it.
+    if code != [0x8b, 0x65, 0xe8] {
+        return Err("landing requires original full-word saved ESP load".into());
+    }
+    let body = crt_stream_emit::emit_linear_fragment(&graph, &BTreeMap::new())?;
+    Ok(format!(
+        r#"
+fn landing_pivot_instruction(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->RegistryResult<CrtValue>{{{body}}}
+fn owned_landing_pivot(frame:&mut CrtOwnedFrameView<'_>,cpu:&mut CrtCpu,jump:CrtSelectedJump)->RegistryResult<()>{{let result=(||{{
+ frame.validate()?;
+ let entry=CrtCpu::pointer(jump.entry[4])?;let owner=frame.owner_frame()?;
+ if jump.anchor!=frame.rt.anchor||jump.event!=frame.machine.event||jump.source!=frame.storage.id||frame.storage.selected_jump!=Some(jump.id)||frame.registry.target_ready()?!=jump.source||frame.machine.current!=frame.machine.selected||jump.owner!=owner||jump.landing.address()!={origin}||cpu.entry!=jump.entry||cpu.return_id!=jump.caller||frame.active!=jump.caller||cpu.returned||cpu.r[4]!=CrtValue::Pointer(jump.slot)||cpu.r[5]!=CrtValue::Pointer(owner)||cpu.r[6]!=CrtValue::scalar({origin}){{return Err("landing stale jump/activation");}}
+ if frame.storage.pair_return!=Some((entry,jump.caller))||entry.cap!=jump.slot.cap||entry.address().checked_add(20).is_none_or(|n|n>frame.storage.image.esp)||jump.slot.address()>=entry.address(){{return Err("landing abandoned stack identity");}}
+ let saved=frame.rt.offset(owner,-24)?;let key=i32::try_from(i64::from(saved.address())-i64::from(frame.storage.entry.address())).map_err(|_|"landing saved ESP offset")?;
+ let expected=frame.rt.resolve_absolute(frame.storage.image.esp,CrtRegionKind::Stack)?;
+ if frame.storage.image.words.get(&key)!=Some(&FrameWord::StackAddress(expected.address()))||frame.storage.protected.get(&key)!=Some(&CrtValue::Pointer(expected))||frame.rt.load(saved,32)?!=CrtValue::Pointer(expected){{return Err("landing saved ESP provenance");}}
+ let p=frame.rt.resolve_absolute({origin},CrtRegionKind::Module)?;for(i,b)in {code:?}.into_iter().enumerate(){{if frame.rt.load(frame.rt.offset(p,i as i64)?,8)?.known_scalar()?!=b as u32{{return Err("landing original pivot changed");}}}}
+ let mut allowed=std::collections::BTreeMap::from([(jump.slot.address(),CrtValue::ProtectedReturn(jump.id)),(entry.address(),CrtValue::ProtectedReturn(jump.caller))]);
+ for(offset,reg)in [(-4,5),(-36,3),(-40,6),(-44,7)]{{let p=frame.rt.offset(entry,offset)?;let v=jump.entry[reg];if frame.rt.load(p,32)?!=v{{return Err("landing handler saved slot changed");}}allowed.insert(p.address(),v);}}
+ for(id,at)in [(jump.id,jump.slot.address()),(jump.caller,entry.address())]{{if frame.rt.tags.iter().filter(|(_,v)|**v==CrtValue::ProtectedReturn(id)).map(|(p,_)|*p).collect::<Vec<_>>()!=vec![at]{{return Err("landing return alias");}}}}
+ let n=expected.address().checked_sub(jump.slot.address()).ok_or("landing stack direction")?;frame.rt.valid(jump.slot,n)?;frame.registry.range(jump.slot.address(),u64::from(expected.address()))?;
+ for(at,v)in frame.rt.overlapping_tags(jump.slot.address(),n){{if matches!(v,CrtValue::ProtectedReturn(_)|CrtValue::OpaqueSaved(_)|CrtValue::ThreadHead(_))&&allowed.get(&at)!=Some(&v){{return Err("landing unowned abandoned control slot");}}}}
+ let pair_slot=frame.rt.offset(owner,-20)?;
+ // Successful delivery callbacks may leave inert bytes below this selected
+ // activation. Only a non-stack or still-live Main-frame alias can outlive
+ // the pivot; the exception-pair field is explicitly stripped below.
+ for(&at,&v)in &frame.rt.tags{{if matches!(v,CrtValue::Pointer(p) if p.cap==jump.slot.cap&&p.address()>=jump.slot.address()&&p.address()<expected.address())&&at!=pair_slot.address(){{let inert_lower_stack=frame.rt.regions.iter().any(|r|r.pointer.cap==jump.slot.cap&&at>=r.pointer.base&&u64::from(at)<u64::from(r.pointer.base)+u64::from(r.pointer.size)&&at<jump.slot.address());if !inert_lower_stack{{return Err("landing escaped abandoned pointer");}}}}}}
+ // All fallible ownership, bytes and range checks precede retirement. The
+ // immediately executed MOV reads only the already-protected saved-ESP word.
+ frame.rt.memory.forget(jump.slot.address(),n).map_err(|_|"landing retirement range")?;
+ frame.rt.tags.retain(|at,_|*at<jump.slot.address()||*at>=expected.address());frame.rt.partial.retain(|at,_|*at<jump.slot.address()||*at>=expected.address());
+ // The original frame's exception-pair field keeps its numeric bytes, but
+ // its ended handler borrow cannot retain dereference authority.
+ frame.rt.tags.remove(&pair_slot.address());
+ frame.storage.input=None;frame.storage.pair_return=None;frame.storage.selected_jump=None;
+ landing_pivot_instruction(frame.rt,cpu)?;
+ if cpu.r[4]!=CrtValue::Pointer(expected){{return Err("landing pivot result");}}frame.validate()?;Ok(())
  }})();if result.is_err(){{frame.failed=true;}}result}}
 "#
     ))
