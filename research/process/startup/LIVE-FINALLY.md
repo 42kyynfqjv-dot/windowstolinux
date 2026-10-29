@@ -423,3 +423,45 @@ Next connect the loop's original register/table traversal and callback call stac
 while preserving this native temporary record. Captured-context acquisition,
 OS delivery and selected restoration remain admission gates. Full startup/rcedit
 is still rejected. This next bounded implementation can start on Sol.
+
+## Native loop register/table traversal and protected callbacks
+
+The connected path now emits original instructions0x402742–0x4027a1 from the
+unchanged body, including both conditional exit tests, cookie/table decoding,
+TryLevel loads, row addressing, filter tests, parent writes and the backedge.
+The existing complete body/scope proof and runtime readonly-row checks remain
+required. Each visited parent must decrease or equal sentinel-2, and the emitted
+loop has an explicit4096-instruction limit. No sampled trace supplies loop state.
+
+The cookie address becomes a module capability only after matching the registry's
+bound cookie address; decrypted table bits become a module capability only after
+matching the owned image's bound table. Original XOR values/flags are retained.
+A new emitter store hook is limited to original MOV memory destinations. For the
+proven parent store it checks actual EAX/ECX operands and performs one checked
+byte/cache update through the owned storage method. Other existing lowering paths
+use their unchanged ordinary stores. The hook neither discards the original MOV
+nor fabricates a second write to repair metadata afterward.
+
+Notification/finally calls now have protected transient CALL/RET activations on
+the current body stack. The notification's actual pushed reason is checked and
+its return consumes4bytes; the finally call consumes none. Callee failure retains
+memory effects and cannot supply a completed protected return. Callback volatile
+registers/flags remain unknown under the explicit callback contracts; subsequent
+original loop loads and comparisons determine the state that is actually known.
+The original temporary-record and body epilog remain connected to this loop.
+
+Five added cases inject a nondecreasing table parent, wrong cookie operand,
+wrong scope-store destination, duplicate active callback return and changed
+native temporary predecessor. They reject before unsafe effects or retain the
+first trace81 write as appropriate. Counts overlap:110 owned-frame,53 delivery,
+35 cross-frame and20 connected native-loop/stack cases. No additional Windows
+comparison or whole-PE pair is claimed; the five recorded wrapper observations
+are separately replayed. Root175/CRT155 tests and Clippy pass locally.
+
+Private notification/finally body scratch and bridge instructions still use the
+independently checked component providers, despite the newly real parent CALL
+stack. Next connect those bodies/bridges to their live child CPU and saved stack,
+then preserve complete cleanup/retirement and selected restoration. OS delivery
+and full entry-to-exit proof remain gates. Full startup/rcedit remains rejected;
+Sol can attempt the next connected callback-body scope. Prior Windows timeout
+causes remain unresolved.

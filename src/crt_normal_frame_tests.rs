@@ -380,7 +380,7 @@ fn owned_local_cases(){
 }
 
 fn owned_main_cases(){
- for mode in 0..105{
+ for mode in 0..110{
   let mut m=Machine::new_dispatch_known((0..if mode>=75{2}else{1}).map(|_|FrameSpec{scopes:vec![]}).collect(),0,[None;10],Some(0)).unwrap();
   let mut r=ThreadRegistry::new(m.owner(),0x8000,0xf000,&[(0x400000,0x420000)],0x41c000).unwrap();let mut rt=runtime(&r);
   let entry=rt.resolve_absolute(if mode==23||mode==32||mode==41||mode==76{0xe800}else{0xe000},CrtRegionKind::Stack).unwrap();rt.store(entry,32,CrtValue::ProtectedReturn(71)).unwrap();let cpu=CrtCpu::new(entry,71).unwrap();
@@ -519,7 +519,7 @@ fn owned_main_cases(){
         if mode==82{target.binding.frame.generation+=1;}
         if mode==87{f.rt.store(f.rt.resolve_absolute(0xb800,CrtRegionKind::Stack)?,32,CrtValue::ProtectedReturn(72))?;}
         if mode>=90{
-         map_local_wrapper(f.rt)?;map_local_body(f.rt)?;if mode==100{f.rt.store(f.rt.resolve_absolute(0x402710,CrtRegionKind::Module)?,8,CrtValue::scalar(0x90))?;}if mode==97{f.rt.store(f.rt.resolve_absolute(0x4022bd,CrtRegionKind::Module)?,8,CrtValue::scalar(0x90))?;}if mode==98{f.rt.store(f.rt.resolve_absolute(0x402860,CrtRegionKind::Module)?,8,CrtValue::scalar(0x90))?;}map_original_cleanups(f.rt)?;map_original_notification(f.rt)?;
+         map_local_wrapper(f.rt)?;map_local_body(f.rt)?;if mode==105{let at=f.rt.resolve_absolute(target.image.scope_va+28,CrtRegionKind::Module)?;f.rt.store(at,32,CrtValue::scalar(1))?;}if mode==100{f.rt.store(f.rt.resolve_absolute(0x402710,CrtRegionKind::Module)?,8,CrtValue::scalar(0x90))?;}if mode==97{f.rt.store(f.rt.resolve_absolute(0x4022bd,CrtRegionKind::Module)?,8,CrtValue::scalar(0x90))?;}if mode==98{f.rt.store(f.rt.resolve_absolute(0x402860,CrtRegionKind::Module)?,8,CrtValue::scalar(0x90))?;}map_original_cleanups(f.rt)?;map_original_notification(f.rt)?;
          let nested=original_nested_handler_bytes();f.rt.map_region(0x4027b0,nested.len()as u32,CrtRegionKind::Module,Some(&nested))?;
          f.rt.store(f.rt.resolve_absolute(0x41c948,CrtRegionKind::Module)?,32,CrtValue::scalar(5))?;
          let result=f.with_handler_target(target,|source,target|{
@@ -609,7 +609,7 @@ fn owned_main_cases(){
         else{assert!(retired.is_err());assert!(m.frames[1].live);assert!(r.available().is_err());}
        }else{
         assert!(retirement.is_none());assert!(view.registry.available().is_err());assert!(view.registry.frames[1].completion.is_none());assert!(view.machine.frames[1].live);
-        let expected=if mode==97||mode==98||mode==100||mode==104{5}else if mode==91||(94..=96).contains(&mode)||mode==101||mode==102{81}else{1298};assert_eq!(view.rt.load(view.rt.resolve_absolute(0x41c948,CrtRegionKind::Module).unwrap(),32).unwrap(),CrtValue::scalar(expected));
+        let expected=if mode==97||mode==98||mode==100||mode==104||(105..=107).contains(&mode){5}else if mode==91||(94..=96).contains(&mode)||mode==101||mode==102||mode==108||mode==109{81}else{1298};assert_eq!(view.rt.load(view.rt.resolve_absolute(0x41c948,CrtRegionKind::Module).unwrap(),32).unwrap(),CrtValue::scalar(expected));
        }continue;
       }
       if mode>=75{
@@ -1120,6 +1120,23 @@ let t=&record.registry.temporary[record.active_index()?];if CrtCpu::pointer(cpu.
 }}
 fn map_local_body(rt:&mut CrtStreamRuntime)->RegistryResult<()>{{rt.map_region(0x402710,{length},CrtRegionKind::Module,Some(&{local_bytes:?}))?;Ok(())}}
 "#,length=local_bytes.len());
+        let mut loop_nodes=std::collections::BTreeMap::new();let mut offset=50usize;
+        while offset<145{let mut d=iced_x86::Decoder::with_ip(32,&local_bytes[offset..145],u64::from(0x402710+offset as u32),iced_x86::DecoderOptions::NONE);let i=d.decode();let pc=i.ip()as u32;let node=crate::crt_stream_ir::Graph::decode_instruction(&local_bytes[offset..offset+i.len()],pc).unwrap();offset+=i.len();loop_nodes.insert(pc,node);}assert_eq!(offset,145);
+        let loop_graph=crate::crt_stream_ir::Graph{origin:0x402742,end:0x4027a1,nodes:loop_nodes};
+        let loop_body=crate::crt_stream_emit::emit_body_with_store(&loop_graph,|pc,target|match(pc,target){
+         (0x40278a,crate::crt_stream_ir::Target::Direct(0x402a30))=>Ok("cpu.validate_active(effects.rt)?;let target=cpu.r[0].known_scalar()?;if effects.rt.load(CrtCpu::pointer(cpu.r[4])?,32)?!=CrtValue::scalar(0x101){return Err(\"local notify original argument\");}effects.notify_call(cpu,target,0x101,0x40278f)?;cpu.validate_active(effects.rt)?;".into()),
+         (0x402797,crate::crt_stream_ir::Target::Direct(0x402a50))=>Ok("cpu.validate_active(effects.rt)?;let target=cpu.r[0].known_scalar()?;let abnormal=cpu.r[1].known_scalar()?;effects.finally_call(cpu,target,abnormal,0x40279c)?;cpu.validate_active(effects.rt)?;".into()),
+         _=>Err("local loop unbound call".into())},&Default::default(),4096,|_,_|Err("local loop unexpected thread effect".into()),|pc,_|{
+         let mut out=String::new();if pc==0x402742{out.push_str("effects.decode_scope()?;");}
+         if pc==0x40274d{out.push_str("if fault==16{cpu.r[1]=CrtValue::scalar(effects.record.registry.cookie_address+4);}if cpu.r[1].known_scalar()?!=effects.record.registry.cookie_address{return Err(\"local cookie address provenance\");}cpu.r[1]=CrtValue::Pointer(effects.rt.resolve_absolute(effects.record.registry.cookie_address,CrtRegionKind::Module)?);");}
+         if pc==0x40274f{out.push_str("let bits=cpu.r[3].known_scalar()?;if bits!=effects.storage.image.scope_va{return Err(\"local decoded table provenance\");}cpu.r[3]=CrtValue::Pointer(effects.rt.resolve_absolute(bits,CrtRegionKind::Module)?);");}
+         if pc==0x40276c{out.push_str("let level=cpu.r[6].known_scalar()? as i32;let row=effects.scope_row(level)?;if row.parent!= -2&&(row.parent<0||row.parent>=level){return Err(\"local native ranking proof\");}");}
+         if pc!=0x402775&&!matches!(pc,0x40278a|0x402797){out.push_str("let rt=&mut *effects.rt;");}Ok(out)
+        },|_,_|Ok(None),Some(0x4027a1),|pc,address,width|{
+         if pc!=0x402775||width!=32||address.base!=Some(0)||address.index.is_some()||address.displacement!=12{return Err("local loop unexpected store".into());}
+         Ok(Some("let owner=effects.rt.resolve_absolute(effects.storage.image.record,CrtRegionKind::Stack)?;if fault==17{cpu.r[0]=CrtValue::Pointer(effects.rt.offset(owner,4)?);}if cpu.r[0]!=CrtValue::Pointer(owner){return Err(\"local scope MOV destination\");}let parent=v.known_scalar()? as i32;effects.write_try_level(parent)?;".into()))
+        }).unwrap();
+        let native_loop=format!("fn original_native_local_loop<F,N>(effects:&mut CrtOwnedLocalEffects<'_,'_,F,N>,cpu:&mut CrtCpu,fault:usize)->RegistryResult<CrtValue> where F:FnMut(u32,i32,&mut CrtStreamRuntime,&mut CrtOwnedStorage,&mut LocalRecord<'_>)->RegistryResult<()>,N:FnMut(u32,u32,&mut CrtStreamRuntime,&mut CrtOwnedStorage,&mut LocalRecord<'_>)->RegistryResult<()>{{effects.install_temporary(40,0x4027b0)?;{loop_body}}}");
         let mut corrupt=local_bytes.clone();corrupt[103]=0x10;assert!(crate::local_unwind::prove(&corrupt,0x402710,crate::local_unwind::Kind::Body,&crate::local_unwind::Bindings{body:0x402710,nested_handler:0x4027b0,cookie:0x41c000,notify:0x402a30,invoke:0x402a50,check_cookie:0x401990}).is_err());
         let local_types=crate::local_unwind::EMITTED_TYPES;
         let mut callback_source=String::new();
@@ -1287,7 +1304,8 @@ if fault==1{{cpu.condition(0)?;}}
         let source = format!("#![allow(dead_code)]\nmod guest_memory{{{memory}}}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{fixture}\n{file_scope}\n{context_types}\n{context_check}\n{scope_store}\n{permuted_store}\n{install}\n{handler_prolog}\n{filter_source}\n{false_filter_source}\n{normalizer_source}\n{guard_source}\n{header_source}\n{prefix_normalizer}\n{prefix_front}\n{guard_prefix}\n{prefix_caller}\n{bridge_native}\n{local_types}\n{owned_types}\n{local_source}\n{callback_source}\n{finally_source}\n{finally_cases}\n{original_local_store}\n{main_init}\n{inner_init}\n{owned_filter}\n{owned_bridge}\n{main_filter_bytes}\n{activation}\n{owned_prolog}\n{owned_prefix}\n{delivery_prefix}
 {inner_data}
 {unwind_caller}
-{stack_source}\n{owned_header}\n{owned_scope_store}\n{owned_permuted_store}\n{global_source}\n{delivery_source}\n{tail_source}\n{owned_search}\n{code_data}\n{path_edges}\n{prefix_metadata}\nfn raise_site()->CrtNormalRaiseSite{{{{{raise}}}}}\n{CASES}",
+{stack_source}
+{native_loop}\n{owned_header}\n{owned_scope_store}\n{owned_permuted_store}\n{global_source}\n{delivery_source}\n{tail_source}\n{owned_search}\n{code_data}\n{path_edges}\n{prefix_metadata}\nfn raise_site()->CrtNormalRaiseSite{{{{{raise}}}}}\n{CASES}",
             include_str!("linker/unwind_runtime.rs").replace("//!", "//"),
             emitted_literal(include_str!("frame_proof.rs")),emitted_literal(include_str!("thread_registry.rs")),
             crate::crt_stream_runtime::EMITTED_TYPES,crate::crt_stream_cpu::EMITTED_TYPES,

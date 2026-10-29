@@ -536,6 +536,19 @@ where F:FnMut(u32,i32,&mut CrtStreamRuntime,&mut CrtOwnedStorage,&mut LocalRecor
    if self.rt.load(self.rt.offset(table,16+(i*12+j*4)as i64)?,32)?.known_scalar()?!=value{return Err("owned local readonly scope rows changed");}
   }}Ok(())
  }
+ fn notify_call(&mut self,cpu:&mut CrtCpu,target:u32,reason:u32,continuation:u32)->RegistryResult<()>{
+  let(_,row)=self.pending.ok_or("native notification without row")?;
+  if !self.written||self.notified||row.filter!=0||row.handler!=target||reason!=0x101||self.read_try_level()?!=row.parent||self.rt.load(CrtCpu::pointer(cpu.r[4])?,32)?!=CrtValue::scalar(reason){return Err("native notification original arguments/order");}
+  cpu.call_activation(self.rt,continuation,4,|rt,child|{(self.notification)(target,reason,rt,self.storage,self.record)?;child.clobber(CrtValue::Scalar{bits:0,known:0});child.finish_pop(rt,4)})?;
+  self.validate_source()?;self.notified=true;Ok(())
+ }
+ fn finally_call(&mut self,cpu:&mut CrtCpu,target:u32,abnormal:u32,continuation:u32)->RegistryResult<()>{
+  let(level,row)=self.pending.ok_or("native finally without row")?;
+  if !self.written||!self.notified||row.filter!=0||row.handler!=target||abnormal!=1||self.read_try_level()?!=row.parent{return Err("native finally original arguments/order");}
+  cpu.call_activation(self.rt,continuation,0,|rt,child|{(self.finally)(target,level,rt,self.storage,self.record)?;child.clobber(CrtValue::Scalar{bits:0,known:0});child.finish(rt)})?;
+  if self.read_try_level()?!=row.parent{return Err("native finally changed parent");}self.pending=None;self.written=false;self.notified=false;Ok(())
+ }
+
 }
 impl<F,N> LocalUnwindEffects for CrtOwnedLocalEffects<'_,'_,F,N>
 where F:FnMut(u32,i32,&mut CrtStreamRuntime,&mut CrtOwnedStorage,&mut LocalRecord<'_>)->RegistryResult<()>,N:FnMut(u32,u32,&mut CrtStreamRuntime,&mut CrtOwnedStorage,&mut LocalRecord<'_>)->RegistryResult<()>{

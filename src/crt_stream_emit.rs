@@ -280,6 +280,29 @@ pub(crate) fn emit_body_with_hooks(
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn emit_body_with_exit(
     graph: &Graph,
+    call: impl FnMut(u32, Target) -> Result<String, String>,
+    roles: &BTreeMap<u32, String>,
+    step_budget: u32,
+    thread: impl FnMut(u32, &Op) -> Result<String, String>,
+    before: impl FnMut(u32, &Op) -> Result<String, String>,
+    return_hook: impl FnMut(u32, u16) -> Result<Option<String>, String>,
+    exit: Option<u32>,
+) -> Result<String, String> {
+    emit_body_with_store(
+        graph,
+        call,
+        roles,
+        step_budget,
+        thread,
+        before,
+        return_hook,
+        exit,
+        |_, _, _| Ok(None),
+    )
+}
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn emit_body_with_store(
+    graph: &Graph,
     mut call: impl FnMut(u32, Target) -> Result<String, String>,
     roles: &BTreeMap<u32, String>,
     step_budget: u32,
@@ -287,6 +310,7 @@ pub(crate) fn emit_body_with_exit(
     mut before: impl FnMut(u32, &Op) -> Result<String, String>,
     mut return_hook: impl FnMut(u32, u16) -> Result<Option<String>, String>,
     exit: Option<u32>,
+    mut store: impl FnMut(u32, &Address, u8) -> Result<Option<String>, String>,
 ) -> Result<String, String> {
     if graph
         .nodes
@@ -321,7 +345,8 @@ pub(crate) fn emit_body_with_exit(
  out.push_str(&format!("let {}={value};", if matches!(op,Binary::Compare|Binary::Test){"_"}else{"v"}));
  if !matches!(op,Binary::Compare|Binary::Test){
  if matches!(dst,Operand::Reg(Reg{index:4,width:32,shift:0}))&&*op==Binary::Add{if let Operand::Immediate(n)=src{out.push_str(&format!("cpu.discard(rt,{n})?;"));}else{return Err("CRT emit dynamic ESP cleanup outside admission".into());}}
- out.push_str(&write(dst,"v",roles)?);}
+ let special=if *op==Binary::Move{if let Operand::Memory(address,width)=dst{store(pc,address,*width)?}else{None}}else{None};
+ out.push_str(&special.unwrap_or(write(dst,"v",roles)?));}
  },
  Op::Ordinary(Operation::Address(dst,a))=>out.push_str(&format!("let v={};{}",lea_address(a,roles),write(&register(*dst),"v",roles)?)),
  Op::Ordinary(Operation::Push(o))=>out.push_str(&format!("let v={};cpu.push(rt,v)?;",read(o,roles)?)),

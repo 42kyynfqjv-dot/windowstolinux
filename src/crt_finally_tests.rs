@@ -225,21 +225,23 @@ fn connected_inner_cleanup(session:&CrtOwnedUnwind<'_>,frame:&mut CrtOwnedFrameV
   if fault==14{rt.store(rt.offset(entry,-8)?,32,CrtValue::ProtectedReturn(9999))?;}
   if entry.cap!=storage.entry.cap||rt.overlapping_tags(low.address(),40).iter().any(|(_,v)|matches!(v,CrtValue::ProtectedReturn(_)|CrtValue::ThreadHead(_)|CrtValue::OpaqueSaved(_))){return Err("native local prolog protected scratch");}
   original_local_stack_entry(rt,record,cpu)?;
-  let actual=CrtOwnedTemporary::bind_native(rt,record,storage,cpu)?;
+  let actual=CrtOwnedTemporary::bind_native(rt,record,storage,cpu)?;let body_return=cpu.return_id;let body_entry=CrtCpu::pointer(cpu.entry[4])?;
   let mut effects=CrtOwnedLocalEffects{rt,record,machine,storage,rows:&rows,native_stack:true,installation_seen:false,temporary:Some(actual),pending:None,written:false,notified:false,
-   notification:|target,reason,rt:&mut CrtStreamRuntime,s:&mut CrtOwnedStorage,record:&mut LocalRecord<'_>|{cpu.validate_active(rt)?;fixture_notify_invoke(rt,s,record,target,reason,0)},
+   notification:|target,reason,rt:&mut CrtStreamRuntime,s:&mut CrtOwnedStorage,record:&mut LocalRecord<'_>|{fixture_notify_invoke(rt,s,record,target,reason,0)},
    finally:|target,_,rt:&mut CrtStreamRuntime,s:&mut CrtOwnedStorage,record:&mut LocalRecord<'_>|{
-    cpu.validate_active(rt)?;original_finally_effects(rt,record,machine,s,target,0)?;
+    original_finally_effects(rt,record,machine,s,target,0)?;
+    if fault==18{let v=rt.load(rt.offset(body_entry,-44)?,32)?;if !matches!(v,CrtValue::ProtectedReturn(_)){return Err("independent callback return missing");}rt.store(rt.resolve_absolute(0xa300,CrtRegionKind::Stack)?,32,v)?;}
+    if fault==19{let t=&record.registry.temporary[record.active_index()?];rt.store(rt.resolve_absolute(t.low,CrtRegionKind::Stack)?,32,CrtValue::scalar(0))?;}
     if fault==11{let t=&record.registry.temporary[record.active_index()?];rt.store(rt.resolve_absolute(t.low+8,CrtRegionKind::Stack)?,32,CrtValue::scalar(0))?;}
-    if fault==12{rt.store(rt.resolve_absolute(0xa200,CrtRegionKind::Stack)?,32,CrtValue::ProtectedReturn(cpu.return_id))?;}
+    if fault==12{rt.store(rt.resolve_absolute(0xa200,CrtRegionKind::Stack)?,32,CrtValue::ProtectedReturn(body_return))?;}
     if fault==1{return Err("connected callback failure after writes");}
     if fault==4{rt.store(rt.offset(token.context,0xb8)?,32,CrtValue::scalar(8))?;}
     if fault==5{rt.store(source_guard,32,CrtValue::scalar(0))?;}
     if fault==6{rt.store(rt.resolve_absolute(0xa100,CrtRegionKind::Stack)?,32,CrtValue::ProtectedReturn(token.callback))?;}
     let check=CrtOwnedFrameView{rt,registry:record.registry,machine,storage:s,search_storage:frame.search_storage,search:false,active:frame.active,depth:frame.depth,calls:frame.calls,failed:false};
     CrtOwnedDeliveryPrefix{session,token,record:session.source.record,context:token.context}.validate_prefix_source(&check)
-   }};owned_original_local(&mut effects,-2,0)?;
-  let temporary=effects.temporary.take().ok_or("native temporary missing after loop")?;drop(effects);temporary.validate(rt,record)?;cpu.clobber(CrtValue::Scalar{bits:0,known:0});if fault==13{let entry=CrtCpu::pointer(cpu.entry[4])?;rt.store(rt.offset(entry,-4)?,32,CrtValue::scalar(0))?;}original_local_stack_exit(rt,record,cpu)?;Ok(())
+   }};original_native_local_loop(&mut effects,cpu,fault)?;
+  let temporary=effects.temporary.take().ok_or("native temporary missing after loop")?;drop(effects);temporary.validate(rt,record)?;if fault==13{let entry=CrtCpu::pointer(cpu.entry[4])?;rt.store(rt.offset(entry,-4)?,32,CrtValue::scalar(0))?;}original_local_stack_exit(rt,record,cpu)?;Ok(())
  })?;
  if fault==2{frame.rt.store(frame.rt.resolve_absolute(frame.storage.image.ebp-48,CrtRegionKind::Stack)?,32,CrtValue::scalar(0))?;}
  CrtOwnedDeliveryPrefix{session,token,record:session.source.record,context:token.context}.validate_prefix_source(frame)
