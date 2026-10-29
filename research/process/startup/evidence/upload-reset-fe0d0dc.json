@@ -42,5 +42,13 @@
   "log_excerpt": [
     "2026-10-29T20:34:40.9118711Z 6 emitted programs:48 scripted error classes +24 forced partial-I/O runs;10 unsafe mutations rejected",
     "2026-10-29T20:34:43.8502023Z ##[error]Failed to CreateArtifact: Unable to make request: ECONNRESET"
-  ]
+  ],
+  "infrastructure_retry": {
+    "requested_job": 123714769651,
+    "run": 40949077644,
+    "head": "fe0d0dccf32a9ed0a5bf45cf830ca02bfc107e26",
+    "attempt": 2,
+    "observed_status": "in_progress",
+    "scope": "Only failed compiler-native-linux job retried through normal GitHub API. Attempt1 remains failed evidence; retry does not validate newer heads."
+  }
 }

@@ -213,3 +213,12 @@ Successful normal cases return ContinueSearch1; they do not resume the guest.
 Unwind helper4041a4, required-PTD termination4077ff, original Windows delivery and
 incoming-chain effects remain explicit rejection boundaries. See the cold
 resolver handoff for the connected instruction path and next effects to close.
+
+
+Original unwind-state connection:4043e9/404406 now read/write the same checked
+live C++ record through protected calls and exact metadata/map authority. Twelve
+native cases cover owned transitions, invalid next state, alias/owner/unknown
+state failures and the signed-byte/full-word boundary. The state write precedes
+its action; it creates no cleanup receipt. The enclosing EH4 unwind body and
+terminate/abort path remain rejected. See [DEPENDENCIES.md](DEPENDENCIES.md) for
+the current connected paths and next cohesive frame/counter/action gate.

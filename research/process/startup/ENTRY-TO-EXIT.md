@@ -1065,3 +1065,8 @@ All three e21cb9f9 workflows completed successfully. f8eb1484 dedicated408018246
 passed; full40801830704 and40801824608 remained active at this checkpoint.
 Historical original-process and observer-build timeout evidence is unchanged
 and its causes remain unresolved. PR45 is still draft; SUB-579 remains In Progress.
+
+
+Current connected paths, external inputs and the next unwind composition gate
+are summarized in [DEPENDENCIES.md](DEPENDENCIES.md). Its acceptance boundary
+remains an unchanged whole-PE invocation, not the sum of component test counts.

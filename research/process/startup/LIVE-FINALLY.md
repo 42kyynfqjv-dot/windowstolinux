@@ -2252,3 +2252,32 @@ reported ECONNRESET. Subsequent comparisons were skipped; this is not a complete
 regression run. The exact failure and skipped steps are preserved in
 [evidence/upload-reset-fe0d0dc.json](evidence/upload-reset-fe0d0dc.json).
 Historical original-Windows timeouts remain preserved and unexplained.
+
+### Original unwind-state access and dependency map
+
+Original4043e9/404406 now read and update the same owned C++ record through checked
+protected calls. Writes require exact record/metadata authority and the next state
+from its live verified map. Twelve native cases cover eight owned read/write
+scenarios and four independent signed-byte/full-word boundary cases. Invalid
+next state, metadata/record alias, changed owner, unknown state and changed code
+reject. All43 original helper bytes reject individual mutations. The write occurs
+before action execution in the original loop; it creates no cleanup receipt.
+The enclosing unwind body remains rejected until its frame/counter/action effects
+are integrated. No successful cleanup or termination is substituted.
+
+Local208 CRT tests passed, one existing observation test separate, plus Clippy,
+format/diff and Python syntax checks. Artifact replay passed ten C++ checks,
+seven prior PTD checks and five recorded Windows wrapper comparisons. Zero new
+Windows observations or whole-PE pairs. Selected hashes/counts are preserved in
+[evidence/unwind-state-component.json](evidence/unwind-state-component.json).
+[DEPENDENCIES.md](DEPENDENCIES.md) maps connected instruction paths, supplied
+contracts, the next cohesive unwind frame/counter/action gate and whole-program
+entry-to-exit acceptance. Original required-PTD termination reaches signal/lock/
+callback/abort effects; it is not modeled as a normal return.
+
+The fe0d0dc upload-only failed job123714769651 was retried through the normal
+GitHub API. Run40949077644 attempt2 was in progress at inspection. Attempt1's
+ECONNRESET and skipped comparisons remain preserved; this explicitly labeled
+infrastructure retry neither erases that failure nor validates newer heads.
+At ec49a79, startup40950629120 passed and Rust40950638490/40950629166 remained
+active. Historical original-Windows timeouts remain separate and unexplained.

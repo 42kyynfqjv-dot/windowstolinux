@@ -538,3 +538,114 @@ for mode in 0..20{{
         );
     }
 }
+
+pub(crate) const UNWIND_STATE_GET: &str =
+    "558bec8b45108b4d08817804800000007f060fbe41085dc38b41085dc3";
+pub(crate) const UNWIND_STATE_SET: &str = "558bec8b45088b4d108948085dc3";
+fn unwind_state_source(get: &[u8], set: &[u8]) -> Result<String, String> {
+    if get != crate::crt_ptd::raw(UNWIND_STATE_GET) || set != crate::crt_ptd::raw(UNWIND_STATE_SET)
+    {
+        return Err("C++ original unwind state helpers".into());
+    }
+    let mut result = String::new();
+    for (bytes, origin, name) in [
+        (get, 0x4043e9, "cxx_unwind_state_read_raw"),
+        (set, 0x404406, "cxx_unwind_state_write_raw"),
+    ] {
+        let graph = crate::crt_stream_ir::Graph::decode(bytes, origin)?;
+        let body = crate::crt_stream_emit::emit_body(
+            &graph,
+            |_, _| Err("unwind state helper call".into()),
+            &Default::default(),
+            64,
+        )?;
+        result.push_str(&format!("fn {name}(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->Result<CrtValue,&'static str>{{{body}}}"));
+    }
+    result.push_str(r#"
+fn cxx_unwind_state_read_owned(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,owner:&CrtCpu,frame:&CrtPtdFrame,record:&CrtCxxRecord)->Result<CrtValue,&'static str>{
+ let expected=record.state(rt,owner,frame)?;cpu.validate_active(rt)?;let sp=CrtCpu::pointer(cpu.r[4])?;
+ if rt.load(rt.offset(sp,4)?,32)?!=CrtValue::Pointer(rt.offset(frame.bp,-12)?)||rt.load(rt.offset(sp,12)?,32)?!=CrtValue::Pointer(record.metadata){return Err("C++ unwind read object/metadata authority");}
+ let result=cxx_unwind_state_read_raw(rt,cpu)?;if result.known_scalar()?!=expected as u32{return Err("C++ unwind read state disagreement");}Ok(result)
+}
+// The original loop writes the next state before invoking its action. This
+// adapter certifies only that write; no cleanup completion receipt is created.
+fn cxx_unwind_state_step(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,owner:&CrtCpu,frame:&CrtPtdFrame,record:&CrtCxxRecord)->Result<CrtValue,&'static str>{
+ let state=record.state(rt,owner,frame)?;cpu.validate_active(rt)?;
+ let sp=CrtCpu::pointer(cpu.r[4])?;let object=rt.offset(frame.bp,-12)?;
+ if rt.load(rt.offset(sp,4)?,32)?!=CrtValue::Pointer(object)||rt.load(rt.offset(sp,8)?,32)?!=CrtValue::Pointer(record.metadata){return Err("C++ unwind state object/metadata authority");}
+ let Some((next,_))=record.required_action(rt,owner,frame)? else{return Err("C++ no pending unwind state transition");};
+ if state<0||rt.load(rt.offset(sp,12)?,32)?.known_scalar()?!=next as u32{return Err("C++ unwind map next state");}
+ cxx_unwind_state_write_raw(rt,cpu)
+}
+"#);
+    Ok(result)
+}
+
+#[test]
+fn unwind_state_helpers_read_and_write_the_same_owned_record_without_cleanup_receipt() {
+    let mut extra = unwind_state_source(
+        &crate::crt_ptd::raw(UNWIND_STATE_GET),
+        &crate::crt_ptd::raw(UNWIND_STATE_SET),
+    )
+    .unwrap();
+    extra.push_str(
+        &crate::crt_ptd::helper_source(
+            &crate::crt_ptd::raw(crate::crt_ptd::PROLOG),
+            0x414268,
+            &crate::crt_ptd::raw(crate::crt_ptd::EPILOG),
+            0x414254,
+            0x41c000,
+        )
+        .unwrap(),
+    );
+    extra.push_str(
+        &emit(
+            &crate::crt_ptd::raw(METADATA),
+            0x41b42c,
+            &crate::crt_ptd::raw(UNWIND_MAP),
+            0x41b41c,
+        )
+        .unwrap(),
+    );
+    if let Some(out) = std::env::var_os("W2L_EH4_EVIDENCE") {
+        std::fs::write(
+            std::path::Path::new(&out).join("unwind-state-live.rs"),
+            format!(
+                "{}\n{}\n{}",
+                crate::crt_stream_runtime::EMITTED_TYPES,
+                crate::crt_stream_cpu::EMITTED_TYPES,
+                extra
+            ),
+        )
+        .unwrap();
+    }
+    let meta = crate::crt_ptd::raw(METADATA);
+    let map = crate::crt_ptd::raw(UNWIND_MAP);
+    let body = format!(
+        r#"
+for mode in 0..8{{
+ let mut rt=CrtStreamRuntime::new(7,9,0x8000,65536).unwrap();rt.map_region(0x41c000,4,CrtRegionKind::Module,Some(&123u32.to_le_bytes())).unwrap();let metadata=rt.map_region(0x41b42c,36,CrtRegionKind::Module,Some(&{meta:?})).unwrap();rt.map_region(0x41b41c,16,CrtRegionKind::Module,Some(&{map:?})).unwrap();
+ let stack=rt.map_region(0x9000,1024,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,768).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(1)).unwrap();let mut owner=CrtCpu::new(sp,1).unwrap();owner.push(&mut rt,CrtValue::scalar(0)).unwrap();owner.r[0]=CrtValue::scalar(0x414ad6);let previous=rt.thread_head(4,5,[1,2,3]).unwrap();let mut frame=CrtPtdFrame::new(&rt,&owner,previous,0x414ad6,0x41c000).unwrap();ptd_prolog(&mut rt,&mut owner,&mut frame,0x40a33e).unwrap();let record=cxx_bind(&rt,&owner,&frame).unwrap();let state=rt.offset(frame.bp,-4).unwrap();rt.store(state,32,CrtValue::scalar(if mode==1{{1}}else{{0}})).unwrap();
+ let scratch=rt.map_region(0xa000,1024,CrtRegionKind::Stack,None).unwrap();let hs=rt.offset(scratch,768).unwrap();rt.store(hs,32,CrtValue::ProtectedReturn(10)).unwrap();let mut child=CrtCpu::new(hs,10).unwrap();let record_pointer=rt.offset(frame.bp,-12).unwrap();child.push(&mut rt,CrtValue::Pointer(metadata)).unwrap();child.push(&mut rt,CrtValue::scalar(0)).unwrap();child.push(&mut rt,CrtValue::Pointer(record_pointer)).unwrap();let read=child.call_activation(&mut rt,0x3333,0,|rt,c|cxx_unwind_state_read_owned(rt,c,&owner,&frame,&record)).unwrap();assert_eq!(read,CrtValue::scalar(if mode==1{{1}}else{{0}}));child.discard(&mut rt,12).unwrap();child.push(&mut rt,CrtValue::scalar(if mode==2{{0}}else{{u32::MAX}})).unwrap();let meta_arg=if mode==3{{rt.offset(metadata,4).unwrap()}}else{{metadata}};child.push(&mut rt,CrtValue::Pointer(meta_arg)).unwrap();let object=rt.offset(frame.bp,if mode==4{{-8}}else{{-12}}).unwrap();child.push(&mut rt,CrtValue::Pointer(object)).unwrap();
+ if mode==5{{owner.return_id+=1;}}if mode==6{{rt.store(state,32,CrtValue::Scalar{{bits:0,known:0}}).unwrap();}}if mode==7{{rt.store(metadata,32,CrtValue::scalar(0)).unwrap();}}let before=rt.load(state,32).unwrap();
+ let result=child.call_activation(&mut rt,0x4444,0,|rt,c|cxx_unwind_state_step(rt,c,&owner,&frame,&record));
+ if mode<=1{{assert_eq!(result.unwrap(),CrtValue::Pointer(rt.offset(frame.bp,-12).unwrap()));assert_eq!(rt.load(state,32).unwrap(),CrtValue::scalar(u32::MAX));assert_eq!(record.required_action(&rt,&owner,&frame).unwrap(),None);child.discard(&mut rt,12).unwrap();child.finish(&mut rt).unwrap();}}else{{assert!(result.is_err());assert_eq!(rt.load(state,32).unwrap(),before);}}
+}}
+// Independent read-width boundary: <=128 reads a signed byte, >128 a full word.
+for(count,value,expected)in [(128u32,255u32,u32::MAX),(129,255,255),(2,128,0xffffff80),(129,0x80000000,0x80000000)]{{
+ let mut rt=CrtStreamRuntime::new(23,45,0x8000,16384).unwrap();let object=rt.map_region(0x6000,12,CrtRegionKind::Context,None).unwrap();rt.store(rt.offset(object,8).unwrap(),32,CrtValue::scalar(value)).unwrap();let info=rt.map_region(0x7000,8,CrtRegionKind::Module,None).unwrap();rt.store(rt.offset(info,4).unwrap(),32,CrtValue::scalar(count)).unwrap();let stack=rt.map_region(0x9000,256,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,192).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(5)).unwrap();let mut c=CrtCpu::new(sp,5).unwrap();c.push(&mut rt,CrtValue::Pointer(info)).unwrap();c.push(&mut rt,CrtValue::scalar(0)).unwrap();c.push(&mut rt,CrtValue::Pointer(object)).unwrap();let result=c.call_activation(&mut rt,0x5555,0,|rt,c|cxx_unwind_state_read_raw(rt,c)).unwrap();assert_eq!(result,CrtValue::scalar(expected));c.discard(&mut rt,12).unwrap();c.finish(&mut rt).unwrap();
+}}
+"#
+    );
+    crate::crt_stream_callees_tests::native(&extra, &body, "owned-unwind-state");
+    for (which, bytes) in [UNWIND_STATE_GET, UNWIND_STATE_SET].into_iter().enumerate() {
+        for i in 0..bytes.len() / 2 {
+            let mut inputs = [
+                crate::crt_ptd::raw(UNWIND_STATE_GET),
+                crate::crt_ptd::raw(UNWIND_STATE_SET),
+            ];
+            inputs[which][i] ^= 1;
+            assert!(unwind_state_source(&inputs[0], &inputs[1]).is_err());
+        }
+    }
+}
