@@ -355,3 +355,33 @@ Counts now overlap as follows:97 owned-frame scenarios,40 delivery-lifetime,
 corpus remains38. Five existing recorded Windows wrapper observations still
 have their own differential check; the new seven cases add zero Windows or
 whole-PE comparison pairs. Prior Windows timeout causes remain unresolved.
+
+## Original unwind caller and RET8 wrapper
+
+The connected component now executes the original caller at0x4022bd through the
+pre-epilog boundary0x4022e0 and the complete local wrapper at0x402860. Their bytes
+are extracted independently from the unchanged PE. The normal graph emitter
+retains CMP/Jcc, PUSH, MOV, CALL and ADD effects. The wrapper's original pushes
+supply cookie-address, establisher and stop-level arguments to the body adapter;
+all three values are checked before cleanup. The guard consumes the original
+caller's pushed table/owner pair. The original ADD instructions reclaim their
+own arguments and set flags normally. The epilog still executes separately only
+after the delivery scope is validated; the component boundary is checked before
+an instruction tick and consumes no return token.
+
+Owned calls now accept explicit checked return cleanup, using the shared CPU
+call/return mechanism. The separately proved wrapper binds8bytes; return cleanup
+is not inferred from whichever RET happens to run. Three additional negative
+cases mutate caller bytes, mutate wrapper bytes or give RET8 a zero-cleanup call
+lease. The first two reject before cleanup writes; the last preserves completed
+cleanup writes but cannot issue handler completion or retire Inner.
+
+Counts are100 owned-frame cases,43 delivery-lifetime,25 cross-frame and10
+connected cleanup/retirement cases, with overlapping subsets. New cases still
+add zero Windows differential pairs and zero whole-PE pairs. The remaining body
+adapter and private notification/finally scratch are explicit physical-stack
+cuts, even though their effects and callback instructions execute. These need
+original body instruction/temporary-record stack composition before claiming
+complete handler execution. OS delivery and selected-source restoration also
+remain gates; full startup/rcedit stays unsupported. Sol can attempt the next
+body-stack connection using the existing temporary-record and call machinery.

@@ -232,7 +232,10 @@ impl CrtOwnedFrameView<'_>{
   if self.rt.overlapping_tags(low.address(),bytes).iter().any(|(_,v)|matches!(v,CrtValue::ProtectedReturn(_)|CrtValue::OpaqueSaved(_)|CrtValue::ThreadHead(_))){return Err("owned bridge protected scratch");}Ok(())
  }
  fn call<F>(&mut self,cpu:&mut CrtCpu,continuation:u32,body:F)->RegistryResult<CrtValue>
+ where F:FnOnce(&mut CrtOwnedFrameView<'_>,&mut CrtCpu)->RegistryResult<CrtValue>{self.call_pop(cpu,continuation,0,body)}
+ fn call_pop<F>(&mut self,cpu:&mut CrtCpu,continuation:u32,cleanup:u16,body:F)->RegistryResult<CrtValue>
  where F:FnOnce(&mut CrtOwnedFrameView<'_>,&mut CrtCpu)->RegistryResult<CrtValue>{
+  if cleanup>256||cleanup%4!=0{return Err("owned call cleanup extent");}
   let result=(||{
    self.validate()?;let sp=CrtCpu::pointer(cpu.r[4])?;
    if self.depth>=32||self.calls>=4096||cpu.returned||cpu.return_id!=self.active
@@ -241,7 +244,7 @@ impl CrtOwnedFrameView<'_>{
     ||self.rt.load(CrtCpu::pointer(cpu.entry[4])?,32)?!=CrtValue::ProtectedReturn(cpu.return_id)||self.rt.tags.values().filter(|&&v|v==CrtValue::ProtectedReturn(cpu.return_id)).count()!=1{return Err("owned filter call activation/scratch");}
    self.registry.range(self.rt.offset(sp,-4)?.address(),u64::from(sp.address()))?;
    let parent=self.active;self.depth+=1;self.calls+=1;
-   let value=cpu.call_activation(self.rt,continuation,0,|rt,child|{
+   let value=cpu.call_activation(self.rt,continuation,cleanup,|rt,child|{
     let mut view=CrtOwnedFrameView{rt,registry:self.registry,machine:self.machine,storage:self.storage,search_storage:self.search_storage,search:self.search,active:child.return_id,depth:self.depth,calls:self.calls,failed:false};
     let result=body(&mut view,child);self.calls=view.calls;
     match result{Ok(v)=>{view.validate()?;Ok(v)},Err(e)=>Err(e)}

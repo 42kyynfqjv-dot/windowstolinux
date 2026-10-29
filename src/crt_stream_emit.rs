@@ -278,7 +278,7 @@ pub(crate) fn emit_body_with_hooks(
     )
 }
 #[allow(clippy::too_many_arguments)]
-fn emit_body_with_exit(
+pub(crate) fn emit_body_with_exit(
     graph: &Graph,
     mut call: impl FnMut(u32, Target) -> Result<String, String>,
     roles: &BTreeMap<u32, String>,

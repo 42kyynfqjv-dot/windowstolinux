@@ -217,7 +217,7 @@ fn original_finally_effects(rt:&mut CrtStreamRuntime,record:&mut LocalRecord<'_>
 }
 /// Explicit caller cut at the local-unwind branch, using original body effects.
 fn connected_inner_cleanup(session:&CrtOwnedUnwind<'_>,frame:&mut CrtOwnedFrameView<'_>,cpu:&CrtCpu,token:&CrtUnwindDelivery,fault:usize,source_guard:CrtPointer)->RegistryResult<()>{
- session.validate_delivery(frame,cpu,token)?;
+ CrtOwnedDeliveryPrefix{session,token,record:session.source.record,context:token.context}.validate_prefix_source(frame)?;cpu.validate_active(frame.rt)?;
  let rows=[LocalScope{parent:-2,filter:0,handler:0x40117f},LocalScope{parent:0,filter:0,handler:0x40116e}];
  let rt=&mut *frame.rt;let machine=frame.machine;
  frame.registry.execute_local(frame.storage.id,frame.storage,LocalEntry{entry_sp:0xb000,handler:0x4027b0,cookie_address:0x41c000,cookie:0x12345678,target_level:-2},|record,storage|{
@@ -228,13 +228,13 @@ fn connected_inner_cleanup(session:&CrtOwnedUnwind<'_>,frame:&mut CrtOwnedFrameV
     if fault==1{return Err("connected callback failure after writes");}
     if fault==4{rt.store(rt.offset(token.context,0xb8)?,32,CrtValue::scalar(8))?;}
     if fault==5{rt.store(source_guard,32,CrtValue::scalar(0))?;}
-    if fault==6{rt.store(rt.resolve_absolute(0xa100,CrtRegionKind::Stack)?,32,CrtValue::ProtectedReturn(cpu.return_id))?;}
+    if fault==6{rt.store(rt.resolve_absolute(0xa100,CrtRegionKind::Stack)?,32,CrtValue::ProtectedReturn(token.callback))?;}
     let check=CrtOwnedFrameView{rt,registry:record.registry,machine,storage:s,search_storage:frame.search_storage,search:false,active:frame.active,depth:frame.depth,calls:frame.calls,failed:false};
-    session.validate_delivery(&check,cpu,token)
+    CrtOwnedDeliveryPrefix{session,token,record:session.source.record,context:token.context}.validate_prefix_source(&check)
    }};owned_original_local(&mut effects,-2,0).map(|_|())
  })?;
  if fault==2{frame.rt.store(frame.rt.resolve_absolute(frame.storage.image.ebp-48,CrtRegionKind::Stack)?,32,CrtValue::scalar(0))?;}
- session.validate_delivery(frame,cpu,token)
+ CrtOwnedDeliveryPrefix{session,token,record:session.source.record,context:token.context}.validate_prefix_source(frame)
 }
 "#;
 

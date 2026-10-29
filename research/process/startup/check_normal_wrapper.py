@@ -96,6 +96,8 @@ def check(original, observation, out, compare=None):
     (out/'main-activate.bin').write_bytes(mapped(image, 0x40130f, 7, executable=True))
     (out/'Main-scope-header.bin').write_bytes(mapped(image, 0x41b218, 16))
     (out/'Main-scope-table.bin').write_bytes(mapped(image, 0x41b218, 28))
+    (out/'original-unwind-caller.bin').write_bytes(mapped(image,0x4022bd,45,executable=True))
+    (out/'original-local-wrapper.bin').write_bytes(mapped(image,0x402860,23,executable=True))
     (out/'handler-complete.bin').write_bytes(mapped(image, 0x402210, 350, executable=True))
     (out/'global-wrapper.bin').write_bytes(mapped(image, 0x402840, 26, executable=True))
     if tuple(import_at_iat(image,0x415040-pe_sections(image)[0]))!=('kernel32.dll','RtlUnwind'): raise ValueError('original RtlUnwind import identity changed')
@@ -182,11 +184,11 @@ def check(original, observation, out, compare=None):
                   inner_prolog_sha256=sha((out/'Inner-prolog.bin').read_bytes()),
                   main_activation_sha256=sha((out/'main-activate.bin').read_bytes()),
                   main_scope_header_sha256=sha((out/'Main-scope-header.bin').read_bytes()),
-                  owned_frame_native_cases=97, owned_local_store_cases=10, original_notification_sha256=sha((out/'owned-notification.bin').read_bytes()), owned_local_loop_cases=13, original_cleanup_loop_cases=21, owned_local_body_sha256=sha((out/'owned-local-body.bin').read_bytes()), local_level_store_sha256=sha(local_store), original_cleanup_hashes={name:sha((out/('owned-'+name+'.bin')).read_bytes()) for name in ['CleanupA','CleanupB','CleanupC']},
-                  owned_delivery_lifetime_cases=40, cross_frame_delivery_cases=22, connected_cleanup_retirement_cases=7, unwind_continuation_input_cut_cases=4, cleanup_continuation_boundary_cases=2,
+                  owned_frame_native_cases=100, owned_local_store_cases=10, original_notification_sha256=sha((out/'owned-notification.bin').read_bytes()), owned_local_loop_cases=13, original_cleanup_loop_cases=21, owned_local_body_sha256=sha((out/'owned-local-body.bin').read_bytes()), local_level_store_sha256=sha(local_store), original_cleanup_hashes={name:sha((out/('owned-'+name+'.bin')).read_bytes()) for name in ['CleanupA','CleanupB','CleanupC']},
+                  owned_delivery_lifetime_cases=43, cross_frame_delivery_cases=25, connected_cleanup_retirement_cases=10, unwind_continuation_input_cut_cases=4, cleanup_continuation_boundary_cases=2,
                   branch_obligation_native_cases=3,
                   ordinary_call_boundary_cases=1,
-                  global_wrapper_sha256=sha((out/'global-wrapper.bin').read_bytes()),
+                  global_wrapper_sha256=sha((out/'global-wrapper.bin').read_bytes()), unwind_caller_sha256=sha((out/'original-unwind-caller.bin').read_bytes()), local_wrapper_sha256=sha((out/'original-local-wrapper.bin').read_bytes()),
                   main_scope_table_sha256=sha((out/'Main-scope-table.bin').read_bytes()),
                   complete_handler_sha256=sha((out/'handler-complete.bin').read_bytes()),
                   observation_sha256=sha((observation/'report.json').read_bytes()),
