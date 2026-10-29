@@ -360,6 +360,7 @@ impl CrtCxxChainBinding {
  }
  fn effect(&mut self,rt:&CrtStreamRuntime,epoch:&mut NormalCallEpoch<'_>,frame:&CrtPtdFrame,value:CrtValue,enter:bool)->RegistryResult<()>{
   self.identity(rt,epoch,frame)?;frame.check_fs(rt,value,enter)?;
+  CrtNormalBinding::validate_cxx_from(rt,epoch,self.previous)?;
   if enter {
    if self.id.is_some()||epoch.head()?!=self.previous{return Err("C++ chain changed predecessor/replay");}
    let low=rt.offset(frame.low,-4)?.address();let high=u64::from(CrtCpu::pointer(frame.entry[4])?.address())+4;

@@ -167,7 +167,10 @@ impl CrtNormalBinding {
   RegistryHead::Cxx(id)=>[4,id.generation,0],
  }}
  fn validate_cxx_head(rt:&CrtStreamRuntime,epoch:&NormalCallEpoch<'_>)->RegistryResult<()>{
-  let mut head=epoch.head()?;
+  Self::validate_cxx_from(rt,epoch,epoch.head()?)
+ }
+ fn validate_cxx_from(rt:&CrtStreamRuntime,epoch:&NormalCallEpoch<'_>,mut head:RegistryHead)->RegistryResult<()>{
+  epoch.state()?;
   for _ in 0..=32{let RegistryHead::Cxx(id)=head else{return Ok(());};
    let f=epoch.registry.cxx.iter().find(|f|f.id==id&&f.linked).ok_or("C++ inherited stale head")?;
    if f.epoch!=epoch.generation||rt.owner!=epoch.registry.identity.owner||rt.thread!=epoch.registry.identity.instance{return Err("C++ inherited foreign epoch/runtime");}
@@ -283,6 +286,7 @@ impl CrtNormalBinding {
  fn install(&mut self,rt:&CrtStreamRuntime,cpu:&CrtCpu,epoch:&mut NormalCallEpoch<'_>,record:CrtPointer,token:CrtThreadHead)->RegistryResult<()>{
   if self.id.is_some()||record!=self.at(rt,self.layout.record)?||token!=self.token
    ||cpu.r[4]!=CrtValue::Pointer(self.at(rt,self.layout.low-4)?){return epoch.fail("CRT normal install record/token/replay");}
+  if let Err(e)=Self::validate_cxx_from(rt,epoch,self.previous){return epoch.fail(e);}
   let image=self.image(rt,cpu,epoch)?;
   let mut steps=vec![NormalFrameStep::RestorePredecessor,NormalFrameStep::DiscardGuard{offset:self.layout.guard,register:1}];
   let mut saved=self.layout.saved.clone();saved.sort_by_key(|&(offset,_)|offset);
@@ -300,6 +304,7 @@ impl CrtNormalBinding {
   self.epilog_entry(rt,cpu,epoch)?;cpu.set(register as usize,32,0,rt.load(self.at(rt,self.layout.record)?,32)?)
  }
  fn unlink(&self,rt:&CrtStreamRuntime,cpu:&CrtCpu,epoch:&mut NormalCallEpoch<'_>,register:u8)->RegistryResult<()>{
+  if let Err(e)=Self::validate_cxx_from(rt,epoch,self.previous){return epoch.fail(e);}
   let image=self.image(rt,cpu,epoch)?;
   if cpu.r[register as usize]!=CrtValue::ThreadHead(self.token){return epoch.fail("CRT normal original FS source");}
   epoch.restore_previous_head(self.id.ok_or("CRT normal missing frame")?,&image)

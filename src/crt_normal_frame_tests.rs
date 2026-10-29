@@ -1490,8 +1490,32 @@ fn bound_invocation(){for delivery_mode in 0..30{let prefix=true;let mode=0;
   Err::<(),_>("original child unwind completion is not OS delivery/restoration")
  });assert!(result.is_err());assert_eq!(rt.initialization,None);assert_eq!(rt.module_references.len(),refs);assert_eq!(rt.memory.read(cache.address(),4).unwrap(),cache_before);assert_eq!(rt.last_os_error,saved_error);
 }}
+fn chain_effect_lifetime(){for mode in 0..4{
+ let(m,mut r,main,mut permit)=fixture_with_extra(&[(0x410000,0x420000)]);let mut rt=runtime(&r);let mut checked=false;
+ let result=r.with_normal_calls(&m,&mut permit,&main,|e|{
+  let mut parent=cpu(&mut rt,0xe800,1101);parent.return_pop=0;parent.push(&mut rt,CrtValue::scalar(0))?;parent.r[0]=CrtValue::scalar(0x414ad6);
+  let mut pb=CrtCxxChainBinding::bind(&rt,&parent,e)?;let mut pf=CrtPtdFrame::new(&rt,&parent,pb.token,0x414ad6,0x41c000)?;
+  ptd_prolog_registered(&mut rt,&mut parent,e,&mut pf,&mut pb,0x40a33e).expect("live predecessor setup");
+  if mode%2==0{
+   let mut child=cpu(&mut rt,0xe000,1102);child.return_pop=0;child.push(&mut rt,CrtValue::scalar(4))?;child.r[0]=CrtValue::scalar(0x414ad6);
+   let mut b=CrtCxxChainBinding::bind(&rt,&child,e)?;let mut f=CrtPtdFrame::new(&rt,&child,b.token,0x414ad6,0x41c000)?;
+   if mode==2{ptd_prolog_registered(&mut rt,&mut child,e,&mut f,&mut b,0x40a33e).expect("live child setup");}
+   rt.consume_stack(CrtCpu::pointer(parent.entry[4])?,CrtValue::ProtectedReturn(parent.return_id)).expect("independent owner retirement");let before=e.head()?;
+   let got=if mode==0{ptd_prolog_registered(&mut rt,&mut child,e,&mut f,&mut b,0x40a33e)}else{ptd_epilog_registered(&mut rt,&mut child,e,&mut f,&mut b,0x40a3b8)};
+   assert_eq!(got,Err("C++ inherited owner/record lifetime"),"mode {}",mode);assert_eq!(e.registry.head,before);
+  }else{
+   let mut child=cpu(&mut rt,0xe000,1103);let mut b=CrtNormalBinding::bind(&rt,&child,e,epilog_run_layout())?;
+   if mode==3{start(&mut rt,&mut child,e,&mut b,1104).expect("live EH4 child setup");}
+   rt.consume_stack(CrtCpu::pointer(parent.entry[4])?,CrtValue::ProtectedReturn(parent.return_id)).expect("independent owner retirement");let before=e.head()?;
+   let got=if mode==1{start(&mut rt,&mut child,e,&mut b,1104)}else{epilog_run(&mut rt,&mut child,e,&mut b).map(|_|())};
+   assert_eq!(got,Err("C++ inherited owner/record lifetime"),"mode {}",mode);assert_eq!(e.registry.head,before);
+  }
+  checked=true;Err::<(),_>("effect-time rejection checked")
+ });assert!(result.is_err());assert!(checked,"mode {} failed before exercising the intended boundary",mode);
+}}
+
 fn shared_chain_delivery(){for mode in 0..5{
- let(m,mut r,main,mut permit)=fixture_with_extra(&[(0x410000,0x420000)]);let mut rt=runtime(&r);
+ let(m,mut r,main,mut permit)=fixture_with_extra(&[(0x410000,0x420000)]);let mut rt=runtime(&r);let mut checked=false;
  let result=r.with_normal_calls(&m,&mut permit,&main,|e|{
   let mut ancestor=cpu(&mut rt,0xe800,970);ancestor.return_pop=0;ancestor.push(&mut rt,CrtValue::scalar(16))?;ancestor.r[0]=CrtValue::scalar(0x414ad6);
   let mut ancestor_binding=CrtCxxChainBinding::bind(&rt,&ancestor,e)?;let mut ancestor_frame=CrtPtdFrame::new(&rt,&ancestor,ancestor_binding.token,0x414ad6,0x41c000)?;
@@ -1512,9 +1536,9 @@ fn shared_chain_delivery(){for mode in 0..5{
    h.r[0]=CrtValue::scalar(1);h.finish(rt)
   });assert_eq!(interrupted.r,saved);assert!(e.state().is_err());
   if mode==0{let receipt=receipt.expect("completed child preserves suspension");assert_eq!(event.take_handler_result(receipt,&rt,&interrupted,e,&binding).expect("matching receipt"),1);assert_eq!(e.registry.cxx.len(),1);assert_eq!(RegistryHead::Cxx(e.registry.cxx[0].id),ancestor_head);}
-  else{assert!(receipt.is_err(),"mode {}",mode);assert_eq!(event.delivery,CrtNormalDelivery::Failed);}
-  Err::<(),_>("delivery acquisition and restoration remain external gates")
- });assert!(result.is_err());
+  else{let expected=match mode{1=>"delivery child incomplete return or changed context",2|4=>"C++ chain stale owner/epoch/lease",3=>"PTD prolog replay",_=>unreachable!()};assert_eq!(receipt.err(),Some(expected),"mode {}",mode);assert_eq!(event.delivery,CrtNormalDelivery::Failed);}
+  checked=true;Err::<(),_>("delivery acquisition and restoration remain external gates")
+ });assert!(result.is_err());assert!(checked,"mode {} failed before its intended boundary",mode);
 }}
 
 fn shared_chain_nested(){for fault in 0..5{
@@ -1537,7 +1561,7 @@ fn shared_chain_nested(){for fault in 0..5{
   ptd_epilog_registered(&mut rt,&mut b,e,&mut bf,&mut bb,0x40a3b8).expect("nested epilog");b.finish(&mut rt)?;assert_eq!(e.head()?,first);
   if fault==4{return ptd_epilog_registered(&mut rt,&mut b,e,&mut bf,&mut bb,0x40a3b8);}
   ptd_epilog_registered(&mut rt,&mut a,e,&mut af,&mut ab,0x40a3b8).expect("outer epilog");a.finish(&mut rt)?;Ok(())
- });if fault==0{result.expect("nested original C++ chain succeeds");assert_eq!(r.head,root);}else{assert!(result.is_err(),"fault {}",fault);assert!(!r.cxx.is_empty());}
+ });if fault==0{result.expect("nested original C++ chain succeeds");assert_eq!(r.head,root);}else{let expected=match fault{1=>"preserved failed helper effects",2=>"rejected typed predecessor alias",3=>"C++ chain changed predecessor/replay",4=>"C++ chain stale owner/epoch/lease",_=>unreachable!()};assert_eq!(result,Err(expected),"fault {}",fault);assert!(!r.cxx.is_empty());}
 }}
 
 fn shared_chain_cases(){for mode in 0..14{
@@ -1560,14 +1584,14 @@ fn shared_chain_cases(){for mode in 0..14{
   if matches!(mode,3..=6){return ptd_prolog_registered(&mut rt,&mut inner,e,&mut bf,&mut b,0x40a33e);}
   ptd_prolog_registered(&mut rt,&mut inner,e,&mut bf,&mut b,0x40a33e).expect("second C++ registration above EH4");let second=e.head()?;assert_ne!(second,first);
   assert_eq!(e.registry.cxx.len(),2);assert_eq!(e.registry.cxx.last().unwrap().previous,nh);
-  if mode==7{rt.store(rt.offset(bf.bp,-12)?,32,CrtValue::ThreadHead(a.token))?;return ptd_epilog_registered(&mut rt,&mut inner,e,&mut bf,&mut b,0x40a3b8);}
+  if mode==7{assert_eq!(rt.store(rt.offset(bf.bp,-12)?,32,CrtValue::ThreadHead(a.token)),Err("CRT protected saved/return overwrite"));assert_eq!(e.head()?,second);return e.fail("rejected typed predecessor overwrite");}
   if mode==8{rt.store(bf.low,32,CrtValue::scalar(0))?;return ptd_epilog_registered(&mut rt,&mut inner,e,&mut bf,&mut b,0x40a3b8);}
   if mode==9{e.registry.head=first;return ptd_epilog_registered(&mut rt,&mut inner,e,&mut bf,&mut b,0x40a3b8);}
   if mode==10{e.registry.normal_epoch.as_mut().unwrap().pending_exception=Some(990);return ptd_epilog_registered(&mut rt,&mut inner,e,&mut bf,&mut b,0x40a3b8);}
   ptd_epilog_registered(&mut rt,&mut inner,e,&mut bf,&mut b,0x40a3b8).expect("inner original unlink and retirement");assert_eq!(e.head()?,nh);inner.finish(&mut rt)?;
   normal.r[0]=CrtValue::scalar(23);assert_eq!(epilog_run(&mut rt,&mut normal,e,&mut n)?.known_scalar()?,23);assert_eq!(e.head()?,first);
   ptd_epilog_registered(&mut rt,&mut outer,e,&mut af,&mut a,0x40a3b8).expect("outer original unlink and retirement");assert_eq!(e.head()?,root);assert!(e.registry.cxx.is_empty());outer.finish(&mut rt)?;assert!(a.identity(&rt,e,&af).is_err());Ok(())
- });if matches!(mode,0|11|12){result.expect("mixed chain completes original LIFO epilogs");assert_eq!(r.head,root);}else{assert!(result.is_err(),"mode {}",mode);assert!(r.failure.is_some());assert!(!r.cxx.is_empty(),"failed path preserves published registration");}
+ });if matches!(mode,0|11|12){result.expect("mixed chain completes original LIFO epilogs");assert_eq!(r.head,root);}else{let expected=match mode{1=>"PTD prolog replay",2|9=>"C++ chain non-LIFO unlink/identity",3=>"C++ chain changed predecessor/replay",4..=6=>"C++ chain stale owner/epoch/lease",7=>"rejected typed predecessor overwrite",8=>"PTD guard changed",10=>"normal call suspended for owned exception",13=>"rejected stale C++ predecessor owner",_=>unreachable!()};assert_eq!(result,Err(expected),"mode {}",mode);assert!(r.failure.is_some());assert!(!r.cxx.is_empty(),"failed path preserves published registration");}
 }}
 
 fn chain_ownership_gap(){let delivery_mode=0;let mode=0;
@@ -1613,7 +1637,7 @@ fn chain_ownership_gap(){let delivery_mode=0;let mode=0;
   Err::<(),_>("two local FS views cannot establish actual handler selection")
  });assert!(result.is_err());
 }
-fn main(){match std::env::args().nth(1).unwrap().as_str(){"shared-chain"=>{shared_chain_cases();shared_chain_nested();shared_chain_delivery()},"chain-ownership-gap"=>chain_ownership_gap(),"bound-cxx-invocation"=>bound_invocation(),"prefix-delivery-unwind"=>dispatcher_delivery_unwind(true),"dispatcher-delivery-unwind"=>dispatcher_delivery_unwind(false),"delivery-cached-unwind"=>delivery_cached_unwind(),"delivery-children"=>delivery_children(),"cxx-cached-unwind"=>cxx_cached_unwind(),"cxx-unwind"=>cxx_registered_unwind(),"manager-inherited"=>inherited_registered_manager(),"manager"=>manager_registered(),"live-finally"=>live_finally_cases(),"owned-loop"=>owned_loop_cases(),"owned-local"=>owned_local_cases(),"owned"=>{main_initial_rejections();initial_raise_rejections();owned_main_cases()},"path-edges"=>path_edges(),"live"=>live_dispatch(),"objects"=>captured_objects(),"handler"=>pending_handler_activation(),"pending"=>pending_normal_exception(),"pending-reject"=>reject_normal_exception(),"file"=>file_scope_normal(),"file-failure"=>file_scope_failure(),"nested"=>nested_actual(),"mutations"=>mutations(),"consumed"=>consumed_mutation(),"failure"=>body_failure(),"certificate"=>wrong_certificate(),"observed"=>observed(),_=>panic!("case")}}
+fn main(){match std::env::args().nth(1).unwrap().as_str(){"chain-effect-lifetime"=>chain_effect_lifetime(),"shared-chain"=>{shared_chain_cases();shared_chain_nested();shared_chain_delivery()},"chain-ownership-gap"=>chain_ownership_gap(),"bound-cxx-invocation"=>bound_invocation(),"prefix-delivery-unwind"=>dispatcher_delivery_unwind(true),"dispatcher-delivery-unwind"=>dispatcher_delivery_unwind(false),"delivery-cached-unwind"=>delivery_cached_unwind(),"delivery-children"=>delivery_children(),"cxx-cached-unwind"=>cxx_cached_unwind(),"cxx-unwind"=>cxx_registered_unwind(),"manager-inherited"=>inherited_registered_manager(),"manager"=>manager_registered(),"live-finally"=>live_finally_cases(),"owned-loop"=>owned_loop_cases(),"owned-local"=>owned_local_cases(),"owned"=>{main_initial_rejections();initial_raise_rejections();owned_main_cases()},"path-edges"=>path_edges(),"live"=>live_dispatch(),"objects"=>captured_objects(),"handler"=>pending_handler_activation(),"pending"=>pending_normal_exception(),"pending-reject"=>reject_normal_exception(),"file"=>file_scope_normal(),"file-failure"=>file_scope_failure(),"nested"=>nested_actual(),"mutations"=>mutations(),"consumed"=>consumed_mutation(),"failure"=>body_failure(),"certificate"=>wrong_certificate(),"observed"=>observed(),_=>panic!("case")}}
 "#;
 
 fn run(case: &str) {
@@ -2292,4 +2316,9 @@ fn original_cxx_fs_views_do_not_establish_shared_thread_chain_selection() {
 #[test]
 fn original_cxx_and_eh4_share_live_lifo_thread_head() {
     run("shared-chain");
+}
+
+#[test]
+fn shared_chain_rechecks_owner_at_original_fs_effect() {
+    run("chain-effect-lifetime");
 }

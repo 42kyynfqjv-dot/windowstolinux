@@ -155,3 +155,49 @@ The legacy boundary retains one native diagnostic experiment. The registered
 path adds 24 native cases, zero fresh Windows observations and zero whole-PE
 translation pairs.
 Full startup/rcedit remains unsupported and PR #45 stays draft.
+
+## Independent review of `dd84b13`
+
+Review reproduced a delayed-use defect: after a binding was created, consuming
+its C++ predecessor's protected return still allowed the original FS installation
+to succeed. The correction checks the live predecessor again at installation and
+restoration effect points in both C++ and EH4 adapters. Four native cases require
+the exact lifetime rejection and unchanged head, and assert that the intended
+boundary was reached. Earlier executed stores remain observable on failure.
+
+The original 24-case suite now requires the intended rejection classes. Its
+predecessor-overwrite case is explicitly a protected-store rejection, not an
+executed corrupted-record epilog. Delivery cases require reaching their result
+checks, preventing unrelated setup errors from passing the outer rejection.
+
+## Next bounded handler receipt contract
+
+Implement these together through original execution and emitted validation:
+
+1. Bind a receipt to registry identity, epoch, event, delivery generation, fresh
+   registration ID and shape, exact handler code/proof identity, live storage and
+   predecessor identity. Numeric record addresses alone grant no authority.
+2. Mint it only after that selected original handler executes. Generic supplied
+   callback results and the current `CrtNormalHandlerReturn` remain component
+   results; neither may be upgraded by copying a scalar result into a receipt.
+3. Revalidate node bytes, owner/capture lifetime, return authority, protected
+   context, physical head and complete child inventory before minting and again
+   on consumption. Bind the child lease and preserve prior effects on failure.
+4. A cursor starts at the actual head for one pending event. Consumption is
+   single-use and ordered; only a supported original disposition advances it to
+   the validated predecessor. Physical FS head, EH4 scope level and search cursor
+   remain distinct. ContinueSearch=1 must not be confused with a filter's
+   ExecuteHandler=1. Use separate typed result domains, rejecting unknown values.
+5. Keep captured exception state separate from handler call registers. Callback
+   completion grants neither restoration nor new capture authority. C++ source
+   activation still needs its own representation instead of EH4 metadata.
+6. Missing borrowed-chain containment, nested/collided behavior, termination or
+   actual delivery contracts retain rejection. Bounded traversal must reject
+   cycles and exhausted budgets, including stale identities after address reuse.
+
+Acceptance must execute mixed C++/EH4 order without skipping the first handler,
+then reject wrong-handler/proof/event/lease, duplicate receipts, changed heads or
+predecessors, expired owners/captures, unretired children and changed code. Check
+original dispositions and emitted state together; no externally supplied success
+Boolean. This remains a bounded Astra High integration. Full startup/rcedit is
+unsupported and historical Windows timeouts remain unexplained.

@@ -1,12 +1,12 @@
 {
   "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
-  "rust_sha256": "8c1a27b5b221859eecc6fb65a7b6c23c1a41af38d0a7c87b7293f33b806d48cc",
+  "rust_sha256": "a1376a5d70f3abc89eb4b2710ffa443864b88c67096992fcdef22925a968275f",
   "unwind_binding_source_sha256": "ac16aa1903e90a6fb3dee07052d004fe7aa67fe7f479113096e1d5825f5f1aef",
   "unwind_native_cases": 24,
   "unwind_new_windows_pairs": 0,
   "unwind_binding_rust_tests": 1,
   "kind": "Original C++ prolog/epilog shared registry-head component with mixed EH4 and delivery-child ownership; not ordered dispatch or whole-PE conversion",
-  "rust_crt_tests_passed": 218,
+  "rust_crt_tests_passed": 219,
   "existing_observation_test_separate": true,
   "byte_mutations_rejected": 415,
   "recorded_wrapper_pairs": 5,
@@ -74,5 +74,12 @@
     "pending source remains suspended; matching child lease required",
     "unlinked but unretired child rejected at callback completion",
     "original FS publication and prior effects preserved after later failure"
-  ]
+  ],
+  "shared_chain_effect_lifetime_cases": 4,
+  "independent_review": {
+    "reviewed_commit": "dd84b13332bb829f1bdd8f17f30fd40579e79578",
+    "defect": "Stale C++ predecessor could be installed after binding but before original FS effect; checks now run at C++/EH4 installation and restoration.",
+    "reproducer": "shared_chain_rechecks_owner_at_original_fs_effect: mode0 returned Ok before correction; four cases require exact rejection afterward",
+    "test_audit": "24 original cases now assert intended error classes; delivery setup cannot bypass result checks; protected predecessor overwrite is labeled store rejection."
+  }
 }
