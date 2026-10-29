@@ -1641,3 +1641,84 @@ HeapFree and GetLastError. Current descriptor allocation-result callbacks still
 replace those helper effects. Full formatter/startup/rcedit remains unsupported.
 Sol can continue the actual heap/allocator/error connection; no new architectural
 escalation is required merely for routine integration and verification.
+
+## Original heap acquisition and calloc/error control flow
+
+The private component runtime now carries an opaque process-heap identity tied to
+its arena/lifetime and an explicit exception-policy input. It transports through
+full typed words, rejects partial reads and foreign-runtime handles, and grants
+no numeric address or pointer authority. TEST of the same non-null heap token
+proves only ZF=0, CF=OF=0; sign remains unknown. The actual producer's SETNE AL
+replaces only AL, loses heap authority in EAX, and leaves upper bits unknown.
+The separately stored typed heap token remains usable. No stable host handle
+value or cross-thread/process sharing guarantee is invented.
+
+The original GetProcessHeap producer `40c8f0..40c901`, calloc body
+`407cf0..407d50`, and new-mode getter `4071c0..4071c7` execute through the shared
+IR/emitter, protected calls and original branches. An exact two-operand 32-bit
+IMUL form was added using the existing signed low-product/CF/OF computation;
+unknown operands reject and undefined ZF/SF remain unknown. Literal boundary
+vectors include MIN*-1, MAX*2, negative non-overflow, zero low product and memory
+sources. Partial-width and LOCK variants reject.
+
+HeapAlloc's bound component effect requires the live opaque heap, exact supported
+flags and known non-exception policy, then allocates with the already checked
+role/lifetime/initialization kernel. Failure preserves prior LastError; success
+leaves its knowledge unknown. A HeapAlloc result alone is not treated as calloc's
+complete behavior. Original instructions read new-mode on failure, call the bound
+new-handler effect with the actual requested byte count, honor retry/decline,
+and execute the original errno12 store before returning null. The errno accessor
+is still a declared effect returning an exact live, separately mapped four-byte
+thread-context cell; its actual implementation and side effects are not closed.
+The new-handler implementation is also an explicit effect input. Unknown mode,
+unknown heap policy, stale errno after a handler mutation, unsupported zero request,
+and retry-budget exhaustion reject, retaining earlier writes/effects.
+
+Thirteen native schedules cover success, terminal failure, overflow before API,
+retry success, unknown mode, rejected handler continuation after a write, failed
+heap retrieval, unknown heap policy, descriptor construction through actual
+calloc, zero-request rejection, retry exhaustion, handler decline, and handler
+retirement of errno before decline. The descriptor constructor's new test path
+calls this actual calloc body rather than directly selecting its allocation
+result. Its initialization/lock API effects are still explicitly bound. The
+previously registered manager/inherited fixture still has its earlier allocator
+result callback; connecting these two tested paths is an explicit remaining gate.
+
+Independent kernel tests reject foreign initialization/heap identity, forged
+scalar handles, wrong flags/extent, unknown exception policy, partial transport,
+and expired initialization authority. Existing root/frame/ownership checks remain.
+Artifact binding checks original producer/calloc/getter bytes and GetProcessHeap/
+HeapAlloc imports. These tests are component evidence with declared input state,
+not new original-Windows observations or whole-PE translations. Zero-request
+calloc currently rejects before helper execution; no minimum physical allocation
+is claimed to authorize readable requested bytes.
+
+Local full CRT suite:189 passed, one separately handled original-observation test;
+frame/unwind:182 passed; root:175 passed. Focused handler-argument/lifetime and
+multiply boundary cases passed; Clippy/format/Python checks passed. The five existing
+recorded Windows boundary comparisons remain the differential gate, not 13 new
+Windows pairs. Full formatter/startup/rcedit admission remains unsupported.
+
+Next: connect the actual allocator path into the registered manager with explicit
+heap/mode/errno bindings; establish actual errno accessor/PTD and new-handler effects,
+then original free failure mapping and locale/FILE producers. The source of initialized
+mode and heap configuration cannot be inferred from a successful sample. Sol can
+continue a bounded integration/review pass; escalate only a concrete unresolved
+TLS/exception-effect question.
+
+### Predecessor Windows timeout retained
+
+For `772c3e6`, startup workflow40918525979 passed. PR Rust workflow40918534890
+failed its authored-Windows job123605174805 during the combined imported/corpus
+step: all seven imported cases completed, then original corpus case16 timed out
+in process.wait after15seconds. PE hash for case16 was
+`386f0579d2509323b1148ad53c8bd610187044352a5a1bd57fbffed60a993fbe`.
+This is not a translated ELF failure. Artifact12917441977 (`corpus-launch-evidence`)
+has ZIP hash `d2211dee3921c9f764cfee23e2499e36f45aa3ae8d0c54314238b583e7341379`.
+The independent launch-diagnosis artifact12917287207 has ZIP hash
+`163f38153d3c335a3afab71110d548db0fff06a726d6414598214e2c92c4f2db`.
+Cause remains unresolved. Push Rust40918526018 was still running at inspection.
+No retry, timeout relaxation or inferred diagnosis was used.
+
+Heap/calloc checkpoint wrapper Rust SHA256: `37a9af55f16e6980a04f86dbe2d60a8effd73f75aeb0738a03f8a61ed027c689`.
+PE SHA256 remains `1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4`.

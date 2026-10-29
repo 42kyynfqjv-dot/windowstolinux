@@ -58,3 +58,21 @@ retrying handler's observable mutation; failed free preserving the allocation;
 successful free invalidating all aliases; stale/foreign heap and errno cells; and
 unknown heap exception policy. Windows conformance observations must be labeled
 separately from native component cases and from whole-PE conversion evidence.
+
+## Current component implementation checkpoint
+
+The actual GetProcessHeap producer, calloc body and new-mode getter now execute in
+native component tests, with an opaque heap token and explicit exception policy.
+The original overflow/zero-product/retry/errno control flow is mechanically emitted;
+zero requested inputs are currently rejected at the component boundary. The signed
+two-operand IMUL form has independent overflow/knowledge vectors. A descriptor
+constructor test now obtains its block through actual calloc execution.
+
+The new-handler callback receives the actual byte count and has a declared boolean
+retry/decline result; writes survive subsequent rejection. Its original body is not
+executed. The errno accessor supplies an exact live four-byte thread-context cell;
+its original PTD/TLS effects remain unresolved. A handler can retire that cell and
+the later accessor binding rejects it. GetProcessHeap's acquisition outcome and
+heap policy remain declared inputs. The registered manager still needs to replace
+its old result callback with these tested allocator instructions. Free failure,
+actual state producers and exceptional paths remain gates; no full startup claim.

@@ -403,6 +403,7 @@ pub(crate) fn emit_body_with_indirect(
  Op::Ordinary(Operation::Not(r))=>{let o=register(*r);out.push_str(&format!("let v=CrtValue::scalar(!CrtCpu::number({})?);{}",read(&o,roles)?,write(&o,"v",roles)?));},
  Op::Ordinary(Operation::Shift{left,dst,count})=>{let o=register(*dst);out.push_str(&format!("let a={};let v=cpu.shift(a,{count},{},{})?;{}",read(&o,roles)?,if *left{0}else{1},dst.width,write(&o,"v",roles)?));},
  Op::ArithmeticShift{dst,count}=>{let o=register(*dst);out.push_str(&format!("let a={};let v=cpu.shift(a,{count},2,{})?;{}",read(&o,roles)?,dst.width,write(&o,"v",roles)?));},
+ Op::MultiplyValue{dst,source:a}=>out.push_str(&format!("let a={};let b={};let v=cpu.multiply(a,CrtCpu::number(b)?)?;{}",read(&register(*dst),roles)?,read(a,roles)?,write(&register(*dst),"v",roles)?)),
  Op::Multiply{dst,source:a,factor}=>out.push_str(&format!("let a={};let v=cpu.multiply(a,{factor})?;{}",read(a,roles)?,write(&register(*dst),"v",roles)?)),
  Op::Ordinary(Operation::ZeroExtend(dst,o))|Op::SignExtend{dst,source:o}=>{let signed=matches!(node.op,Op::SignExtend{..});let w=width(o);out.push_str(&format!("let a=CrtCpu::number({})?;let v=CrtValue::scalar({});{}",read(o,roles)?,if signed{format!("(((a<<{})as i32)>>{})as u32",32-w,32-w)}else{format!("a&{}u32",if w==8{255}else{65535})},write(&register(*dst),"v",roles)?));},
  Op::Ordinary(Operation::Set(c,r))=>out.push_str(&format!("let v=CrtValue::scalar(u32::from(cpu.condition({})?));{}",condition(*c),write(&register(*r),"v",roles)?)),

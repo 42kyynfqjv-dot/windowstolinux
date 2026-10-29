@@ -50,6 +50,10 @@ pub(crate) enum Op {
         dst: Reg,
         count: u8,
     },
+    MultiplyValue {
+        dst: Reg,
+        source: Operand,
+    },
     Multiply {
         dst: Reg,
         source: Operand,
@@ -305,6 +309,10 @@ fn extended(i: &Instruction, raw: &[u8], tables: &[JumpTable<'_>]) -> Result<Op,
                 count: i.immediate8() & 31,
             }
         }
+        Mnemonic::Imul if i.code() == Code::Imul_r32_rm32 => Op::MultiplyValue {
+            dst: full(i.op0_register())?,
+            source: operand_from_move(i, 1)?,
+        },
         Mnemonic::Imul
             if i.op_count() == 3
                 && i.op0_kind() == OpKind::Register

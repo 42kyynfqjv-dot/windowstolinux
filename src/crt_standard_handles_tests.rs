@@ -146,6 +146,9 @@ assert!(greater(&mut rt,&mut c).is_err());assert!(!c.returned);assert_eq!(rt.loa
 }
 
 fn descriptor_source() -> String {
+    descriptor_source_with_allocator(None)
+}
+fn descriptor_source_with_allocator(allocator: Option<&str>) -> String {
     let descriptor_constructor:Vec<u8>="8bff558bec515153566a386a40e864beffff8bf033db8975f8595985f675048bf3eb4b8d86000e00003bf07441578d7e208bf05368a00f00008d47e050e8bdc1ffff834ff8ff80670df8891f8d7f38895fcc8d47e0c747d000000a0ac647d40a895fd6885fda3bc675c98b75f85f53e862beffff598bc65e5bc9c3".as_bytes().chunks_exact(2).map(|x|u8::from_str_radix(std::str::from_utf8(x).unwrap(),16).unwrap()).collect();
     let descriptor_destructor:Vec<u8>="8bff558bec568b750885f67425538d9e000e0000578bfe3bf3740e57ff155450410083c7383bfb75f256e82cbeffff595f5b5e5dc3".as_bytes().chunks_exact(2).map(|x|u8::from_str_radix(std::str::from_utf8(x).unwrap(),16).unwrap()).collect();
     let mut extra = inherited_source();
@@ -157,7 +160,7 @@ fn descriptor_source() -> String {
         let body=crt_stream_emit::emit_body(&graph,|pc,target|{
             let next=pc+graph.nodes[&pc].length;
             let (pop,code)=match target {
-                Target::Direct(0x407cf0)=>(0,"let n=rt.load(rt.offset(sp,4)?,32)?.known_scalar()?;let size=rt.load(rt.offset(sp,8)?,32)?.known_scalar()?;if size!=56{return Err(\"descriptor allocator element size\");}child.r[0]=match rt.alloc_descriptor_block(init,n,available)?{Some(p)=>{*allocated=Some(p);CrtValue::Pointer(p)},None=>CrtValue::scalar(0)};child.finish(rt)"),
+                Target::Direct(0x407cf0)=>(0,allocator.unwrap_or("let n=rt.load(rt.offset(sp,4)?,32)?.known_scalar()?;let size=rt.load(rt.offset(sp,8)?,32)?.known_scalar()?;if size!=56{return Err(\"descriptor allocator element size\");}child.r[0]=match rt.alloc_descriptor_block(init,n,available)?{Some(p)=>{*allocated=Some(p);CrtValue::Pointer(p)},None=>CrtValue::scalar(0)};child.finish(rt)")),
                 Target::Direct(0x408079)=>(12,"let p=CrtCpu::pointer(rt.load(rt.offset(sp,4)?,32)?)?;if rt.load(rt.offset(sp,8)?,32)?.known_scalar()?!=4000{return Err(\"descriptor spin count\");}let flags=rt.load(rt.offset(sp,12)?,32)?.known_scalar()?;let result=if *calls==fail_at{0}else{1};*calls+=1;if !rt.construct_record_lock_result(init,p,flags,result)?{return Err(\"original continuation after failed lock is unclosed\");}child.r[0]=CrtValue::scalar(result);child.finish_pop(rt,12)"),
                 Target::Import(0x415054)=>(4,"let p=CrtCpu::pointer(rt.load(rt.offset(sp,4)?,32)?)?;rt.destroy_record_lock(init,p)?;*calls+=1;child.finish_pop(rt,4)"),
                 Target::Direct(0x407d50)=>(0,"match rt.load(rt.offset(sp,4)?,32)?{CrtValue::Scalar{bits:0,known:u32::MAX}=>{},CrtValue::Pointer(p)=>rt.free_initialization(init,p)?,_=>return Err(\"free provenance\")};child.finish(rt)"),
@@ -256,4 +259,91 @@ for fault in 0..6 {
 "#,
         "allocation-manager",
     );
+}
+
+#[test]
+fn original_heap_producer_calloc_and_descriptor_constructor_preserve_error_paths() {
+    let heap_producer: Vec<u8> = "ff15f850410085c0a3c8d241000f95c0c3"
+        .as_bytes()
+        .chunks_exact(2)
+        .map(|x| u8::from_str_radix(std::str::from_utf8(x).unwrap(), 16).unwrap())
+        .collect();
+    let calloc_body:Vec<u8>="8bff558bec568b750885f6740c6ae033d258f7f63b450c72370faf750c33c04085f60f44f0eb14e8a4f4ffff85c0742056e89a4c00005985c07415566a08ff35c8d24100ff159450410085c074d9eb0de888ffffffc7000c00000033c05e5dc3".as_bytes().chunks_exact(2).map(|x|u8::from_str_radix(std::str::from_utf8(x).unwrap(),16).unwrap()).collect();
+    let mode_getter: Vec<u8> = "a180ce410090c3"
+        .as_bytes()
+        .chunks_exact(2)
+        .map(|x| u8::from_str_radix(std::str::from_utf8(x).unwrap(), 16).unwrap())
+        .collect();
+    let mut extra = String::new();
+    for (bytes, origin, name) in [
+        (&heap_producer, 0x40c8f0, "heap_producer"),
+        (&mode_getter, 0x4071c0, "mode_getter"),
+        (&calloc_body, 0x407cf0, "calloc_original"),
+    ] {
+        let graph = Graph::decode(bytes, origin).unwrap();
+        let body=crt_stream_emit::emit_body(&graph,|pc,target|{let next=pc+graph.nodes[&pc].length;let(pop,code)=match target{
+   Target::Import(0x4150f8)=>(0,"let value=rt.process_heap_result(init,heap_available,policy)?;child.clobber(value);child.finish(rt)"),
+   Target::Import(0x415094)=>(12,"let sp=CrtCpu::pointer(child.r[4])?;let CrtValue::Heap(heap)=rt.load(rt.offset(sp,4)?,32)? else{return Err(\"HeapAlloc opaque heap identity\")};let flags=rt.load(rt.offset(sp,8)?,32)?.known_scalar()?;let size=rt.load(rt.offset(sp,12)?,32)?.known_scalar()?;allocations.push(size);let available=allocations.len()<=success_after.0||allocations.len()>success_after.1;child.clobber(match rt.heap_alloc_result(init,heap,flags,size,descriptor,available)?{Some(p)=>CrtValue::Pointer(p),None=>CrtValue::scalar(0)});child.finish_pop(rt,12)"),
+   Target::Direct(0x4071c0)=>(0,"mode_getter(rt,child,init,heap_available,policy,success_after,descriptor,errno,allocations,handler)"),
+   Target::Direct(0x40c9c0)=>(0,"let requested=rt.load(rt.offset(CrtCpu::pointer(child.r[4])?,4)?,32)?.known_scalar()?;let retry=handler(rt,requested)?;child.clobber(CrtValue::scalar(u32::from(retry)));child.finish(rt)"),
+   Target::Direct(0x407ccd)=>(0,"rt.valid(errno,4)?;if errno.kind!=CrtRegionKind::Context||errno.size!=4||errno.address!=errno.base||!rt.regions.iter().any(|r|r.pointer==errno){return Err(\"errno owned thread-context role\");}child.clobber(CrtValue::Pointer(errno));child.finish(rt)"),
+   _=>return Err("unbound allocator call".into())};Ok(format!("cpu.call_activation(rt,{next},{pop},|rt,child|{{{code}}})?;"))},&std::collections::BTreeMap::from([(0x41d2c8,"CrtRegionKind::Module".into()),(0x41ce80,"CrtRegionKind::Module".into())]),2048).unwrap();
+        let entry = if name == "calloc_original" {
+            "let sp=CrtCpu::pointer(cpu.r[4])?;if rt.load(rt.offset(sp,4)?,32)?.known_scalar()?==0||rt.load(rt.offset(sp,8)?,32)?.known_scalar()?==0{return Err(\"zero-request calloc domain unbound\");}"
+        } else {
+            ""
+        };
+        extra.push_str(&format!("fn {name}(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,init:CrtInitialization,heap_available:bool,policy:Option<bool>,success_after:(usize,usize),descriptor:bool,errno:CrtPointer,allocations:&mut Vec<u32>,handler:&mut impl FnMut(&mut CrtStreamRuntime,u32)->Result<bool,&'static str>)->Result<CrtValue,&'static str>{{{entry}{body}}}"));
+    }
+    extra.push_str(&descriptor_source_with_allocator(Some("let errno=rt.resolve_absolute(0x7000,CrtRegionKind::Context)?;let mut requests=vec![];let result=calloc_original(rt,child,init,true,Some(false),if available{(1,1)}else{(0,usize::MAX)},true,errno,&mut requests,&mut |_,_|Err(\"new handler remains unbound\"))?;if let CrtValue::Pointer(p)=result{*allocated=Some(p);}Ok(result)")));
+    super::crt_stream_callees_tests::native(
+        &extra,
+        r#"
+for fault in 0..13{
+ let(mut rt,init)=CrtStreamRuntime::new_initializing(1,2,0x8000,32768).unwrap();let heap_cell=rt.map_region(0x41d2c8,4,CrtRegionKind::Module,None).unwrap();let mode=rt.map_region(0x41ce80,4,CrtRegionKind::Module,None).unwrap();let errno=rt.map_region(0x7000,4,CrtRegionKind::Context,Some(&73u32.to_le_bytes())).unwrap();let observable=rt.map_region(0x7100,4,CrtRegionKind::Result,Some(&[0;4])).unwrap();
+ rt.store(mode,32,if fault==4{CrtValue::Scalar{bits:0,known:0}}else{CrtValue::scalar(if fault==3||fault==5||fault==10||fault==11||fault==12{1}else{0})}).unwrap();let stack=rt.map_region(0x9000,4096,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,3072).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(77)).unwrap();let mut cpu=CrtCpu::new(sp,77).unwrap();let mut allocations=vec![];let mut handler_calls=0;let mut handler=|rt:&mut CrtStreamRuntime,size:u32|{assert_eq!(size,3584);handler_calls+=1;rt.store(observable,32,CrtValue::scalar(91))?;if fault==5{return Err("unbound handler continuation after prior write");}if fault==12{rt.retire_region(errno)?;}Ok(fault!=11&&fault!=12)};
+ heap_producer(&mut rt,&mut cpu,init,fault!=6,if fault==7{None}else{Some(false)},(0,0),true,errno,&mut allocations,&mut handler).unwrap();assert!(cpu.returned);if fault!=6{assert!(cpu.r[0].known_scalar().is_err());assert!(CrtCpu::number(rt.load(heap_cell,32).unwrap()).is_err());assert_eq!(cpu.flags.sf,None);assert!(cpu.condition(10).is_err());}assert_eq!(cpu.get(0,8,0).unwrap(),CrtValue::scalar(if fault==6{0}else{1}));
+ rt.store(sp,32,CrtValue::ProtectedReturn(78)).unwrap();rt.store(rt.offset(sp,4).unwrap(),32,CrtValue::scalar(if fault==2{u32::MAX}else if fault==9{0}else{64})).unwrap();rt.store(rt.offset(sp,8).unwrap(),32,CrtValue::scalar(56)).unwrap();let mut cpu=CrtCpu::new(sp,78).unwrap();let saved=cpu.r;let outcome=calloc_original(&mut rt,&mut cpu,init,true,Some(false),if fault==0||fault==8{(1,1)}else if fault==3{(0,1)}else{(0,usize::MAX)},true,errno,&mut allocations,&mut handler);
+ if [4,5,6,7,9,10,12].contains(&fault){assert!(outcome.is_err());assert!(!cpu.returned);if fault==12{assert!(rt.load(errno,32).is_err());assert_eq!(rt.load(observable,32).unwrap(),CrtValue::scalar(91));continue;}assert_eq!(rt.load(errno,32).unwrap(),CrtValue::scalar(73));if fault==5||fault==10{assert_eq!(rt.load(observable,32).unwrap(),CrtValue::scalar(91));}continue;}
+ let result=outcome.unwrap();assert!(cpu.returned);assert_eq!(cpu.r[6],saved[6]);assert_eq!(cpu.r[5],saved[5]);
+ if fault==1||fault==2||fault==11{assert_eq!(result,CrtValue::scalar(0));assert_eq!(rt.load(errno,32).unwrap(),CrtValue::scalar(12));assert_eq!(allocations.len(),if fault==2{0}else{1});}else{let CrtValue::Pointer(p)=result else{panic!()};assert_eq!(p.size,3584);assert_eq!(rt.load(p,32).unwrap(),CrtValue::scalar(0));assert_eq!(rt.load(errno,32).unwrap(),CrtValue::scalar(73));if fault==8{rt.store(sp,32,CrtValue::ProtectedReturn(79)).unwrap();let mut c=CrtCpu::new(sp,79).unwrap();c.r[1]=CrtValue::Scalar{bits:0,known:0};let(mut locks,mut block)=(0,None);let v=construct(&mut rt,&mut c,init,true,usize::MAX,&mut locks,&mut block).unwrap();assert_eq!(v,CrtValue::Pointer(block.unwrap()));assert_eq!(locks,64);assert_eq!(rt.record_objects.len(),64);assert_eq!(rt.load(rt.offset(block.unwrap(),24).unwrap(),32).unwrap(),CrtValue::scalar(u32::MAX));}if fault==3{assert_eq!(allocations,[3584,3584]);assert_eq!(rt.load(observable,32).unwrap(),CrtValue::scalar(91));}}
+}
+"#,
+        "heap-calloc",
+    );
+}
+
+#[test]
+fn two_operand_imul_keeps_signed_overflow_unknowns_and_memory_ownership() {
+    let mut extra = String::new();
+    for (bytes, name) in [
+        (&[0x0f, 0xaf, 0xc1, 0xc3][..], "register_product"),
+        (&[0x0f, 0xaf, 0x07, 0xc3][..], "memory_product"),
+    ] {
+        let g = Graph::decode(bytes, 0x1000).unwrap();
+        let body = crt_stream_emit::emit_body(
+            &g,
+            |_, _| Err("unexpected multiply call".into()),
+            &Default::default(),
+            4,
+        )
+        .unwrap();
+        extra.push_str(&format!("fn {name}(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->Result<CrtValue,&'static str>{{{body}}}"));
+    }
+    super::crt_stream_callees_tests::native(
+        &extra,
+        r#"
+for(a,b,result,overflow)in[(2u32,3u32,6u32,false),(0x80000000,0xffffffff,0x80000000,true),(0x7fffffff,2,0xfffffffe,true),(0x7fffffff,0xffffffff,0x80000001,false),(0x80000000,1,0x80000000,false),(0xffffffff,0xffffffff,1,false),(65536,65536,0,true)]{
+ for memory in [false,true]{let mut rt=CrtStreamRuntime::new(1,2,0x8000,32768).unwrap();let stack=rt.map_region(0x9000,256,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,224).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(1)).unwrap();let p=rt.map_region(0x7000,4,CrtRegionKind::Input,Some(&b.to_le_bytes())).unwrap();let mut c=CrtCpu::new(sp,1).unwrap();c.r[0]=CrtValue::scalar(a);c.r[1]=CrtValue::scalar(b);c.r[7]=CrtValue::Pointer(p);c.entry=c.r;let v=if memory{memory_product(&mut rt,&mut c)}else{register_product(&mut rt,&mut c)}.unwrap();assert_eq!(v,CrtValue::scalar(result));assert_eq!(c.flags.cf,Some(overflow));assert_eq!(c.flags.of,Some(overflow));assert_eq!(c.flags.zf,None);assert_eq!(c.flags.sf,None);}
+}
+let mut rt=CrtStreamRuntime::new(1,2,0x8000,32768).unwrap();let stack=rt.map_region(0x9000,256,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,224).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(1)).unwrap();let mut c=CrtCpu::new(sp,1).unwrap();c.r[0]=CrtValue::scalar(2);c.r[1]=CrtValue::Scalar{bits:3,known:0};assert!(register_product(&mut rt,&mut c).is_err());assert_eq!(c.r[0],CrtValue::scalar(2));assert!(!c.returned);
+"#,
+        "multiply-two-operands",
+    );
+    for bytes in [
+        &[0x66, 0x0f, 0xaf, 0xc1, 0xc3][..],
+        &[0xf0, 0x0f, 0xaf, 0xc1, 0xc3][..],
+    ] {
+        assert!(Graph::decode(bytes, 0x1000).is_err());
+    }
 }

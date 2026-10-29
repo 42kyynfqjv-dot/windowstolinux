@@ -14,7 +14,9 @@ struct CrtThreadHead {anchor:guest_memory::Capability,thread:u64,registry:u64,ep
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 struct CrtDispatcherContext {anchor:guest_memory::Capability,thread:u64,epoch:u64,callback:u64,serial:u64}
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
-enum CrtValue {Dispatcher(CrtDispatcherContext),Scalar{bits:u32,known:u32},Pointer(CrtPointer),Handle(CrtDescriptorId),ThreadHead(CrtThreadHead),OpaqueSaved(u8),ProtectedReturn(u64)}
+struct CrtHeap {anchor:guest_memory::Capability,exceptions:Option<bool>}
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+enum CrtValue {Heap(CrtHeap),Dispatcher(CrtDispatcherContext),Scalar{bits:u32,known:u32},Pointer(CrtPointer),Handle(CrtDescriptorId),ThreadHead(CrtThreadHead),OpaqueSaved(u8),ProtectedReturn(u64)}
 impl CrtValue {
  fn scalar(bits:u32)->Self{Self::Scalar{bits,known:u32::MAX}}
  fn known_scalar(self)->Result<u32,&'static str>{match self{Self::Scalar{bits,known:u32::MAX}=>Ok(bits),_=>Err("CRT scalar knowledge/type")}}
@@ -48,7 +50,7 @@ trait CrtBackend {
 struct CrtRegion {pointer:CrtPointer,heap:bool,file_owner:Option<u32>}
 struct CrtDescriptor {id:CrtDescriptorId,live:bool,record:Option<CrtPointer>,record_initialized:bool}
 struct CrtStreamRuntime {
- memory:guest_memory::Space,owner:u64,thread:u64,anchor:guest_memory::Capability,
+ heap:Option<CrtHeap>,memory:guest_memory::Space,owner:u64,thread:u64,anchor:guest_memory::Capability,
  dispatchers:std::collections::BTreeMap<u64,CrtDispatcherContext>,regions:Vec<CrtRegion>,retired:Vec<CrtPointer>,tags:std::collections::BTreeMap<u32,CrtValue>,
  partial:std::collections::BTreeMap<u32,(u8,u8)>,descriptors:Vec<CrtDescriptor>,
  global_objects:std::collections::BTreeMap<u32,CrtPointer>,global_locks:Vec<CrtGlobalLock>,record_objects:Vec<CrtPointer>,record_locks:Vec<CrtRecordLock>,locks:Vec<CrtLock>,descriptor_locks:Vec<CrtDescriptorLock>,serial:u64,generation:u64,errno:Option<i32>,doserrno:Option<u32>,last_os_error:Option<u32>,
@@ -64,7 +66,7 @@ impl CrtStreamRuntime {
   let mut memory=guest_memory::Space::new(byte_limit,64).map_err(|_|"CRT memory budget")?;
   let anchor=memory.map(file_address,size,guest_memory::Owner::Module(owner),guest_memory::Permissions::READ_WRITE,false).map_err(|_|"CRT FILE mapping")?;
   let pointer=CrtPointer{cap:anchor,owner:guest_memory::Owner::Module(owner),base:file_address,size,address:file_address,kind:CrtRegionKind::File};
-  Ok(Self{memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],global_objects:std::collections::BTreeMap::new(),global_locks:vec![],record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([file_address])})
+  Ok(Self{heap:None,memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],global_objects:std::collections::BTreeMap::new(),global_locks:vec![],record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([file_address])})
  }
  /// Separate startup-exclusive storage authority, with no preconstructed lock.
  /// Ending it does not attest that original CRT initialization has completed.
@@ -239,7 +241,7 @@ impl CrtStreamRuntime {
   let size=match width{8=>1,16=>2,32=>4,_=>return Err("CRT load width")};self.valid(p,size)?;self.ordinary_file_bytes(p,size)?;
   let tags=self.overlapping_tags(p.address,size);
   if !tags.is_empty(){if width!=32||tags.len()!=1||tags[0].0!=p.address{return Err("CRT partial typed-word read");}
-   match tags[0].1{CrtValue::Dispatcher(token)=>self.dispatcher(token)?,CrtValue::Pointer(q)=>self.pointer_transport(q)?,CrtValue::Handle(h)=>{self.descriptor(h)?;},CrtValue::ThreadHead(head)=>self.thread_head_transport(head)?,_=>{}}
+   match tags[0].1{CrtValue::Heap(h)=>self.heap_identity(h)?,CrtValue::Dispatcher(token)=>self.dispatcher(token)?,CrtValue::Pointer(q)=>self.pointer_transport(q)?,CrtValue::Handle(h)=>{self.descriptor(h)?;},CrtValue::ThreadHead(head)=>self.thread_head_transport(head)?,_=>{}}
    return Ok(tags[0].1);
   }
   let(mut bits,mut known)=(0u32,0u32);for i in 0..size{let a=p.address+i;
@@ -261,6 +263,7 @@ impl CrtStreamRuntime {
    }
   }
   let bits=match value{
+   CrtValue::Heap(h)=>{if width!=32{return Err("CRT heap handle width");}self.heap_identity(h)?;0},
    CrtValue::Dispatcher(token)=>{if width!=32||p.kind!=CrtRegionKind::Stack{return Err("CRT dispatcher transport role");}self.dispatcher(token)?;0},
    CrtValue::Scalar{bits,..}=>bits,
    CrtValue::Pointer(q)=>{if width!=32{return Err("CRT pointer store width");}self.pointer_transport(q)?;q.address},
@@ -312,8 +315,19 @@ impl CrtStreamRuntime {
   let cap=self.memory.heap_capability(heap,base).map_err(|_|"CRT allocation identity")?;
   let p=CrtPointer{cap,owner:guest_memory::Owner::Heap(0),base,size,address:base,kind:CrtRegionKind::Buffer};self.regions.push(CrtRegion{pointer:p,heap:true,file_owner:None});Ok(Some(p))
  }
- /// The role is selected at allocation issuance, before any pointer escapes.
- /// No existing Buffer alias is relabelled or allowed to bypass record locks.
+ /// Bind an observed process-heap outcome without inventing handle bits.
+ fn process_heap_result(&mut self,init:CrtInitialization,available:bool,exceptions:Option<bool>)->Result<CrtValue,&'static str>{
+  self.initialization(init)?;self.last_os_error=None;if !available{return Ok(CrtValue::scalar(0));}
+  let heap=CrtHeap{anchor:self.anchor,exceptions};if self.heap.is_some_and(|h|h!=heap){return Err("CRT changed process heap contract");}self.heap=Some(heap);Ok(CrtValue::Heap(heap))
+ }
+ fn heap_identity(&self,heap:CrtHeap)->Result<(),&'static str>{if self.closed||heap.anchor!=self.anchor||self.heap!=Some(heap){return Err("CRT heap owner/lifetime");}Ok(())}
+ fn heap_alloc_result(&mut self,init:CrtInitialization,heap:CrtHeap,flags:u32,size:u32,descriptor:bool,available:bool)->Result<Option<CrtPointer>,&'static str>{
+  self.initialization(init)?;self.heap_identity(heap)?;
+  if heap.exceptions!=Some(false)||flags!=8||size==0{return Err("CRT unproved heap flags/exception/zero request");}
+  let result=if descriptor{if size%56!=0{return Err("CRT descriptor allocation extent");}self.alloc_descriptor_block(init,size/56,available)}else{self.allocate(size,true,available)}?;if result.is_some(){self.last_os_error=None;}Ok(result)
+ }
+ /// Select the allocation role before any pointer escapes; no Buffer alias
+ /// is relabelled or allowed to bypass record locks.
  fn alloc_descriptor_block(&mut self,token:CrtInitialization,count:u32,available:bool)->Result<Option<CrtPointer>,&'static str>{
   self.initialization(token)?;if count==0||count>64{return Err("CRT descriptor allocation count");}
   let Some(p)=self.allocate(count*56,true,available)? else{return Ok(None)};
@@ -523,6 +537,20 @@ for result in [0,1,7,u32::MAX]{
 let(mut r,init)=CrtStreamRuntime::new_initializing(1,2,0x5000,32768).unwrap();let f=r.file();let p=r.offset(f,32).unwrap();let(_,foreign)=CrtStreamRuntime::new_initializing(1,2,0x5000,32768).unwrap();
 assert!(r.construct_lock_result(foreign,p,0,1).is_err());assert!(r.construct_lock_result(init,r.offset(p,4).unwrap(),0,1).is_err());assert!(r.construct_lock_result(init,r.subrange(p,20).unwrap(),0,1).is_err());assert!(r.construct_lock_result(init,p,1,1).is_err());
 r.store(p,32,CrtValue::Pointer(f)).unwrap();assert!(r.construct_lock_result(init,p,0,1).is_err());assert_eq!(r.load(p,32).unwrap(),CrtValue::Pointer(f));assert!(r.lock_objects.is_empty());
+"#,
+        );
+    }
+
+    #[test]
+    fn opaque_heap_contracts_reject_cross_runtime_forged_and_unknown_policy() {
+        native(
+            r#"
+let(mut a,init)=CrtStreamRuntime::new_initializing(1,2,0x8000,32768).unwrap();let(mut b,other)=CrtStreamRuntime::new_initializing(1,2,0x8000,32768).unwrap();
+assert!(a.process_heap_result(other,true,Some(false)).is_err());assert_eq!(a.process_heap_result(init,false,None).unwrap(),CrtValue::scalar(0));assert!(a.heap.is_none());
+let CrtValue::Heap(heap)=a.process_heap_result(init,true,Some(false)).unwrap()else{panic!()};let CrtValue::Heap(foreign)=b.process_heap_result(other,true,Some(false)).unwrap()else{panic!()};assert!(a.heap_identity(foreign).is_err());assert!(a.process_heap_result(init,true,None).is_err());
+let slot=a.map_region(0x7000,8,CrtRegionKind::Module,None).unwrap();a.store(slot,32,CrtValue::Heap(heap)).unwrap();assert_eq!(a.load(slot,32).unwrap(),CrtValue::Heap(heap));assert!(a.load(slot,8).is_err());assert!(a.store(slot,16,CrtValue::Heap(heap)).is_err());assert!(b.store(b.file(),32,CrtValue::Heap(heap)).is_err());
+for flags in [0,4,9]{assert!(a.heap_alloc_result(init,heap,flags,56,true,true).is_err());}assert!(a.heap_alloc_result(init,heap,8,0,false,true).is_err());assert!(a.heap_alloc_result(init,heap,8,57,true,true).is_err());a.last_os_error=Some(77);assert!(a.heap_alloc_result(init,heap,8,56,true,false).unwrap().is_none());assert_eq!(a.last_os_error,Some(77));
+let p=a.heap_alloc_result(init,heap,8,56,true,true).unwrap().unwrap();assert_eq!(a.last_os_error,None);assert_eq!(a.load(p,32).unwrap(),CrtValue::scalar(0));let(mut u,ut)=CrtStreamRuntime::new_initializing(1,2,0x8000,32768).unwrap();let CrtValue::Heap(unknown)=u.process_heap_result(ut,true,None).unwrap()else{panic!()};assert!(u.heap_alloc_result(ut,unknown,8,56,true,true).is_err());a.end_initialization(init).unwrap();assert!(a.heap_alloc_result(init,heap,8,56,true,true).is_err());
 "#,
         );
     }
