@@ -385,3 +385,41 @@ original body instruction/temporary-record stack composition before claiming
 complete handler execution. OS delivery and selected-source restoration also
 remain gates; full startup/rcedit stays unsupported. Sol can attempt the next
 body-stack connection using the existing temporary-record and call machinery.
+
+## Actual local-body stack and temporary record
+
+The connected adapter now derives its local entry from the live body CALL instead
+of the fixture address0xb000. After full40-byte scratch preflight, the original
+prolog at0x402710–0x402742 executes its saved-register pushes, argument loads,
+record pushes, cookie XOR and guarded guest-FS installation. The instruction-proved
+FS hooks operate on the guest registry; they do not read host thread memory.
+`bind_native` checks the resulting seven actual words against the reserved
+registry record, with no fabricated private stores. Handler/cookie immediates
+remain exact scalars; establisher/owner values retain stack capabilities.
+
+The existing instruction-derived cleanup effect loop uses that installed record.
+Its completion defers restoration to the original exit boundary: the proven
+POP FS at0x4027a1 validates/restores the registry head and consumes the actual
+head word, then emitted ADD/POP/RET instructions at0x4027a8 restore the stack,
+nonvolatile registers and protected body return. The enclosing local wrapper
+still executes its own RET8. The adapter has a single-use installation flag;
+normal projected test paths retain their separate binding mechanism.
+
+Five new connected cases reject changed body code, damaged temporary guard bytes,
+a duplicated body return identity, a changed saved EBX value and a protected
+return inside the prolog scratch range. The scratch case rejects before original
+pushes; callback-time failures retain the first trace81 write and no completion.
+The saved-register failure preserves finished cleanup effects but cannot return
+or retire the target. Together with previous nested, context and lifecycle cases,
+counts are105 owned-frame,48 delivery-lifetime,30 cross-frame and15 connected
+native-local-stack cases (overlapping subsets). New cases add zero Windows pairs
+and zero whole-PE comparisons; five recorded wrapper observations remain separate.
+
+The cleanup-loop effects still use the proved adapter rather than its complete
+CPU loop. Its volatile register/flag results therefore become unknown before the
+actual tail; the earlier prolog values cannot masquerade as loop results. The
+loop and notification/finally callback physical scratch remain supplied.
+Next connect the loop's original register/table traversal and callback call stacks
+while preserving this native temporary record. Captured-context acquisition,
+OS delivery and selected restoration remain admission gates. Full startup/rcedit
+is still rejected. This next bounded implementation can start on Sol.
