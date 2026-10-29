@@ -69,6 +69,38 @@ pub(crate) const COMMON: &str = "558bec83ec08535657fc8945fc33c0505050ff75fcff751
 pub(crate) const DISPATCH_THUNK: &str = "558bec5de9f5feffff";
 pub(crate) const DISPATCH_ENTRY: &str = "558bec535657ff7510";
 
+pub(crate) const CONTEXT_CHECK:&str="558bec813d28514100f91b4000741f648b0d180000008b45088b80c40000003b410872053b410476056a0d59cd295dc3";
+fn context_source(code: &[u8]) -> Result<String, String> {
+    let proof = crate::handler_context::prove_context_check(code, 0x402877, 0x415128)?;
+    let types = crate::handler_context::EMITTED_TYPES;
+    let body = proof.body();
+    Ok(format!(
+        r#"{types}
+impl ThreadContext{{fn original_check(&self,owner:u64,selector:u32)->Result<(),&'static str>{{{body}}}}}
+struct CrtCxxContext{{anchor:guest_memory::Capability,thread:u64,outer:u64,bp:CrtPointer,context:CrtPointer,stack:CrtPointer,esp:CrtPointer,live:bool}}
+impl CrtCxxContext{{
+ fn bind(rt:&CrtStreamRuntime,owner:&CrtCpu,frame:&CrtPtdFrame,context:CrtPointer,stack:CrtPointer)->Result<Self,&'static str>{{
+  let esp=CrtCpu::pointer(rt.load(rt.offset(context,0xc4)?,32)?)?;
+  let token=Self{{anchor:rt.anchor,thread:rt.thread,outer:owner.return_id,bp:frame.bp,context,stack,esp,live:true}};token.check(rt,owner,frame)?;Ok(token)
+ }}
+ fn check(&self,rt:&CrtStreamRuntime,owner:&CrtCpu,frame:&CrtPtdFrame)->Result<(),&'static str>{{
+  frame.live(rt,owner)?;
+  if !self.live||self.anchor!=rt.anchor||self.thread!=rt.thread||self.outer!=owner.return_id||self.bp!=frame.bp{{return Err("C++ captured context owner/lifetime");}}
+  if self.context.kind!=CrtRegionKind::Context||self.context.address()!=self.context.base||self.stack.kind!=CrtRegionKind::Stack||self.stack.address()!=self.stack.base||frame.bp.cap!=self.stack.cap||self.esp.cap!=self.stack.cap{{return Err("C++ captured context/stack role");}}
+  if !rt.regions.iter().any(|r|r.pointer==self.stack)||!rt.regions.iter().any(|r|r.pointer==self.context){{return Err("C++ captured context/root extent");}}
+  rt.valid(self.context,200)?;rt.valid(self.stack,self.stack.size)?;rt.valid(self.esp,0)?;
+  if rt.load(rt.offset(self.context,0xc4)?,32)?!=CrtValue::Pointer(self.esp){{return Err("C++ captured ESP changed/unknown");}}
+  let base=self.stack.address().checked_add(self.stack.size).ok_or("C++ stack bound overflow")?;
+  let captured=ThreadContext::new(rt.thread,self.stack.address(),base,self.esp.address())?;
+  let selector=rt.load(rt.resolve_absolute(0x415128,CrtRegionKind::Module)?,32)?.known_scalar()?;
+  captured.original_check(rt.thread,selector)
+ }}
+ fn retire(&mut self){{self.live=false;}}
+}}
+"#
+    ))
+}
+
 fn common_source(common: &[u8], thunk: &[u8], entry: &[u8]) -> Result<String, String> {
     if common != crate::crt_ptd::raw(COMMON)
         || thunk != crate::crt_ptd::raw(DISPATCH_THUNK)
@@ -88,7 +120,7 @@ fn common_source(common: &[u8], thunk: &[u8], entry: &[u8]) -> Result<String, St
     let e = lift(entry, 0x403d76)?;
     Ok(format!(
         r#"
-fn cxx_common(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->Result<CrtValue,&'static str>{{
+fn cxx_common(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,owner:&CrtCpu,frame:&CrtPtdFrame,context:&CrtCxxContext)->Result<CrtValue,&'static str>{{
  cpu.validate_active(rt)?;
  let _=(||->Result<CrtValue,&'static str>{{{a}}})()?;
  // Original CLD. This component constructor guarantees DF=0, and the
@@ -98,7 +130,11 @@ fn cxx_common(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->Result<CrtValue,&'stati
  cpu.call_activation(rt,0x403028,0,|rt,cpu|{{
   let _=(||->Result<CrtValue,&'static str>{{{t}}})()?;
   let _=(||->Result<CrtValue,&'static str>{{{e}}})()?;
-  Err("C++ original context validator effect unbound")
+  context.check(rt,owner,frame)?;
+  if rt.load(CrtCpu::pointer(cpu.r[4])?,32)?!=CrtValue::Pointer(context.context){{return Err("C++ validator context argument");}}
+  cpu.call_activation(rt,0x403d84,0,|rt,child|{{context.check(rt,owner,frame)?;child.clobber(CrtValue::Scalar{{bits:0,known:0}});child.finish(rt)}})?;
+  let argument=cpu.pop(rt)?;cpu.r[1]=argument;
+  Err("C++ dispatcher PTD effect unbound")
  }})
 }}
 "#
@@ -156,7 +192,7 @@ child.finish(rt)
     );
     Ok(format!(
         r#"
-fn cxx_handler_prefix(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,owner:&CrtCpu,frame:&CrtPtdFrame,record:&CrtCxxRecord)->Result<CrtValue,&'static str>{{
+fn cxx_handler_prefix(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,owner:&CrtCpu,frame:&CrtPtdFrame,record:&CrtCxxRecord,context:&CrtCxxContext)->Result<CrtValue,&'static str>{{
  record.state(rt,owner,frame)?;cpu.validate_active(rt)?;
  if frame.handler!={origin}||frame.low!=rt.offset(frame.bp,-28)?||record.metadata.address()!={metadata}{{return Err("C++ handler/frame binding");}}
  let sp=CrtCpu::pointer(cpu.r[4])?;
@@ -166,7 +202,7 @@ fn cxx_handler_prefix(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,owner:&CrtCpu,fra
  let _=(||->Result<CrtValue,&'static str>{{{prefix}}})()?;
  {check}
  let _=(||->Result<CrtValue,&'static str>{{{tail}}})()?;
- cxx_common(rt,cpu)
+ cxx_common(rt,cpu,owner,frame,context)
 }}
 "#
     ))
@@ -209,7 +245,7 @@ fn owned_cxx_record_keeps_state_metadata_and_continuation_distinct() {
     )
     .unwrap();
     let extra = format!(
-        "{} {} {} {}",
+        "{} {} {} {} {}",
         crate::crt_ptd::helper_source(
             &crate::crt_ptd::raw(crate::crt_ptd::PROLOG),
             0x414268,
@@ -225,17 +261,24 @@ fn owned_cxx_record_keeps_state_metadata_and_continuation_distinct() {
             &crate::crt_ptd::raw(DISPATCH_THUNK),
             &crate::crt_ptd::raw(DISPATCH_ENTRY)
         )
-        .unwrap()
+        .unwrap(),
+        context_source(&crate::crt_ptd::raw(CONTEXT_CHECK)).unwrap()
     );
     let body = format!(
         r#"
 let mut rt=CrtStreamRuntime::new(7,9,0x8000,65536).unwrap();rt.map_region(0x41c000,4,CrtRegionKind::Module,Some(&123u32.to_le_bytes())).unwrap();let meta=rt.map_region(0x41b42c,36,CrtRegionKind::Module,Some(&{meta:?})).unwrap();rt.map_region(0x41b41c,16,CrtRegionKind::Module,Some(&{map:?})).unwrap();let stack=rt.map_region(0x9000,1024,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,768).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(1)).unwrap();let mut cpu=CrtCpu::new(sp,1).unwrap();cpu.push(&mut rt,CrtValue::scalar(0)).unwrap();cpu.r[0]=CrtValue::scalar(0x414ad6);let previous=rt.thread_head(4,5,[1,2,3]).unwrap();let mut frame=CrtPtdFrame::new(&rt,&cpu,previous,0x414ad6,0x41c000).unwrap();ptd_prolog(&mut rt,&mut cpu,&mut frame,0x40a33e).unwrap();let binding=cxx_bind(&rt,&cpu,&frame).unwrap();assert_eq!(binding.required_action(&rt,&cpu,&frame).unwrap(),None);let state=rt.offset(frame.bp,-4).unwrap();
 let foreign=CrtStreamRuntime::new(7,9,0x8000,65536).unwrap();assert!(binding.state(&foreign,&cpu,&frame).is_err());
+let context_pointer=rt.map_region(0xb000,200,CrtRegionKind::Context,None).unwrap();rt.store(rt.offset(context_pointer,0xc4).unwrap(),32,CrtValue::Pointer(frame.low)).unwrap();let selector=rt.map_region(0x415128,4,CrtRegionKind::Module,Some(&0u32.to_le_bytes())).unwrap();let mut context=CrtCxxContext::bind(&rt,&cpu,&frame,context_pointer,stack).unwrap();
 let scratch=rt.map_region(0xa000,1024,CrtRegionKind::Stack,None).unwrap();
-for fault in 0..7{{let hs=rt.offset(scratch,if fault==6{{24}}else{{256+fault*96}}).unwrap();rt.store(hs,32,CrtValue::ProtectedReturn(123)).unwrap();rt.store(rt.offset(hs,8).unwrap(),32,if fault==1{{CrtValue::scalar(frame.bp.address()-12)}}else{{CrtValue::Pointer(rt.offset(frame.bp,if fault==2{{-8}}else{{-12}}).unwrap())}}).unwrap();for (i,value) in [(1,0xe06d7363),(3,0x1234),(4,0x5678)]{{rt.store(rt.offset(hs,i*4).unwrap(),32,CrtValue::scalar(value)).unwrap();}}let mut child=CrtCpu::new(hs,123).unwrap();if fault==5{{child.r[4]=CrtValue::Pointer(frame.low);}}let guard=rt.load(frame.low,32).unwrap();if fault==3{{rt.store(frame.low,32,CrtValue::scalar(0)).unwrap();}}if fault==4{{rt.store(frame.low,32,CrtValue::Scalar{{bits:0,known:0}}).unwrap();}}
-let result=cxx_handler_prefix(&mut rt,&mut child,&cpu,&frame,&binding);assert!(result.is_err());assert!(!child.returned);if fault==0{{assert_eq!(result.unwrap_err(),"C++ original context validator effect unbound");let bp=CrtCpu::pointer(child.r[5]).unwrap();for(i,v)in [(8,0xe06d7363),(16,0x1234),(20,0x5678),(24,0x41b42c),(28,0),(32,0),(36,0)]{{assert_eq!(rt.load(rt.offset(bp,i).unwrap(),32).unwrap(),CrtValue::scalar(v));}}assert_eq!(rt.load(rt.offset(bp,12).unwrap(),32).unwrap(),CrtValue::Pointer(rt.offset(frame.bp,-12).unwrap()));assert_eq!(rt.load(CrtCpu::pointer(child.r[4]).unwrap(),32).unwrap(),CrtValue::scalar(0x1234));}}if fault==6{{assert_eq!(rt.load(rt.offset(hs,-8).unwrap(),32).unwrap(),CrtValue::scalar(0x41b42c));assert!(frame.live(&rt,&cpu).is_ok());}}rt.store(frame.low,32,guard).unwrap();rt.consume_stack(hs,CrtValue::ProtectedReturn(123)).unwrap();}}
+for fault in 0..8{{let hs=rt.offset(scratch,if fault==6{{24}}else{{256+fault*96}}).unwrap();rt.store(hs,32,CrtValue::ProtectedReturn(123)).unwrap();rt.store(rt.offset(hs,8).unwrap(),32,if fault==1{{CrtValue::scalar(frame.bp.address()-12)}}else{{CrtValue::Pointer(rt.offset(frame.bp,if fault==2{{-8}}else{{-12}}).unwrap())}}).unwrap();for (i,value) in [(1,0xe06d7363),(3,0x1234),(4,0x5678)]{{rt.store(rt.offset(hs,i*4).unwrap(),32,CrtValue::scalar(value)).unwrap();}}rt.store(rt.offset(hs,12).unwrap(),32,CrtValue::Pointer(if fault==7{{rt.offset(context_pointer,4).unwrap()}}else{{context_pointer}})).unwrap();let mut child=CrtCpu::new(hs,123).unwrap();if fault==5{{child.r[4]=CrtValue::Pointer(frame.low);}}let guard=rt.load(frame.low,32).unwrap();if fault==3{{rt.store(frame.low,32,CrtValue::scalar(0)).unwrap();}}if fault==4{{rt.store(frame.low,32,CrtValue::Scalar{{bits:0,known:0}}).unwrap();}}
+let result=cxx_handler_prefix(&mut rt,&mut child,&cpu,&frame,&binding,&context);assert!(result.is_err());assert!(!child.returned);if fault==0{{assert_eq!(result.unwrap_err(),"C++ dispatcher PTD effect unbound");let bp=CrtCpu::pointer(child.r[5]).unwrap();for(i,v)in [(8,0xe06d7363),(20,0x5678),(24,0x41b42c),(28,0),(32,0),(36,0)]{{assert_eq!(rt.load(rt.offset(bp,i).unwrap(),32).unwrap(),CrtValue::scalar(v));}}assert_eq!(rt.load(rt.offset(bp,12).unwrap(),32).unwrap(),CrtValue::Pointer(rt.offset(frame.bp,-12).unwrap()));assert_eq!(child.r[1],CrtValue::Pointer(context_pointer));}}if fault==6{{assert_eq!(rt.load(rt.offset(hs,-8).unwrap(),32).unwrap(),CrtValue::scalar(0x41b42c));assert!(frame.live(&rt,&cpu).is_ok());}}rt.store(frame.low,32,guard).unwrap();rt.consume_stack(hs,CrtValue::ProtectedReturn(123)).unwrap();}}
+rt.store(rt.offset(stack,196).unwrap(),32,CrtValue::Pointer(frame.low)).unwrap();assert!(CrtCxxContext::bind(&rt,&cpu,&frame,stack,stack).is_err());assert!(CrtCxxContext::bind(&foreign,&cpu,&frame,context_pointer,stack).is_err());assert!(CrtCxxContext::bind(&rt,&cpu,&frame,context_pointer,scratch).is_err());assert!(CrtCxxContext::bind(&rt,&cpu,&frame,context_pointer,rt.subrange(stack,512).unwrap()).is_err());
+for esp in [stack,rt.offset(stack,1024).unwrap()]{{rt.store(rt.offset(context_pointer,0xc4).unwrap(),32,CrtValue::Pointer(esp)).unwrap();let t=CrtCxxContext::bind(&rt,&cpu,&frame,context_pointer,stack).unwrap();t.check(&rt,&cpu,&frame).unwrap();}}
+rt.store(rt.offset(context_pointer,0xc4).unwrap(),32,CrtValue::Pointer(frame.low)).unwrap();
+for bad in [CrtValue::scalar(frame.low.address()),CrtValue::Pointer(scratch),CrtValue::Scalar{{bits:0,known:0}}]{{rt.store(rt.offset(context_pointer,0xc4).unwrap(),32,bad).unwrap();assert!(context.check(&rt,&cpu,&frame).is_err());}}
+rt.store(rt.offset(context_pointer,0xc4).unwrap(),32,CrtValue::Pointer(frame.low)).unwrap();rt.store(selector,32,CrtValue::Scalar{{bits:0,known:0}}).unwrap();assert!(context.check(&rt,&cpu,&frame).is_err());rt.store(selector,32,CrtValue::scalar(0x401bf9)).unwrap();context.check(&rt,&cpu,&frame).unwrap();let mut cloned=CrtCxxContext::bind(&rt,&cpu,&frame,context_pointer,stack).unwrap();cloned.context=rt.map_region(0xc000,200,CrtRegionKind::Context,None).unwrap();assert!(cloned.check(&rt,&cpu,&frame).is_err());context.retire();assert!(context.check(&rt,&cpu,&frame).is_err());
 for n in [0,1]{{rt.store(state,32,CrtValue::scalar(n)).unwrap();assert_eq!(binding.required_action(&rt,&cpu,&frame).unwrap(),Some((-1,0x4026fc)));assert_eq!(rt.load(state,32).unwrap(),CrtValue::scalar(n));}}
-rt.store(state,32,CrtValue::Scalar{{bits:0,known:0}}).unwrap();assert!(binding.state(&rt,&cpu,&frame).is_err());rt.store(state,32,CrtValue::scalar(2)).unwrap();assert!(binding.state(&rt,&cpu,&frame).is_err());rt.store(state,32,CrtValue::scalar(1)).unwrap();let old=cpu.return_id;cpu.return_id+=1;assert!(binding.state(&rt,&cpu,&frame).is_err());cpu.return_id=old;rt.store(meta,32,CrtValue::scalar(0)).unwrap();assert!(binding.state(&rt,&cpu,&frame).is_err());rt.store(meta,32,CrtValue::scalar(0x19930522)).unwrap();ptd_epilog(&mut rt,&mut cpu,&mut frame,0x40a3b8).unwrap();assert!(binding.state(&rt,&cpu,&frame).is_err());cpu.finish(&mut rt).unwrap();
+rt.store(state,32,CrtValue::Scalar{{bits:0,known:0}}).unwrap();assert!(binding.state(&rt,&cpu,&frame).is_err());rt.store(state,32,CrtValue::scalar(2)).unwrap();assert!(binding.state(&rt,&cpu,&frame).is_err());rt.store(state,32,CrtValue::scalar(1)).unwrap();let old=cpu.return_id;cpu.return_id+=1;assert!(binding.state(&rt,&cpu,&frame).is_err());cpu.return_id=old;rt.store(meta,32,CrtValue::scalar(0)).unwrap();assert!(binding.state(&rt,&cpu,&frame).is_err());rt.store(meta,32,CrtValue::scalar(0x19930522)).unwrap();let live_capture=CrtCxxContext::bind(&rt,&cpu,&frame,context_pointer,stack).unwrap();ptd_epilog(&mut rt,&mut cpu,&mut frame,0x40a3b8).unwrap();assert!(live_capture.check(&rt,&cpu,&frame).is_err());assert!(binding.state(&rt,&cpu,&frame).is_err());cpu.finish(&mut rt).unwrap();
 "#
     );
     crate::crt_stream_callees_tests::native(&extra, &body, "cxx-record");
@@ -254,6 +297,14 @@ rt.store(state,32,CrtValue::Scalar{{bits:0,known:0}}).unwrap();assert!(binding.s
             inputs[which][i] ^= 1;
             assert!(common_source(&inputs[0], &inputs[1], &inputs[2]).is_err());
         }
+    }
+    for i in [
+        0, 1, 2, 3, 4, 5, 6, 7, 8, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29,
+        30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45,
+    ] {
+        let mut code = crate::crt_ptd::raw(CONTEXT_CHECK);
+        code[i] ^= 1;
+        assert!(context_source(&code).is_err(), "context mutation {}", i);
     }
     for i in 0..29 {
         let mut code = crate::crt_ptd::raw(HANDLER);

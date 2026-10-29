@@ -126,3 +126,11 @@ which may read CONTEXT+0xc4 and FS:[0x18] thread stack bounds or fast-fail. It
 cannot be replaced by a guessed successful validation. CLD is justified only by
 the existing explicit forward cdecl ABI domain; unknown thread flags remain
 outside it. Short-stack rejection preserves earlier metadata writes.
+
+Context-validation connection: the existing original-helper proof is now reused
+with a runtime/thread/frame-bound capture, live Context/Stack roots, typed saved
+ESP and live selector. Bounds and lifetime are checked without manufacturing a
+TEB or admitting unknown ESP. The protected call returns, original POP ECX consumes
+the context argument, and execution rejects at actual PTD lookup4028c3. Actual
+Windows capture acquisition and INT29 failure semantics remain outside admission;
+remaining C++ dispatcher/termination callbacks have not been declared successful.

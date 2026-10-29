@@ -1951,3 +1951,30 @@ dispatch entry `1821f2e8cb0ab16faafa538d6f14d001319b0ea80a3279a73f0418f81ff48fef
 All three89123fd workflows ultimately passed. b8e49de workflows40932067466,
 40932056425 and40932056438 were still running at this checkpoint; historical
 original-Windows failures, including case24, remain preserved and unexplained.
+
+### Bound context validation before C++ dispatcher PTD acquisition
+
+The original helper proof for402877 now composes with the C++ wrapper. A typed
+capture binds live Context and Stack roots, runtime/thread/normal-frame identity
+and saved ESP. It revalidates lifetimes, exact root extents, unchanged typed ESP
+and the live module selector before a protected helper call. The constructor's
+explicit valid-stack domain is retained even on the selector bypass; no INT29
+emulation or original Windows acquisition is claimed. The decoded helper's
+volatile registers/flags are conservatively unknown on return. The original
+caller POP ECX then executes and the path rejects at PTD call4028c3.
+
+Eight native handler scenarios and independent capture checks cover argument
+identity, root/stack alias, narrowed extent, both valid endpoints, wrong runtime,
+unknown/changed/forged ESP, unknown selector and retirement. Existing helper
+boundary/control-flow regressions remain shared. No cleanup disposition or
+restoration authority is produced, and both original unwind actions still lead
+to termination. See CXX-PTD-RECORD.md for remaining acquisition/effect contracts.
+
+Verification: 199 CRT tests passed (one existing observation case separate),
+final focused context/lifetime regression, Clippy/format/diff and Python syntax
+checks passed. Artifact replay bound the48-byte original context helper in
+addition to the wrapper/thunk/entry and passed seven PTD tests, the C++ test and
+five previously recorded Windows wrapper comparisons. The PE and wrapper Rust
+hashes are unchanged from the preceding checkpoint; zero new Windows observations
+or whole-PE pairs. 77715cd startup40932819504 passed; Rust40932829428 and40932819895
+were still running at inspection. Historical Windows timeouts remain unexplained.
