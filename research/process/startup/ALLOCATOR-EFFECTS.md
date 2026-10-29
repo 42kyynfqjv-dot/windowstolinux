@@ -93,3 +93,20 @@ through calloc/errno failure. Handler retrieval also needs global0 locking,
 cookie decoding and guard-slot415128/callback provenance. These effects remain
 explicitly unresolved; no mode0 default, guessed PTD object or unproved no-exception
 condition may replace them. See LIVE-FINALLY.md for precise code dependencies.
+
+## PTD normal-path advance and identity correction
+
+The original getter/continuation helpers now execute in a separate connected
+errno/PTD native component. See [PTD-FLS.md](PTD-FLS.md). Import-table inspection
+corrected the earlier TLS label: the fallback is `FlsGetValue`, and the optional
+resolved name is `FlsGetValue2`. Fiber identity, index generation and live PTD root
+are checked independently; thread identity alone is insufficient. LastError is
+saved/restored by original instructions without assuming the API preserves it.
+
+The changed continuation ABI has its own complete helper protocol certificate,
+relocated single-use return tokens and checked normal epilog. It is not reused as
+an EH4 manager certificate. Its incoming-chain record projection is still a
+component boundary, so the registered manager has not silently acquired complete
+PTD exception/initialization support. Lazy allocation/recursive failure, real FLS
+producers, dynamic lookup and destructor callbacks remain explicit gates. No new
+Windows observations or whole-PE admission follows from these component tests.

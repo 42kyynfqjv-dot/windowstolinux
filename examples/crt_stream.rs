@@ -281,3 +281,7 @@ mod crt_standard_handles_tests;
 #[cfg(test)]
 #[path = "../src/crt_global_lock.rs"]
 mod crt_global_lock;
+
+#[cfg(test)]
+#[path = "../src/crt_ptd.rs"]
+mod crt_ptd;

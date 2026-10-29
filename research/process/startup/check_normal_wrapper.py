@@ -179,6 +179,19 @@ def check(original, observation, out, compare=None):
         if fixture is None or bytes.fromhex(fixture[1])!=raw:
             raise ValueError('heap/allocator fixture differs from original PE')
         file_regions[name]=sha(raw)
+    ptd_source = (Path(__file__).resolve().parents[3]/'src/crt_ptd.rs').read_text()
+    for name, start, length in [('PROLOG', 0x414268, 51), ('EPILOG', 0x414254, 20), ('GETTER', 0x40a332, 135), ('FLS_THUNK', 0x408061, 12)]:
+        raw = mapped(image, start, length, executable=True)
+        fixture = re.search(r'const\s+'+name+r'\s*:\s*&str\s*=\s*"([0-9a-f]+)"', ptd_source)
+        if fixture is None or bytes.fromhex(fixture[1]) != raw:
+            raise ValueError('PTD continuation/getter fixture differs from original PE')
+        file_regions['ptd-'+name.lower().replace('_', '-')] = sha(raw)
+    fls_thunk = mapped(image, 0x408061, 12, executable=True)
+    if fls_thunk != bytes.fromhex('8bff558bec5dff25a0504100'):
+        raise ValueError('original FLS thunk changed')
+    if tuple(import_at_iat(image, 0x4150a0-base)) != ('kernel32.dll', 'FlsGetValue'):
+        raise ValueError('original FLS import identity changed; TLS is not equivalent')
+    file_regions['ptd-fls-thunk'] = sha(fls_thunk)
     for address,name in [(0x4150f8,'GetProcessHeap'),(0x415094,'HeapAlloc')]:
         if tuple(import_at_iat(image,address-base))!=('kernel32.dll',name):
             raise ValueError('heap producer/allocator import changed')
@@ -206,6 +219,12 @@ def check(original, observation, out, compare=None):
     (out/'standard-handles.stderr').write_bytes(standard_run.stderr)
     if standard_run.returncode or b'8 passed' not in standard_run.stdout:
         raise ValueError('standard-handle component check failed')
+    ptd_run = subprocess.run(['cargo', 'test', '--locked', '--example', 'crt_stream', 'crt_ptd::'],
+                             env=env, capture_output=True, timeout=180)
+    (out/'ptd-components.stdout').write_bytes(ptd_run.stdout)
+    (out/'ptd-components.stderr').write_bytes(ptd_run.stderr)
+    if ptd_run.returncode or b'5 passed' not in ptd_run.stdout:
+        raise ValueError('original PTD normal-path component check failed')
     for test in ['allocation_manager_registers_and_retires_original_eh4_under_startup_authority',
                  'inherited_producer_calls_original_manager_with_live_eh4_registration']:
         result = subprocess.run(['cargo','test','--locked','--example','crt_stream',test],
@@ -279,7 +298,7 @@ def check(original, observation, out, compare=None):
                   main_activation_sha256=sha((out/'main-activate.bin').read_bytes()),
                   main_scope_header_sha256=sha((out/'Main-scope-header.bin').read_bytes()),
                   locale_state_evidence=locale_state_evidence(image),
-                  errno_router_component_cases=9, errno_router_new_windows_pairs=0, heap_calloc_component_cases=13, heap_calloc_new_windows_pairs=0, registered_manager_component_cases=6, registered_manager_new_windows_pairs=0, manager_component_cases=6, manager_new_windows_pairs=0, descriptor_lifecycle_component_cases=4, descriptor_lifecycle_new_windows_pairs=0, inherited_component_cases=7, inherited_new_windows_pairs=0, standard_handle_component_cases=25, standard_handle_new_windows_pairs=0,
+                  ptd_component_rust_tests=5, ptd_new_windows_pairs=0, errno_router_component_cases=9, errno_router_new_windows_pairs=0, heap_calloc_component_cases=13, heap_calloc_new_windows_pairs=0, registered_manager_component_cases=6, registered_manager_new_windows_pairs=0, manager_component_cases=6, manager_new_windows_pairs=0, descriptor_lifecycle_component_cases=4, descriptor_lifecycle_new_windows_pairs=0, inherited_component_cases=7, inherited_new_windows_pairs=0, standard_handle_component_cases=25, standard_handle_new_windows_pairs=0,
                   original_printf_routing_sha256=sha((out/'printf-routing-live.bin').read_bytes()),
                   original_printf_context_sha256=sha((out/'printf-context-live.bin').read_bytes()),
                   original_printf_entry_sha256=sha((out/'printf-entry-live.bin').read_bytes()),

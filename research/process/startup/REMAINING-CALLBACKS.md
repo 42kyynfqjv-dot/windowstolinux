@@ -87,11 +87,18 @@ include global-lock initialization, frame/request, allocator availability and AP
 outcomes. The actual heap producer/calloc/new-mode getter now execute in component tests,
 and a descriptor-constructor path uses actual calloc. The registered manager now calls that actual allocator, and the original errno
 router selects canonical PTD/fallback storage. Its PTD lookup remains an explicit
-callable effect. Next: establish the actual PTD/TLS acquisition and different
-414268/414254 frame/continuation protocol, recursive initializing-sentinel failure
-behavior, and encoded new-handler/guard-slot/callback effects; then free failure
+callable effect. The separate connected errno/PTD component now executes the different
+414268/414254 normal continuation protocol and original FlsGetValue path with
+explicit fiber/slot input identity. This corrects the earlier TLS label: the actual
+import is FLS, and the dynamic alternative names FlsGetValue2. Neither the live
+manager registry nor lazy acquisition is closed by that component. Next: bind this
+distinct record to the live registry, original FLS acquisition, recursive
+initializing-sentinel failure behavior, and encoded new-handler/guard-slot/callback effects; then free failure
 and locale/FILE production. See
 [ALLOCATOR-EFFECTS.md](ALLOCATOR-EFFECTS.md) for exact instruction/API dependencies
 and independent acceptance requirements. Sol can proceed; escalate only a
 concrete missing exception-effect contract. Full startup/formatter/rcedit remains
 unsupported until unchanged-binary entry-to-exit evidence passes.
+
+See [PTD-FLS.md](PTD-FLS.md) for the independently checked stack layout,
+slot/fiber lifetime and unknown-state tests, and explicit remaining API cuts.

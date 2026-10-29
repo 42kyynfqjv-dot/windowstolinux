@@ -1800,3 +1800,59 @@ locale/FILE producers remain on the same critical path.
 
 Registered allocator/errno wrapper Rust SHA256: `8dc49ff3bf8ffec192fcc69d83b730594638a2aa03a5a5400f9b7f840b0867f3`.
 Unchanged PE SHA256: `1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4`.
+
+## Original PTD normal continuation and FLS lookup (2026-10-29)
+
+Review corrected a concrete provenance error in the preceding inventory: the
+import at4150a0 is **FlsGetValue**, not TLS; the dynamic name is **FlsGetValue2**.
+See [PTD-FLS.md](PTD-FLS.md) for primary contracts and the complete supported-domain
+and remaining-boundary description. Fiber identity is now distinct from thread,
+runtime, FLS index and allocation generation; unknown or stale state is rejected.
+
+The connected native errno test executes the original135-byte PTD getter,
+51-byte prolog and20-byte epilog, plus the actual FLS thunk. The helper certificate
+preserves the distinct variable-frame and moved-continuation ABI instead of
+reusing the manager EH4 proof. Independent expected offsets across four frame
+sizes, token uniqueness/replay, saved-register/guard/chain corruption, code/IAT
+mutation, foreign fiber/runtime, slot reuse and retired PTD cases protect it.
+LastError save/restore and sentinel normalization follow original instructions.
+Unknown errno bytes remain unknown, and canonical writes use the selected cell.
+Retiring a fiber also invalidates canonical errno knowledge/binding.
+
+This is still an explicit normal-path component: existing initialized FLS/heap
+state, the borrowed incoming head and no admitted exceptional delivery through
+this record remain inputs. The manager's old PTD result cut is not silently
+claimed closed. Lazy40a1ee allocation/recursive errno, failed setters and cleanup,
+FlsGetValue2 resolution, the actual new record's live registry integration,
+new-handler/guard effects and full locale/formatter/startup remain open. Original
+null lookup rejects at the lazy-call boundary after preserving earlier effects.
+There is no new program admission, fresh Windows pair or rcedit success claim.
+
+Verification: full CRT suite196 passed/one existing observation test separate;
+frame/unwind183 and root175 passed. Five focused PTD tests pass after the final
+helper/IAT certificate and unknown-errno additions. Clippy, format/diff checks and
+57 Python tests pass (one skipped). The artifact checker retains the unchanged PE
+and five recorded Windows wrapper-boundary comparisons; it now binds PTD helper,
+getter and thunk bytes plus the actual FLS import. Native PTD cases remain
+separately labeled, zero new Windows/whole-PE pairs. Projection completed all202
+owned cases in1.533seconds with the same15-second limit and assertions.
+
+Wrapper Rust SHA256: `218df65548262081500fd96bf480041345ef54f06e11dcc8f193a59f2cc96bdb`.
+PTD prolog SHA256: `4bd86fc014c6b4bc62ac075e441ebc162fabb51277692e679f58bd206520081d`.
+PTD epilog SHA256: `48fda296793be6b2a3465d1d3bae4cd47eb5966f166ec10c7bfd01d4318dbb48`.
+PTD getter SHA256: `faa3e4ab000682b51138fbc8b51753258055ea5cd96f46a51dc7a97d0303126c`.
+FLS thunk SHA256: `6c9cde534e3bc89d09a7ad64399133317c2a2219c947afa1d4be5b5c6b4f06ad`.
+
+Predecessor645a0ed startup40924630119 passed; both Rust runs40924641012 and
+40924630001 completed successfully. Exact new-head
+workflow conclusions must be checked after publication; no new-head CI pass is
+inferred from local checks. The earlier case16 Windows timeout remains preserved
+and unexplained, separately from the diagnosed projection aggregate-budget issue.
+Sol can resume substantive independent review and bounded registry/FLS evidence
+integration. No Ultra, formal approval, merge, release or full-startup claim.
+
+Final state audit also removed stale helper-return authority from volatile
+registers after RET: original ECX retains the numeric caller continuation, while
+the consumed protected token cannot be pushed again as control authority. The
+independent differently-sized-frame cases assert both the precise numeric PC and
+absence of remaining protected-return values in registers.

@@ -15,6 +15,12 @@ struct CrtThreadHead {anchor:guest_memory::Capability,thread:u64,registry:u64,ep
 struct CrtDispatcherContext {anchor:guest_memory::Capability,thread:u64,epoch:u64,callback:u64,serial:u64}
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 struct CrtHeap {anchor:guest_memory::Capability,exceptions:Option<bool>}
+/// An explicitly bound, stationary fiber context. This is not a guessed TLS
+/// index or proof that original FlsAlloc/callback initialization has run.
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+struct CrtFiber {anchor:guest_memory::Capability,thread:u64,serial:u64}
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+struct CrtFlsSlot {fiber:CrtFiber,index:u32,serial:u64}
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 enum CrtValue {Heap(CrtHeap),Dispatcher(CrtDispatcherContext),Scalar{bits:u32,known:u32},Pointer(CrtPointer),Handle(CrtDescriptorId),ThreadHead(CrtThreadHead),OpaqueSaved(u8),ProtectedReturn(u64)}
 impl CrtValue {
@@ -50,6 +56,7 @@ trait CrtBackend {
 struct CrtRegion {pointer:CrtPointer,heap:bool,file_owner:Option<u32>}
 struct CrtDescriptor {id:CrtDescriptorId,live:bool,record:Option<CrtPointer>,record_initialized:bool}
 struct CrtStreamRuntime {
+ fiber:Option<CrtFiber>,fls:std::collections::BTreeMap<u32,(CrtFlsSlot,CrtValue)>,
  heap:Option<CrtHeap>,memory:guest_memory::Space,owner:u64,thread:u64,anchor:guest_memory::Capability,
  dispatchers:std::collections::BTreeMap<u64,CrtDispatcherContext>,regions:Vec<CrtRegion>,retired:Vec<CrtPointer>,tags:std::collections::BTreeMap<u32,CrtValue>,
  partial:std::collections::BTreeMap<u32,(u8,u8)>,descriptors:Vec<CrtDescriptor>,
@@ -66,8 +73,32 @@ impl CrtStreamRuntime {
   let mut memory=guest_memory::Space::new(byte_limit,64).map_err(|_|"CRT memory budget")?;
   let anchor=memory.map(file_address,size,guest_memory::Owner::Module(owner),guest_memory::Permissions::READ_WRITE,false).map_err(|_|"CRT FILE mapping")?;
   let pointer=CrtPointer{cap:anchor,owner:guest_memory::Owner::Module(owner),base:file_address,size,address:file_address,kind:CrtRegionKind::File};
-  Ok(Self{heap:None,memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],global_objects:std::collections::BTreeMap::new(),global_locks:vec![],record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,canonical_errno:false,errno_cell:None,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([file_address])})
+  Ok(Self{fiber:None,fls:std::collections::BTreeMap::new(),heap:None,memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],global_objects:std::collections::BTreeMap::new(),global_locks:vec![],record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,canonical_errno:false,errno_cell:None,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([file_address])})
  }
+ fn bind_fiber(&mut self,thread:u64)->Result<CrtFiber,&'static str>{
+  if self.closed||thread!=self.thread||self.fiber.is_some(){return Err("CRT fiber context already bound/foreign");}
+  let serial=self.serial.checked_add(1).ok_or("CRT fiber serial")?;let f=CrtFiber{anchor:self.anchor,thread,serial};self.serial=serial;self.fiber=Some(f);Ok(f)
+ }
+ fn check_fiber(&self,f:CrtFiber)->Result<(),&'static str>{if self.closed||self.fiber!=Some(f)||f.anchor!=self.anchor||f.thread!=self.thread{return Err("CRT fiber identity/lifetime");}Ok(())}
+ fn fls_value(&self,v:CrtValue)->Result<(),&'static str>{match v{
+  CrtValue::Pointer(p)=>{self.valid(p,20)?;if p.kind!=CrtRegionKind::ThreadData||p.address!=p.base||!self.regions.iter().any(|r|r.pointer==p){return Err("CRT FLS PTD root/extent");}},
+  CrtValue::Scalar{bits:0|u32::MAX,known:u32::MAX}=>{},_=>return Err("CRT FLS unknown/forged PTD value")};Ok(())}
+ /// Bind independently established initial FLS state, not execute FlsAlloc.
+ fn bind_fls(&mut self,f:CrtFiber,index:u32,value:CrtValue)->Result<CrtFlsSlot,&'static str>{
+  self.check_fiber(f)?;self.fls_value(value)?;if index==u32::MAX||self.fls.len()>=64||self.fls.contains_key(&index){return Err("CRT FLS index/budget/already bound");}
+  let serial=self.serial.checked_add(1).ok_or("CRT FLS serial")?;let slot=CrtFlsSlot{fiber:f,index,serial};self.serial=serial;self.fls.insert(index,(slot,value));Ok(slot)
+ }
+ fn fls_get(&mut self,f:CrtFiber,slot:CrtFlsSlot,index:u32)->Result<CrtValue,&'static str>{
+  self.check_fiber(f)?;let &(actual,value)=self.fls.get(&index).ok_or("CRT unbound FLS index")?;
+  if slot!=actual||slot.fiber!=f||slot.index!=index{return Err("CRT FLS owner/reused index");}self.fls_value(value)?;
+  // FlsGetValue's public success contract does not promise a preserved or
+  // zero LastError. The original getter saves/restores it around this call.
+  self.last_os_error=None;Ok(value)
+ }
+ fn retire_fls(&mut self,f:CrtFiber,slot:CrtFlsSlot)->Result<(),&'static str>{
+  self.check_fiber(f)?;if slot.fiber!=f||self.fls.get(&slot.index).map(|x|x.0)!=Some(slot){return Err("CRT stale FLS retirement");}self.fls.remove(&slot.index);Ok(())
+ }
+ fn retire_fiber(&mut self,f:CrtFiber)->Result<(),&'static str>{self.check_fiber(f)?;if !self.fls.is_empty(){return Err("CRT live FLS slots/callback effects");}self.fiber=None;self.errno_cell=None;self.errno=None;Ok(())}
  /// Separate startup-exclusive storage authority, with no preconstructed lock.
  /// Ending it does not attest that original CRT initialization has completed.
  fn new_initializing(owner:u64,thread:u64,file_address:u32,byte_limit:usize)->Result<(Self,CrtInitialization),&'static str>{Self::new_initializing_array(owner,thread,file_address,1,byte_limit)}
