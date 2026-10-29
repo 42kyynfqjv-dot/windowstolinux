@@ -287,7 +287,7 @@ fn file_scope_failure(){
 
 fn bytes_for_native_filter()->Vec<u8>{vec![0x8b,0x55,0xec,0x8b,0x02,0x8b,0x08,0x89,0x4d,0xe4,0x8b,0x55,0xe4,0x33,0xc0,0x81,0xfa,0x42,0x00,0x42,0xe0,0x0f,0x94,0xc0,0xc3]}
 fn owned_main_cases(){
- for mode in 0..51{
+ for mode in 0..72{
   let mut m=Machine::new_dispatch_known(vec![FrameSpec{scopes:vec![]}],0,[None;10],Some(0)).unwrap();
   let mut r=ThreadRegistry::new(m.owner(),0x8000,0xf000,&[(0x400000,0x420000)],0x41c000).unwrap();let mut rt=runtime(&r);
   let entry=rt.resolve_absolute(if mode==23||mode==32||mode==41{0xe800}else{0xe000},CrtRegionKind::Stack).unwrap();rt.store(entry,32,CrtValue::ProtectedReturn(71)).unwrap();let cpu=CrtCpu::new(entry,71).unwrap();
@@ -381,6 +381,71 @@ fn owned_main_cases(){
      assert_eq!(c.r[3],CrtValue::scalar((-2i32)as u32));assert_eq!(c.r[7],CrtValue::scalar(0));assert_eq!(c.r[4],CrtValue::Pointer(view.rt.offset(hbp,-40).unwrap()));
      assert_eq!(view.calls,5);assert_eq!(view.storage.image.try_level,0);assert_eq!(m.owned_context,saved);assert_eq!(m.phase,Phase::Cleanup);
      for offset in [-776,-780]{assert_eq!(view.read(offset).unwrap(),CrtValue::scalar(0xe0424242));}
+     if (51..=65).contains(&mode)||mode>=70{
+      let captured_before=CrtOwnedUnwind::context_words(view.rt,context).unwrap();
+      let delivery=view.rt.map_region(0x55000,716,CrtRegionKind::Context,None).unwrap();
+      if mode!=55{view.rt.store(view.rt.offset(delivery,0xc4).unwrap(),32,CrtValue::scalar(0x9600)).unwrap();}
+      let nested_context=view.rt.map_region(0x56000,716,CrtRegionKind::Context,None).unwrap();view.rt.store(view.rt.offset(nested_context,0xc4).unwrap(),32,CrtValue::scalar(0x9700)).unwrap();
+      let mut reached=0;let mut marker=None;
+      let result=view.call(&mut c,0x402337,|f,wrapper|original_global_delivery_cut(f,wrapper,&input,|f,_wrapper,session|{
+       // Explicit independently supplied unwind delivery input. This is not
+       // an implementation of RtlUnwind's writes or Windows context capture.
+       assert!(input.validate_prefix_source(f).is_err());
+       f.rt.store(f.rt.offset(record,4)?,32,CrtValue::scalar(2))?;
+       let context_arg=if mode==53{context}else if mode==54{record}else{delivery};
+       let sp=f.rt.resolve_absolute(0xa000,CrtRegionKind::Stack)?;
+       let mut child=delivery_cpu(f,sp,701,record,context_arg)?;
+       if mode==56{f.rt.store(f.rt.offset(sp,12)?,32,CrtValue::scalar(context_arg.address()))?;}
+       session.with_delivery(f,&mut child,context_arg,|session,f,child,token|{
+        reached+=1;assert_eq!(token.captured_esp,0x9600);assert_ne!(token.context,input.context);assert_ne!(token.captured_esp,CrtCpu::pointer(child.r[4])?.address());
+        owned_handler_prolog(f,child)?;session.validate_delivery(f,child,token)?;
+        assert_eq!(child.r[5],CrtValue::Pointer(f.rt.offset(sp,-4)?));assert_eq!(child.r[4],CrtValue::Pointer(f.rt.offset(sp,-32)?));
+        if mode==57{f.rt.store(f.rt.offset(context,0xb8)?,32,CrtValue::scalar(7))?;}
+        if mode==58{f.rt.store(f.rt.offset(delivery,0xb8)?,32,CrtValue::scalar(8))?;}
+        if mode==59{f.rt.store(f.rt.offset(record,4)?,32,CrtValue::scalar(0))?;}
+        if mode==61{f.rt.retire_region(delivery)?;}
+        if mode==62{f.rt.consume_stack(bridge_sp,CrtValue::ProtectedReturn(return_id))?;}
+        if mode==63{let p=f.rt.offset(bp,-780)?;f.rt.store(p,32,CrtValue::scalar(0xface))?;marker=Some(p);return Err("independent delivery failure");}
+        if mode==70{f.rt.store(f.rt.offset(sp,12)?,32,CrtValue::Pointer(context))?;}
+        if mode==65{f.rt.consume_stack(sp,CrtValue::ProtectedReturn(701))?;}
+        if mode==52||mode==60||mode==64{
+         let nested=if mode==64{delivery}else{nested_context};let nsp=f.rt.resolve_absolute(0x9800,CrtRegionKind::Stack)?;
+         let mut ncpu=delivery_cpu(f,nsp,702,record,nested)?;
+         session.with_delivery(f,&mut ncpu,nested,|session,f,ncpu,note|{
+          if mode==60{return session.validate_delivery(f,child,token);}
+          reached+=1;assert_eq!(note.captured_esp,0x9700);owned_handler_prolog(f,ncpu)?;session.validate_delivery(f,ncpu,note)
+         })?;
+         session.validate_delivery(f,child,token)?;
+        }
+        Ok(())
+       })?;
+       if mode==71{
+        // Windows may reuse one unwind CONTEXT for sequential callbacks.
+        // A new scoped lease is required; active aliasing still rejects.
+        let next=f.rt.resolve_absolute(0x9800,CrtRegionKind::Stack)?;let mut sibling=delivery_cpu(f,next,703,record,delivery)?;
+        session.with_delivery(f,&mut sibling,delivery,|session,f,sibling,token|{reached+=1;assert_eq!(token.serial,2);owned_handler_prolog(f,sibling)?;session.validate_delivery(f,sibling,token)})?;
+       }
+       assert!(session.active.is_empty());assert_eq!(session.used.len(),if mode==52||mode==71{2}else{1});
+       assert_eq!(CrtOwnedUnwind::context_words(f.rt,context)?,captured_before);
+       Ok(())
+      }));
+      if mode==70{assert_ne!(result.as_ref().unwrap_err(),&"RtlUnwind requires owned continuation and effect contract");}
+      assert!(result.is_err());assert!(view.failed);assert!(view.storage.unwind_epoch.is_some());
+      if mode==51||mode==52||mode==71{assert_eq!(result.unwrap_err(),"RtlUnwind requires owned continuation and effect contract");assert_eq!(reached,if mode==52||mode==71{2}else{1});}
+      if (53..=56).contains(&mode){assert_eq!(reached,0);}
+      if let Some(p)=marker{assert_eq!(view.rt.load(p,32).unwrap(),CrtValue::scalar(0xface));}
+      if mode==57{assert_eq!(view.rt.load(view.rt.offset(context,0xb8).unwrap(),32).unwrap(),CrtValue::scalar(7));}
+      if mode==58{assert_eq!(view.rt.load(view.rt.offset(delivery,0xb8).unwrap(),32).unwrap(),CrtValue::scalar(8));}
+      assert_eq!(m.owned_context,saved);assert_eq!(m.phase,Phase::Cleanup);continue;
+     }
+     if (66..=69).contains(&mode){
+      // Explicit API continuation input, distinct from an executed API. The
+      // original prolog, argument pushes, POPs and RET still execute natively.
+      let old=c.r;let result=view.call(&mut c,0x402337,|f,wrapper|original_global_tail_cut(f,wrapper,&input,mode-66));
+      if mode==66{assert_eq!(result.unwrap(),CrtValue::scalar(0));for reg in [3,5,6,7]{assert_eq!(c.r[reg],old[reg]);}assert!(c.flags.zf.is_none());for reg in [1,2]{assert!(c.r[reg].known_scalar().is_err());}}
+      else{assert!(result.is_err());assert!(view.failed);}
+      assert_eq!(m.owned_context,saved);assert_eq!(m.phase,Phase::Cleanup);continue;
+     }
      if mode==50{view.rt.store(view.rt.offset(record,4).unwrap(),32,CrtValue::scalar(2)).unwrap();assert!(input.validate(&view,&c).is_err());assert_eq!(view.rt.load(view.rt.offset(record,4).unwrap(),32).unwrap(),CrtValue::scalar(2));assert_eq!(m.owned_context,saved);continue;}
      if mode==42{
       let sp=CrtCpu::pointer(c.r[4]).unwrap();let old=c.r;let result=view.call(&mut c,0x402337,|f,child|original_global_to_api(f,child,&input));
@@ -425,6 +490,12 @@ fn owned_main_cases(){
    assert_eq!(m.phase,Phase::Cleanup);assert_eq!(view.rt.load(entry,32).unwrap(),CrtValue::ProtectedReturn(71));
   }else{assert!(result.is_err(),"owned mode {mode}");}
  }
+}
+
+fn delivery_cpu(frame:&mut CrtOwnedFrameView<'_>,sp:CrtPointer,id:u64,record:CrtPointer,context:CrtPointer)->RegistryResult<CrtCpu>{
+ frame.rt.store(sp,32,CrtValue::ProtectedReturn(id))?;let owner=frame.rt.resolve_absolute(frame.storage.image.record,CrtRegionKind::Stack)?;
+ for(i,v)in [CrtValue::Pointer(record),CrtValue::Pointer(owner),CrtValue::Pointer(context),CrtValue::scalar(0)].into_iter().enumerate(){frame.rt.store(frame.rt.offset(sp,4+i as i64*4)?,32,v)?;}
+ CrtCpu::new(sp,id)
 }
 
 fn path_edges(){
@@ -883,6 +954,25 @@ pub(super) fn execute(frame:&mut CrtOwnedFrameView<'_>,cpu:&mut CrtCpu,objects:&
          Ok("objects.validate_prefix_source(frame)?;let sp=CrtCpu::pointer(cpu.r[4])?;let owner=frame.owner_frame()?;for(i,value)in [CrtValue::Pointer(frame.rt.offset(owner,-16)?),CrtValue::scalar(0x402855),CrtValue::Pointer(objects.record),CrtValue::scalar(0)].into_iter().enumerate(){if frame.rt.load(frame.rt.offset(sp,i as i64*4)?,32)?!=value{return Err(\"original RtlUnwind argument shape\");}}return Err(\"RtlUnwind requires owned continuation and effect contract\");".into())
         },&Default::default(),64,|_,_|Err("unexpected thread effect".into()),|_,op|Ok(if matches!(op,crate::crt_stream_ir::Op::Call(_)){String::new()}else{"let rt=&mut *frame.rt;".into()}),|_,_|Ok(None)).unwrap();
         let global_source=format!("fn original_global_to_api(frame:&mut CrtOwnedFrameView<'_>,cpu:&mut CrtCpu,objects:&CrtOwnedPrefixInput)->RegistryResult<CrtValue>{{frame.preflight_bridge(cpu,{})?;{global_body}}}",global_proof.temporary_bytes);
+        let argument_check="objects.validate_prefix_source(frame)?;let sp=CrtCpu::pointer(cpu.r[4])?;let owner=frame.owner_frame()?;for(i,value)in [CrtValue::Pointer(frame.rt.offset(owner,-16)?),CrtValue::scalar(0x402855),CrtValue::Pointer(objects.record),CrtValue::scalar(0)].into_iter().enumerate(){if frame.rt.load(frame.rt.offset(sp,i as i64*4)?,32)?!=value{return Err(\"original RtlUnwind argument shape\");}}";
+        let global_private=global_proof.calls[0].entry_depth.checked_sub(4).unwrap();
+        let delivery_body=crate::crt_stream_emit::emit_body_with_hooks(&global_graph,|pc,target|{
+         assert_eq!((pc,target),(0x40284f,crate::crt_stream_ir::Target::Import(0x415040)));
+         Ok(format!("{argument_check}let mut pending=CrtOwnedUnwind::begin(frame,cpu,objects,{global_private})?;probe(frame,cpu,&mut pending)?;return Err(\"RtlUnwind requires owned continuation and effect contract\");"))
+        },&Default::default(),64,|_,_|Err("unexpected thread effect".into()),|_,op|Ok(if matches!(op,crate::crt_stream_ir::Op::Call(_)){String::new()}else{"let rt=&mut *frame.rt;".into()}),|_,_|Ok(None)).unwrap();
+        let delivery_source=format!("fn original_global_delivery_cut<F>(frame:&mut CrtOwnedFrameView<'_>,cpu:&mut CrtCpu,objects:&CrtOwnedPrefixInput,mut probe:F)->RegistryResult<CrtValue> where F:FnMut(&mut CrtOwnedFrameView<'_>,&mut CrtCpu,&mut CrtOwnedUnwind<'_>)->RegistryResult<()>{{frame.preflight_bridge(cpu,{})?;{delivery_body}}}",global_proof.temporary_bytes);
+        let tail_body=crate::crt_stream_emit::emit_body_with_hooks(&global_graph,|pc,target|{
+         assert_eq!((pc,target),(0x40284f,crate::crt_stream_ir::Target::Import(0x415040)));
+         Ok(format!(r#"{argument_check}
+// Test-only externally supplied continuation cut: no protected API CALL or
+// actual API completion is claimed. Production's hook above remains rejection.
+if fault==2{{let p=frame.rt.offset(sp,16)?;frame.rt.store(p,32,CrtValue::scalar(1))?;}}
+if fault==3{{frame.rt.consume_stack(CrtCpu::pointer(cpu.entry[4])?,CrtValue::ProtectedReturn(cpu.return_id))?;}}
+cpu.discard(frame.rt,16)?;let resume_sp=cpu.r[4];cpu.r=[CrtValue::Scalar{{bits:0,known:0}};8];cpu.r[4]=resume_sp;cpu.r[0]=CrtValue::scalar(0);cpu.flags=CrtFlags::unknown();
+if fault==1{{cpu.condition(0)?;}}
+"#))
+        },&Default::default(),64,|_,_|Err("unexpected thread effect".into()),|_,op|Ok(if matches!(op,crate::crt_stream_ir::Op::Call(_)){String::new()}else{"let rt=&mut *frame.rt;".into()}),|_,_|Ok(None)).unwrap();
+        let tail_source=format!("fn original_global_tail_cut(frame:&mut CrtOwnedFrameView<'_>,cpu:&mut CrtCpu,objects:&CrtOwnedPrefixInput,fault:u32)->RegistryResult<CrtValue>{{frame.preflight_bridge(cpu,{})?;{tail_body}}}",global_proof.temporary_bytes);
         let edge_steps=[crate::crt_stream_emit::PathStep{pc:0x430000,bytes:&[0x83,0xf8,1],next:Some(0x430003)},crate::crt_stream_emit::PathStep{pc:0x430003,bytes:&[0x74,5],next:Some(0x430005)},crate::crt_stream_emit::PathStep{pc:0x430005,bytes:&[0xe8,0xf6,0x0f,0,0],next:None}];
         let edge_body=crate::crt_stream_emit::emit_proved_path(&edge_steps,|_,_|Ok("return Ok(());".into()),&Default::default(),|_,_|Ok(String::new())).unwrap();
         let path_edges=format!("fn native_path_edge(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->RegistryResult<()>{{{edge_body}}}");
@@ -900,7 +990,7 @@ pub(super) fn execute(frame:&mut CrtOwnedFrameView<'_>,cpu:&mut CrtCpu,objects:&
         let prefix_metadata=format!("fn owned_prefix_handler()->u32{{{}}}fn owned_prefix_temporary()->u32{{{}}}",prefix.entry,prefix.temporary_bytes);
         let context_types=crate::handler_context::EMITTED_TYPES;
         let context_check=context_proof.normal_object_check();
-        let source = format!("#![allow(dead_code)]\nmod guest_memory{{{memory}}}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{fixture}\n{file_scope}\n{context_types}\n{context_check}\n{scope_store}\n{permuted_store}\n{install}\n{handler_prolog}\n{filter_source}\n{false_filter_source}\n{normalizer_source}\n{guard_source}\n{header_source}\n{prefix_normalizer}\n{prefix_front}\n{guard_prefix}\n{prefix_caller}\n{bridge_native}\n{owned_types}\n{main_init}\n{inner_init}\n{owned_filter}\n{owned_bridge}\n{main_filter_bytes}\n{activation}\n{owned_prolog}\n{owned_prefix}\n{owned_header}\n{owned_scope_store}\n{owned_permuted_store}\n{global_source}\n{owned_search}\n{code_data}\n{path_edges}\n{prefix_metadata}\nfn raise_site()->CrtNormalRaiseSite{{{{{raise}}}}}\n{CASES}",
+        let source = format!("#![allow(dead_code)]\nmod guest_memory{{{memory}}}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{fixture}\n{file_scope}\n{context_types}\n{context_check}\n{scope_store}\n{permuted_store}\n{install}\n{handler_prolog}\n{filter_source}\n{false_filter_source}\n{normalizer_source}\n{guard_source}\n{header_source}\n{prefix_normalizer}\n{prefix_front}\n{guard_prefix}\n{prefix_caller}\n{bridge_native}\n{owned_types}\n{main_init}\n{inner_init}\n{owned_filter}\n{owned_bridge}\n{main_filter_bytes}\n{activation}\n{owned_prolog}\n{owned_prefix}\n{owned_header}\n{owned_scope_store}\n{owned_permuted_store}\n{global_source}\n{delivery_source}\n{tail_source}\n{owned_search}\n{code_data}\n{path_edges}\n{prefix_metadata}\nfn raise_site()->CrtNormalRaiseSite{{{{{raise}}}}}\n{CASES}",
             include_str!("linker/unwind_runtime.rs").replace("//!", "//"),
             emitted_literal(include_str!("frame_proof.rs")),emitted_literal(include_str!("thread_registry.rs")),
             crate::crt_stream_runtime::EMITTED_TYPES,crate::crt_stream_cpu::EMITTED_TYPES,

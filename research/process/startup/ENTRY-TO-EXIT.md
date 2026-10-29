@@ -750,3 +750,87 @@ This is a concrete Astra High question about nonlocal control/effect ownership;
 routine testing and CI remain Sol work. Full startup/rcedit stays rejected.
 Earlier observer-build and original-process timeouts remain unresolved; current
 passing CI explains neither.
+
+### Owned unwind delivery lifetime and conservative continuation boundary
+
+The global wrapper now has a checked delivery-lifetime component at its exact
+imported call boundary. The enclosing instruction proof still binds the original
+four arguments and IAT. `CrtOwnedUnwind::begin` validates the live wrapper return,
+stack extent, source registration and captured input, then suspends the search
+input token permanently for that epoch. Clearing record flags later cannot revive
+that token. This operation does not implement RtlUnwind or issue a completion.
+
+A delivery receives a separately supplied, checked CONTEXT capability. The
+captured search CONTEXT, exception record and all active delivery contexts must
+be disjoint from it. The complete 716-byte context range, initialized ESP, thread
+bounds, callback arguments, protected return and private scratch are checked.
+Nested deliveries have distinct callback identities and descending stack ranges;
+there are limits of 16 active deliveries and 64 delivery scopes per boundary.
+Sequential callbacks may reuse the same live unwind CONTEXT with a fresh scoped
+lease, as the original observations do; an active alias remains rejected. The current
+narrow component accepts flags 2 and dispatcher argument 0 only. These are explicit
+input restrictions, not general Windows exception semantics. In particular, this
+is not yet a binding of the observed nonzero Windows dispatcher-context object.
+
+These new delivery cases use the already bound source frame; they do not yet
+install or retire younger frames. Each delivery executes the original handler prolog against its own call registers
+and checked stack. Captured ESP remains distinct from callback ESP. All context
+comparison snapshots are read-only validation data: they cannot write back or
+initialize Machine's saved state. Parent delivery tokens cannot be used during a
+nested delivery. A changed argument graph, expired context, captured-context
+mutation, corrupted callback token or body failure rejects while retaining prior
+memory effects. No successful delivery scope grants cleanup completion, return
+from a handler, or guest restoration.
+
+An independent corruption test exposed a defect in the first unpublished version:
+it checked delivery argument identities at entry but did not recheck them when the
+scope ended. Replacing the CONTEXT argument with the captured search context was
+therefore missed. The exit check now verifies the four typed argument words again;
+the regression demonstrates rejection before the still-unbound API boundary.
+
+The unchanged global wrapper's original POP/RET sequence also executes in four
+separate continuation-input tests. At that explicit test-only API cut, EAX is the
+specified ReturnValue and ESP is the checked continuation stack; every other
+register and tracked flag is unknown. Original POPs restore EBX, ESI, EDI and EBP
+from actual saved words before the normal protected RET. Unknown-flag reads,
+corrupt saved words and a consumed caller return reject. This demonstrates that
+native emission can preserve conservative register effects without weakening
+ordinary-call ABI checks. It is not an executed RtlUnwind, a proof of its memory
+footprint, or a new Windows/ELF translation comparison.
+
+There are 72 owned native scenarios: 51 inherited, 17 delivery-lifetime cases and
+4 continuation-input cases. The three branch cases and one ordinary-call negative
+control remain separate. CRT tests are 134 passed and one ignored; the five
+recorded original-Windows wrapper observations are replayed separately. None of
+these adds a whole-PE pair. The local baseline remains PE
+`1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4`;
+the separately rebuilt CI PE `836e40be...` must not be substituted for it.
+
+The remaining executable boundary is precise: the native API needs an owned
+nonlocal continuation issued only after actual younger-frame handler execution,
+local cleanup and registry retirement have completed. That binding must supply
+validated delivery and dispatcher-context objects, preserve or conservatively
+invalidate every observable external effect, and consume the API call control
+state at the proved TargetIp. The current component deliberately has no completion
+method. Original local-unwind writes still need the live owned-storage adapter,
+and older-frame installation needs its separate pre-event contract. Only then
+can selected transfer/landing and Machine restoration be connected. Ordinary
+startup and full rcedit remain rejected. Sol can review this bounded change and
+its CI before the next ownership/completion integration.
+
+Prior-checkpoint CI is not uniformly green: d27f8f5d startup run 40794626841 and
+full PR run 40794635242 passed; full push run 40794627077 failed in the original
+Windows corpus launch. Case 27, PE
+`4dc763b44f80b5e2f7b49b4ae6f0090b6fa56e12ec321e81b7eefea4098e9305`,
+produced `C27` and empty stderr but was still alive after 15 seconds. It was killed
+and reaped with exit 1. Both independent host exit controls and all 18 launch
+samples passed earlier in that job; the other eight jobs passed. Preserved artifact
+12863490978 has SHA256
+`504490a02a0b9cb407bd8b4d231cb6b8c089bb87093bc4185e3608840c274aeb`.
+This is an original-process timeout, distinct from the earlier observer compiler
+build timeout. Neither cause is established, and no thresholds or retries changed.
+
+Final local component Rust SHA256: `06051479c0279575d418b00e0099005d9a6af6759fd6fd9e9e145ddc16560d72`.
+The retained native projection check also passed with 72 owned cases; its
+37 live-adapter and 2 projection cases are inherited, not additional translated
+programs. Frame tests passed 171/171; Clippy and formatting checks passed.
