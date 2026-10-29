@@ -834,3 +834,37 @@ Final local component Rust SHA256: `06051479c0279575d418b00e0099005d9a6af6759fd6
 The retained native projection check also passed with 72 owned cases; its
 37 live-adapter and 2 projection cases are inherited, not additional translated
 programs. Frame tests passed 171/171; Clippy and formatting checks passed.
+
+
+### Independent review and cleanup prerequisite connection
+
+The separate captured/delivery lifetime and argument-exit fix were reviewed on
+Sol. The original API boundary now has `check_cleanup_boundary`: it rejects
+inside any active delivery, rechecks the live wrapper activation and all four
+original argument values, and requires the registry's exact target to be ready.
+The latter means every younger registration has completed its handler, unlinked
+and retired. A returned callback or an unlinked but still-live frame is
+insufficient. The independent two-frame lifecycle regression now checks both of
+those intermediate states before its existing actual registry retirement step.
+
+Native delivery cases check that an active callback cannot pass this boundary,
+even in the zero-younger-frame fixture. After scoped deliveries end the original
+argument check succeeds; changed TargetIp or wrapper identity rejects. These two
+new corruption cases bring the owned count to 74 = 51 inherited + 17 delivery +
+4 explicit continuation-input cases + 2 cleanup-boundary cases. The boundary is
+a read-only prerequisite, never an API completion receipt, jump or saved-context
+restoration. Existing full-program admission remains unchanged.
+
+The exact remaining code-level connection is the live owned local-cleanup
+adapter: `ThreadRegistry::execute_local` currently mutates `FrameImage`, whereas
+original handlers read and write `CrtOwnedStorage` bytes/protected roles. The
+owned view borrows registry and Machine immutably. Completing the path requires
+scoped mutable registry execution while the adapter updates the same live source,
+then actual handler epilog/guard validation, retirement and a nonlocal API control
+outcome. Copying a completed detached image back, or treating this prerequisite
+check as completion, would skip that proof. No new external permission is needed.
+
+All three 6a612ccf workflows are being checked; the dedicated startup workflow
+40797171456 has passed. Full runs 40797179466 and 40797171510 were still active at
+the review checkpoint. Prior original case-27 timeout evidence remains preserved
+and unresolved; no retries or timeout thresholds changed.

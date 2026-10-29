@@ -311,6 +311,19 @@ impl CrtOwnedUnwind<'_>{
   })();frame.active=parent;
   if result.is_err(){self.failed=true;frame.failed=true;}result
  }
+ /// Completed delivery scopes alone cannot satisfy this boundary. Registry
+ /// retirement must account for every younger owned registration. This is a
+ /// prerequisite check, never an API completion or Machine restoration token.
+ fn check_cleanup_boundary(&self,frame:&CrtOwnedFrameView<'_>,cpu:&CrtCpu,target_ip:u32)->RegistryResult<()>{
+  self.validate(frame)?;
+  if !self.active.is_empty()||frame.active!=self.wrapper_id||cpu.returned||cpu.return_id!=self.wrapper_id
+   ||CrtCpu::pointer(cpu.entry[4])?!=self.wrapper_entry||cpu.r[4]!=CrtValue::Pointer(self.api_sp)
+   ||frame.registry.target_ready()?!=frame.storage.id||target_ip==0||!frame.registry.module_contains_address(target_ip){return Err("unwind cleanup/continuation boundary");}
+  let owner=frame.rt.offset(frame.storage.entry,i64::from(frame.storage.image.record)-i64::from(frame.storage.image.entry_sp))?;
+  for(i,v)in [CrtValue::Pointer(owner),CrtValue::scalar(target_ip),CrtValue::Pointer(self.source.record),CrtValue::scalar(0)].into_iter().enumerate(){
+   if frame.rt.load(frame.rt.offset(self.api_sp,i as i64*4)?,32)?!=v{return Err("unwind continuation arguments changed");}
+  }Ok(())
+ }
  fn validate_delivery(&self,frame:&CrtOwnedFrameView<'_>,cpu:&CrtCpu,token:&CrtUnwindDelivery)->RegistryResult<()>{
   self.validate(frame)?;
   if token.epoch!=self.epoch||self.active.last()!=Some(&(token.serial,token.context,token.entry,token.callback))

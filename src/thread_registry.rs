@@ -561,7 +561,9 @@ fn normal(){
    image.words.insert(-36,FrameWord::Scalar(31));finish_level(image);local.restore_previous_head()
   })?;assert_eq!(registry.head()?,previous);Ok(())
  }).unwrap();
- assert!(registry.frames[1].live);assert!(registry.frames[1].linked);registry.unlink_head(ids[1]).unwrap();assert!(registry.frames[1].live);
+ assert!(registry.frames[1].live);assert!(registry.frames[1].linked);assert!(registry.target_ready().is_err()); // callback completion alone
+ registry.unlink_head(ids[1]).unwrap();assert!(registry.frames[1].live);
+ assert!(registry.target_ready().is_err()); // completed and unlinked is still live
  registry.retire_frame(receipt,&images[1]).unwrap();assert!(!registry.frames[1].live);assert_eq!(registry.target_ready().unwrap(),ids[0]);
  assert!(matches!(images[1].words.get(&-36),Some(FrameWord::Scalar(31))));assert!(registry.frames[0].live);
  // The alternate unlink-before-callback ordering is mechanically supported,

@@ -287,7 +287,7 @@ fn file_scope_failure(){
 
 fn bytes_for_native_filter()->Vec<u8>{vec![0x8b,0x55,0xec,0x8b,0x02,0x8b,0x08,0x89,0x4d,0xe4,0x8b,0x55,0xe4,0x33,0xc0,0x81,0xfa,0x42,0x00,0x42,0xe0,0x0f,0x94,0xc0,0xc3]}
 fn owned_main_cases(){
- for mode in 0..72{
+ for mode in 0..74{
   let mut m=Machine::new_dispatch_known(vec![FrameSpec{scopes:vec![]}],0,[None;10],Some(0)).unwrap();
   let mut r=ThreadRegistry::new(m.owner(),0x8000,0xf000,&[(0x400000,0x420000)],0x41c000).unwrap();let mut rt=runtime(&r);
   let entry=rt.resolve_absolute(if mode==23||mode==32||mode==41{0xe800}else{0xe000},CrtRegionKind::Stack).unwrap();rt.store(entry,32,CrtValue::ProtectedReturn(71)).unwrap();let cpu=CrtCpu::new(entry,71).unwrap();
@@ -387,7 +387,7 @@ fn owned_main_cases(){
       if mode!=55{view.rt.store(view.rt.offset(delivery,0xc4).unwrap(),32,CrtValue::scalar(0x9600)).unwrap();}
       let nested_context=view.rt.map_region(0x56000,716,CrtRegionKind::Context,None).unwrap();view.rt.store(view.rt.offset(nested_context,0xc4).unwrap(),32,CrtValue::scalar(0x9700)).unwrap();
       let mut reached=0;let mut marker=None;
-      let result=view.call(&mut c,0x402337,|f,wrapper|original_global_delivery_cut(f,wrapper,&input,|f,_wrapper,session|{
+      let result=view.call(&mut c,0x402337,|f,wrapper|original_global_delivery_cut(f,wrapper,&input,|f,wrapper,session|{
        // Explicit independently supplied unwind delivery input. This is not
        // an implementation of RtlUnwind's writes or Windows context capture.
        assert!(input.validate_prefix_source(f).is_err());
@@ -397,6 +397,7 @@ fn owned_main_cases(){
        let mut child=delivery_cpu(f,sp,701,record,context_arg)?;
        if mode==56{f.rt.store(f.rt.offset(sp,12)?,32,CrtValue::scalar(context_arg.address()))?;}
        session.with_delivery(f,&mut child,context_arg,|session,f,child,token|{
+        assert!(session.check_cleanup_boundary(f,wrapper,0x402855).is_err());
         reached+=1;assert_eq!(token.captured_esp,0x9600);assert_ne!(token.context,input.context);assert_ne!(token.captured_esp,CrtCpu::pointer(child.r[4])?.address());
         owned_handler_prolog(f,child)?;session.validate_delivery(f,child,token)?;
         assert_eq!(child.r[5],CrtValue::Pointer(f.rt.offset(sp,-4)?));assert_eq!(child.r[4],CrtValue::Pointer(f.rt.offset(sp,-32)?));
@@ -426,10 +427,14 @@ fn owned_main_cases(){
         session.with_delivery(f,&mut sibling,delivery,|session,f,sibling,token|{reached+=1;assert_eq!(token.serial,2);owned_handler_prolog(f,sibling)?;session.validate_delivery(f,sibling,token)})?;
        }
        assert!(session.active.is_empty());assert_eq!(session.used.len(),if mode==52||mode==71{2}else{1});
+       if mode==72{f.rt.store(f.rt.offset(session.api_sp,4)?,32,CrtValue::scalar(0x402856))?;}
+       if mode==73{wrapper.return_id+=1;}
+       session.check_cleanup_boundary(f,wrapper,0x402855)?;
+
        assert_eq!(CrtOwnedUnwind::context_words(f.rt,context)?,captured_before);
        Ok(())
       }));
-      if mode==70{assert_ne!(result.as_ref().unwrap_err(),&"RtlUnwind requires owned continuation and effect contract");}
+      if mode==70||mode==72||mode==73{assert_ne!(result.as_ref().unwrap_err(),&"RtlUnwind requires owned continuation and effect contract");}
       assert!(result.is_err());assert!(view.failed);assert!(view.storage.unwind_epoch.is_some());
       if mode==51||mode==52||mode==71{assert_eq!(result.unwrap_err(),"RtlUnwind requires owned continuation and effect contract");assert_eq!(reached,if mode==52||mode==71{2}else{1});}
       if (53..=56).contains(&mode){assert_eq!(reached,0);}
