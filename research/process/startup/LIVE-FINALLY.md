@@ -317,3 +317,41 @@ pass is justified only by a concrete unresolved ownership transition. Initial
 OS delivery, API completion, selected continuation and full entry-to-exit proof
 remain gates. Full startup/rcedit stays rejected. Historical Windows timeouts
 remain unresolved.
+
+## Connected delivery cleanup and retirement
+
+Review of the separate-frame checkpoint confirmed source guard/pair/context
+validation remains live and the delivery token binds its target registration.
+The runtime frame view now lends the registry mutably. `with_handler_target`
+checks both owners and callback order, reborrows the selected source for the
+handler scope, propagates nested call usage and revalidates the source before
+allowing the registry to issue completion. A completed scope still needs the
+separate original epilog exit token before retirement.
+
+Seven native cases connect Main's original search/global wrapper and Inner's
+original prefix to the existing local-unwind adapter, original notification and
+finally bodies, post-cleanup guard and original handler epilog. The successful
+case validates the matching completion/exit receipts and retires only Inner:
+the registry becomes ready for Main, Inner's storage expires and Main's guarded
+storage remains live. Trace1298/local118 are independent expectations. The source
+captured CONTEXT is retained separately throughout. Negative cases cover failure
+after the first callback writes, damaged target guard after cleanup, stale exit
+completion generation, changed delivery context, damaged source guard and a
+second copy of the handler return identity. Failed callbacks leave the original
+first trace81 write and live registration; they issue no completion. A stale
+completion rejects retirement before unlinking.
+
+The original branch-to-local-helper caller instructions and local helper's full
+physical call stack remain explicit cuts. The handler epilog runs after the
+scoped delivery body ends; ending that scope itself issues no completion or
+restoration authority. The connected assembly is native component evidence, not
+an admitted whole-handler or whole-PE translation. Next lift the actual unwind
+branch/caller sequence and its arguments to replace that cut, preserving the
+checked registry lending interface and matching completion/retirement gates.
+No further architectural escalation is presently required for that attempt.
+
+Counts now overlap as follows:97 owned-frame scenarios,40 delivery-lifetime,
+22 cross-frame and7 connected cleanup/retirement scenarios. The separate finally
+corpus remains38. Five existing recorded Windows wrapper observations still
+have their own differential check; the new seven cases add zero Windows or
+whole-PE comparison pairs. Prior Windows timeout causes remain unresolved.

@@ -380,7 +380,7 @@ fn owned_local_cases(){
 }
 
 fn owned_main_cases(){
- for mode in 0..90{
+ for mode in 0..97{
   let mut m=Machine::new_dispatch_known((0..if mode>=75{2}else{1}).map(|_|FrameSpec{scopes:vec![]}).collect(),0,[None;10],Some(0)).unwrap();
   let mut r=ThreadRegistry::new(m.owner(),0x8000,0xf000,&[(0x400000,0x420000)],0x41c000).unwrap();let mut rt=runtime(&r);
   let entry=rt.resolve_absolute(if mode==23||mode==32||mode==41||mode==76{0xe800}else{0xe000},CrtRegionKind::Stack).unwrap();rt.store(entry,32,CrtValue::ProtectedReturn(71)).unwrap();let cpu=CrtCpu::new(entry,71).unwrap();
@@ -426,7 +426,7 @@ fn owned_main_cases(){
   let bridge_sp=if mode==12{entry}else{runtime.resolve_absolute(if mode==23||mode==32||mode==41||mode==76{0xb000}else{0xc000},CrtRegionKind::Stack).unwrap()};let return_id=if mode==12{71}else{200};if mode!=12{runtime.store(bridge_sp,32,CrtValue::ProtectedReturn(return_id)).unwrap();}
   let mut c=CrtCpu::new(bridge_sp,return_id).unwrap();let target_code=original_main_filter_bytes();let target=runtime.map_region(0x401333,target_code.len()as u32,CrtRegionKind::Module,Some(&target_code)).unwrap();
   c.r[1]=CrtValue::Pointer(target);c.r[2]=CrtValue::Pointer(bp);
-  let mut view=CrtOwnedFrameView{rt:runtime,registry:&r,machine:&m,storage:&mut storage,search_storage:None,search:true,active:c.return_id,depth:0,calls:0,failed:false};
+  let mut view=CrtOwnedFrameView{rt:runtime,registry:&mut r,machine:&m,storage:&mut storage,search_storage:None,search:true,active:c.return_id,depth:0,calls:0,failed:false};
   if mode>=14{
    let (record,context)=if mode==19{
     let other_record=view.rt.map_region(0x53000,80,CrtRegionKind::Context,None).unwrap();let other_context=view.rt.map_region(0x54000,716,CrtRegionKind::Context,None).unwrap();
@@ -495,7 +495,7 @@ fn owned_main_cases(){
       let delivery=view.rt.map_region(0x55000,716,CrtRegionKind::Context,None).unwrap();
       if mode!=55{view.rt.store(view.rt.offset(delivery,0xc4).unwrap(),32,CrtValue::scalar(0x9600)).unwrap();}
       let nested_context=view.rt.map_region(0x56000,716,CrtRegionKind::Context,None).unwrap();view.rt.store(view.rt.offset(nested_context,0xc4).unwrap(),32,CrtValue::scalar(0x9700)).unwrap();
-      let mut reached=0;let mut marker=None;
+      let mut reached=0;let mut marker=None;let mut retirement=None;
       let result=view.call(&mut c,0x402337,|f,wrapper|original_global_delivery_cut(f,wrapper,&input,|f,wrapper,session|{
        // Explicit independently supplied unwind delivery input. This is not
        // an implementation of RtlUnwind's writes or Windows context capture.
@@ -508,7 +508,7 @@ fn owned_main_cases(){
         let target_local=f.rt.resolve_absolute(target.image.ebp-28,CrtRegionKind::Stack)?;
         let target_guard=f.rt.resolve_absolute(target.image.ebp-48,CrtRegionKind::Stack)?;
         assert_ne!(target.image.entry_sp-target.image.esp,f.storage.image.entry_sp-f.storage.image.esp);
-        let table=original_inner_table();f.rt.map_region(target.image.scope_va,table.len()as u32,CrtRegionKind::Module,Some(&table))?;
+        if mode>=90{map_finally_original(f.rt)?;}else{let table=original_inner_table();f.rt.map_region(target.image.scope_va,table.len()as u32,CrtRegionKind::Module,Some(&table))?;}
         let sp=f.rt.resolve_absolute(0xa000,CrtRegionKind::Stack)?;
         f.rt.store(sp,32,CrtValue::ProtectedReturn(701))?;
         let owner=f.rt.resolve_absolute(if mode==78{f.storage.image.record}else{target.image.record},CrtRegionKind::Stack)?;
@@ -518,6 +518,22 @@ fn owned_main_cases(){
         if mode==80{f.rt.store(target_guard,32,CrtValue::scalar(0))?;}
         if mode==82{target.binding.frame.generation+=1;}
         if mode==87{f.rt.store(f.rt.resolve_absolute(0xb800,CrtRegionKind::Stack)?,32,CrtValue::ProtectedReturn(72))?;}
+        if mode>=90{
+         map_original_cleanups(f.rt)?;map_original_notification(f.rt)?;
+         let nested=original_nested_handler_bytes();f.rt.map_region(0x4027b0,nested.len()as u32,CrtRegionKind::Module,Some(&nested))?;
+         f.rt.store(f.rt.resolve_absolute(0x41c948,CrtRegionKind::Module)?,32,CrtValue::scalar(5))?;
+         let result=f.with_handler_target(target,|source,target|{
+          session.with_target_delivery(source,target,&mut child,delivery,|session,t,child,token|{
+           reached+=1;assert_eq!(owned_delivery_prefix_helpers::execute(session,t,child,token)?,0x4022bd);
+           connected_inner_cleanup(session,t,child,token,mode-90,source_guard)?;
+           original_inner_guard_call(t,child,0x40226e)?;session.validate_delivery(t,child,token)
+          })?;
+          let disposition=handler_original_epilog(source.rt,&mut child)?.known_scalar()?;
+          if disposition!=1||!child.returned{return Err("connected original handler return");}
+          Ok(CrtHandlerExit{anchor:source.rt.anchor,id:target.id,event:source.machine.event,disposition,completion_generation:source.registry.generation.checked_add(1).ok_or("handler completion generation overflow")?})
+         });
+         let(exit,completion)=result?;retirement=Some((exit,completion));return Ok(());
+        }
         let result=session.with_target_delivery(f,target,&mut child,delivery,|session,t,child,token|{
          reached+=1;assert_eq!(token.target,t.storage.id);assert_ne!(token.target,input.id);
          let branch=owned_delivery_prefix_helpers::execute(session,t,child,token)?;assert_eq!(branch,0x4022bd);
@@ -581,6 +597,22 @@ fn owned_main_cases(){
        assert_eq!(CrtOwnedUnwind::context_words(f.rt,context)?,captured_before);
        Ok(())
       }));
+      if mode>=90{
+       assert!(result.is_err());assert!(view.failed);
+       if mode==90||mode==93{
+        assert_eq!(result.unwrap_err(),"RtlUnwind requires owned continuation and effect contract");
+        let memory=&mut *view.rt;
+        assert_eq!(memory.load(memory.resolve_absolute(0x41c948,CrtRegionKind::Module).unwrap(),32).unwrap(),CrtValue::scalar(1298));
+        assert_eq!(memory.load(memory.resolve_absolute(delivery_target.as_ref().unwrap().image.ebp-28,CrtRegionKind::Stack).unwrap(),32).unwrap(),CrtValue::scalar(118));
+        let(mut exit,completion)=retirement.take().unwrap();if mode==93{exit.completion_generation-=1;}
+        drop(view);let target=delivery_target.as_mut().unwrap();let retired=target.retire_completed(&mut rt,&mut r,&mut m,completion,exit);
+        if mode==90{retired.unwrap();assert_eq!(r.target_ready().unwrap(),storage.id);assert!(!m.frames[1].live);assert!(target.validate_storage(&rt,&r,&m).is_err());storage.validate_storage(&rt,&r,&m).unwrap();}
+        else{assert!(retired.is_err());assert!(m.frames[1].live);assert!(r.available().is_err());}
+       }else{
+        assert!(retirement.is_none());assert!(view.registry.available().is_err());assert!(view.registry.frames[1].completion.is_none());assert!(view.machine.frames[1].live);
+        let expected=if mode==91||mode>=94{81}else{1298};assert_eq!(view.rt.load(view.rt.resolve_absolute(0x41c948,CrtRegionKind::Module).unwrap(),32).unwrap(),CrtValue::scalar(expected));
+       }continue;
+      }
       if mode>=75{
        let error=*result.as_ref().unwrap_err();assert!(view.failed);
        if mode==75||mode==76||mode==77{assert_eq!(error,"RtlUnwind requires owned continuation and effect contract");assert_eq!(reached,if mode==77{2}else{1});}
@@ -602,7 +634,7 @@ fn owned_main_cases(){
      if (66..=69).contains(&mode){
       // Explicit API continuation input, distinct from an executed API. The
       // original prolog, argument pushes, POPs and RET still execute natively.
-      let old=c.r;let result=view.call(&mut c,0x402337,|f,wrapper|original_global_tail_cut(f,wrapper,&input,mode-66));
+      let old=c.r;let result=view.call(&mut c,0x402337,|f,wrapper|original_global_tail_cut(f,wrapper,&input,(mode-66)as u32));
       if mode==66{assert_eq!(result.unwrap(),CrtValue::scalar(0));for reg in [3,5,6,7]{assert_eq!(c.r[reg],old[reg]);}assert!(c.flags.zf.is_none());for reg in [1,2]{assert!(c.r[reg].known_scalar().is_err());}}
       else{assert!(result.is_err());assert!(view.failed);}
       assert_eq!(m.owned_context,saved);assert_eq!(m.phase,Phase::Cleanup);continue;

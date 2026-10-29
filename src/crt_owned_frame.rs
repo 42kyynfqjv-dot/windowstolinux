@@ -216,7 +216,7 @@ impl CrtOwnedStorage {
   self.input=Some((None,record,context,code));self.validate_search(rt,r,m)
  }
 }
-struct CrtOwnedFrameView<'a>{rt:&'a mut CrtStreamRuntime,registry:&'a ThreadRegistry,machine:&'a Machine,storage:&'a mut CrtOwnedStorage,search_storage:Option<&'a CrtOwnedStorage>,search:bool,active:u64,depth:u32,calls:u32,failed:bool}
+struct CrtOwnedFrameView<'a>{rt:&'a mut CrtStreamRuntime,registry:&'a mut ThreadRegistry,machine:&'a Machine,storage:&'a mut CrtOwnedStorage,search_storage:Option<&'a CrtOwnedStorage>,search:bool,active:u64,depth:u32,calls:u32,failed:bool}
 impl CrtOwnedFrameView<'_>{
  fn scope_address(&self)->u32{self.storage.image.scope_va}
  fn cookie_address(&self)->u32{self.registry.cookie_address}
@@ -246,6 +246,21 @@ impl CrtOwnedFrameView<'_>{
     let result=body(&mut view,child);self.calls=view.calls;
     match result{Ok(v)=>{view.validate()?;Ok(v)},Err(e)=>Err(e)}
    });self.depth-=1;self.active=parent;value
+  })();if result.is_err(){self.failed=true;}result
+ }
+ /// Lend the registry to one checked younger handler while preserving the
+ /// selected source view. Completion still does not supply an epilog exit.
+ fn with_handler_target<T,F>(&mut self,target:&mut CrtOwnedStorage,body:F)->RegistryResult<(T,HandlerCompletion)>
+ where F:FnOnce(&mut CrtOwnedFrameView<'_>,&mut CrtOwnedStorage)->RegistryResult<T>{
+  let result=(||{
+   self.validate()?;
+   if !self.search||self.search_storage.is_some()||target.identity!=self.storage.identity||target.anchor!=self.storage.anchor||target.binding.index<=self.storage.binding.index||target.image.entry_sp>=self.storage.image.esp{return Err("owned handler source/target boundary");}
+   target.validate(self.rt,self.registry,self.machine)?;
+   let result=self.registry.execute_handler(target.id,target,|registry,target|{
+    let mut source=CrtOwnedFrameView{rt:self.rt,registry,machine:self.machine,storage:self.storage,search_storage:None,search:true,active:self.active,depth:self.depth,calls:self.calls,failed:false};
+    let value=body(&mut source,target);self.calls=source.calls;
+    let value=value?;source.validate()?;Ok(value)
+   });result
   })();if result.is_err(){self.failed=true;}result
  }
  fn owner_frame(&self)->RegistryResult<CrtPointer>{self.validate()?;self.rt.offset(self.storage.entry,i64::from(self.storage.image.ebp)-i64::from(self.storage.image.entry_sp))}
