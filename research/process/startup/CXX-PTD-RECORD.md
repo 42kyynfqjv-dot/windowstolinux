@@ -25,8 +25,9 @@ The original handler at `414ad6` is lifted through its load/LEA/XOR instructions
 the independently validated cookie-check helper, and the original metadata load.
 The checked establisher argument must be the actual typed record pointer. Its
 call stack must not overlap the owned frame, and the cookie CALL uses a fresh
-protected activation. A valid prefix reaches an explicit rejection at the
-unbound dispatcher `403002`; it cannot return a successful disposition. A guard
+protected activation. A valid prefix now enters the original common wrapper `403002` and thunk
+`403e78`, then dispatcher `403d76`, rejecting at the actual context-validator
+call `402877`. It cannot return a successful disposition. A guard
 failure remains an unsupported effect, with prior register/flag effects retained.
 
 ## The cleanup dependency is termination, not a successful return
@@ -53,8 +54,14 @@ read-only; no single-use control authority is created to replay.
 ## Independent checks and reproduction
 
 The native test executes the original prolog, valid and corrupt handler prefixes,
-and original epilog. Cases include scalar-forged/wrong-offset establisher pointers,
+and original epilog. The common wrapper saves its actual registers and metadata,
+forwards all eight original arguments, and the dispatcher pushes the context
+argument. CLD is explicit: this component
+uses the existing `Cdecl32Forward` constructor domain, which guarantees DF=0;
+the admitted operations preserve it. This does not capture unknown thread DF.
+Cases include scalar-forged/wrong-offset establisher pointers,
 handler-stack overlap, unknown/corrupt guards, unknown/out-of-range state,
+a short-stack failure after the original metadata write (the write persists),
 cross-runtime and wrong-call identity, metadata corruption, and retired-frame
 reuse. Compile-time checks reject all 29 one-byte handler mutations, metadata
 field changes, alias/overflow and nondecreasing unwind edges. Invalid handler
@@ -68,8 +75,12 @@ The existing five recorded Windows wrapper comparisons remain separate evidence.
 ## Next connected implementation gate
 
 Sol can review this bounded adapter and continue instruction inventory/test work.
-Before live registry integration, execute and validate the common dispatcher
-`403002 -> 403e78 -> 403d76` against the actual exception/context objects. Establish
+Before live registry integration, bind context-validator `402877`: it compares
+the live guard-function pointer, may read FS:[18] thread state and the supplied
+CONTEXT saved ESP at offset C4, and takes INT29 failure if outside stack bounds.
+The existing generic context helper must not be reused without these exact input
+and thread-bound ownership conditions. Then execute the remaining dispatcher
+`403d76` against actual exception/context objects. Establish
 its PTD calls, exception-code/flag branches, action invocation and failure effects.
 For these two action entries, bind PTD+12 and the termination/abort path, including
 recursive PTD acquisition and callback exceptions; do not replace termination

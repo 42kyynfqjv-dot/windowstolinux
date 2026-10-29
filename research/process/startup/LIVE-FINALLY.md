@@ -1923,3 +1923,31 @@ PR Rust40928096259 failed at original-Windows corpus case24. Its preserved
 process.wait timeout is unresolved. At this review, 89123fd startup40929659363
 passed and both Rust runs40929667611/40929659415 were still running. No failure
 has been removed, retried silently or explained by a different run passing.
+
+### Common C++ wrapper and dispatcher entry connection
+
+Sol review found no admission escape in the owned-record prefix. Original common
+wrapper403002, thunk403e78 and dispatcher entry403d76 now execute after its guard
+and metadata load. Seven native handler/stack cases verify exact argument forwarding,
+protected nested call, failure preservation and the existing negative ownership
+cases. Complete common/thunk/entry byte mutations reject. CLD uses the documented
+existing forward-cdecl ABI domain (DF=0), preserving arithmetic flags; no unknown
+Windows thread flags are silently initialized. A deliberately short stack rejects
+after preserving the actual prior metadata write. No failed activation is reported
+as completed cleanup or disposition.
+
+Execution stops at original context-validator402877. Its guard-pointer branch,
+CONTEXT saved-ESP read, thread stack bounds and fast-failure effects remain to bind
+before dispatcher PTD acquisition and table traversal. Both unwind entries still
+lead to termination. This is component evidence with zero newly translated PE
+pairs. Full startup/rcedit remains unsupported.
+
+Artifact replay passed with the same PE and wrapper Rust hashes above, seven PTD
+checks, the connected C++ check and five prior recorded Windows comparisons.
+Common-wrapper SHA256 `d3b9de408d983d602e1dea6518ad5fd4e6831732cb34aa7b09606f093c23d750`;
+thunk `e20bdda8db1ae8aa50523ea8d431e785cf82b497c34ce93555cba41154261bf9`;
+dispatch entry `1821f2e8cb0ab16faafa538d6f14d001319b0ea80a3279a73f0418f81ff48fef`.
+199 CRT tests, final focused seven-scenario C++ test, Clippy/format/diff passed.
+All three89123fd workflows ultimately passed. b8e49de workflows40932067466,
+40932056425 and40932056438 were still running at this checkpoint; historical
+original-Windows failures, including case24, remain preserved and unexplained.

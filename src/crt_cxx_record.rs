@@ -65,6 +65,46 @@ pub(crate) const METADATA: &str =
 pub(crate) const UNWIND_MAP: &str = "fffffffffc264000fffffffffc264000";
 pub(crate) const ACTION: &str = "e90b500000";
 
+pub(crate) const COMMON: &str = "558bec83ec08535657fc8945fc33c0505050ff75fcff7514ff7510ff750cff7508e8500e000083c4208945f85f5e5b8b45f88be55dc3";
+pub(crate) const DISPATCH_THUNK: &str = "558bec5de9f5feffff";
+pub(crate) const DISPATCH_ENTRY: &str = "558bec535657ff7510";
+
+fn common_source(common: &[u8], thunk: &[u8], entry: &[u8]) -> Result<String, String> {
+    if common != crate::crt_ptd::raw(COMMON)
+        || thunk != crate::crt_ptd::raw(DISPATCH_THUNK)
+        || entry != crate::crt_ptd::raw(DISPATCH_ENTRY)
+    {
+        return Err("C++ common dispatcher code binding".into());
+    }
+    let lift = |b: &[u8], pc| {
+        crate::crt_stream_emit::emit_linear_fragment(
+            &crate::crt_stream_ir::Graph::decode_linear_fragment(b, pc)?,
+            &Default::default(),
+        )
+    };
+    let a = lift(&common[..9], 0x403002)?;
+    let b = lift(&common[10..33], 0x40300c)?;
+    let t = lift(&thunk[..4], 0x403e78)?;
+    let e = lift(entry, 0x403d76)?;
+    Ok(format!(
+        r#"
+fn cxx_common(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->Result<CrtValue,&'static str>{{
+ cpu.validate_active(rt)?;
+ let _=(||->Result<CrtValue,&'static str>{{{a}}})()?;
+ // Original CLD. This component constructor guarantees DF=0, and the
+ // supported operations preserve it. Unknown thread flags are not admitted.
+ if cpu.abi!=CrtAbi::Cdecl32Forward{{return Err("C++ CLD requires forward ABI domain");}}
+ let _=(||->Result<CrtValue,&'static str>{{{b}}})()?;
+ cpu.call_activation(rt,0x403028,0,|rt,cpu|{{
+  let _=(||->Result<CrtValue,&'static str>{{{t}}})()?;
+  let _=(||->Result<CrtValue,&'static str>{{{e}}})()?;
+  Err("C++ original context validator effect unbound")
+ }})
+}}
+"#
+    ))
+}
+
 /// Lift the original wrapper up to its external dispatcher. Guard mismatch and
 /// the dispatcher itself remain rejecting boundaries, never a disposition.
 fn handler_prefix(
@@ -126,7 +166,7 @@ fn cxx_handler_prefix(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,owner:&CrtCpu,fra
  let _=(||->Result<CrtValue,&'static str>{{{prefix}}})()?;
  {check}
  let _=(||->Result<CrtValue,&'static str>{{{tail}}})()?;
- Err("C++ original dispatcher effect unbound")
+ cxx_common(rt,cpu)
 }}
 "#
     ))
@@ -169,7 +209,7 @@ fn owned_cxx_record_keeps_state_metadata_and_continuation_distinct() {
     )
     .unwrap();
     let extra = format!(
-        "{} {} {}",
+        "{} {} {} {}",
         crate::crt_ptd::helper_source(
             &crate::crt_ptd::raw(crate::crt_ptd::PROLOG),
             0x414268,
@@ -179,15 +219,21 @@ fn owned_cxx_record_keeps_state_metadata_and_continuation_distinct() {
         )
         .unwrap(),
         emit(&meta, 0x41b42c, &map, 0x41b41c).unwrap(),
-        handler
+        handler,
+        common_source(
+            &crate::crt_ptd::raw(COMMON),
+            &crate::crt_ptd::raw(DISPATCH_THUNK),
+            &crate::crt_ptd::raw(DISPATCH_ENTRY)
+        )
+        .unwrap()
     );
     let body = format!(
         r#"
 let mut rt=CrtStreamRuntime::new(7,9,0x8000,65536).unwrap();rt.map_region(0x41c000,4,CrtRegionKind::Module,Some(&123u32.to_le_bytes())).unwrap();let meta=rt.map_region(0x41b42c,36,CrtRegionKind::Module,Some(&{meta:?})).unwrap();rt.map_region(0x41b41c,16,CrtRegionKind::Module,Some(&{map:?})).unwrap();let stack=rt.map_region(0x9000,1024,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,768).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(1)).unwrap();let mut cpu=CrtCpu::new(sp,1).unwrap();cpu.push(&mut rt,CrtValue::scalar(0)).unwrap();cpu.r[0]=CrtValue::scalar(0x414ad6);let previous=rt.thread_head(4,5,[1,2,3]).unwrap();let mut frame=CrtPtdFrame::new(&rt,&cpu,previous,0x414ad6,0x41c000).unwrap();ptd_prolog(&mut rt,&mut cpu,&mut frame,0x40a33e).unwrap();let binding=cxx_bind(&rt,&cpu,&frame).unwrap();assert_eq!(binding.required_action(&rt,&cpu,&frame).unwrap(),None);let state=rt.offset(frame.bp,-4).unwrap();
 let foreign=CrtStreamRuntime::new(7,9,0x8000,65536).unwrap();assert!(binding.state(&foreign,&cpu,&frame).is_err());
 let scratch=rt.map_region(0xa000,1024,CrtRegionKind::Stack,None).unwrap();
-for fault in 0..6{{let hs=rt.offset(scratch,512).unwrap();rt.store(hs,32,CrtValue::ProtectedReturn(123)).unwrap();rt.store(rt.offset(hs,8).unwrap(),32,if fault==1{{CrtValue::scalar(frame.bp.address()-12)}}else{{CrtValue::Pointer(rt.offset(frame.bp,if fault==2{{-8}}else{{-12}}).unwrap())}}).unwrap();let mut child=CrtCpu::new(hs,123).unwrap();if fault==5{{child.r[4]=CrtValue::Pointer(frame.low);}}let guard=rt.load(frame.low,32).unwrap();if fault==3{{rt.store(frame.low,32,CrtValue::scalar(0)).unwrap();}}if fault==4{{rt.store(frame.low,32,CrtValue::Scalar{{bits:0,known:0}}).unwrap();}}
-let result=cxx_handler_prefix(&mut rt,&mut child,&cpu,&frame,&binding);assert!(result.is_err());assert!(!child.returned);if fault==0{{assert_eq!(result.unwrap_err(),"C++ original dispatcher effect unbound");assert_eq!(child.r[0],CrtValue::scalar(0x41b42c));assert_eq!(child.r[1],CrtValue::scalar(123));}}rt.store(frame.low,32,guard).unwrap();rt.consume_stack(hs,CrtValue::ProtectedReturn(123)).unwrap();}}
+for fault in 0..7{{let hs=rt.offset(scratch,if fault==6{{24}}else{{256+fault*96}}).unwrap();rt.store(hs,32,CrtValue::ProtectedReturn(123)).unwrap();rt.store(rt.offset(hs,8).unwrap(),32,if fault==1{{CrtValue::scalar(frame.bp.address()-12)}}else{{CrtValue::Pointer(rt.offset(frame.bp,if fault==2{{-8}}else{{-12}}).unwrap())}}).unwrap();for (i,value) in [(1,0xe06d7363),(3,0x1234),(4,0x5678)]{{rt.store(rt.offset(hs,i*4).unwrap(),32,CrtValue::scalar(value)).unwrap();}}let mut child=CrtCpu::new(hs,123).unwrap();if fault==5{{child.r[4]=CrtValue::Pointer(frame.low);}}let guard=rt.load(frame.low,32).unwrap();if fault==3{{rt.store(frame.low,32,CrtValue::scalar(0)).unwrap();}}if fault==4{{rt.store(frame.low,32,CrtValue::Scalar{{bits:0,known:0}}).unwrap();}}
+let result=cxx_handler_prefix(&mut rt,&mut child,&cpu,&frame,&binding);assert!(result.is_err());assert!(!child.returned);if fault==0{{assert_eq!(result.unwrap_err(),"C++ original context validator effect unbound");let bp=CrtCpu::pointer(child.r[5]).unwrap();for(i,v)in [(8,0xe06d7363),(16,0x1234),(20,0x5678),(24,0x41b42c),(28,0),(32,0),(36,0)]{{assert_eq!(rt.load(rt.offset(bp,i).unwrap(),32).unwrap(),CrtValue::scalar(v));}}assert_eq!(rt.load(rt.offset(bp,12).unwrap(),32).unwrap(),CrtValue::Pointer(rt.offset(frame.bp,-12).unwrap()));assert_eq!(rt.load(CrtCpu::pointer(child.r[4]).unwrap(),32).unwrap(),CrtValue::scalar(0x1234));}}if fault==6{{assert_eq!(rt.load(rt.offset(hs,-8).unwrap(),32).unwrap(),CrtValue::scalar(0x41b42c));assert!(frame.live(&rt,&cpu).is_ok());}}rt.store(frame.low,32,guard).unwrap();rt.consume_stack(hs,CrtValue::ProtectedReturn(123)).unwrap();}}
 for n in [0,1]{{rt.store(state,32,CrtValue::scalar(n)).unwrap();assert_eq!(binding.required_action(&rt,&cpu,&frame).unwrap(),Some((-1,0x4026fc)));assert_eq!(rt.load(state,32).unwrap(),CrtValue::scalar(n));}}
 rt.store(state,32,CrtValue::Scalar{{bits:0,known:0}}).unwrap();assert!(binding.state(&rt,&cpu,&frame).is_err());rt.store(state,32,CrtValue::scalar(2)).unwrap();assert!(binding.state(&rt,&cpu,&frame).is_err());rt.store(state,32,CrtValue::scalar(1)).unwrap();let old=cpu.return_id;cpu.return_id+=1;assert!(binding.state(&rt,&cpu,&frame).is_err());cpu.return_id=old;rt.store(meta,32,CrtValue::scalar(0)).unwrap();assert!(binding.state(&rt,&cpu,&frame).is_err());rt.store(meta,32,CrtValue::scalar(0x19930522)).unwrap();ptd_epilog(&mut rt,&mut cpu,&mut frame,0x40a3b8).unwrap();assert!(binding.state(&rt,&cpu,&frame).is_err());cpu.finish(&mut rt).unwrap();
 "#
@@ -197,6 +243,17 @@ rt.store(state,32,CrtValue::Scalar{{bits:0,known:0}}).unwrap();assert!(binding.s
         let mut bad = meta.clone();
         bad[i] ^= 1;
         assert!(emit(&bad, 0x41b42c, &map, 0x41b41c).is_err());
+    }
+    for (which, bytes) in [COMMON, DISPATCH_THUNK, DISPATCH_ENTRY].iter().enumerate() {
+        for i in 0..bytes.len() / 2 {
+            let mut inputs = [
+                crate::crt_ptd::raw(COMMON),
+                crate::crt_ptd::raw(DISPATCH_THUNK),
+                crate::crt_ptd::raw(DISPATCH_ENTRY),
+            ];
+            inputs[which][i] ^= 1;
+            assert!(common_source(&inputs[0], &inputs[1], &inputs[2]).is_err());
+        }
     }
     for i in 0..29 {
         let mut code = crate::crt_ptd::raw(HANDLER);

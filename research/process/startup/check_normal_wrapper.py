@@ -189,7 +189,8 @@ def check(original, observation, out, compare=None):
     cxx_source = (Path(__file__).resolve().parents[3]/'src/crt_cxx_record.rs').read_text()
     for name, start, length, executable in [('HANDLER',0x414ad6,29,True),
             ('METADATA',0x41b42c,36,False),('UNWIND_MAP',0x41b41c,16,False),
-            ('ACTION',0x4026fc,5,True)]:
+            ('ACTION',0x4026fc,5,True),('COMMON',0x403002,54,True),
+            ('DISPATCH_THUNK',0x403e78,9,True),('DISPATCH_ENTRY',0x403d76,9,True)]:
         raw = mapped(image,start,length,executable=executable)
         fixture = re.search(r'const\s+'+name+r'\s*:\s*&str\s*=\s*"([0-9a-f]+)"',cxx_source)
         if fixture is None or bytes.fromhex(fixture[1]) != raw:

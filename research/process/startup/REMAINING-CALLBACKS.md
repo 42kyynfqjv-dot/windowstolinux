@@ -118,3 +118,11 @@ adapter grants no disposition, cleanup receipt or registry admission; see
 [CXX-PTD-RECORD.md](CXX-PTD-RECORD.md). Original dispatcher selection, PTD+12 callback
 ownership, recursive PTD acquisition and termination effects are the concrete
 next contracts before lazy-initialization exception composition.
+
+The next Sol connection executes common C++ wrapper403002, thunk403e78 and
+original dispatcher entry403d76 on that same handler stack. All eight arguments
+forward in original order. The boundary is now actual context-validator402877,
+which may read CONTEXT+0xc4 and FS:[0x18] thread stack bounds or fast-fail. It
+cannot be replaced by a guessed successful validation. CLD is justified only by
+the existing explicit forward cdecl ABI domain; unknown thread flags remain
+outside it. Short-stack rejection preserves earlier metadata writes.
