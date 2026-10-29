@@ -1037,7 +1037,7 @@ cpu.call_activation(rt,0x402799,0,|rt,child|match target{{{cases}_=>Err("origina
         callback_source.push_str(crate::unwind_bridges::EMITTED_TYPES);
         callback_source.push_str(&crate::crt_owned_frame::emit_notification(&notification_code,0x402a30,crate::unwind_bridges::NotificationBinding{target_word:0x41c074,action_word:0x41c078,frame_word:0x41c07c},0x40278e).unwrap());
         callback_source.push_str(r#"fn fixture_notify_invoke(rt:&mut CrtStreamRuntime,storage:&mut CrtOwnedStorage,record:&mut LocalRecord<'_>,target:u32,reason:u32,fault:usize)->RegistryResult<()>{
-let sp=rt.resolve_absolute(0x9800,CrtRegionKind::Stack)?;rt.store(sp,32,CrtValue::ProtectedReturn(943))?;let mut caller=CrtCpu::new(sp,943)?;caller.r[0]=CrtValue::Pointer(rt.resolve_absolute(target,CrtRegionKind::Module)?);caller.r[5]=CrtValue::Pointer(rt.resolve_absolute(storage.image.ebp,CrtRegionKind::Stack)?);caller.entry=caller.r;
+let sp=rt.resolve_absolute(0x9400,CrtRegionKind::Stack)?;rt.store(sp,32,CrtValue::ProtectedReturn(943))?;let mut caller=CrtCpu::new(sp,943)?;caller.r[0]=CrtValue::Pointer(rt.resolve_absolute(target,CrtRegionKind::Module)?);caller.r[5]=CrtValue::Pointer(rt.resolve_absolute(storage.image.ebp,CrtRegionKind::Stack)?);caller.entry=caller.r;
 if fault==21{caller.r[0]=CrtValue::scalar(target);}
 if fault==22{rt.consume_stack(sp,CrtValue::ProtectedReturn(943))?;}
 if fault==23{rt.store(rt.offset(sp,-8)?,32,CrtValue::ProtectedReturn(944))?;}

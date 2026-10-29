@@ -192,7 +192,7 @@ def check(original, observation, out, compare=None):
                   observation_sha256=sha((observation/'report.json').read_bytes()),
                   vectors_sha256=sha(vector_bytes), rust_sha256=source_hash, command=command,
                   comparisons=5, whole_pe_translation_pairs=0,
-                  live_finally_native_cases=36, live_finally_windows_pairs=0, live_finally_hashes=finally_regions,
+                  live_finally_native_cases=38, live_finally_windows_pairs=0, live_finally_hashes=finally_regions,
                   file_scope_code_sha256=file_regions, file_scope_imports=file_imports,
                   file_scope_native_test_functions=3,
                   live_dispatch_native_cases=37, live_dispatch_windows_original_pairs=0,

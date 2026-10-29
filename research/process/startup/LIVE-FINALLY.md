@@ -185,3 +185,27 @@ CI reconciliation: all three aa6a9d4b workflows succeeded. For 16951511 startup
 preserves the launch and observer evidence. The same PE is
 `30a0afa2dba23697256b96df129e62a9cc7c099edf68bfcb87eaf125fc3757e3`.
 This cause remains unresolved; the parallel run's result does not erase it.
+
+## Live caller across cleanup
+
+The original handler save block and disposition initialization now precede local
+cleanup, and the same caller CPU remains live through notification/finally calls,
+guards and the original epilog. This closes the earlier assembly gap that created
+a new caller only after cleanup. `CrtCpu::validate_active` checks the actual live
+stack range, same issued capability, unique protected root return and unreturned
+state at callback boundaries without inventing saved register/flag knowledge.
+
+Composition exposed a scratch collision: the notification fixture's old 0x9800
+entry was also the now-live handler root. Its explicit fixture scratch moves to
+0x9400, disjoint from handler saves, original cleanup scratch and the registration
+record. No production address or original artifact changes. Notification still
+has an explicit private caller cut; it does not claim the original local helper's
+entire physical call stack has been executed.
+
+Two new cases expire or alias the handler root return after the first finally.
+The next callback boundary rejects completion, retaining trace81/local107/cursor1
+and the still-live source registration. The complete component corpus is now38
+scenarios (4 success/34 failure), with no additional test functions or whole-PE
+pairs. Original dispatcher branches, captured/delivery context acquisition and
+intervening body effects remain explicit integration gates. See
+[AUDIT-69b844fd.md](AUDIT-69b844fd.md) for the independent routine-audit review.

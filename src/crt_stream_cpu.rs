@@ -37,6 +37,12 @@ impl CrtCpu{
  fn pop(&mut self,rt:&mut CrtStreamRuntime)->Result<CrtValue,&'static str>{let p=Self::pointer(self.r[4])?;let v=rt.load(p,32)?;rt.consume_stack(p,v)?;self.r[4]=CrtValue::Pointer(rt.offset(p,4)?);Ok(v)}
  fn discard(&mut self,rt:&mut CrtStreamRuntime,bytes:u32)->Result<(),&'static str>{if bytes%4!=0||bytes>256{return Err("CRT cdecl argument cleanup");}let start=Self::pointer(self.r[4])?;for i in 0..bytes/4{let p=rt.offset(start,i64::from(i)*4)?;let v=rt.load(p,32)?;if matches!(v,CrtValue::OpaqueSaved(_)|CrtValue::ProtectedReturn(_)|CrtValue::ThreadHead(_)){return Err("CRT cleanup crosses protected word");}}for _ in 0..bytes/4{self.pop(rt)?;}Ok(())}
  fn leave(&mut self,rt:&mut CrtStreamRuntime)->Result<(),&'static str>{self.r[4]=CrtValue::Pointer(Self::pointer(self.r[5])?);self.r[5]=self.pop(rt)?;Ok(())}
+ /// Check a live interrupted/active call without pretending it has returned.
+ fn validate_active(&self,rt:&CrtStreamRuntime)->Result<(),&'static str>{
+  let entry=Self::pointer(self.entry[4])?;let sp=Self::pointer(self.r[4])?;
+  if self.returned||self.return_id==0||entry.cap!=sp.cap||entry.owner!=sp.owner||sp.address()>entry.address()||rt.load(entry,32)?!=CrtValue::ProtectedReturn(self.return_id)||rt.tags.values().filter(|&&v|v==CrtValue::ProtectedReturn(self.return_id)).count()!=1{return Err("CRT active caller lifetime/return authority");}
+  rt.valid(sp,entry.address().checked_sub(sp.address()).and_then(|n|n.checked_add(4)).ok_or("CRT active caller range")?)
+ }
  fn finish(&mut self,rt:&mut CrtStreamRuntime)->Result<CrtValue,&'static str>{self.finish_pop(rt,0)}
  fn finish_pop(&mut self,rt:&mut CrtStreamRuntime,bytes:u16)->Result<CrtValue,&'static str>{
   if self.returned{return Err("CRT repeated return");}

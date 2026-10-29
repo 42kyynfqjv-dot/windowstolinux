@@ -219,7 +219,7 @@ fn original_finally_effects(rt:&mut CrtStreamRuntime,record:&mut LocalRecord<'_>
 
 pub(crate) const CASES: &str = r#"
 fn live_finally_cases(){
- for mode in 0..36{
+ for mode in 0..38{
   let mut m=Machine::new_dispatch_known((0..if mode>=31{2}else{1}).map(|_|FrameSpec{scopes:vec![]}).collect(),0,[None;10],Some(0)).unwrap();let mut r=ThreadRegistry::new(m.owner(),0x8000,0xf000,&[(0x400000,0x420000)],0x41c000).unwrap();let mut rt=runtime(&r);
   let older=if mode>=31{let b=m.owned_binding(0).unwrap();let image=older_entry_cut(0xe800,0x12345678,[None;8],r.head().unwrap()).unwrap();Some(r.install_frame(b,&image).unwrap())}else{None};
   let sp=rt.resolve_absolute(0xe000,CrtRegionKind::Stack).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(71)).unwrap();let c=CrtCpu::new(sp,71).unwrap();let binding=m.owned_binding(if mode>=31{1}else{0}).unwrap();
@@ -236,19 +236,25 @@ fn live_finally_cases(){
   if mode==10{rt.store(rt.resolve_absolute(storage.image.ebp-48,CrtRegionKind::Stack).unwrap(),32,CrtValue::scalar(0)).unwrap();}
   if mode==11{rt.store(rt.resolve_absolute(0x401020,CrtRegionKind::Module).unwrap(),8,CrtValue::scalar(0x90)).unwrap();}
   let rows=[LocalScope{parent:-2,filter:0,handler:0x40117f},LocalScope{parent:0,filter:0,handler:0x40116e}];
-  let result=r.execute_handler(id,&mut storage,|r,s|r.execute_local(id,s,LocalEntry{entry_sp:0xc000,handler:0x4027b0,cookie_address:0x41c000,cookie:0x12345678,target_level:-2},|record,s|{
+  let result=r.execute_handler(id,&mut storage,|r,s|{
+   let sp=rt.resolve_absolute(0x9800,CrtRegionKind::Stack)?;rt.store(sp,32,CrtValue::ProtectedReturn(946))?;
+   let mut cpu=CrtCpu::new(sp,946)?;let exception=rt.map_region(0x7000,80,CrtRegionKind::Context,Some(&[0;80]))?;rt.store(rt.offset(sp,4)?,32,CrtValue::Pointer(exception))?;
+   handler_saved_entry(&mut rt,&mut cpu)?;handler_disposition_init(&mut rt,&mut cpu)?;assert_eq!(cpu.steps,8);assert!(!cpu.returned);cpu.validate_active(&rt)?;
+   r.execute_local(id,s,LocalEntry{entry_sp:0xc000,handler:0x4027b0,cookie_address:0x41c000,cookie:0x12345678,target_level:-2},|record,s|{
    let mut effects=CrtOwnedLocalEffects{rt:&mut rt,record,machine:&m,storage:s,rows:&rows,temporary:None,pending:None,written:false,notified:false,
-    notification:|target,reason,rt:&mut CrtStreamRuntime,s:&mut CrtOwnedStorage,record:&mut LocalRecord<'_>|fixture_notify_invoke(rt,s,record,target,reason,0),
+    notification:|target,reason,rt:&mut CrtStreamRuntime,s:&mut CrtOwnedStorage,record:&mut LocalRecord<'_>|{cpu.validate_active(rt)?;fixture_notify_invoke(rt,s,record,target,reason,0)},
     finally:|target,_,rt:&mut CrtStreamRuntime,s:&mut CrtOwnedStorage,record:&mut LocalRecord<'_>|{
+     cpu.validate_active(rt)?;
      if mode==12{let old=s.event;s.event+=1;let result=original_finally_effects(rt,record,&m,s,target,0);s.event=old;return result;}
-     original_finally_effects(rt,record,&m,s,target,if mode>=20{0}else{mode})
+     original_finally_effects(rt,record,&m,s,target,if mode>=20{0}else{mode})?;
+     if mode==36{rt.consume_stack(sp,CrtValue::ProtectedReturn(946))?;}
+     if mode==37{rt.store(rt.resolve_absolute(0x9900,CrtRegionKind::Stack)?,32,CrtValue::ProtectedReturn(946))?;}
+     Ok(())
     }};owned_original_local(&mut effects,-2,0).map(|_|())
   }).and_then(|_|{
    if mode==20{let at=rt.resolve_absolute(s.image.ebp-48,CrtRegionKind::Stack)?;rt.store(at,32,CrtValue::scalar(0))?;}
    if mode==21{rt.store(rt.resolve_absolute(0x40154c,CrtRegionKind::Module)?,8,CrtValue::scalar(0x90))?;}
-   let sp=rt.resolve_absolute(0x9800,CrtRegionKind::Stack)?;rt.store(sp,32,CrtValue::ProtectedReturn(946))?;
-   let mut cpu=CrtCpu::new(sp,946)?;let exception=rt.map_region(0x7000,80,CrtRegionKind::Context,Some(&[0;80]))?;rt.store(rt.offset(sp,4)?,32,CrtValue::Pointer(exception))?;
-   handler_saved_entry(&mut rt,&mut cpu)?;handler_disposition_init(&mut rt,&mut cpu)?;assert_eq!(cpu.steps,8);assert!(!cpu.returned);
+   cpu.validate_active(&rt)?;
    if mode==22{rt.store(rt.resolve_absolute(0x9900,CrtRegionKind::Stack)?,32,CrtValue::ProtectedReturn(946))?;}
    if mode==23{rt.consume_stack(sp,CrtValue::ProtectedReturn(946))?;}
    for(at,b)in finally_original_regions(){let at=rt.resolve_absolute(at,CrtRegionKind::Module)?;for(i,expected)in b.iter().enumerate(){if rt.load(rt.offset(at,i as i64)?,8)?.known_scalar()?!=u32::from(*expected){return Err("postcleanup original code changed");}}}
@@ -270,16 +276,16 @@ fn live_finally_cases(){
    let disposition=handler_original_epilog(&mut rt,&mut cpu)?.known_scalar()?;
    if disposition>1{return Err("unsupported handler disposition");}
    assert!(cpu.returned);assert_eq!(disposition,1);assert_eq!(cpu.r[4],CrtValue::Pointer(rt.offset(sp,4)?));assert_eq!(cpu.r[5],cpu.entry[5]);Ok(CrtHandlerExit{anchor:rt.anchor,id:s.id,event:m.event,disposition,completion_generation:r.generation.checked_add(1).ok_or("handler completion generation overflow")?})
-  }));
+  })});
   let read=|rt:&CrtStreamRuntime,p|rt.load(p,32).unwrap().known_scalar().unwrap();
-  if mode<=1||mode==24||mode>=31{let(mut exit,completion)=result.unwrap();if mode>=31{
+  if mode<=1||mode==24||(31..=35).contains(&mode){let(mut exit,completion)=result.unwrap();if mode>=31{
     if mode==32{exit.event+=1;}if mode==33{exit.disposition=0;}if mode==34{m.current=0;}if mode==35{exit.completion_generation-=1;}
     let retired=storage.retire_completed(&mut rt,&mut r,&mut m,completion,exit);
     if mode==31{retired.unwrap();assert_eq!(r.target_ready().unwrap(),older.unwrap());assert!(!m.frames[1].live);assert!(rt.load(sp,32).unwrap().known_scalar().is_err());assert!(storage.validate_storage(&rt,&r,&m).is_err());let mut expired=c;assert!(expired.finish(&mut rt).is_err());}else{assert!(retired.is_err());assert!(m.frames[1].live);assert!(r.frames[1].linked);assert!(r.available().is_err());}
     continue;
    }else{assert!(r.retire_frame(completion,&storage.image).is_err());}let expected=if mode==1{0xffffff12}else{1298};assert_eq!(read(&rt,trace),expected);assert_eq!(read(&rt,local),118);assert_eq!(read(&rt,cursor),u32::MAX);assert_eq!(read(&rt,rt.resolve_absolute(0x41c94c,CrtRegionKind::Module).unwrap()),118);assert_eq!(read(&rt,rt.resolve_absolute(0x41c958,CrtRegionKind::Module).unwrap()),u32::MAX);assert_eq!(storage.image.try_level,-2);assert!(r.temporary.is_empty());}
-  else{assert!(result.is_err(),"finally case {mode}");assert!(r.available().is_err());assert!(r.frames[0].completion.is_none());
-   if mode>=20{assert_eq!(read(&rt,trace),1298);assert_eq!(read(&rt,local),118);assert_eq!(storage.image.try_level,-2);assert!(r.temporary.is_empty());}
+  else{assert!(result.is_err(),"finally case {mode}");assert!(r.available().is_err());assert!(r.frames.last().unwrap().completion.is_none());
+   if mode>=36{assert_eq!(read(&rt,trace),81);assert_eq!(read(&rt,local),107);assert_eq!(read(&rt,cursor),1);assert!(r.frames.last().unwrap().live);}else if mode>=20{assert_eq!(read(&rt,trace),1298);assert_eq!(read(&rt,local),118);assert_eq!(storage.image.try_level,-2);assert!(r.temporary.is_empty());}
    if mode==4{assert_eq!(read(&rt,trace),81);assert_eq!(read(&rt,local),100);assert_eq!(read(&rt,cursor),0);}
    if mode==5{assert_eq!(read(&rt,trace),1298);assert_eq!(read(&rt,local),118);assert_eq!(read(&rt,cursor),u32::MAX);assert_eq!(read(&rt,rt.resolve_absolute(0x41c94c,CrtRegionKind::Module).unwrap()),118);assert_eq!(read(&rt,rt.resolve_absolute(0x41c958,CrtRegionKind::Module).unwrap()),0);}
    if mode==6{assert_eq!(read(&rt,trace),5);assert_eq!(read(&rt,local),100);assert_eq!(read(&rt,rt.resolve_absolute(0x9600,CrtRegionKind::Stack).unwrap()),81);}
