@@ -77,11 +77,11 @@ fn context_source(code: &[u8]) -> Result<String, String> {
     Ok(format!(
         r#"{types}
 impl ThreadContext{{fn original_check(&self,owner:u64,selector:u32)->Result<(),&'static str>{{{body}}}}}
-struct CrtCxxContext{{anchor:guest_memory::Capability,thread:u64,outer:u64,bp:CrtPointer,context:CrtPointer,stack:CrtPointer,esp:CrtPointer,live:bool}}
+struct CrtCxxContext{{anchor:guest_memory::Capability,thread:u64,outer:u64,bp:CrtPointer,context:CrtPointer,stack:CrtPointer,esp:CrtPointer,esp_value:CrtValue,live:bool}}
 impl CrtCxxContext{{
  fn bind(rt:&CrtStreamRuntime,owner:&CrtCpu,frame:&CrtPtdFrame,context:CrtPointer,stack:CrtPointer)->Result<Self,&'static str>{{
   let esp=CrtCpu::pointer(rt.load(rt.offset(context,0xc4)?,32)?)?;
-  let token=Self{{anchor:rt.anchor,thread:rt.thread,outer:owner.return_id,bp:frame.bp,context,stack,esp,live:true}};token.check(rt,owner,frame)?;Ok(token)
+  let token=Self{{anchor:rt.anchor,thread:rt.thread,outer:owner.return_id,bp:frame.bp,context,stack,esp,esp_value:CrtValue::Pointer(esp),live:true}};token.check(rt,owner,frame)?;Ok(token)
  }}
  fn check(&self,rt:&CrtStreamRuntime,owner:&CrtCpu,frame:&CrtPtdFrame)->Result<(),&'static str>{{
   frame.live(rt,owner)?;
@@ -89,7 +89,7 @@ impl CrtCxxContext{{
   if self.context.kind!=CrtRegionKind::Context||self.context.address()!=self.context.base||self.stack.kind!=CrtRegionKind::Stack||self.stack.address()!=self.stack.base||frame.bp.cap!=self.stack.cap||self.esp.cap!=self.stack.cap{{return Err("C++ captured context/stack role");}}
   if !rt.regions.iter().any(|r|r.pointer==self.stack)||!rt.regions.iter().any(|r|r.pointer==self.context){{return Err("C++ captured context/root extent");}}
   rt.valid(self.context,200)?;rt.valid(self.stack,self.stack.size)?;rt.valid(self.esp,0)?;
-  if rt.load(rt.offset(self.context,0xc4)?,32)?!=CrtValue::Pointer(self.esp){{return Err("C++ captured ESP changed/unknown");}}
+  if rt.load(rt.offset(self.context,0xc4)?,32)?!=self.esp_value{{return Err("C++ captured ESP changed/unknown");}}
   let base=self.stack.address().checked_add(self.stack.size).ok_or("C++ stack bound overflow")?;
   let captured=ThreadContext::new(rt.thread,self.stack.address(),base,self.esp.address())?;
   let selector=rt.load(rt.resolve_absolute(0x415128,CrtRegionKind::Module)?,32)?.known_scalar()?;
@@ -755,6 +755,15 @@ pub(crate) fn invocation_source() -> &'static str {
     INVOCATION
 }
 const INVOCATION: &str = r#"
+impl CrtCxxContext{ /// Bind the already checked normal event's scalar ESP to its declared stack.
+ /// This refines authority locally; it performs no guest CONTEXT store.
+ fn bind_normal(rt:&CrtStreamRuntime,owner:&CrtCpu,frame:&CrtPtdFrame,objects:&CrtNormalObjects,stack:CrtPointer)->Result<Self,&'static str>{
+  let esp=rt.offset(stack,i64::from(objects.captured_esp)-i64::from(stack.address()))?;
+  let token=Self{anchor:rt.anchor,thread:rt.thread,outer:owner.return_id,bp:frame.bp,context:objects.context,stack,esp,esp_value:CrtValue::scalar(objects.captured_esp),live:true};
+  token.check(rt,owner,frame)?;Ok(token)
+ }
+}
+
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 enum CxxInvocationPhase{Pending,Active,Consumed,ResultTaken,Failed}
 struct CxxInvocationReturn{handler:CrtNormalHandlerReturn,lease:u64,executed:[u32;3],owner:u64,bp:CrtPointer}
@@ -794,6 +803,50 @@ impl CrtCxxInvocation{
   self.objects(event.code,rt,owner,frame,record,context)
  }
 }
+struct CrtSelectedCxxReturn{receipt:CrtNormalHandlerReturn,serial:u64,registration:RegistrationId,handler:[u32;3],owner:u64,context:CrtCxxContext}
+/// Execute exactly the selected live C++ registration. A rejected search backend
+/// yields no result/advance/restoration receipt. Earlier original effects remain.
+fn cxx_invoke_selected_search(search:&mut CrtOrderedSearch,event:&mut CrtNormalException,objects:&CrtNormalObjects,rt:&mut CrtStreamRuntime,interrupted:&CrtCpu,epoch:&mut NormalCallEpoch<'_>,binding:&CrtNormalBinding,dispatcher:&mut CrtCpu,owner:&CrtCpu,frame:&CrtPtdFrame,record:&CrtCxxRecord,stack:CrtPointer,fiber:CrtFiber,slot:CrtFlsSlot,continuation:u32)->RegistryResult<CrtSelectedCxxReturn>{
+ let ready=(||{
+  if search.phase!=2{return Err("selected C++ repeated execution");}
+  search.validate_stage(event,objects,rt,interrupted,epoch,binding,true)?;
+  let RegistryHead::Cxx(id)=search.current else{return Err("selected search requires C++ registration");};
+  let f=epoch.registry.cxx.iter().find(|f|f.id==id&&f.linked).ok_or("selected C++ registration expired")?;
+  frame.live(rt,owner)?;record.state(rt,owner,frame)?;
+  if f.epoch!=event.epoch||f.owner!=owner.return_id||f.record!=rt.offset(frame.bp,-12)?.address()||f.handler!=cxx_handler_identity()[0]
+   ||frame.handler!=f.handler||f.high!=u64::from(CrtCpu::pointer(owner.entry[4])?.address())+4||f.low!=rt.offset(frame.low,-4)?.address(){return Err("selected C++ owner/record/handler mismatch");}
+  if event.noncontinuable{return Err("selected C++ noncontinuable search contract unbound");}
+  objects.validate(event,rt,epoch)?;
+  let context=CrtCxxContext::bind_normal(rt,owner,frame,objects,stack)?;
+  let sp=CrtCpu::pointer(dispatcher.r[4])?;
+  for(i,v)in [CrtValue::Pointer(objects.record),CrtValue::Pointer(rt.offset(frame.bp,-12)?),CrtValue::Pointer(objects.context)].into_iter().enumerate(){if rt.load(rt.offset(sp,i as i64*4)?,32)?!=v{return Err("selected C++ original arguments");}}
+  Ok(context)
+ })();
+ let context=match ready{Ok(c)=>c,Err(e)=>{search.phase=3;return Err(e);}};
+ search.phase=4;event.delivery=CrtNormalDelivery::Pending;
+ let result=event.execute_child_handler(rt,interrupted,epoch,binding,dispatcher,continuation,|rt,cpu,child|{
+  cxx_handler_prefix(rt,cpu,owner,frame,record,&context,child,fiber,slot)
+ });
+ match result{Err(e)=>{search.phase=3;Err(e)},Ok(receipt)=>{
+  search.validate_stage(event,objects,rt,interrupted,epoch,binding,true)?;context.check(rt,owner,frame)?;
+  let RegistryHead::Cxx(registration)=search.current else{unreachable!()};
+  Ok(CrtSelectedCxxReturn{receipt,serial:search.serial,registration,handler:cxx_handler_identity(),owner:owner.return_id,context})
+ }}
+}
+fn cxx_take_selected_search(search:&mut CrtOrderedSearch,event:&mut CrtNormalException,objects:&CrtNormalObjects,returned:CrtSelectedCxxReturn,rt:&CrtStreamRuntime,interrupted:&CrtCpu,epoch:&mut NormalCallEpoch<'_>,binding:&CrtNormalBinding,owner:&CrtCpu,frame:&CrtPtdFrame,record:&CrtCxxRecord)->RegistryResult<u32>{
+ let result=(||{
+  search.validate_stage(event,objects,rt,interrupted,epoch,binding,true)?;
+  if search.phase!=4||returned.serial!=search.serial||search.current!=RegistryHead::Cxx(returned.registration)||returned.handler!=cxx_handler_identity()||returned.owner!=owner.return_id{return Err("selected C++ foreign/replayed executed receipt");}
+  returned.context.check(rt,owner,frame)?;record.state(rt,owner,frame)?;
+  let f=epoch.registry.cxx.iter().find(|f|f.id==returned.registration&&f.linked).ok_or("selected C++ expired return registration")?;
+  if f.owner!=returned.owner||f.handler!=returned.handler[0]||f.record!=rt.offset(frame.bp,-12)?.address(){return Err("selected C++ return owner mismatch");}
+  let next=f.previous;
+  if returned.receipt.value!=CrtValue::scalar(1){return Err("selected C++ unsupported search disposition");}
+  let value=event.take_handler_result(returned.receipt,rt,interrupted,epoch,binding)?;
+  search.phase=5;search.current=next;Ok(value)
+ })();if result.is_err(){search.phase=3;}result
+}
+
 fn cxx_invoke_unwind(event:&mut CrtNormalException,invocation:&mut CrtCxxInvocation,rt:&mut CrtStreamRuntime,interrupted:&CrtCpu,epoch:&mut NormalCallEpoch<'_>,binding:&CrtNormalBinding,dispatcher:&mut CrtCpu,owner:&CrtCpu,frame:&CrtPtdFrame,record:&CrtCxxRecord,context:&CrtCxxContext,fiber:CrtFiber,slot:CrtFlsSlot,continuation:u32)->RegistryResult<CxxInvocationReturn>{
  let start=(||{
   invocation.pending(event,rt,epoch,owner,frame,record,context)?;

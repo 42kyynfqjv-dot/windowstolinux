@@ -688,9 +688,12 @@ impl CrtOrderedSearch {
   s.validate(event,objects,rt,interrupted,epoch,binding)?;Ok(s)
  }
  fn validate(&self,event:&CrtNormalException,objects:&CrtNormalObjects,rt:&CrtStreamRuntime,interrupted:&CrtCpu,epoch:&NormalCallEpoch<'_>,binding:&CrtNormalBinding)->RegistryResult<()>{
+  self.validate_stage(event,objects,rt,interrupted,epoch,binding,false)
+ }
+ fn validate_stage(&self,event:&CrtNormalException,objects:&CrtNormalObjects,rt:&CrtStreamRuntime,interrupted:&CrtCpu,epoch:&NormalCallEpoch<'_>,binding:&CrtNormalBinding,advanced:bool)->RegistryResult<()>{
   event.dispatch_source(rt,interrupted,epoch,binding)?;objects.validate(event,rt,epoch)?;
-  if self.phase>1||self.identity!=event.identity||self.epoch!=event.epoch||self.event!=event.generation
-   ||self.source!=event.frame||self.current!=RegistryHead::Normal(event.frame)||self.previous!=binding.previous
+  if (if advanced{!matches!((self.phase,event.delivery),(2,CrtNormalDelivery::ResultTaken)|(4,CrtNormalDelivery::Returned))||self.current!=self.previous}else{self.phase>1||self.current!=RegistryHead::Normal(event.frame)})||self.identity!=event.identity||self.epoch!=event.epoch||self.event!=event.generation
+   ||self.source!=event.frame||self.previous!=binding.previous
    ||self.handler!=binding.layout.handler||self.owner!=binding.return_id||self.record!=objects.record||self.context!=objects.context||self.captured_esp!=objects.captured_esp
    ||epoch.registry.cxx!=self.cxx||epoch.registry.normal_epoch.as_ref().is_none_or(|s|s.frames.len()!=self.normal_count||s.delivery.is_some()){
    return Err("ordered search stale source/order/children");

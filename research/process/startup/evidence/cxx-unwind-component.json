@@ -1,11 +1,11 @@
 {
   "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
-  "rust_sha256": "fe270f49ba9a37241c585bafbc6d6c837e01696a55b3c72effd3da6eeb5256c8",
+  "rust_sha256": "56e7c15ffac6766dd4e7a29bd88058a934b66f6f5e512e37a116280c3da819fb",
   "unwind_binding_source_sha256": "0b1ff9343211301d646e52c8a46d831fcd795ef33cf481ad97f98daa959fbfba",
   "unwind_native_cases": 24,
   "unwind_new_windows_pairs": 0,
   "unwind_binding_rust_tests": 1,
-  "kind": "Original EH4 empty-scope return and first registration-bound ordered advance component; selected C++ predecessor execution and whole-PE conversion remain unsupported",
+  "kind": "Original EH4 and selected registered C++ search execution with separate single-use receipts; component evidence only",
   "rust_crt_tests_passed": 223,
   "existing_observation_test_separate": true,
   "byte_mutations_rejected": 415,
@@ -63,8 +63,8 @@
   },
   "chain_ownership_diagnostic_experiments": 1,
   "chain_ownership_new_windows_pairs": 0,
-  "chain_selection_status": "Actual EH4 normal source executes original prefix and empty-scope RET before a single checked cursor advance to its predecessor. Physical head/source suspension preserved. Selected C++ search execution remains unbound.",
-  "next_contract": "THREAD-CHAIN.md: selected C++ registration search invocation, actual capture/acquisition and incoming/collided effects",
+  "chain_selection_status": "Original EH4 return/advance followed by selected C++ search return/advance now executes under the same pending source; physical head/source CALL remain live.",
+  "next_contract": "THREAD-CHAIN.md: independently review selected receipt; establish actual capture and incoming-chain containment plus remaining backend/search domains before entry-to-exit admission.",
   "shared_chain_native_cases": 24,
   "shared_chain_new_windows_pairs": 0,
   "shared_chain_checks": [
@@ -90,7 +90,7 @@
     "ordered_advance": false
   },
   "ordered_dispatch_gate": "First source return/advance implemented. Next: derive selected C++ owner from the actual registration and invoke its original search path under the same pending source; supplied-owner unwind receipts do not authorize that selection.",
-  "ordered_search_native_cases": 21,
+  "ordered_search_native_cases": 31,
   "original_empty_search_native_cases": 1,
   "ordered_search_new_windows_pairs": 0,
   "return_path_integration": {
@@ -101,6 +101,16 @@
     "negative_cases": "wrong target/source/order/serial, replay, stale or rebound capture, expired predecessor, code changes, extra child, nested delivery, earlier effects retained on failure",
     "new_original_instruction_mutations_rejected": 3,
     "whole_pe_pairs": 0,
-    "independent_review_pending": true
+    "independent_review_pending": false
+  },
+  "selected_cxx_search": {
+    "new_native_cases": 10,
+    "registration": "actual selected canonical node and live owner/record/full stack extent",
+    "capture": "same normal event scalar ESP refined against checked stack root, no guest CONTEXT store",
+    "execution": "original prefix/common/cached PTD/FLS/RET, then distinct selected receipt",
+    "domain": "zero-extra-local C++ owner, ordinary continuable software exception, ContinueSearch only",
+    "new_windows_observations": 0,
+    "whole_pe_pairs": 0,
+    "remaining": "actual capture/module/FLS producers, other search/backend/disposition, incoming/nested/collided and termination contracts"
   }
 }

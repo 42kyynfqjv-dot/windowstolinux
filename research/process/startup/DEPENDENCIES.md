@@ -139,3 +139,22 @@ All three workflows for both reviewed predecessors completed successfully:
 214d585: 40971700846, 40971694667, 40971694772;
 cfaa71f: 40972514039, 40972507526, 40972507509.
 Their success does not explain or erase the historical Windows timeouts.
+
+The selected C++ predecessor is now connected for the tested search domain:
+registration/owner/record authority comes from the same canonical chain, normal
+captured ESP is refined against the live stack without modifying CONTEXT bytes,
+and actual original prefix/common/PTD/RET execution precedes a distinct single-use
+selected-node receipt. The 31-case selector includes ten new selected-C++ cases.
+See THREAD-CHAIN.md. Remaining producers are actual delivery/capture, module/FLS
+acquisition and incoming-chain containment; unbound C++ search backend, other
+search dispositions, noncontinuable/nested/collided paths and termination remain
+explicit rejections. This closes a connected component path, not whole-PE startup.
+
+Selected-search validation: all 223 CRT tests passed (one observation-dependent
+case separately passed), all-target Clippy passed with warnings denied, and the
+retained artifact checker passed all 31 ordered cases and five recorded wrapper
+comparisons. PE hash is unchanged; current harness hash is in the evidence JSON.
+There are zero new Windows observations and zero whole-PE pairs. Review of
+4a44eca confirmed eight jobs passed in each Rust workflow, final Linux jobs
+123803368463/123803467001 still active, and pinned startup40975183290 passed.
+These conclusions do not validate the new changed head or diagnose old timeouts.

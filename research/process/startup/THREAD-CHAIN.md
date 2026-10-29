@@ -322,3 +322,47 @@ collided delivery and termination remain unproved. Prefix helper effects retain
 their existing independently proved component contracts; this does not acquire a
 Windows runtime or prove every helper's original initialization. No new Windows
 observation or whole-PE comparison is claimed. Full startup/rcedit stays rejected.
+
+## Selected C++ search execution
+
+Sol inspection of the return/advance change found the original CALL-cut rejection
+intact, actual RET before receipt minting, and explicit intended-boundary assertions
+in the native cases. The connected next step now validates the selected C++
+registration against its real live owner, record, handler and full stack extent
+(including the helper's extra protected scratch word). Selection cannot accept a
+supplied owner belonging to another registration.
+
+The normal event's captured ESP is a checked scalar, while the older C++ context
+adapter required a tagged pointer. The new normal binding refines that scalar
+against the declared live stack root and captured object token without writing a
+new pointer into guest memory or deriving saved state from call registers. Both
+representations keep their original exact-value/lifetime checks. Unknown or changed
+saved ESP still rejects.
+
+After the first actual EH4 ContinueSearch receipt is consumed, only the matching
+selected-node operation can move the event into its next protected handler CALL.
+It executes the original C++ prefix/common dispatcher and cached PTD/FLS getter.
+For the tested software-exception search domain, the original dispatcher returns
+ContinueSearch. A distinct receipt retains selected registration, actual compiled
+handler identity, cursor serial, owner and captured context. Consumption rechecks
+live record/metadata/capture and returns to the predecessor in the actual chain.
+The physical FS head and interrupted source remain live throughout. No generic
+callback result, supplied unwind receipt, filter result or restoration token can
+stand in for this selected-handler receipt.
+
+The native selector now runs 31 cases: the previous 21 plus ten selected-C++
+cases. Success requires both actual original returns and both receipt consumptions.
+New negatives cover wrong order/owner, changed capture and handler record,
+wrong receipt registration/serial, changed metadata, replay and repeated invocation.
+No original instruction is replaced with an expected disposition. Unbound search
+backend, noncontinuable search, nested/collided delivery, arbitrary handler chains
+and termination effects remain rejecting domains. This is a checked two-handler
+component using explicit module/FLS/captured-state inputs, not original entry-to-exit
+execution or a full startup/rcedit compatibility claim.
+
+The newly connected positive cases use the original zero-extra-local-allocation
+C++ owner shape and ordinary continuable software-exception search. Larger owner
+allocations still participate in the earlier registration/order negatives; they
+are not claimed as new successful handler execution. The compiled original handler
+prefix retains its own frame-shape checks. Tests cannot supply a body or a success
+receipt to the selected-call operation.
