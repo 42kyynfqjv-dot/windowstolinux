@@ -74,8 +74,10 @@ impl EpilogProof {
         {
             return Err("EH4 epilog LEAVE identity".into());
         }
-        let Op::ReturnPop(pop) = nodes[7].1.op else {
-            return Err("EH4 epilog callee cleanup form".into());
+        let pop = match nodes[7].1.op {
+            Op::ReturnPop(pop) => pop,
+            Op::Ordinary(Operation::Return) => 0,
+            _ => return Err("EH4 epilog callee cleanup form".into()),
         };
         if pop > 256 || pop % 4 != 0 {
             return Err("EH4 epilog cleanup bounds".into());
@@ -117,7 +119,9 @@ impl EpilogProof {
                     sp += 4;
                 }
                 Op::Ordinary(Operation::Leave) => code.push_str("binding.leave(rt,cpu,epoch)?;"),
-                Op::ReturnPop(_) => code.push_str("return binding.finish(rt,cpu,epoch);"),
+                Op::ReturnPop(_) | Op::Ordinary(Operation::Return) => {
+                    code.push_str("return binding.finish(rt,cpu,epoch);")
+                }
                 _ => return Err("EH4 epilog proof/emission disagreement".into()),
             }
         }

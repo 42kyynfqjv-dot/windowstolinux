@@ -42,19 +42,32 @@ for (kind,want,valid) in [(1,0x81,true),(2,0xc1,true),(3,0x89,true),(0x8002,0xc1
 }
 
 fn inherited_source() -> String {
+    inherited_source_for(None)
+}
+pub(super) fn inherited_source_for(registered_allocator: Option<&str>) -> String {
     let inherited:Vec<u8>="8bff558bec83ec488d45b850ff153850410066837dea000f8491000000578b7dec85ff0f84840000008b0753568d5f04be0020000003d83bc60f4cf056e8b13900003b3508d14100590f4f3508d141008975fc33f68b45fc85c0744f833bff7442833bfe743d8a4c3e04f6c1017434f6c108750cff33ff15bc50410085c074208bc68bce83e03fc1f9066bd0388b0303148d08cf41008942188a443e048842288b45fc4683c3043bf075b15e5b5fc9c3".as_bytes().chunks_exact(2).map(|x|u8::from_str_radix(std::str::from_utf8(x).unwrap(),16).unwrap()).collect();
     let graph = Graph::decode(&inherited, 0x408537).unwrap();
     let body=crt_stream_emit::emit_body(&graph,|pc,target|{
  let next=pc+graph.nodes[&pc].length;
  let code=match target{
  Target::Import(0x415038)=>"let p=CrtCpu::pointer(rt.load(rt.offset(sp,4)?,32)?)?;rt.valid(p,68)?;rt.store(rt.offset(p,50)?,16,CrtValue::scalar(if disabled{0}else{serialized.size}))?;if !disabled{rt.store(rt.offset(p,52)?,32,CrtValue::Pointer(serialized))?;}child.finish_pop(rt,4)".to_string(),
- Target::Direct(0x40bf2a)=>"let n=rt.load(rt.offset(sp,4)?,32)?.known_scalar()?;allocations.push(n);if n>3{return Err(\"descriptor allocation effect unclosed\");}child.r[0]=CrtValue::scalar(0);child.finish(rt)".to_string(),
+ Target::Direct(0x40bf2a)=>registered_allocator.unwrap_or("let n=rt.load(rt.offset(sp,4)?,32)?.known_scalar()?;allocations.push(n);if n>3{return Err(\"descriptor allocation effect unclosed\");}child.r[0]=CrtValue::scalar(0);child.finish(rt)").to_string(),
  Target::Import(0x4150bc)=>"let value=rt.load(rt.offset(sp,4)?,32)?;let CrtValue::Handle(id)=value else{return Err(\"inherited handle provenance\");};rt.descriptor_identity(id)?;queries.push(id.number);child.r[0]=if id.number==0{CrtValue::scalar(1)}else{CrtValue::Scalar{bits:0,known:0}};child.finish_pop(rt,4)".to_string(),
  _=>return Err("unbound inherited call".into())};
  let pop=if target==Target::Direct(0x40bf2a){0}else{4};
  Ok(format!("cpu.call_activation(rt,{next},{pop},|rt,child|{{let sp=CrtCpu::pointer(child.r[4])?;child.clobber(CrtValue::Scalar{{bits:0,known:0}});{code}}})?;"))
  },&std::collections::BTreeMap::from([(0x41cf08,"CrtRegionKind::Module".into()),(0x41d108,"CrtRegionKind::Module".into())]),4096).unwrap();
-    format!("{}\nfn inherit(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,serialized:CrtPointer,disabled:bool,allocations:&mut Vec<u32>,queries:&mut Vec<u32>)->Result<CrtValue,&'static str>{{{body}}}",standard_source())
+    let name = if registered_allocator.is_some() {
+        "inherit_registered"
+    } else {
+        "inherit"
+    };
+    let more = if registered_allocator.is_some() {
+        ",e:&mut NormalCallEpoch<'_>,init:CrtInitialization"
+    } else {
+        ""
+    };
+    format!("{}\nfn {name}(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,serialized:CrtPointer,disabled:bool,allocations:&mut Vec<u32>,queries:&mut Vec<u32>{more})->Result<CrtValue,&'static str>{{{body}}}",if registered_allocator.is_some(){String::new()}else{standard_source()})
 }
 #[test]
 fn original_inherited_records_feed_standard_initialization_with_checked_bounds() {
@@ -186,8 +199,7 @@ for fault in 0..4 {
     );
 }
 
-#[test]
-fn original_allocation_manager_scope_orders_lock_publication_and_cleanup() {
+pub(super) fn manager_source() -> String {
     let manager:Vec<u8>="33f68975e46a07e863feffff598975fc8bfea108d14100897de03945087c1f3934bd08cf41007531e8edfeffff8904bd08cf410085c075146a0c5e8975e4c745fcfeffffffe815000000eba2a108d1410083c040a308d1410047ebbb".as_bytes().chunks_exact(2).map(|x|u8::from_str_radix(std::str::from_utf8(x).unwrap(),16).unwrap()).collect();
     let manager_cleanup: Vec<u8> = "6a07e851feffff59c3"
         .as_bytes()
@@ -198,11 +210,16 @@ fn original_allocation_manager_scope_orders_lock_publication_and_cleanup() {
     let cb=crt_stream_emit::emit_body(&cg,|pc,target|{if target!=Target::Direct(0x40be17){return Err("cleanup target changed".into());}let next=pc+cg.nodes[&pc].length;Ok(format!("cpu.call_activation(rt,{next},0,|rt,child|{{let sp=CrtCpu::pointer(child.r[4])?;if rt.load(rt.offset(sp,4)?,32)?.known_scalar()?!=7{{return Err(\"cleanup lock index\");}}let lease=held.ok_or(\"cleanup without manager lease\")?;rt.check_global(lease)?;if release_fails{{return Err(\"declared LeaveCriticalSection effect failed\");}}rt.unlock_global(lease)?;*held=None;events.push(2);child.clobber(CrtValue::Scalar{{bits:0,known:0}});child.finish(rt)}})?;"))},&Default::default(),64).unwrap();
     let graph = Graph::decode_with_exits(&manager, 0x40bf60, &[0x40bf4e]).unwrap();
     let body=crt_stream_emit::emit_body_with_exit(&graph,|pc,target|{let next=pc+graph.nodes[&pc].length;let code=match target {
- Target::Direct(0x40bdcf)=>"let sp=CrtCpu::pointer(child.r[4])?;if rt.load(rt.offset(sp,4)?,32)?.known_scalar()?!=7{return Err(\"manager lock index\");}if acquire_fails{return Err(\"declared EnterCriticalSection effect failed\");}*held=Some(rt.lock_global(2,7)?);events.push(1);child.clobber(CrtValue::Scalar{bits:0,known:0});child.finish(rt)",
+ Target::Direct(0x40bdcf)=>"let sp=CrtCpu::pointer(child.r[4])?;if rt.load(rt.offset(sp,4)?,32)?.known_scalar()?!=7{return Err(\"manager lock index\");}if acquire_fails{return Err(\"declared EnterCriticalSection effect failed\");}*held=Some(rt.lock_global(rt.thread,7)?);events.push(1);child.clobber(CrtValue::Scalar{bits:0,known:0});child.finish(rt)",
  Target::Direct(0x40be7a)=>"rt.check_global(held.ok_or(\"allocation without manager lock\")?)?;let mut calls=0;let mut allocated=None;construct(rt,child,init,allocations<successes,usize::MAX,&mut calls,&mut allocated)?;allocations+=1;Ok(child.r[0])",
  Target::Direct(0x40bfbf)=>"if rt.load(rt.offset(CrtCpu::pointer(child.r[5])?,-4)?,32)?.known_scalar()?!=u32::MAX-1{return Err(\"cleanup before scope disable\");}cleanup(rt,child,held,events,release_fails)",
  _=>return Err("manager call changed".into())};Ok(format!("cpu.call_activation(rt,{next},0,|rt,child|{{{code}}})?;"))},&std::collections::BTreeMap::from([(0x41cf08,"CrtRegionKind::Module".into()),(0x41d108,"CrtRegionKind::Module".into())]),16384,|_,_|Err("unbound FS".into()),|_,_|Ok(String::new()),|_,_|Ok(None),Some(0x40bf4e)).unwrap();
     let extra=format!("{} fn cleanup(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,held:&mut Option<CrtGlobalLock>,events:&mut Vec<u32>,release_fails:bool)->Result<CrtValue,&'static str>{{{cb}}} fn manager(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,init:CrtInitialization,successes:usize,acquire_fails:bool,release_fails:bool,held:&mut Option<CrtGlobalLock>,events:&mut Vec<u32>)->Result<CrtValue,&'static str>{{let mut allocations=0;{body}}}",descriptor_source());
+    extra
+}
+#[test]
+fn original_allocation_manager_scope_orders_lock_publication_and_cleanup() {
+    let extra = manager_source();
     super::crt_stream_callees_tests::native(
         &extra,
         r#"

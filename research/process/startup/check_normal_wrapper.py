@@ -152,6 +152,17 @@ def check(original, observation, out, compare=None):
     if tuple(import_at_iat(image, 0x415038-base)) != ('kernel32.dll', 'GetStartupInfoW'):
         raise ValueError('inherited startup-info import changed')
     file_regions['inherited-handle-initializer'] = sha(inherited)
+    manager_prefix = mapped(image, 0x40bf2a, 12, executable=True)
+    if manager_prefix != bytes.fromhex('6a1068a0b64100e82a5fffff'):
+        raise ValueError('manager allocation/scope/prolog binding changed')
+    file_regions['manager-prefix'] = sha(manager_prefix)
+    manager_epilog = mapped(image, 0x40bf50, 16, executable=True)
+    normal_source = (Path(__file__).resolve().parents[3]/'src/crt_normal_frame_tests.rs').read_text()
+    fixture = re.search(r'let\s+manager_epilog_bytes\s*=\s*bytes_hex\("([0-9a-f]+)"\)', normal_source)
+    if fixture is None or bytes.fromhex(fixture[1]) != manager_epilog:
+        raise ValueError('manager epilog fixture differs from original PE')
+    file_regions['manager-epilog'] = sha(manager_epilog)
+
     for name, start, length in [('descriptor_constructor', 0x40be7a, 123), ('descriptor_destructor', 0x40bef5, 53), ('manager', 0x40bf60, 92), ('manager_cleanup', 0x40bfbf, 9)]:
         raw = mapped(image, start, length, executable=True)
         fixture = re.search(r'let\s+'+name+r'\s*:\s*Vec<u8>\s*=\s*"([0-9a-f]+)"', test_source)
@@ -176,6 +187,15 @@ def check(original, observation, out, compare=None):
     (out/'standard-handles.stderr').write_bytes(standard_run.stderr)
     if standard_run.returncode or b'5 passed' not in standard_run.stdout:
         raise ValueError('standard-handle component check failed')
+    for test in ['allocation_manager_registers_and_retires_original_eh4_under_startup_authority',
+                 'inherited_producer_calls_original_manager_with_live_eh4_registration']:
+        result = subprocess.run(['cargo','test','--locked','--example','crt_stream',test],
+                                env=env, capture_output=True, timeout=180)
+        (out/(test+'.stdout')).write_bytes(result.stdout)
+        (out/(test+'.stderr')).write_bytes(result.stderr)
+        if result.returncode or b'1 passed' not in result.stdout:
+            raise ValueError('registered manager component failed: '+test)
+
     command = ['cargo', 'test', '--locked', '--example', 'crt_stream',
                'original_windows_wrapper_state_matches_native_normal_lifecycle', '--', '--ignored']
     run = subprocess.run(command, env=env, capture_output=True, timeout=180)
@@ -240,7 +260,7 @@ def check(original, observation, out, compare=None):
                   main_activation_sha256=sha((out/'main-activate.bin').read_bytes()),
                   main_scope_header_sha256=sha((out/'Main-scope-header.bin').read_bytes()),
                   locale_state_evidence=locale_state_evidence(image),
-                  manager_component_cases=6, manager_new_windows_pairs=0, descriptor_lifecycle_component_cases=4, descriptor_lifecycle_new_windows_pairs=0, inherited_component_cases=7, inherited_new_windows_pairs=0, standard_handle_component_cases=25, standard_handle_new_windows_pairs=0,
+                  registered_manager_component_cases=6, registered_manager_new_windows_pairs=0, manager_component_cases=6, manager_new_windows_pairs=0, descriptor_lifecycle_component_cases=4, descriptor_lifecycle_new_windows_pairs=0, inherited_component_cases=7, inherited_new_windows_pairs=0, standard_handle_component_cases=25, standard_handle_new_windows_pairs=0,
                   original_printf_routing_sha256=sha((out/'printf-routing-live.bin').read_bytes()),
                   original_printf_context_sha256=sha((out/'printf-context-live.bin').read_bytes()),
                   original_printf_entry_sha256=sha((out/'printf-entry-live.bin').read_bytes()),

@@ -73,12 +73,16 @@ relabelled. The original manager's allocation loop and normal cleanup funclet no
 execute on an owned component frame: lock 7 precedes scope activation, blocks and
 capacity publish in original order, and scope -2 precedes cleanup release. Distinct
 module-global leases preserve partial effects on acquisition/release failures.
-The actual EH4 prolog/registration/epilog, exception-driven cleanup invocation,
-Enter/Leave helper instructions and producer invocation remain to connect.
+The actual EH4 prolog/registration/epilog now execute under an exact live
+initialization token, and the inherited producer invokes this registered manager.
+Ordinary normal-call admission still rejects initialization. The bridge rejects
+request >=8192 before effects; the original invalid-request/errno branch remains
+unbound. Exception-driven cleanup invocation and Enter/Leave helper instructions
+remain to connect.
 calloc/new-handler/errno (`407cf0`), free failure/errno (`407d50`), and continuation
 after failed critical-section initialization remain unresolved. Explicit inputs
 include global-lock initialization, frame/request, allocator availability and API
-outcomes. Next: bind manager EH4 and invoke it from the inherited producer on the
+outcomes. Next: bind the actual global-lock helpers and allocator/error effects on the
 same owner, then continue locale/FILE production. Sol can proceed; escalate only a
 concrete missing exception-effect contract. Full startup/formatter/rcedit remains
 unsupported until unchanged-binary entry-to-exit evidence passes.

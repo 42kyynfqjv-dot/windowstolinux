@@ -1528,3 +1528,61 @@ lock helper instructions under the existing thread ownership machinery, then cal
 it from the inherited producer. Keep allocator/API effect cuts explicit. Sol can
 continue; a concrete unresolved exception-effect contract would justify a bounded
 Astra pass. Locale production and complete formatter integration remain mandatory.
+
+## Registered allocation manager called by the inherited producer
+
+Review of `25d29a9` kept the distinct global/record/FILE lock identities and partial
+failure ordering. Startup CI 40915016998 passed. Both full Rust runs
+40915027942/40915017038 were still executing their final independent LLVM
+comparison step at this review; no full CI success is inferred from that state.
+
+The shared normal-call binding now has an explicit initialization entry requiring
+the exact live `CrtInitialization` token. It retains that token and validates it
+on subsequent binding transitions, together with arena/thread/epoch/record and
+saved-state authority. Ordinary `bind` still rejects initialization. Foreign
+initialization tokens and ending initialization before epilog cannot authorize
+return. This adds no initialized bytes or exception-delivery proof.
+
+The unchanged manager prolog helper executes with allocation 16 and scope
+41b6a0, installs its record into the live normal-call registry, executes the
+allocation loop/normal cleanup, performs the original MOV EAX,ESI, unlinks through
+the original epilog and validates its return. The generic epilog proof now also
+accepts plain RET as zero callee-pop bytes, preserving every saved-slot, scope,
+guard, registry-order and protected-return requirement. A changed saved-register
+POP is independently rejected by the epilog proof.
+
+The original inherited-record body now calls this registered manager through a
+protected call on the same guest stack. A new native case starts with capacity
+zero, produces the descriptor block, restores the previous thread-chain head,
+returns to the inherited parser and imports the two valid inherited handles.
+Five registered-manager cases cover success, corrupted guard, revoked
+initialization authority, null allocation and foreign initialization token.
+The component bridge rejects request >=8192 before registration: the original
+invalid-request/errno/API branch remains unbound. A regression checks that this
+rejection changes neither registers nor registry head. It is not replaced by the
+allocation loop's different error behavior.
+
+The artifact checker now binds the manager PUSH allocation/scope/CALL bytes and
+epilog bytes in addition to the existing helper, loop, cleanup and inherited
+bodies. It runs both new registered component tests on each host, alongside the
+five pre-existing recorded Windows boundary comparisons. These six registered
+scenarios and the invalid-request negative are native component evidence, not
+fresh Windows observations or whole-PE translations. The existing completed-event
+registry fixture, initial module/thread state, global-lock initialization,
+GetStartupInfo/GetFileType results, calloc/new-handler/errno and API exception
+effects remain explicit cuts. Full startup/formatter/rcedit remains unsupported.
+
+Local checks: 184 CRT passed (one recorded-observation test handled separately),
+181 frame/unwind and 175 root passed; the focused changed-epilog and invalid-request
+checks passed after review. Clippy/format/Python checks passed. Both historical
+Windows process-exit failures and the separately preserved projection-budget
+failure retain their earlier evidence and qualification.
+
+Next connected scope: execute the actual global-lock helper instructions under a
+bound module lock table, then establish calloc/new-handler/error effects and
+FILE/locale producers. Actual startup entry and exceptional cleanup/delivery
+remain separate admission gates. Sol can continue this path; escalation needs a
+concrete unresolved semantic question.
+
+Registered-manager wrapper Rust SHA256: `8298843fe741e1f31a505d3b94e41acaefd744e4f5b484d30ed9988d6bd0870f`.
+The unchanged PE remains `1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4`.

@@ -156,7 +156,7 @@ struct CrtNormalLayout {
 struct CrtNormalBinding {
  anchor:guest_memory::Capability,identity:RegistryIdentity,epoch:u64,
  previous:RegistryHead,token:CrtThreadHead,caller:CrtPointer,entry:[CrtValue;8],return_id:u64,
- layout:CrtNormalLayout,cookie:u32,id:Option<NormalFrameId>,consumed:std::collections::BTreeSet<i32>,done:bool,
+ layout:CrtNormalLayout,cookie:u32,initialization:Option<CrtInitialization>,id:Option<NormalFrameId>,consumed:std::collections::BTreeSet<i32>,done:bool,
 }
 impl CrtNormalBinding {
  fn head_bits(head:RegistryHead)->[u64;3]{match head{
@@ -166,9 +166,17 @@ impl CrtNormalBinding {
   RegistryHead::Normal(id)=>[3,id.epoch,id.generation],
  }}
  fn bind(rt:&CrtStreamRuntime,cpu:&CrtCpu,epoch:&NormalCallEpoch<'_>,layout:CrtNormalLayout)->RegistryResult<Self>{
+  Self::bind_phase(rt,cpu,epoch,layout,None)
+ }
+ fn bind_initializing(rt:&CrtStreamRuntime,cpu:&CrtCpu,epoch:&NormalCallEpoch<'_>,layout:CrtNormalLayout,initialization:CrtInitialization)->RegistryResult<Self>{
+  rt.initialization(initialization)?;Self::bind_phase(rt,cpu,epoch,layout,Some(initialization))
+ }
+ fn bind_phase(rt:&CrtStreamRuntime,cpu:&CrtCpu,epoch:&NormalCallEpoch<'_>,layout:CrtNormalLayout,initialization:Option<CrtInitialization>)->RegistryResult<Self>{
+  match initialization{Some(token)=>rt.initialization(token)?,None=>if rt.initialization.is_some(){return Err("CRT normal initialization token required");}}
+
   epoch.state()?;let identity=epoch.registry.identity;let previous=epoch.head()?;
   let caller=CrtCpu::pointer(cpu.entry[4])?;
-  if rt.owner!=identity.owner||rt.thread!=identity.instance||epoch.registry.cookie_address!=layout.cookie_address||rt.initialization.is_some()||rt.shutdown.is_some()||rt.closed
+  if rt.owner!=identity.owner||rt.thread!=identity.instance||epoch.registry.cookie_address!=layout.cookie_address||rt.shutdown.is_some()||rt.closed
    ||cpu.returned||cpu.return_id==0||cpu.return_pop!=layout.pop||cpu.r[4]!=cpu.entry[4]
    ||caller.kind!=CrtRegionKind::Stack||caller.address()%4!=0
    ||[3,5,6,7].iter().any(|&r|cpu.r[r]!=cpu.entry[r]){
@@ -182,7 +190,7 @@ impl CrtNormalBinding {
   let cookie=rt.load(rt.resolve_absolute(layout.cookie_address,CrtRegionKind::Module)?,32)?.known_scalar()?;
   let token=rt.thread_head(identity.instance,epoch.generation,Self::head_bits(previous))?;
   Ok(Self{anchor:rt.anchor,identity,epoch:epoch.generation,previous,token,caller,entry:cpu.entry,
-   return_id:cpu.return_id,layout,cookie,id:None,consumed:Default::default(),done:false})
+   return_id:cpu.return_id,layout,cookie,initialization,id:None,consumed:Default::default(),done:false})
  }
  fn authority(&self,rt:&CrtStreamRuntime,epoch:&NormalCallEpoch<'_>)->RegistryResult<()>{
   epoch.state()?;self.identity(rt,epoch)?;
@@ -190,10 +198,11 @@ impl CrtNormalBinding {
  }
  fn identity(&self,rt:&CrtStreamRuntime,epoch:&NormalCallEpoch<'_>)->RegistryResult<()>{
   rt.validate_thread_head(self.token)?;
+  match self.initialization{Some(token)=>rt.initialization(token)?,None=>if rt.initialization.is_some(){return Err("CRT normal initialization phase changed");}}
   if self.done||rt.anchor!=self.anchor||rt.owner!=self.identity.owner||rt.thread!=self.identity.instance
    ||epoch.registry.identity!=self.identity||epoch.generation!=self.epoch
    ||self.token.registry!=self.identity.instance||self.token.epoch!=self.epoch
-   ||self.token.head!=Self::head_bits(self.previous)||rt.initialization.is_some()||rt.shutdown.is_some(){
+   ||self.token.head!=Self::head_bits(self.previous)||rt.shutdown.is_some(){
    return Err("CRT normal stale epoch/arena/predecessor");
   }
   rt.valid(self.caller,4)?;
