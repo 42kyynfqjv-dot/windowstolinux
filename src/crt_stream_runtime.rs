@@ -86,6 +86,19 @@ impl CrtStreamRuntime {
  fn construct_lock(&mut self,token:CrtInitialization,file:CrtPointer)->Result<(),&'static str>{
   self.initialization(token)?;self.file_record(file)?;if !self.lock_objects.insert(file.address){return Err("CRT duplicate lock construction");}Ok(())
  }
+ /// Bound InitializeCriticalSectionEx result, for the exclusive x86 FILE domain.
+ /// The external result is an input effect, not a simulated successful OS call.
+ fn construct_lock_result(&mut self,token:CrtInitialization,lock:CrtPointer,flags:u32,result:u32)->Result<bool,&'static str>{
+  self.initialization(token)?;self.identity_range(lock,24)?;
+  let file=self.offset(lock,-32)?;self.file_record(file)?;
+  if flags!=0||self.lock_objects.contains(&file.address)||!self.overlapping_tags(lock.address,24).is_empty(){return Err("CRT lock construction flags/duplicate/typed alias");}
+  self.memory.forget(lock.address,24).map_err(|_|"CRT opaque lock range")?;
+  self.partial.retain(|&at,_|at<lock.address||at>=lock.address+24);self.last_os_error=None;
+  if result!=0{self.construct_lock(token,file)?;}Ok(result!=0)
+ }
+ fn ordinary_file_bytes(&self,p:CrtPointer,size:u32)->Result<(),&'static str>{
+  if p.kind==CrtRegionKind::File&&self.lock_objects.iter().any(|&at|u64::from(p.address)<u64::from(at)+56&&u64::from(at)+32<u64::from(p.address)+u64::from(size)){return Err("CRT opaque critical section bytes");}Ok(())
+ }
  fn destroy_lock(&mut self,token:CrtInitialization,file:CrtPointer)->Result<(),&'static str>{
   self.initialization(token)?;self.file_record(file)?;if self.locks.iter().any(|l|l.record==file.address)||!self.lock_objects.remove(&file.address){return Err("CRT missing/live lock destruction");}Ok(())
  }
@@ -183,7 +196,7 @@ impl CrtStreamRuntime {
   self.tags.iter().filter(|(at,_)|u64::from(**at)<u64::from(address)+u64::from(size)&&u64::from(address)<u64::from(**at)+4).map(|(&a,&v)|(a,v)).collect()
  }
  fn load(&self,p:CrtPointer,width:u8)->Result<CrtValue,&'static str>{
-  let size=match width{8=>1,16=>2,32=>4,_=>return Err("CRT load width")};self.valid(p,size)?;
+  let size=match width{8=>1,16=>2,32=>4,_=>return Err("CRT load width")};self.valid(p,size)?;self.ordinary_file_bytes(p,size)?;
   let tags=self.overlapping_tags(p.address,size);
   if !tags.is_empty(){if width!=32||tags.len()!=1||tags[0].0!=p.address{return Err("CRT partial typed-word read");}
    match tags[0].1{CrtValue::Dispatcher(token)=>self.dispatcher(token)?,CrtValue::Pointer(q)=>self.pointer_transport(q)?,CrtValue::Handle(h)=>{self.descriptor(h)?;},CrtValue::ThreadHead(head)=>self.thread_head_transport(head)?,_=>{}}
@@ -196,7 +209,7 @@ impl CrtStreamRuntime {
   Ok(CrtValue::Scalar{bits,known:if width==32{known}else{known|(!0u32<<width)}})
  }
  fn store(&mut self,p:CrtPointer,width:u8,value:CrtValue)->Result<(),&'static str>{
-  let size=match width{8=>1,16=>2,32=>4,_=>return Err("CRT store width")};self.valid(p,size)?;
+  let size=match width{8=>1,16=>2,32=>4,_=>return Err("CRT store width")};self.valid(p,size)?;self.ordinary_file_bytes(p,size)?;
   if matches!(p.kind,CrtRegionKind::Input){return Err("CRT immutable source write");}
   let old=self.overlapping_tags(p.address,size);
   if old.iter().any(|(_,v)|matches!(v,CrtValue::OpaqueSaved(_)|CrtValue::ProtectedReturn(_)|CrtValue::ThreadHead(_))){return Err("CRT protected saved/return overwrite");}
@@ -413,6 +426,24 @@ assert!(rt.store(rt.offset(stack,8).unwrap(),32,value).is_err());assert!(rt.end_
 let next=rt.new_dispatcher(13,701).unwrap();assert_ne!(next,token);assert!(rt.dispatcher(token).is_err());
 rt.store(stack,32,CrtValue::Dispatcher(next)).unwrap();assert_eq!(rt.load(stack,32).unwrap(),CrtValue::Dispatcher(next));
 for _ in 1..16{rt.new_dispatcher(13,702).unwrap();}assert!(rt.new_dispatcher(13,703).is_err());
+"#,
+        );
+    }
+
+    #[test]
+    fn lock_result_preserves_fields_and_rejects_opaque_aliases() {
+        native(
+            r#"
+for result in [0,1,7,u32::MAX]{
+ let(mut r,init)=CrtStreamRuntime::new_initializing(1,2,0x4000,32768).unwrap();let f=r.file();let p=r.offset(f,32).unwrap();
+ r.store(r.offset(f,28).unwrap(),32,CrtValue::scalar(73)).unwrap();r.store(p,32,CrtValue::scalar(99)).unwrap();r.last_os_error=Some(9);
+ assert_eq!(r.construct_lock_result(init,p,0,result).unwrap(),result!=0);assert_eq!(r.last_os_error,None);assert_eq!(r.load(r.offset(f,28).unwrap(),32).unwrap(),CrtValue::scalar(73));
+ if result==0{assert!(r.lock(2).is_err());assert!(r.load(p,32).unwrap().known_scalar().is_err());}
+ else{let l=r.lock(2).unwrap();assert!(r.load(p,8).is_err());assert!(r.store(r.offset(f,31).unwrap(),16,CrtValue::scalar(0)).is_err());assert!(r.store(p,32,CrtValue::scalar(0)).is_err());assert!(r.construct_lock_result(init,p,0,1).is_err());r.unlock(l).unwrap();r.destroy_lock(init,f).unwrap();assert!(!r.lock_objects.contains(&f.address()));}
+}
+let(mut r,init)=CrtStreamRuntime::new_initializing(1,2,0x5000,32768).unwrap();let f=r.file();let p=r.offset(f,32).unwrap();let(_,foreign)=CrtStreamRuntime::new_initializing(1,2,0x5000,32768).unwrap();
+assert!(r.construct_lock_result(foreign,p,0,1).is_err());assert!(r.construct_lock_result(init,r.offset(p,4).unwrap(),0,1).is_err());assert!(r.construct_lock_result(init,r.subrange(p,20).unwrap(),0,1).is_err());assert!(r.construct_lock_result(init,p,1,1).is_err());
+r.store(p,32,CrtValue::Pointer(f)).unwrap();assert!(r.construct_lock_result(init,p,0,1).is_err());assert_eq!(r.load(p,32).unwrap(),CrtValue::Pointer(f));assert!(r.lock_objects.is_empty());
 "#,
         );
     }

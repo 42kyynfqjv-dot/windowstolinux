@@ -129,7 +129,12 @@ def check(original, observation, out, compare=None):
         if actual_import != expected:
             raise ValueError('FILE scope original import identity mismatch')
         file_imports[str(address)] = list(actual_import)
-    file_regions = {}
+    construction_thunk = mapped(image, 0x408079, 12, executable=True)
+    if construction_thunk != bytes.fromhex('8bff558bec5dff25ac504100'):
+        raise ValueError('original FILE construction thunk changed')
+    if tuple(import_at_iat(image, 0x4150ac-base)) != ('kernel32.dll', 'InitializeCriticalSectionEx'):
+        raise ValueError('original FILE construction import changed')
+    file_regions = {'file-construction-thunk': sha(construction_thunk)}
     for name, start, end in [('file-wrapper', 0x404668, 0x4046a8),
                              ('file-lock', 0x404634, 0x404648),
                              ('file-unlock', 0x404648, 0x40465c),

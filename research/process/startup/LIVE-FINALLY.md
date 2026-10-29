@@ -1221,3 +1221,63 @@ python3 research/process/startup/formatter_binding.py ORIGINAL_DIR EVIDENCE_DIR
 python3 research/process/startup/check_normal_wrapper.py ORIGINAL_DIR OBSERVED_DIR NATIVE_DIR
 python3 research/process/startup/check_projection_boundary.py NATIVE_DIR/normal-wrapper.rs PROJECTION_DIR
 ```
+
+### FILE construction results and opaque critical-section storage
+
+Review of the runtime-bound locale identity fix found no new identity escape.
+The next connected FILE transition now consumes an explicit
+`InitializeCriticalSectionEx` result. The original initializer calls the thunk at
+`408079`, whose complete bytes tail-jump through IAT `4150ac`; the retained PE
+binds that slot to `kernel32.dll!InitializeCriticalSectionEx`. The artifact
+checker verifies both identities. The original initializer ignores the Boolean
+return, so its next use cannot itself prove construction succeeded.
+
+The shared runtime's result adapter requires exclusive initialization authority,
+the exact live FILE lock range (offset 32, 24 bytes in this admitted x86 layout),
+flags zero, no existing constructed lock and no typed aliases in that range.
+Any nonzero API result creates lock ownership; zero does not. The result remains
+an external effect input, not a fabricated OS success. Because the API object
+representation and last-error value are not established by the result alone,
+the adapter invalidates those byte/value facts. It preserves earlier FILE fields
+and table writes. Subsequent ordinary loads/stores into a constructed critical
+section reject even while initialization authority or a FILE lock is held.
+
+This follows Microsoft's [InitializeCriticalSectionEx contract](https://learn.microsoft.com/en-us/windows/win32/api/synchapi/nf-synchapi-initializecriticalsectionex):
+nonzero success, zero failure, initialization before use, no reinitialization
+without deletion, and logically opaque object storage. This is a bounded
+exclusive component domain; concurrent scheduling, arbitrary object layouts and
+all flag modes are not implemented by this adapter.
+
+The existing emitted original initializer/fallback/teardown test now calls this
+result adapter. Independent values 0, 1, 7 and UINT32_MAX distinguish failure from
+all nonzero successes. Tests cover foreign runtime authority, narrowed or shifted
+ranges, duplicate construction, unsupported flags, typed aliases, overlapping
+byte writes and opaque reads. Failure on the second lock preserves the first
+lock/table entry and leaves the second table entry untouched and its lock
+unusable. This reduces the construction-result obligation; it does not close
+allocator, low-I/O, locale producers or execute the full formatter.
+
+Local checks passed 175 root,178 frame/unwind and 174 CRT tests, with the existing
+observation case separate from the default CRT suite. Formatting and Clippy
+passed. The prior head 6b38b38 startup workflow 40902148938 passed; both full
+workflows 40902159730/40902148774 had eight passing jobs with only
+compiler-native-linux still running at review. The earlier local projection
+15-second timeout and historical Windows process timeouts remain distinct and
+unresolved. No timeout/retry policy changed and no new whole-PE pair is claimed.
+
+Next: bind original locale object producers/mutations and FILE low-I/O state to
+the shared live owner, then connect the formatter driver and its ordered cleanup.
+The full formatter callback remains explicit. Sol can review this bounded result
+adapter and verify CI; the remaining original startup/locale effect composition
+still needs a focused semantic pass. PR45 remains draft.
+
+Artifact replay and the projection check passed on this changed implementation.
+The five Windows comparisons reuse the retained observations; no fresh Windows
+run or whole-binary conversion is counted. PE SHA256 remains
+`1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4`;
+generated Rust SHA256 is
+`ab536c87b5e3a0876361bed1ca9d60d4e715947d886e4aa80ca1a386b65b222a`.
+The construction-thunk hash is
+`01565efe983e9c4227f23d12a585198bbaed33e7ed2081e0d04fe375ba1bd5ad`.
+The previous implementation's local projection timeout remains retained; this
+changed-head pass does not establish its cause.
