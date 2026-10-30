@@ -451,3 +451,9 @@ promote them. The callable implementation issuer, API-set mapping and first
 synchronization export's actual effects remain unbound at402b00. See
 [PROVIDER-OWNERSHIP.md](PROVIDER-OWNERSHIP.md); this replaces no Windows outcome
 with a fabricated success callback.
+
+InitializeCriticalSectionEx now has a bounded native global-object implementation
+and a specific callable issuer, with protected stdcall transport. Other provider
+descriptors remain noncallable. Actual API-set mapping/initial state, resource
+failure/error results, general contention and shutdown remain open; original
+entry still rejects402b00. See [NATIVE-SYNCHRONIZATION.md](NATIVE-SYNCHRONIZATION.md).

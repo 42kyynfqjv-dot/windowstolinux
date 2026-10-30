@@ -11,6 +11,14 @@ enum CrtAbi{Cdecl32Forward}
 struct CrtCpu{abi:CrtAbi,r:[CrtValue;8],xmm:[[CrtValue;4];8],entry:[CrtValue;8],flags:CrtFlags,return_id:u64,steps:u32,returned:bool,return_pop:u16}
 impl CrtCpu{
  fn new(sp:CrtPointer,return_id:u64)->Result<Self,&'static str>{if sp.kind!=CrtRegionKind::Stack||return_id==0{return Err("CRT cpu entry authority");}let mut r=std::array::from_fn(|i|CrtValue::OpaqueSaved(i as u8));r[4]=CrtValue::Pointer(sp);Ok(Self{abi:CrtAbi::Cdecl32Forward,r,xmm:[[CrtValue::Scalar{bits:0,known:0};4];8],entry:r,flags:CrtFlags::unknown(),return_id,steps:0,returned:false,return_pop:0})}
+ /// Bound stdcall adapter; index is the proven native global-object slot,
+ /// not an extra guest argument. Original code/target binding remains required.
+ fn native_sync_call(&mut self,rt:&mut CrtStreamRuntime,init:CrtInitialization,function:CrtFunction,index:u32)->Result<CrtValue,&'static str>{
+  self.validate_active(rt)?;if self.return_pop!=12||self.r[4]!=self.entry[4]{return Err("CRT synchronization stdcall frame");}
+  let sp=Self::pointer(self.r[4])?;let p=Self::pointer(rt.load(rt.offset(sp,4)?,32)?)?;
+  let spin=rt.load(rt.offset(sp,8)?,32)?.known_scalar()?;let flags=rt.load(rt.offset(sp,12)?,32)?.known_scalar()?;
+  let result=rt.native_sync_initialize(init,function,index,p,spin,flags)?;self.clobber(CrtValue::scalar(result));self.finish_pop(rt,12)
+ }
  fn tick(&mut self,budget:u32)->Result<(),&'static str>{self.steps=self.steps.checked_add(1).ok_or("CRT instruction counter overflow")?;if self.steps>budget{return Err("CRT certified instruction bound exceeded");}Ok(())}
  fn bits(v:CrtValue)->Result<(u32,u32),&'static str>{match v{CrtValue::Module(m)=>Ok((m.handle,u32::MAX)),CrtValue::Function(f)=>Ok((f.address,u32::MAX)),CrtValue::Scalar{bits,known}=>Ok((bits,known)),CrtValue::Pointer(p)=>Ok((p.address(),u32::MAX)),CrtValue::Handle(h)=>Ok((h.handle,u32::MAX)),CrtValue::OpaqueSaved(_)=>Ok((0,0)),CrtValue::Heap(_)|CrtValue::Dispatcher(_)|CrtValue::ProtectedReturn(_)|CrtValue::ThreadHead(_)=>Err("CRT protected control bits")}}
  fn number(v:CrtValue)->Result<u32,&'static str>{let(b,k)=Self::bits(v)?;if k!=u32::MAX{return Err("CRT unknown scalar bits observed");}Ok(b)}

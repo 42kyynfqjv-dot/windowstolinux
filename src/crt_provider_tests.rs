@@ -110,3 +110,57 @@ assert!(r.provider_destroy(i,b).is_err());
         "provider-stale-target",
     );
 }
+
+#[test]
+fn native_sync_binding_initializes_real_opaque_recursive_lock_and_preserves_failures() {
+    native(
+        "",
+        r#"
+let(mut r,i)=CrtStreamRuntime::new_initializing(2,3,0x8000,65536).unwrap();
+let t=r.provider_begin(i,"IndependentSynchronization",0x700000,2).unwrap();let m=r.provider_publish(i,&t).unwrap();
+let wrong=r.provider_export(i,m,m,"DifferentOperation",0x701000).unwrap();assert!(r.bind_native_sync(i,wrong).is_err());
+let d=r.provider_export(i,m,m,"InitializeCriticalSectionEx",0x702000).unwrap();let f=r.bind_native_sync(i,d).unwrap();assert!(r.bind_native_sync(i,d).is_err());r.native_sync_identity(f).unwrap();
+let p=r.map_region(0x9000,48,CrtRegionKind::Module,Some(&[73;48])).unwrap();
+assert!(r.native_sync_initialize(i,f,7,p,4000,1).is_err());assert_eq!(r.load(p,8).unwrap(),CrtValue::scalar(73));assert!(r.native_sync.is_empty());
+assert_eq!(r.native_sync_initialize(i,f,7,p,4000,0),Ok(1));assert!(r.load(p,8).is_err());assert!(r.store(r.offset(p,4).unwrap(),32,CrtValue::scalar(0)).is_err());
+assert_eq!(r.load(r.offset(p,24).unwrap(),8).unwrap(),CrtValue::scalar(73));assert!(r.native_sync_initialize(i,f,8,r.offset(p,4).unwrap(),0,0).is_err());
+assert!(r.native_sync_initialize(i,f,7,p,0,0).is_err());assert!(r.provider_destroy(i,m).is_err());
+let a=r.lock_global(3,7).unwrap();let b=r.lock_global(3,7).unwrap();assert!(r.lock_global(4,7).is_err());assert!(r.native_sync_delete(i,f,7,p).is_err());
+r.unlock_global(b).unwrap();r.unlock_global(a).unwrap();r.native_sync_delete(i,f,7,p).unwrap();assert!(r.lock_global(3,7).is_err());assert!(r.native_sync_delete(i,f,7,p).is_err());
+assert_eq!(r.native_sync_initialize(i,f,7,p,0,0),Ok(1));r.thread=4;assert!(r.native_sync_delete(i,f,7,p).is_err());r.thread=3;r.native_sync_delete(i,f,7,p).unwrap();r.provider_destroy(i,m).unwrap();assert!(r.native_sync_identity(f).is_err());
+"#,
+        "native-sync-semantics",
+    );
+}
+
+#[test]
+fn native_sync_rejects_observed_symbol_wrong_runtime_and_protected_alias() {
+    native(
+        "",
+        r#"
+let(mut r,i)=CrtStreamRuntime::new_initializing(2,3,0x8000,65536).unwrap();let p=r.map_region(0x9000,24,CrtRegionKind::Module,Some(&[19;24])).unwrap();
+let(m,_)=r.module_acquire_result(i,"ObservedOnly",0x700000).unwrap();let f=r.module_export_result(i,m,"InitializeCriticalSectionEx",0x701000).unwrap();assert!(r.native_sync_initialize(i,f,0,p,0,0).is_err());
+let t=r.provider_begin(i,"Native",0x720000,1).unwrap();let m=r.provider_publish(i,&t).unwrap();let d=r.provider_export(i,m,m,"InitializeCriticalSectionEx",0x721000).unwrap();let f=r.bind_native_sync(i,d).unwrap();
+let(mut other,oi)=CrtStreamRuntime::new_initializing(2,3,0x8000,65536).unwrap();assert!(other.native_sync_initialize(oi,f,0,p,0,0).is_err());
+r.store(p,32,CrtValue::Pointer(r.file())).unwrap();assert!(r.native_sync_initialize(i,f,0,p,0,0).is_err());assert_eq!(r.load(p,32).unwrap(),CrtValue::Pointer(r.file()));assert!(r.native_sync.is_empty());
+let short=r.subrange(r.offset(p,4).unwrap(),16).unwrap();assert!(r.native_sync_initialize(i,f,0,short,0,0).is_err());assert!(r.global_objects.is_empty());
+"#,
+        "native-sync-rejections",
+    );
+}
+
+#[test]
+fn native_sync_stdcall_checks_protected_return_before_effect_and_cleans_three_arguments() {
+    native(
+        "",
+        r#"
+let(mut r,i)=CrtStreamRuntime::new_initializing(2,3,0x8000,65536).unwrap();let p=r.map_region(0x9000,24,CrtRegionKind::Module,Some(&[71;24])).unwrap();
+let t=r.provider_begin(i,"Synchronization",0x700000,1).unwrap();let m=r.provider_publish(i,&t).unwrap();let d=r.provider_export(i,m,m,"InitializeCriticalSectionEx",0x701000).unwrap();let f=r.bind_native_sync(i,d).unwrap();
+let sp=r.map_region(0xa000,64,CrtRegionKind::Stack,None).unwrap();r.store(sp,32,CrtValue::ProtectedReturn(77)).unwrap();r.store(r.offset(sp,4).unwrap(),32,CrtValue::Pointer(p)).unwrap();r.store(r.offset(sp,8).unwrap(),32,CrtValue::scalar(4000)).unwrap();r.store(r.offset(sp,12).unwrap(),32,CrtValue::scalar(0)).unwrap();
+let mut c=CrtCpu::new(sp,77).unwrap();c.return_pop=12;c.return_id=78;assert!(c.native_sync_call(&mut r,i,f,3).is_err());assert!(r.global_objects.is_empty());assert_eq!(r.load(p,8).unwrap(),CrtValue::scalar(71));
+c.return_id=77;assert_eq!(c.native_sync_call(&mut r,i,f,3),Ok(CrtValue::scalar(1)));assert!(c.returned);assert_eq!(CrtCpu::pointer(c.r[4]).unwrap().address(),0xa010);assert!(c.native_sync_call(&mut r,i,f,3).is_err());
+r.native_sync_delete(i,f,3,p).unwrap();r.provider_destroy(i,m).unwrap();
+"#,
+        "native-sync-stdcall",
+    );
+}

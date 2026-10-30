@@ -623,3 +623,13 @@ or enter a function cache without an implementation issuer; actual native API
 semantics and original entry mapping at402b00 remain open. See
 [PROVIDER-OWNERSHIP.md](PROVIDER-OWNERSHIP.md). No Windows initialization or new
 whole-PE execution follows from registry construction.
+
+### Native synchronization operation
+
+A specific implementation issuer now binds InitializeCriticalSectionEx to actual
+owned global-lock construction and a checked RET12 adapter. Native tracking
+allocation, opaque object storage, recursive thread ownership, deletion ordering
+and provider lifetime are tested. Resource-failure BOOL/LastError effects and
+full API-set/system-provider initialization remain unclosed at402b00. See
+[NATIVE-SYNCHRONIZATION.md](NATIVE-SYNCHRONIZATION.md); no new Windows pairs or
+whole-image admission follow from these component tests.
