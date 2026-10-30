@@ -685,3 +685,13 @@ failure behavior is a separate API gate rather than a prerequisite for acquisiti
 Next bind named export lookup and original function-cache publication under live
 source/target authority. See [minimum predicates and scope](NATIVE-PLATFORM-PROFILE.md).
 No fresh Windows or whole-PE pair; complete environment/resource proof is still open.
+
+### Named native export and function cache now execute
+
+Under the explicit native profile, original GetProcAddress402ae0 now returns the
+unique live implemented export, and original XCHG402aef publishes function41cd24.
+Execution stops explicitly at constructor tail402c47, before guard/indirect API
+invocation; default entry still rejects402b00. Lookup validates complete source
+publication and actual target lifetime without creating call authority. Next lift
+402c47..402c73 with actual arguments, guard, dynamic call and fallback semantics.
+See [NAMED-NATIVE-EXPORT.md](NAMED-NATIVE-EXPORT.md). No new whole-PE pairs.

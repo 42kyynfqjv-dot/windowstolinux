@@ -372,6 +372,19 @@ impl CrtStreamRuntime {
   if owned.reference.module!=owned.function.module||p.root==Some(owned.reference)||self.module_references.get(&owned.reference.serial)!=Some(&owned.reference){return Err("CRT native provider reference owner/replay");}
   self.module_references.remove(&owned.reference.serial);Ok(())
  }
+ /// Resolve only a unique already implemented native export; lookup creates no
+ /// descriptor and grants no authority to an unimplemented or stale target.
+ fn native_named_export(&self,init:CrtInitialization,module:CrtModule,name:&str)->Result<CrtFunction,&'static str>{
+  self.initialization(init)?;self.provider_ready(module)?;
+  if name.is_empty()||name.len()>255||!name.is_ascii()||name.as_bytes().contains(&0){return Err("CRT native named export encoding/bounds");}
+  let mut matches=self.exports.values().filter(|e|e.function.module==module&&e.symbol==name);
+  let e=matches.next().ok_or("CRT native named export unsupported")?;
+  if matches.next().is_some(){return Err("CRT native named export ambiguous");}
+  if self.provider_ready(module)?.exports.iter().filter(|id|**id==e.function.serial).count()!=1{return Err("CRT native named export publication incomplete");}
+  self.function_identity(e.function,Some(name))?;
+  if e.api!=Some(CrtNativeApi::InitializeGlobalCriticalSectionEx){return Err("CRT native named export implementation unbound");}
+  self.provider_ready(e.target)?;Ok(e.function)
+ }
  /// This issuer binds only the implemented, startup-exclusive global-lock API.
  fn bind_native_sync(&mut self,init:CrtInitialization,descriptor:CrtProviderExport)->Result<CrtFunction,&'static str>{
   self.initialization(init)?;self.provider_target(descriptor)?;let e=self.exports.get_mut(&descriptor.record.serial).unwrap();

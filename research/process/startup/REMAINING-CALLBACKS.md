@@ -486,3 +486,9 @@ Original entry reaches GetProcAddress402ae0; its export result is still unbound.
 Default startup remains rejected at402b00. This is conditional component execution,
 not whole-PE conversion or Windows DLL initialization. The complete prerequisite
 classification and next binding are in [NATIVE-PLATFORM-PROFILE.md](NATIVE-PLATFORM-PROFILE.md).
+
+Named GetProcAddress is now bound under the explicit native profile, followed by
+original function-cache publication and resolver return. The next cut is original
+constructor tail402c47; the guard, indirect synchronization invocation/failure
+semantics and fallback remain open. Default admission remains402b00. See
+[NAMED-NATIVE-EXPORT.md](NAMED-NATIVE-EXPORT.md).

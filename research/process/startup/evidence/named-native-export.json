@@ -1,0 +1,52 @@
+{
+  "kind": "Named native export lookup and original cache publication component",
+  "reviewed_commit": "4a7ec0183c261597ddc258eff6fcf9aff1cc25d4",
+  "profile": "w2l-native-sync-20348-v1",
+  "source_sha256": {
+    "src/crt_stream_runtime.rs": "9c37d4c5a0659c7e37dbc2da33f4d9dee24ff841619bbdbc579121d88610ad68",
+    "src/crt_resident_loader.rs": "4e277fa6106b6853b0f9cf6f273e7a326a6d8e18b504239f5fa4117388807c0c",
+    "src/crt_provider_tests.rs": "b0a5eaec50f0bff9529c571e1d1358d8ee0f069d325c41666cea3a995b557bd8",
+    "src/crt_normal_frame_tests.rs": "beb64197fd946dbecd6dbe93907585b6bfe9cb612fd4e375b8ba32caee896dc4",
+    "src/crt_startup_modules.rs": "4fe0f760718c5c6e2e4bd1b596062359c487b9068c851b1fcc39939db95999d9",
+    "research/process/startup/check_normal_wrapper.py": "6b5d827306fe543fc579f72ee844708d73e165d03a67b0c4ed94acd41a01669a"
+  },
+  "validation": {
+    "crt_passed": 279,
+    "ignored_in_full": 2,
+    "ignored_replay": "both passed",
+    "independent_lookup_scenarios": 12,
+    "startup_cpu_scenarios": 15,
+    "startup_explicit_profile_scenarios": 6,
+    "python_run": 75,
+    "python_skip": 1,
+    "clippy": "passed",
+    "format": "passed"
+  },
+  "boundaries": {
+    "default": "LoadLibraryExW402b00",
+    "explicit_profile": "constructor tail402c47",
+    "actual_module_cache": "41cd0c",
+    "actual_function_cache": "41cd24",
+    "constructor_or_lock_success_claimed": false
+  },
+  "replay": {
+    "kind": "original prolog/epilog component comparison with explicit unexecuted body boundary",
+    "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+    "rust_sha256": "b873c73a6f8088cc4798daa7ec8c306977ac1b5f408c8d3cdec647d64653ada7",
+    "comparisons": 5,
+    "scope": "Live registry fixture; body EAX/flags inputs; original stack/FS/saved-state restoration only"
+  },
+  "replay_report_sha256": "eb01f33992c322cf7a4abf3869bfa1b4745c5662c3a09b660e6f43de4f8c10a6",
+  "report_metadata_note": "The running replay loaded before the new explicit-profile count field was added. Final script reports six explicit-profile cases separately from the existing15 CPU cases; all21 passed in the artifact test.",
+  "logs": {
+    "full-final.log": "af37b4626adce329de54d79f692b237d10a400a960ea9cb08843f87362c72241",
+    "focused.log": "490adecbb1df179818f9aa886ad312cbf394c2e8f23bf68c2237848f68e6c48d",
+    "canonical-fixed.log": "f4649f017259e17be07e3d8f468226c7c7b184a6fe108179fbcb4f3e170f06aa",
+    "clippy-final.log": "736e2582f563605dd272e5fb977840b0c0767377d27b6940c440caf75eec7157",
+    "python.log": "43a1557e520ddfc9bfcde2512e917429afd4cb2c46c9873e15c4d591857ece41"
+  },
+  "new_windows_observations": 0,
+  "new_whole_pe_pairs": 0,
+  "missing_symbols": "unsupported-domain rejection, no fabricated NULL/LastError",
+  "forwarded_target": "shared lookup checks separate source/target lifetimes; profile mapping remains same-provider only"
+}

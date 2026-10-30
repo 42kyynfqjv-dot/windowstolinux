@@ -65,7 +65,16 @@ impl CrtNativePlatform {
  }
  fn call(&self,rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,init:CrtInitialization,iat:u32)->Result<CrtValue,&'static str>{
   cpu.validate_active(rt)?;self.validate(rt,init)?;
-  if iat!=0x415074{return Err("native platform export/release contract unbound");}
+  if iat==0x415070{
+   if cpu.return_pop!=8||cpu.r[4]!=cpu.entry[4]||[3,5,6,7].iter().any(|&i|cpu.r[i]!=cpu.entry[i]){return Err("native platform stdcall frame");}
+   let sp=CrtCpu::pointer(cpu.r[4])?;let CrtValue::Module(module)=rt.load(rt.offset(sp,4)?,32)? else{return Err("native platform export module authority");};
+   if module!=self.function.module{return Err("native platform export source identity");}
+   let p=CrtCpu::pointer(rt.load(rt.offset(sp,8)?,32)?)?;let mut bytes=[0u8;256];let mut len=None;
+   for(i,b)in bytes.iter_mut().enumerate(){let unit=rt.load(rt.offset(p,i as i64)?,8)?.known_scalar()?;if unit==0{len=Some(i);break;}*b=unit as u8;}
+   let len=len.ok_or("native platform export unterminated name")?;let name=std::str::from_utf8(&bytes[..len]).map_err(|_|"native platform export encoding")?;
+   let f=rt.native_named_export(init,module,name)?;cpu.clobber(CrtValue::Function(f));return cpu.finish_pop(rt,8)
+  }
+  if iat!=0x415074{return Err("native platform release contract unbound");}
   if cpu.return_pop!=12||cpu.r[4]!=cpu.entry[4]||[3,5,6,7].iter().any(|&i|cpu.r[i]!=cpu.entry[i]){return Err("native platform stdcall frame");}
   let sp=CrtCpu::pointer(cpu.r[4])?;let p=CrtCpu::pointer(rt.load(rt.offset(sp,4)?,32)?)?;
   let mut bytes=[0u8;260];let mut len=None;

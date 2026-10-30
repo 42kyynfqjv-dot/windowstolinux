@@ -85,6 +85,11 @@ pub(crate) fn source(regions: &[Vec<u8>]) -> Result<String, String> {
                 None
             },
         )?;
+        let body = if name == "constructor_prefix" {
+            format!("let _value=(||{{{body}}})()?;Err(\"startup constructor body unbound at 0x402c47\")")
+        } else {
+            body
+        };
         out.push_str(&format!("fn startup_{name}<F>(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,effects:&mut F)->Result<CrtValue,&'static str> where F:FnMut(&mut CrtStreamRuntime,&mut CrtCpu,u32,u32)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;let p=rt.process_image_code(inputs.image,{origin},{})?;if rt.memory.read(p.address(),{}).map_err(|_|\"startup module code read\")?!=&{bytes:?}{{return Err(\"startup module live code changed\");}}{body}}}",bytes.len(),bytes.len()));
     }
     out.push_str(r#"

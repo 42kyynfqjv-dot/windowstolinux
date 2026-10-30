@@ -322,3 +322,34 @@ DENY.store(false,std::sync::atomic::Ordering::SeqCst);result.unwrap();r.provider
         "native-reference-capacity",
     );
 }
+
+#[test]
+fn named_native_export_requires_unique_live_implemented_source_and_target() {
+    native(
+        "",
+        r#"
+for mode in 0..12{
+ let(mut r,i)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();
+ let a=r.provider_begin(i,"UnrelatedFrontend",0x700000,3).unwrap();let a=r.provider_publish(i,&a).unwrap();
+ let b=r.provider_begin(i,"UnrelatedBackend",0x720000,3).unwrap();let b=r.provider_publish(i,&b).unwrap();
+ let d=r.provider_export(i,a,b,"InitializeCriticalSectionEx",0x721000).unwrap();let f=r.bind_native_sync(i,d).unwrap();
+ let prior=r.serial;r.last_os_error=Some(87);
+ if mode==1{r.exports.get_mut(&f.serial).unwrap().callable=false;}
+ if mode==2{r.exports.get_mut(&f.serial).unwrap().api=None;}
+ if mode==3{r.modules.get_mut(&b.handle).unwrap().certain=false;}
+ if mode==4{r.modules.get_mut(&a.handle).unwrap().certain=false;}
+ if mode==5{let mut duplicate=CrtExport{function:f,symbol:"InitializeCriticalSectionEx".into(),target:b,callable:true,api:Some(CrtNativeApi::InitializeGlobalCriticalSectionEx)};duplicate.function.serial+=1;r.exports.insert(duplicate.function.serial,duplicate);}
+ if mode==6{r.exports.remove(&f.serial);}
+ if mode==7{r.thread+=1;}
+ if mode==11{r.providers.get_mut(&a.handle).unwrap().exports.clear();}
+ let name=match mode{8=>"initializecriticalsectionex",9=>"InitializeCriticalSectionEx\0",_=>"InitializeCriticalSectionEx"};
+ let got=r.native_named_export(i,a,name);
+ assert_eq!(r.serial,prior);assert_eq!(r.last_os_error,Some(87));
+ if mode==0||mode==10{assert_eq!(got,Ok(f));let p=r.map_region(0x9000,24,CrtRegionKind::Module,Some(&[0;24])).unwrap();assert_eq!(r.native_sync_initialize(i,f,0,p,0,0),Ok(1));r.native_sync_delete(i,f,0,p).unwrap();}
+ else{assert_eq!(got,Err(match mode{1=>"CRT native provider export implementation unbound",2=>"CRT native named export implementation unbound",3|4=>"CRT module owner/generation/lifetime",5=>"CRT native named export ambiguous",6|8=>"CRT native named export unsupported",7=>"CRT initialization owner/lifetime",9=>"CRT native named export encoding/bounds",11=>"CRT native named export publication incomplete",_=>unreachable!()}));}
+ if mode==10{assert_eq!(r.provider_destroy(i,b),Err("CRT provider still acquired/borrowed"));r.provider_destroy(i,a).unwrap();assert!(r.native_named_export(i,a,name).is_err());r.provider_destroy(i,b).unwrap();let t=r.provider_begin(i,"UnrelatedFrontend",a.handle,1).unwrap();let new=r.provider_publish(i,&t).unwrap();assert_ne!(new,a);assert!(r.function_identity(f,None).is_err());}
+}
+"#,
+        "native-named-export",
+    );
+}
