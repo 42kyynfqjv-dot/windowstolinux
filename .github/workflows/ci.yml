@@ -15,6 +15,7 @@ jobs:
       - run: cargo clippy --all-targets --locked -- -D warnings
       - run: cargo test --locked
       - run: python3 -m unittest discover -s corpus -p test_launch.py -v
+      - run: python3 -m unittest discover -s corpus -p test_windows_wait_observer.py -v
       - run: python3 -m unittest discover -s research/process -v
       - run: python3 research/process/check_memory.py
       - run: python3 research/process/heap/check_guards.py
@@ -147,6 +148,12 @@ jobs:
         with:
           name: imported-launch-evidence
           path: ${{ runner.temp }}/w2l-imported-launch/*
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: output-probe-launch-evidence
+          path: ${{ runner.temp }}/w2l-output-probe-launch/*
           if-no-files-found: warn
       - name: Execute authored PE32 fixture on Windows
         shell: pwsh

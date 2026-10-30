@@ -1,0 +1,117 @@
+{
+  "kind": "Original initializer loop with owned callbacks/ordered rollback; component only",
+  "reviewed_commit": "4bc05bb207df68790836bcaf26b7dd97bff531b9",
+  "source_sha256": {
+    "src/crt_startup_table.rs": "534b8a1b855889ad24e61ffac7f525b27003fffe5133be18e7c56b026dedf35d",
+    "src/crt_startup_entry.rs": "ae29f47c6e8d8394e4491902a0311fbe35b39fc04407af2231241f9cd01ab6fc",
+    "src/crt_normal_frame_tests.rs": "24c3b85b7c69993b880c2a4562c2cfab2523c91f33baee464f68ba624cded1b6",
+    "examples/crt_stream.rs": "3970d467def43b321f919922ea52924530cf5a93d20dc70ed5f9d1b6f9abb86b",
+    "research/process/startup/check_normal_wrapper.py": "a58c5fe7ac7ddfa97750496c104bc86a59e856b714bf753aa75a1b6ec285f8b7"
+  },
+  "validation": {
+    "crt_passed": 283,
+    "ignored_in_full": 2,
+    "artifact_tests": "both passed in reviewed replay",
+    "independent_table_cases": 18,
+    "declared_profile_cases": 17,
+    "python_run": 75,
+    "python_skip": 1,
+    "clippy": "passed",
+    "format": "passed"
+  },
+  "production_component": {
+    "initializer_full_tail": "401945..40197d",
+    "table_loop": "40c926..40c98d",
+    "table": "415fb8..416038,16 init/cleanup pairs",
+    "actual_callbacks_completed": [
+      "407558",
+      "407587"
+    ],
+    "actual_scalar_callees": [
+      "407a8c",
+      "40ca00",
+      "40cbf6",
+      "406660",
+      "406fd7"
+    ],
+    "next_boundary": "VirtualProtect408129/IAT4150b0 inside callback408113",
+    "next_arguments": {
+      "address": "41e000",
+      "size": 128,
+      "new_protection": 2,
+      "old_protection_output": "owned four-byte stack slot EBP-4"
+    },
+    "permission_effect_executed": false,
+    "default_admission": "LoadLibraryExW402b00 remains rejected"
+  },
+  "proof_contract": {
+    "table": "known scalar bounds, immutable owned canonical image, maximum16 pairs",
+    "receipt": "index/phase/live executable target, single use after original guard",
+    "completion": "actual protected callback return and known AL",
+    "rollback": "reverse completed entries only, eligible nonnull cleanup once",
+    "unsupported_callback": "retain prior effects and reject; no fabricated false/success"
+  },
+  "test_scope": {
+    "authored_callback_outcomes": "loop protocol only, not original callback translations or Windows observations",
+    "negative_mutants": "separate copies, frozen original unchanged",
+    "later_helper_mutation": "earlier first callback and cookie store retained, later stores absent"
+  },
+  "provenance_review": {
+    "retired_begin_end_cases": "actually issued/retired input capabilities, PE mapping reuses address; no effects permitted",
+    "mutants": [
+      {
+        "bound": "begin",
+        "exit": 101,
+        "regression_fired": true
+      },
+      {
+        "bound": "end",
+        "exit": 101,
+        "regression_fired": true
+      }
+    ],
+    "mutant_stderr_sha256": {
+      "mutant-begin.stderr": "c1491a745a71cb57ae1c6600c281a7ac1c6257217b914abe3133711ac86085d9",
+      "mutant-end.stderr": "87b607c83630f86aef8dd54d12c7d8742077fb79ee5b5aa0b87ffad1fe185d74"
+    },
+    "foreign_fabrication": "already rejected by lower pointer transport; not claimed as defect"
+  },
+  "replay": {
+    "kind": "original prolog/epilog component comparison with explicit unexecuted body boundary",
+    "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+    "rust_sha256": "6306c25d2bbde1e81260047c2fdc74fcb161647c9c68d32946ffc6e549067883",
+    "comparisons": 5,
+    "scope": "Live registry fixture; body EAX/flags inputs; original stack/FS/saved-state restoration only",
+    "whole_pe_translation_pairs": 0
+  },
+  "report_sha256": "058b98e14e1251d116626416f1c4982476367196948ecfbce082eb7e46ea5a64",
+  "logs": {
+    "full-reviewed.log": "f838e4bbb79143961f0070c637f52f167fdefa2cc5d32cfb18c1d931da924574",
+    "clippy-reviewed.log": "ce77780e52d6b141ec03cce8e9f268a49e064a4500649194657cc2a1cd391045",
+    "format-final-fixed.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "python-final.log": "fd64cda821d57464e341eb978047d865bc6a3ae6c12ee93eb57fd4ae181a7721",
+    "retired-provenance.log": "26c7eadf6dd1363ae9cb5de0af2294f51a1726bd450b256a7837db3cd34576c1",
+    "partial-writes-final.log": "6ad18fd681e8547c7281bf260216caca1cca1781859f9e724017ac4fcbc7181f",
+    "independent.log": "14656bb3802b206bc01bc724acd480d600f2e282a6a26786274ba05fe02ccd8d",
+    "independent-fixed.log": "9c898aad5f1abac97ddfb30bcf1109d62fbc895bf417b756220b7e3540eef26b"
+  },
+  "predecessor_ci": [
+    {
+      "run": 41072504174,
+      "conclusion": "success"
+    },
+    {
+      "run": 41072489824,
+      "conclusion": "success"
+    },
+    {
+      "run": 41072489854,
+      "conclusion": "success"
+    }
+  ],
+  "new_windows_observations": 0,
+  "new_whole_pe_pairs": 0,
+  "next_architecture_gate": "page-granular protection without changing allocation/capability identity; old-protection output, reservation/commit bounds and failure atomicity",
+  "primary_next_contract": "https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualprotect",
+  "historical_windows_timeouts": "retained, unresolved"
+}

@@ -1,0 +1,94 @@
+{
+  "kind": "authored Windows data-page observations; zero translations",
+  "source_sha256": "8e4c40bbe73ec6a689e2aa5bd784bc5ed42558e5b12143134ebdbebdf6a6b6f9",
+  "flags": [
+    "/nologo",
+    "/W4",
+    "/O2",
+    "/GS"
+  ],
+  "expected": [
+    {
+      "ok": true,
+      "old": 4,
+      "pages": [
+        4,
+        2,
+        4
+      ],
+      "states": [
+        4096,
+        4096,
+        4096
+      ]
+    },
+    {
+      "ok": true,
+      "old": 4,
+      "pages": [
+        2,
+        2,
+        4
+      ],
+      "states": [
+        4096,
+        4096,
+        4096
+      ]
+    },
+    {
+      "ok": true,
+      "old": 2,
+      "pages": [
+        4,
+        4,
+        4
+      ],
+      "states": [
+        4096,
+        4096,
+        4096
+      ]
+    },
+    {
+      "ok": true,
+      "old": 4,
+      "pages": [
+        4,
+        1,
+        4
+      ],
+      "states": [
+        4096,
+        4096,
+        4096
+      ]
+    },
+    {
+      "ok": false,
+      "pages": [
+        4,
+        null,
+        null
+      ],
+      "states": [
+        4096,
+        8192,
+        8192
+      ]
+    },
+    {
+      "ok": false,
+      "pages": [
+        4,
+        4,
+        4
+      ],
+      "states": [
+        4096,
+        4096,
+        4096
+      ]
+    }
+  ]
+}

@@ -1,0 +1,71 @@
+{
+  "kind": "Original process-heap initializer/cleanup component; zero whole-PE translations",
+  "reviewed_commit": "2f65eb28150e6c8689a0c5c01ab421498a274322",
+  "source_sha256": {
+    "src/crt_startup_heap.rs": "36dd86e0edbef1b0f4dc3ccf7d3f1cc0ebdfa7220c618cc649d37d58d83b61e3",
+    "src/crt_startup_table.rs": "e572319cf90bea0484ac17a72bf4c816444dd3924680515f8e79010b3d88b8ae",
+    "src/crt_stream_runtime.rs": "e595331b051ef883b7999d8004c4ed78e26bbbe71ae1c5947e46dea734a5c3fe",
+    "src/crt_stream_cpu.rs": "8613cbfd7b6672b768d84ef9d2483bb070917ca0891278a1af74d0b891fd3955",
+    "src/crt_normal_frame_tests.rs": "49510940070e56044e7cfb21328f8d28fd378143be4261b90ec16b8e63873312",
+    "examples/crt_stream.rs": "0651016367facaddb9735df0df073cf93394d441b6341e5f89e9ee5b336f5bb0",
+    "research/process/startup/check_normal_wrapper.py": "13edb1b286e667243189928b4e4a1059dea9990595d5bbc8a8640df9757ba045"
+  },
+  "validation": {
+    "crt_passed": 285,
+    "ignored_in_full": 2,
+    "artifact_tests": "both passed in reviewed replay",
+    "heap_native_cases": 12,
+    "python_run": 76,
+    "python_skip": 1,
+    "guard_mutants_detected": 7,
+    "emitted_frame_vectors": 10,
+    "clippy": "passed",
+    "format": "passed"
+  },
+  "evidence": {
+    "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+    "rust_sha256": "5a3e8342f37dda1c004b56aa9266559bc6a3e616616f096f6a6f951c5e09c966",
+    "report_sha256": "210936125d3f24954cae8870b2b68df23ab312518ba3c91ccdb79043a8afa554",
+    "recorded_windows_wrapper_comparisons": 5,
+    "new_heap_windows_pairs": 0,
+    "whole_pe_pairs": 0
+  },
+  "component": {
+    "callback": "40c8f0",
+    "import_binding": "kernel32.dll!GetProcessHeap via4150f8",
+    "store": "opaque canonical heap at41d2c8",
+    "cleanup": "40c910 clears cell, does not destroy process heap",
+    "authority": "anchor plus actual Space::ProcessHeap identity; existing policy retained; fresh policy unknown",
+    "next_boundary": "index7/40a407 body unbound",
+    "default_admission": "402b00 remains blocked"
+  },
+  "predecessor_ci": {
+    "push_run": 41086548101,
+    "push_conclusion": "success",
+    "pr_run": 41086538322,
+    "pr_conclusion": "failure",
+    "failed_job": 124169062133,
+    "cause": "original imported-output one fixture timed out after15s; cause unresolved",
+    "fixture_pe_sha256": "852e4add3173b4519d319231bca7d6e240a52755e6768739032ad0dd83170916",
+    "retained_artifacts": [
+      12992091647,
+      12992391390
+    ],
+    "mutation_gate": "succeeded; repaired page guard mutation still detected"
+  },
+  "log_sha256": {
+    "full.log": "c1d8f1d8fea374230d21929a8ca390882040cb512de3105b61549fe754b313ef",
+    "cases.log": "0a7a65345d68321fefea2c3f4f03bcf3918ca6ea3b14fff955e9479effa416a9",
+    "first.log": "70a6dca325b2f378a19391bc062b6ea6725454524df1ce869beb75fc6bf6ce5d",
+    "clippy.log": "426158b8abedd8a8828d02e4c8ca0d87221468e3d5e73eb04255008ba964fb0f",
+    "python.log": "62a5f2464e6727ffd92d61d0e5b5022a0008737a3fbaee47a36453f274e491e1",
+    "memory-mutations.log": "9e375eb448d2c6575b085cf190827436072230e94625022c8b4551a3f0f3ba7e"
+  },
+  "limits": [
+    "native success profile has one canonical heap; Windows resource/failure equivalence unproved",
+    "GetProcessHeap alone does not establish allocation policy",
+    "false-return case is a separate conformance injection",
+    "default/full startup/rcedit and historical timeout causes unresolved",
+    "final-head CI/independent review required"
+  ]
+}

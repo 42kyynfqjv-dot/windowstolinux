@@ -1,0 +1,29 @@
+{
+  "head": "db4fc00f7eeff64b3a3bf2e07d44913acce75ea8",
+  "pinned_failure": {
+    "run": 40993129755,
+    "job": 123859982035,
+    "observed": "226 CRT tests passed. check_normal_wrapper.py then raised original C++ owned record component failed.",
+    "identified_defect": "Runner required substring 11 passed after the previous review added a twelfth selected C++ test. Independent local reproduction confirms the count mismatch. Raw Windows cxx-record-components stdout was uploaded but was not downloaded in this session.",
+    "artifact": 12950131822,
+    "artifact_zip_sha256": "3739ad55225a23e25019c1070a5989bec9bab083e5cef26e02c300364cb42f03",
+    "fix": "Require named successful tests, zero failure/ignored counts and exact correspondence between unique completion rows and the libtest summary; accept additional executed tests. Add independent false-pass and CRLF regressions."
+  },
+  "separate_original_windows_failure": {
+    "run": 40993135963,
+    "job": 123860002538,
+    "last_announced_case": "helper",
+    "pe_sha256": "2141f783bf76bb468e67000d94ff8d16f583eb8c5b1f3faf4856f1cc39315e23",
+    "observed": "Original imported fixture process.wait timed out after 15 seconds. The earlier independent launch controls passed. Output bytes and root cause are not established from these logs.",
+    "artifact": 12949818169,
+    "artifact_zip_sha256": "8fb774290d9515cad589310abde4489047c2a6e6741a416da4f304409ce42e1c",
+    "launch_control_artifact": 12949614321,
+    "launch_control_zip_sha256": "18758b90960724919d5b7038267ba6cdbd433b71ba914c416730b9ab9e823b3f",
+    "status": "Unresolved; no retry or timeout relaxation. Stale-count correction does not diagnose this failure."
+  },
+  "final_workflow_conclusions": {
+    "40993135963": "failure",
+    "40993129755": "failure",
+    "40993129680": "success"
+  }
+}

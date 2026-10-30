@@ -1,0 +1,72 @@
+{
+  "kind": "original free and pending-event lazy PTD component integration",
+  "reviewed_commit": "223938efa072f18685d02dcd78f455961d3edb9e",
+  "reviewed_ci": {
+    "40997493851": "success",
+    "40997489151": "success",
+    "40997488681": "success"
+  },
+  "primary_contract": {
+    "url": "https://learn.microsoft.com/en-us/windows/win32/api/heapapi/nf-heapapi-heapfree",
+    "read_date": "2026-10-30",
+    "scope": "BOOL and GetLastError; failure does not certify unchanged bytes or usable allocation lifetime"
+  },
+  "free_native_cases": 18,
+  "receipt_native_cases": 10,
+  "lazy_ptd_native_cases": 20,
+  "new_lazy_ptd_cases": 5,
+  "ordered_native_cases": 84,
+  "new_ordered_lazy_cases": 8,
+  "new_windows_observations": 0,
+  "whole_pe_pairs": 0,
+  "regions": {
+    "FREE": {
+      "bytes": 58,
+      "sha256": "d42a40724c82ea991845cf96d2978ce313af1c0fe4327edf1eb3271125079c93"
+    },
+    "MAPPER": {
+      "bytes": 95,
+      "sha256": "eeb72ef19e7023e5075f51b11c7031620c8d33faeabac0047cf3dfd08c99d861"
+    },
+    "SEARCH": {
+      "bytes": 127,
+      "sha256": "80b3fdbc40b37192fb9bb32e53a9393fd66105596803f4907999868767f48f9e"
+    },
+    "UPDATER": {
+      "bytes": 36,
+      "sha256": "1986f11110a5eea0954ca17361b51fd9724305a3fc92a87fac9b0d1035f1ab4b"
+    },
+    "TABLE": {
+      "bytes": 360,
+      "sha256": "11ed605c378b270d3886b5648fb8e8abd6d7e45a4c37e88e3bb333c6317cdb36"
+    }
+  },
+  "limits": [
+    "HeapFree BOOL/LastError outcomes remain explicit component inputs",
+    "failure quarantines proof authority and retains charged backing storage; no host allocator failure equivalence claim",
+    "error mapper/search/table proved from unchanged bytes; 68-byte private scratch checked and conservatively forgotten",
+    "errno router/store original; UCRT PTD acquisition callback remains supplied",
+    "pending event binds original lazy getter itself, but allocator/API inputs remain explicit",
+    "lazy unwind, recursive errno/new handler, required PTD termination, actual delivery and full startup remain unproved"
+  ],
+  "test_development_corrections": [
+    "Interior pointer preflight moved ahead of API callback; strict error expectation updated.",
+    "Generated lazy handler identity needed its own Rust namespace, without changing original target identity.",
+    "Reused mapper proof now checks and forgets private scratch; protected-slot and stale-fact regressions added.",
+    "First replay requested heap-free tests from the C++-only cargo filter and correctly rejected missing named completions. Added a separate heap-free invocation with strict named completions; retained the failed local run."
+  ],
+  "crt_tests": 232,
+  "root_tests": 175,
+  "python_tests": 60,
+  "python_skipped": 1,
+  "clippy": "passed",
+  "formatting": "passed",
+  "retained_replay": "passed",
+  "recorded_windows_wrapper_comparisons": 5,
+  "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "generated": {
+    "normal-wrapper.rs": "739d1e76ea8c84f9026d9fe55ac41bac41b33a0e5bf3e29517e6bc7ec3622545",
+    "lazy-ptd-component.rs": "00e26b8eccff3de1120a9f25f8aeaa63fd562602133f82303681d36f43e1eb94",
+    "lazy-common-handler.rs": "2d7ba6acbee66179dc07ad8d8c4dabd34f43702da959a7803c9eda74b3f54ed1"
+  }
+}

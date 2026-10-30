@@ -186,3 +186,262 @@ fn finite_budgets_and_failed_mutation_preserve_facts() {
     assert!(matches!(Space::new(MAX_BYTES + 1, 1), Err(Fault::Budget)));
     assert!(matches!(Space::new(1, MAX_REGIONS + 1), Err(Fault::Budget)));
 }
+
+fn protection_space() -> (Space, Capability, Capability) {
+    let mut s = Space::new(32768, 8).unwrap();
+    let data = s
+        .map_image(0x10000, 3 * PAGE_SIZE, 7, Permissions::READ_WRITE, &[9; 16])
+        .unwrap();
+    let out = s
+        .map(
+            0x20000,
+            PAGE_SIZE,
+            Owner::Stack(8),
+            Permissions::READ_WRITE,
+            false,
+        )
+        .unwrap();
+    s.write(0x20000, &0xdeadbeefu32.to_le_bytes()).unwrap();
+    (s, data, out)
+}
+#[test]
+fn page_protection_rounding_first_old_value_and_aliases() {
+    let (mut s, data, out) = protection_space();
+    let fact = s.prove_read(data, Owner::Module(7), 0x10000, 4).unwrap();
+    s.protect_data_with_old(
+        (data, Owner::Module(7), 0x10fff, 2),
+        2,
+        (out, Owner::Stack(8), 0x20000),
+    )
+    .unwrap();
+    assert_eq!(s.read(0x20000, 4).unwrap(), &4u32.to_le_bytes());
+    for at in [0x10000, 0x10fff, 0x11000, 0x11fff] {
+        assert_eq!(s.write(at, &[1]), Err(Fault::Permission));
+    }
+    s.write(0x12000, &[5]).unwrap();
+    assert_eq!(s.read_proven(fact, Owner::Module(7)), Err(Fault::Stale));
+    s.validate(data, Owner::Module(7)).unwrap();
+    assert_eq!(s.read(0x10000, 4).unwrap(), &[9; 4]);
+    // The pages now differ. Old protection is from the FIRST page only.
+    s.protect_data_with_old(
+        (data, Owner::Module(7), 0x11fff, 2),
+        4,
+        (out, Owner::Stack(8), 0x20000),
+    )
+    .unwrap();
+    assert_eq!(s.read(0x20000, 4).unwrap(), &2u32.to_le_bytes());
+    s.write(0x11000, &[7]).unwrap();
+    assert_eq!(s.write(0x10000, &[1]), Err(Fault::Permission));
+}
+#[test]
+fn page_protection_failures_are_atomic() {
+    for mode in 0..10 {
+        let (mut s, data, out) = protection_space();
+        let (mut address, mut size, mut flags, mut output) = (0x10001, 1, 2, 0x20000);
+        match mode {
+            0 => size = 0,
+            1 => {
+                address = 0x12fff;
+                size = 2;
+            }
+            2 => flags = 0x40,
+            3 => flags = 0x102,
+            4 => output = 0x20ffe,
+            5 => output = 0x10fff,
+            6 => {
+                address = u32::MAX;
+                size = 2;
+            }
+            7 => output = 0,
+            8 => s.release(out, Owner::Stack(8)).unwrap(),
+            9 => {
+                s.regions[1].epoch = u64::MAX;
+            }
+            _ => unreachable!(),
+        }
+        let data_epoch = s.regions[0].epoch;
+        let got = s.protect_data_with_old(
+            (data, Owner::Module(7), address, size),
+            flags,
+            (out, Owner::Stack(8), output),
+        );
+        assert!(got.is_err(), "mode {mode} unexpectedly protected");
+        assert_eq!(s.regions[0].epoch, data_epoch);
+        s.validate_writable(data, Owner::Module(7), 0x10000, 3 * PAGE_SIZE)
+            .unwrap();
+        if mode != 8 {
+            assert_eq!(s.read(0x20000, 4).unwrap(), &0xdeadbeefu32.to_le_bytes());
+        }
+    }
+}
+#[test]
+fn page_protection_stale_cross_process_and_executable_reject() {
+    let (mut s, data, out) = protection_space();
+    let (other, foreign, _) = protection_space();
+    assert_ne!(s.identity, other.identity);
+    assert_eq!(
+        s.protect_data_with_old(
+            (foreign, Owner::Module(7), 0x10000, 1),
+            2,
+            (out, Owner::Stack(8), 0x20000)
+        ),
+        Err(Fault::Identity)
+    );
+    s.release(data, Owner::Module(7)).unwrap();
+    let code = s
+        .map_image(
+            0x10000,
+            3 * PAGE_SIZE,
+            7,
+            Permissions::READ_EXECUTE,
+            &[0xc3],
+        )
+        .unwrap();
+    assert_eq!(
+        s.protect_data_with_old(
+            (data, Owner::Module(7), 0x10000, 1),
+            2,
+            (out, Owner::Stack(8), 0x20000)
+        ),
+        Err(Fault::Stale)
+    );
+    assert_eq!(
+        s.protect_data_with_old(
+            (code, Owner::Module(7), 0x10000, 1),
+            4,
+            (out, Owner::Stack(8), 0x20000)
+        ),
+        Err(Fault::Permission)
+    );
+    s.validate_executable(code, Owner::Module(7), 0x10000, 1)
+        .unwrap();
+    assert_eq!(s.read(0x20000, 4).unwrap(), &0xdeadbeefu32.to_le_bytes());
+}
+#[test]
+fn protection_does_not_define_unknown_bytes_or_grow_mapping() {
+    let (mut s, data, out) = protection_space();
+    s.forget(0x10008, 1).unwrap();
+    s.protect_data_with_old(
+        (data, Owner::Module(7), 0x10000, 1),
+        1,
+        (out, Owner::Stack(8), 0x20000),
+    )
+    .unwrap();
+    assert_eq!(s.read(0x10000, 1), Err(Fault::Permission));
+    assert_eq!(
+        s.validate_readable(data, Owner::Module(7), 0x10000, 1),
+        Err(Fault::Permission)
+    );
+    s.protect_data_with_old(
+        (data, Owner::Module(7), 0x10000, 1),
+        2,
+        (out, Owner::Stack(8), 0x20000),
+    )
+    .unwrap();
+    assert_eq!(s.read(0x10008, 1), Err(Fault::Uninitialized));
+    let short = s
+        .map_image(0x30000, 128, 7, Permissions::READ_WRITE, &[5])
+        .unwrap();
+    s.protect_data_with_old(
+        (short, Owner::Module(7), 0x30000, 128),
+        2,
+        (out, Owner::Stack(8), 0x20000),
+    )
+    .unwrap();
+    assert_eq!(s.read(0x30080, 1), Err(Fault::Range));
+    assert_eq!(
+        s.map(0x30080, 128, Owner::Stack(9), Permissions::READ_WRITE, true),
+        Err(Fault::Overlap)
+    );
+    // Existing partial neighboring mappings also block protection atomically.
+    let another = s
+        .map_image(0x40000, 128, 7, Permissions::READ_WRITE, &[5])
+        .unwrap();
+    s.map(0x40080, 128, Owner::Stack(9), Permissions::READ_WRITE, true)
+        .unwrap();
+    assert_eq!(
+        s.protect_data_with_old(
+            (another, Owner::Module(7), 0x40000, 1),
+            2,
+            (out, Owner::Stack(8), 0x20000)
+        ),
+        Err(Fault::Overlap)
+    );
+    s.validate_writable(another, Owner::Module(7), 0x40000, 1)
+        .unwrap();
+}
+#[test]
+fn same_mapping_output_other_page_preserves_identity_and_first_value() {
+    let (mut s, data, _) = protection_space();
+    let fact = s.prove_read(data, Owner::Module(7), 0x12000, 4).unwrap();
+    s.protect_data_with_old(
+        (data, Owner::Module(7), 0x10000, 1),
+        2,
+        (data, Owner::Module(7), 0x12000),
+    )
+    .unwrap();
+    assert_eq!(s.read(0x12000, 4).unwrap(), &4u32.to_le_bytes());
+    assert_eq!(s.read_proven(fact, Owner::Module(7)), Err(Fault::Stale));
+    s.validate_writable(data, Owner::Module(7), 0x12000, 4)
+        .unwrap();
+}
+
+#[test]
+fn mixed_permissions_invalidate_immutable_snapshots() {
+    let (mut s, data, out) = protection_space();
+    s.protect_data_with_old(
+        (data, Owner::Module(7), 0x10000, 3 * PAGE_SIZE),
+        2,
+        (out, Owner::Stack(8), 0x20000),
+    )
+    .unwrap();
+    s.validate_immutable(data, Owner::Module(7), 0x10000, 3 * PAGE_SIZE)
+        .unwrap();
+    s.protect_data_with_old(
+        (data, Owner::Module(7), 0x11000, 1),
+        4,
+        (out, Owner::Stack(8), 0x20000),
+    )
+    .unwrap();
+    assert_eq!(
+        s.validate_writable(data, Owner::Module(7), 0x10000, 3 * PAGE_SIZE),
+        Err(Fault::Permission)
+    );
+    assert_eq!(
+        s.validate_immutable(data, Owner::Module(7), 0x10000, 3 * PAGE_SIZE),
+        Err(Fault::Permission)
+    );
+    s.validate_immutable(data, Owner::Module(7), 0x10000, PAGE_SIZE)
+        .unwrap();
+}
+#[test]
+fn protection_epoch_and_output_permission_preflight() {
+    for mode in 0..3 {
+        let (mut s, data, out) = protection_space();
+        if mode == 0 {
+            s.regions[0].epoch = u64::MAX;
+        }
+        if mode == 1 {
+            s.regions[1].pages.fill(Permissions::READ);
+        }
+        if mode == 2 {
+            s.regions[0].epoch = u64::MAX - 1;
+        }
+        let output = if mode == 2 {
+            (data, Owner::Module(7), 0x12000)
+        } else {
+            (out, Owner::Stack(8), 0x20000)
+        };
+        assert_eq!(
+            s.protect_data_with_old((data, Owner::Module(7), 0x10000, 1), 2, output),
+            Err(if mode == 1 {
+                Fault::Permission
+            } else {
+                Fault::Budget
+            })
+        );
+        s.validate_writable(data, Owner::Module(7), 0x10000, 1)
+            .unwrap();
+        assert_eq!(s.read(0x20000, 4).unwrap(), &0xdeadbeefu32.to_le_bytes());
+    }
+}

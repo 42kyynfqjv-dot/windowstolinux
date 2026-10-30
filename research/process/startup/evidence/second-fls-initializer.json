@@ -1,0 +1,83 @@
+{
+  "kind": "Original second-FLS initializer/cold resolver component; zero whole-PE translations",
+  "reviewed_commit": "276aa419c8a7e86b8f24f9680ec688095dd00a69",
+  "source_sha256": {
+    "src/crt_startup_fiber.rs": "9987955eed711129b8042ef266c2b38b432b21b3fe774acd9597bf237a4d8de3",
+    "src/crt_startup_table.rs": "d8d83bbeb1e63ab622000c056538263bb11b2b5ee3574ea11346eb8e1b195b8b",
+    "src/crt_startup_entry.rs": "e0af77532a010507c54ad25aabb99d85732249b7d85fea0b45963e6ad6ef01e4",
+    "src/crt_normal_frame_tests.rs": "09ecf884fc43b6a5c7432ff170ccd0b282efb45c1677b6dc50d1d2eb2bd610ae",
+    "examples/crt_stream.rs": "31f8bf6986d8f1af4a842739aa310e2af06beefebccd63f089acfbbb4cc88e87",
+    "research/process/startup/check_normal_wrapper.py": "f4e221e012465977918e1661e3a7ce5399ebd02ff953ec83be533e212b6fc263",
+    "research/process/startup/second_fiber_probe.c": "e1a7a57cca3820fb7f9a94a58a888106d7853b1cfca97ed9e5cb7ef15cfebef0",
+    "research/process/startup/second-fiber-frozen.json": "12280909f478402d17e19d9b3447082e03a463e79c3fb082e2a35fa63370957a",
+    "research/process/startup/measure_second_fiber.py": "af439f846999499f509caf41b5db369d582821a09cedb932d11aa28a8a197f0a",
+    ".github/workflows/startup-inventory.yml": "26e854b8e030a7e9961817244a2c5e2f10ac5cb27f6d46e58e876cbb6dc59f79"
+  },
+  "validation": {
+    "crt_passed": 286,
+    "ignored_in_full": 2,
+    "artifact_tests": "both passed in reviewed replay",
+    "second_fls_native_cases": 15,
+    "python_run": 76,
+    "python_skip": 1,
+    "guard_mutants_detected": 7,
+    "emitted_frame_vectors": 10,
+    "clippy": "passed",
+    "format": "passed"
+  },
+  "evidence": {
+    "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+    "rust_sha256": "d4f36d3eac92ad58e82c3b29ab09164476493fb27e25df7edbedcd474078406e",
+    "report_sha256": "c3a545cd6a7995ecb507f3daf600e6fb94a215328488c2ff7df4f9ef1370b979",
+    "recorded_windows_wrapper_comparisons": 5,
+    "new_second_fls_windows_pairs": 0,
+    "whole_pe_pairs": 0
+  },
+  "component": {
+    "callback": "40a407",
+    "selector": "408136",
+    "resolver": "407e41",
+    "loader": "407f0e",
+    "next_boundary": "LoadLibraryExW407f1d/IAT415074",
+    "candidate": "api-ms-win-core-fibers-l1-1-2",
+    "symbol": "FlsGetValue2",
+    "arguments": {
+      "flags": "800",
+      "reserved": 0
+    },
+    "outcome": "native profile mapping unsupported; no module/function/second FLS index published",
+    "seeded_conformance": "known missing-function sentinel executes actual native allocation then rejects registered PTD context at40a428; not unchanged entry acceptance",
+    "default_admission": "402b00 remains blocked"
+  },
+  "predecessor_ci": {
+    "41089875039": "success",
+    "41089864372": "success",
+    "41089864506": "success"
+  },
+  "log_sha256": {
+    "full-reviewed.log": "042d5a8d9ea692f17f051a780afd5a775ce833a3da0e26a2ef2abd8fa576c615",
+    "cases.log": "0bc42322c5d596520d26c7d7b85c5684e3e5fe353b2eabdf0011705f427ba6d3",
+    "stale-export.log": "bff2413f53d57cedba967915a050993333cc134cb019c60d99cb6300e2f4742c",
+    "clippy-reviewed.log": "cae671109a1e351e2cf518b21e61ac97f9259f7dcebfdb8df5183f153cb1bcb6",
+    "python-final.log": "891d881bcbe9c7cc0ab5df1f5c0892c4bf065af040ab1d5073ae000bfca7c355",
+    "memory-mutations.log": "9e375eb448d2c6575b085cf190827436072230e94625022c8b4551a3f0f3ba7e",
+    "first.log": "4eede6a40d7c9f3053f9a9b7b99ef60dfe7c35fcaeba713116dbe5ed04634dc4"
+  },
+  "windows_observation": {
+    "status": "frozen source/configuration; pending CI",
+    "kind": "original Windows candidate availability; no translation",
+    "names": [
+      "api-ms-win-core-fibers-l1-1-2",
+      "kernelbase"
+    ],
+    "symbol": "FlsGetValue2",
+    "availability": "not assumed"
+  },
+  "remaining": [
+    "version-qualified candidate mapping and export availability evidence",
+    "indexed-lock logical-to-owned-slot normalization and actual protection/cache publication/release",
+    "original registered PTD context acquisition and cleanup/callback effects",
+    "default/full startup/rcedit and historical Windows timeout causes unresolved",
+    "final-head CI and independent review required"
+  ]
+}

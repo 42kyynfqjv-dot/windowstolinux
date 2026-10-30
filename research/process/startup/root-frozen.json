@@ -1,0 +1,24 @@
+{
+  "source_sha256": "009780acc25bbbc7a184a68537544aa264119eeabb54e0079df76bc1ce6b1de6",
+  "configuration": "MSVC x86 14.44 /O2 /GS; ordinary CRT entry; no debugger; expected outcomes frozen before execution",
+  "cases": [
+    {
+      "mode": "r",
+      "exit": 0,
+      "stdout_hex": "5452",
+      "stderr_hex": ""
+    },
+    {
+      "mode": "t",
+      "exit": 37,
+      "stdout_hex": "54",
+      "stderr_hex": ""
+    },
+    {
+      "mode": "s",
+      "exit": 0,
+      "stdout_hex": "4648",
+      "stderr_hex": ""
+    }
+  ]
+}

@@ -1,0 +1,79 @@
+{
+  "kind": "Bounded original startup CPU classifier observation and return; not whole-PE translation",
+  "reviewed_parent": "79b31b599b42bcc4573ade8118e3e9403e03aabc",
+  "parent_ci": {
+    "41027946389": "success",
+    "41027940069": "success",
+    "41027940119": "success"
+  },
+  "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "generated_rust_sha256": "a5a79fa839d50a80ddf29c232e388abaf83bd80d8ea9f5f31e642d69934cef5e",
+  "cpu_tail_sha256": "ac7bd48f5cbd556667c4128318a35607bbc6bde1b879b75ed180093f37c81465",
+  "new_original_windows_cpu_observations": 0,
+  "new_windows_elf_pairs": 0,
+  "retained_recorded_windows_component_comparisons": 5,
+  "local_startup_cpu_cases": 15,
+  "native_linux_cpu_observation_cases": 2,
+  "native_combined_identity_clock_cpu_entry_cases": 1,
+  "new_rust_regression_tests": 5,
+  "crt_tests_passed": 258,
+  "crt_tests_ignored_separately_passed": 2,
+  "converter_tests_passed": 175,
+  "python_tests_run": 60,
+  "python_existing_skip": 1,
+  "clippy": "passed -D warnings",
+  "format_and_diff_checks": "passed",
+  "binding_mutants": {
+    "entry_regions": 86,
+    "cpu_tail_bytes": 763,
+    "cpu_import_identity": 3
+  },
+  "first_unsupported_operation": {
+    "call": "0x40195a",
+    "target": "0x4024ca",
+    "effects": "call activation retained; original classifier writes and return already executed"
+  },
+  "no_contract_boundary_retained": "0x401ebe/IAT0x41501c rejects without feature observation",
+  "native_domain": [
+    "Linux x86-64 userspace ABI",
+    "CPUID enabled",
+    "stable CPU feature exposure; guarded XGETBV0",
+    "fresh observations per query",
+    "matching runtime/init/logical thread and native process/thread identity",
+    "enabled legacy SSE2; zero PF10 synthetic case models HAL non-detection"
+  ],
+  "admission_limits": [
+    "CPU observations confined to closed scalar classifier",
+    "no feature-selected library or generic SIMD admission",
+    "root activation/stack/incoming chain supplied",
+    "no complete startup/rcedit or Windows delivery closure"
+  ],
+  "source_sha256": {
+    "src/crt_cpu_features.rs": "4de4e99d87f85bc4ead001e65b6666e7a6c74896ca644ef8f968eb413bfa0c77",
+    "src/crt_startup_entry.rs": "adf32eb885b289ad8016beef956e822da83cedff7c7ef297e0c5f1f405d7ceb1",
+    "src/crt_stream_ir.rs": "9339f6cd5cb0b94cb107f1f3ec20c36733387ae7b193aaf1c19b66b30ffff6e4",
+    "src/crt_stream_emit.rs": "a4a58d89af4f9685df9fffd09e8dbbcedbaf194e151de8d32853b2c154006734"
+  },
+  "local_logs_sha256": {
+    "connected.log": "d51482ba81f54cc9482240bd99bea4803a4a9722fe4a39919f09cd528f8626ea",
+    "connected-owner.log": "0aa0584c6ea2622701e2c2405cfda3e754fec335d20dafbb206ec72089bc6315",
+    "connected-complete.log": "f604b8f10a61bec394a315bffded6d94044d6a8aa7f4bb827e048c92d627b7d1",
+    "feature-strict.log": "e226c988e39e3f914c3d5e4396f511002de2c06da3699ca9e4974241e1137b7f",
+    "feature-import.log": "c613f39e3c0e2906cde695a2536ecaa7593f4642f9cc623ce2977aa18ec38d24",
+    "crt-publish.log": "717ffea9a827d628a0c30e212977922ed267165aca3e15323019638558ef061f",
+    "root.log": "a815323736641dc09334c57a9b9ad378e212f0eec55c41647636ccca60270af8",
+    "python-final.log": "465475c4f677dd2fcb72c51fb56252a53fff05e1492f63a69219fbc09cd0bf50",
+    "clippy-publish.log": "f792e96b437b6b1af83167b2efa488f44c1215eaa9f743373b0c87dee483c82f",
+    "replay-publish/report.json": "3022e56c35bf3f852681a3091ef42e56963d131ca7a38c8eaf2cd205d7920f85",
+    "replay-verified/registered-errno.stdout": "669b498c21e361d6ce11e9d2a576311b97b0cf2da1273192e4f7e9434abc3aee"
+  },
+  "retained_local_corrections": [
+    "generated negative test initially used wrong release owner type",
+    "strict XCR negative expected a later check instead of earlier unsupported-state rejection",
+    "replay-verified compiled an edited harness after extraction; missing import-evidence file, final stable replay succeeds",
+    "native-observation report count corrected from one to two",
+    "HAL reporting predicate separated from required enabled legacy SSE2 premise"
+  ],
+  "historical_windows_timeouts": "unresolved; no retry-resolution claim",
+  "reproduction": "python3 research/process/startup/check_normal_wrapper.py ORIGINAL_WINDOWS_DIR OBSERVED_WINDOWS_DIR NEW_OUTPUT_DIR with pinned Rust/Z3 environment"
+}

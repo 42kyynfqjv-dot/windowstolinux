@@ -35,6 +35,8 @@ research/cli/v2/*.json text eol=lf
 research/cli/v2/*.py text eol=lf
 # Runtime template is included verbatim in emitted Rust on both hosts.
 src/linker/stream/runtime.txt text eol=lf
+src/linker/input/continuation.txt text eol=lf
+src/linker/activation.rs text eol=lf
 research/cli/v2/proof/* text eol=lf
 research/cli/corpus/*.json text eol=lf
 research/cli/corpus/*.py text eol=lf
@@ -57,3 +59,6 @@ research/process/heap/*.json text eol=lf
 research/process/heap/*.py text eol=lf
 research/process/buffers/*.json text eol=lf
 research/process/buffers/*.py text eol=lf
+research/process/startup/*.json text eol=lf
+research/process/startup/*.py text eol=lf
+research/process/startup/*.c text eol=lf

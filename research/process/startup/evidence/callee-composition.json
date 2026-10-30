@@ -1,0 +1,109 @@
+{
+  "kind": "EH4 helper proof/source composition and connected C++ producer counterexamples; component evidence only",
+  "base_commit": "d1923853216772641fd52292a38a2ebe6a09ca89",
+  "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "rust_sha256": "50e0c39edb170cd005db0367292b7bcfaf36deff152e34fd250034a200c75f94",
+  "observations_sha256": "0feb586c7170dfd7e2390cf92ce1e5efa050c3e208d6c8903312e2d054c506cc",
+  "vectors_sha256": "6f9b74742366c0f207d397ccf8b1af4afc2d01b34fae21cafb68d38d71a6ec66",
+  "ordered_native_cases": 76,
+  "no_read_scenarios": 27,
+  "new_native_cases": 6,
+  "compiler_callee_rejection_cases": 6,
+  "root_tests_passed": 175,
+  "crt_tests_passed": 225,
+  "all_target_clippy": "passed",
+  "recorded_windows_wrapper_comparisons": 5,
+  "fresh_windows_observations": 0,
+  "whole_pe_pairs": 0,
+  "helper_hashes": {
+    "event_normalizer_sha256": "dbce9477a792e0eb0508b3801acd1010c0663437f234076fb55951a13ae743d1",
+    "guard_validator_sha256": "f07b9f6c09b740956b701d0169614db4da210ccb7a3264617dc520608d1f6960",
+    "security_check_sha256": "fe7d9d63849704c000bf3b2bd78617127b54a1a00005d72f3263cae87bf49fad",
+    "context_helper_sha256": "2472c01cd9c5e286219ff8c07890ba030015dd8c4cdc62608ad79ffbd147b693"
+  },
+  "proof_composition": [
+    "original call roles and targets",
+    "event code",
+    "scope header and cookie",
+    "disjoint original byte owners",
+    "callbacks emitted from matched proofs",
+    "live helper bytes before execution and consumption"
+  ],
+  "compiled_mutants": {
+    "callee-bytes": {
+      "kind": "callee-bytes proof mutation; native component only",
+      "source_sha256": "50e0c39edb170cd005db0367292b7bcfaf36deff152e34fd250034a200c75f94",
+      "mutant_sha256": "1ea2a86f36e2dc66a31e75333d14016ee2c85b4e3cada6bb28be1c5d50b0c944",
+      "returncode": 101,
+      "observed": "changed original normalizer executed from stale compiled effects",
+      "whole_pe_pairs": 0,
+      "new_windows_observations": 0
+    },
+    "unobserved-read": {
+      "kind": "unobserved-read proof mutation; native component only",
+      "source_sha256": "50e0c39edb170cd005db0367292b7bcfaf36deff152e34fd250034a200c75f94",
+      "mutant_sha256": "936761afd5a8d678faf73e11d8d5ed306013ae4485c67a71f7fb3ca7f41e21e8",
+      "returncode": 101,
+      "observed": "raw CONTEXT read admitted despite the no-read lease",
+      "whole_pe_pairs": 0,
+      "new_windows_observations": 0
+    },
+    "unobserved-epoch": {
+      "kind": "unobserved-epoch proof mutation; native component only",
+      "source_sha256": "50e0c39edb170cd005db0367292b7bcfaf36deff152e34fd250034a200c75f94",
+      "mutant_sha256": "2226e51d2e8eae9564ec93691292417e321520562f8084291a25f0b321bfa884",
+      "returncode": 101,
+      "observed": "retained event lease survived the failed registry epoch",
+      "whole_pe_pairs": 0,
+      "new_windows_observations": 0
+    }
+  },
+  "remaining_effects": [
+    {
+      "case": 74,
+      "pc": "0x403d9c",
+      "instruction": "cmp dword ptr [eax+0x20],esi",
+      "missing_fact": "initialized known dispatcher PTD word",
+      "expected_error": "CRT unknown scalar bits observed"
+    },
+    {
+      "case": 75,
+      "pc": "0x402906",
+      "target": "0x402bef",
+      "missing_fact": "original lazy setter and allocation/publication/rollback effects after null FLS result",
+      "expected_error": "C++ PTD lazy setter/allocation/free effect unbound"
+    }
+  ],
+  "remaining_producer_boundary": {
+    "ordered_fixture_code": "0xe0420042",
+    "original_initial_raise_code": "0xe0424242",
+    "source_call": "explicit component input; import replay does not close startup"
+  },
+  "new_test_development_corrections": [
+    "u32 array index converted to usize before successful native compilation",
+    "context code mutation rejects first at its existing lease check",
+    "unknown PTD comparison requires exact unknown-scalar error",
+    "completed EH4 scratch is retired before C++ failure; assert retained record and interrupted state instead of a live scratch value"
+  ],
+  "base_ci": {
+    "d192385": {
+      "40989022050": "success",
+      "40989017448": "success",
+      "40989017442": "success"
+    },
+    "c3be6ab": {
+      "40988106192": "success",
+      "40988100925": "success",
+      "40988101018": "success"
+    }
+  },
+  "historical_windows_timeouts": "unresolved; no threshold change or retry in this pass",
+  "whole_event_certificate": "not issued; PTD and delivered-state producers, incoming containment and external effects remain open",
+  "commands": [
+    "cargo test --locked --example crt_stream",
+    "cargo test --locked --bin w2l",
+    "cargo clippy --all-targets --locked -- -D warnings",
+    "python3 research/process/startup/check_normal_wrapper.py ORIGINAL OBSERVED OUTPUT",
+    "python3 research/process/startup/check_root_guard.py OUTPUT/normal-wrapper.rs MUTANT_OUTPUT --mutation callee-bytes"
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "rust_sha256": "1d4353871658ac3470ff65cd4be5703d8bea347fed26ef5413801ba861ef5300",
+  "cached_common_source_sha256": "025cbc517e965284425b611a434ac6c79c44257004e3c321bd1f0ac0a5364489",
+  "cached_common_native_cases": 20,
+  "cached_common_new_windows_pairs": 0,
+  "cxx_record_rust_tests": 9,
+  "comparisons": 5,
+  "whole_pe_translation_pairs": 0,
+  "scope": "Linux original-instruction common-handler component with bound module/FLS and captured delivery inputs; normal ContinueSearch disposition only; no new Windows observations",
+  "crt_tests": 207,
+  "crt_ignored": 1,
+  "changed_handler_common_dispatcher_bytes_rejected": 318
+}

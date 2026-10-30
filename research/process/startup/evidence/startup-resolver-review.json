@@ -1,0 +1,70 @@
+{
+  "kind": "Original mapped resolver component and process-index/fiber-value ownership; no whole-PE conversion",
+  "reviewed_parent": "223786b5b86c07a5af3454c57685622cd518999a",
+  "parent_ci": {
+    "41035066582": "success",
+    "41035056834": "success",
+    "41035057015": "success"
+  },
+  "earlier_cpu_parent_ci": {
+    "41033417519": "success",
+    "41033408417": "success",
+    "41033408404": "success"
+  },
+  "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "generated_rust_sha256": "1688063bc1f90c257d2014237e5c8257b1bd31e5f0202f0fe2cdb4b6bba8f76c",
+  "retained_recorded_windows_component_pairs": 5,
+  "new_windows_pairs": 0,
+  "crt_passed": 260,
+  "ignored_tests_separately_passed": 2,
+  "python_run": 60,
+  "python_existing_skip": 1,
+  "strict_clippy": "passed",
+  "mapped_resolver_cases": 14,
+  "process_fls_callback_cases": 4,
+  "process_index_lifecycle_test_functions": 1,
+  "retained_original_module_control_cases": 9,
+  "first_unsupported": {
+    "call": "0x402b00",
+    "iat": "0x415074",
+    "api": "LoadLibraryExW",
+    "path": [
+      "0x40195a",
+      "0x4024ca",
+      "0x4029b4",
+      "0x402c2d",
+      "0x402a53",
+      "0x402af3"
+    ]
+  },
+  "demonstrated_review_fix": "Independent generated-code mutation retired mapped code during loader callback; before fix resolver incorrectly succeeded. New post-effect image/initialization validation rejects before cache publication, preserving acquired module.",
+  "supplied_component_effects": [
+    "module acquire/release/export observations",
+    "FLS allocation outcome and optional callback identity",
+    "lock construction/destruction observations"
+  ],
+  "unclosed": [
+    "actual LoadLibraryExW/API-set/DllMain/TLS effects",
+    "constructor guarded/fallback native API",
+    "actual FlsAlloc/FlsSetValue/FlsFree producer and callback execution",
+    "module-backed bootstrap PTD 0x41ccc4",
+    "multiple simultaneous fibers or externally mutable FLS state",
+    "full startup/rcedit entry-to-exit"
+  ],
+  "failure_logs_sha256": {
+    "initial-register-rejection.log": "dd11420d44060411d843be5ece7499daddea5d4aa7a0bf364795121332e5f24d",
+    "initial-error-class.log": "e63b71177781e52749e24072bf6f088e2b6d61de5fff2b22925bfd0fffd5a266",
+    "crt.log": "2a4970b8b048d83c3ea933587c21d72daa2632e9c24e55de01e7a4ce900c61ba",
+    "clippy.log": "61df364e07d4d450710e0f1c0bbcc3a5dee79c24e2d9f35370770d57e2a21b3c",
+    "stale-code-mutant.log": "4805f428a8f2c911380d9617839ae60317337fdfe9a62da77066f484575f75cd"
+  },
+  "adversarial_mutant_rust_sha256": "003b40a77c2317045ea73c28dc22f761845c02900b09f853818eb629ee6ab1f8",
+  "passing_logs_sha256": {
+    "connected-lifetime.log": "43c978be54d86a4be79314f61daa8495cb6c994f0d00d7cf786d9c809ae0b058",
+    "crt-lifetime.log": "604a359c1a783114a0f9e79435438c6e108bf0c8556fedf3476d20835e2fff34",
+    "clippy-lifetime.log": "ee1d3fffa2022e962e63e0dbe4d35c9c198450a20c29fc09030f635dbb38bfcd",
+    "python-final.log": "cf32d55b603f8f8f57ccd36d4e919d9b47bc45f6c6cf6540ffe94b3c35d9883c",
+    "replay-final/report.json": "b3d6f8ac8e8267daa74d9818c0c608f0ac9855637200eaddc5c4cbb922a918e7"
+  },
+  "historical_windows_timeouts": "unresolved"
+}

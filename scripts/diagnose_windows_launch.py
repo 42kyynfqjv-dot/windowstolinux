@@ -11,12 +11,15 @@ from imported_fixture import fixture
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'corpus'))
 from generate import build
 from launch import execute
+from launch_controls import run_controls
 
 assert sys.platform == 'win32', 'Windows baseline required'
 root = Path(os.environ['RUNNER_TEMP']) / 'w2l-launch-diagnosis'
 root.mkdir(exist_ok=True)
 cases = [('max', fixture(b'A'*64), b'A'*64),
          ('corpus14', build(14), b'C14'), ('hello', fixture(b'Hello'), b'Hello')]
+controls = run_controls(root / 'host-controls')
+print('independent host exit controls '+json.dumps(controls), flush=True)
 records = []
 for mode in ['reused', 'fresh']:
     for repetition in range(3):
@@ -43,3 +46,5 @@ for mode in ['reused', 'fresh']:
                 (root/f'failed-{len(records)}.exe').write_bytes(image)
             print('launch probe result '+json.dumps(record), flush=True)
 assert len(records)==18 and all(r['passed'] for r in records), 'launch probe failed; see report.json'
+
+assert len(controls)==2 and all(r['passed'] for r in controls), 'independent host exit control failed; see host-controls/report.json'

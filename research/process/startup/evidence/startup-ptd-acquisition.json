@@ -1,0 +1,102 @@
+{
+  "kind": "Original startup UCRT getter and native stationary-fiber read; component only",
+  "reviewed_parent": "99d677512fae36392dd87174971e18fa349b63e2",
+  "source_sha256": {
+    "examples/crt_stream.rs": "4abed993ab4b08b53250b3b612e8f6b772e76eb5fc33ea9312c0d4dca994bc67",
+    "src/crt_stream_runtime.rs": "589073b26057eb8cf09ccdd53c2ac319afe4dec583b94d93b250a8731a6ca880",
+    "src/crt_stream_cpu.rs": "ea1ff228238c2eca7fccff4f4adb70ff9a6273cbd517beafe20dfa038c8ffacf",
+    "src/crt_global_lock.rs": "198dde0b9b43751d62f53cc79a7d5fe76c73f1221e62fcdff0adc0c8c7ef6ee4",
+    "src/crt_ptd.rs": "22473fab6deb34dd45e8cc7dd1dffdae51e60223a6b44d6f61187dc54b9c3c0a",
+    "src/crt_resident_loader.rs": "2d64f663e245ed5b62aef9f77c8b5b658a449aa32fee32130f54116cc8c8d175",
+    "src/crt_startup_entry.rs": "01920a703bdce1e287dd9edeb6f04eb0be497b095479974b7c6437f662564cd8",
+    "src/crt_startup_table.rs": "d385db298165d605edd6b4338d940e78abe98b9452aa4c4a44f476a2c9d13a96",
+    "src/crt_startup_fiber.rs": "724f0a16fc66e9fc0646e564c31b1440a29d09c88c37a442efeb50d5ca5862b4",
+    "src/crt_normal_frame_tests.rs": "49008e09311b2d0ebb51c923d6792c46ad0c5a8107998976ec0092ea3e18544e",
+    "research/process/startup/check_normal_wrapper.py": "2aa455798f73f539550c666757f0679aae5e4056cd2b961beded699ad96212ae"
+  },
+  "primary_contracts_checked": "2026-10-30",
+  "primary_contracts": [
+    "https://learn.microsoft.com/en-us/windows/win32/api/fibersapi/nf-fibersapi-flsalloc",
+    "https://learn.microsoft.com/en-us/windows/win32/api/fibersapi/nf-fibersapi-flsgetvalue"
+  ],
+  "validation": {
+    "crt_passed": 287,
+    "ignored_in_full": 2,
+    "artifact_tests": "both passed in final replay",
+    "native_fls_read_cases": 16,
+    "independent_pe_mutations": 4,
+    "python_run": 76,
+    "python_skip": 1,
+    "clippy_all_targets": "passed",
+    "format": "passed",
+    "repeated_generation": "identical hash across later emissions"
+  },
+  "component": {
+    "profile": "w2l-native-second-fiber-20348-2398cc6a-v1",
+    "executed": "original entry/table/initializer, registered UCRT prolog414268, GetLastError, original static FLS thunk408061, native current-fiber read and original null branch",
+    "epoch": "actual startup NormalCallEpoch propagated; no supplied thread-head/slot",
+    "second_index": 1,
+    "current_fiber_value": 0,
+    "live_record": "byte-backed linked C++-style registry record, handler414ad6",
+    "next_boundary": "CALL40a3a3->40a1ee lazy UCRT allocation effect unbound",
+    "heap_ptd_issued": false,
+    "default_admission": "402b00 blocked"
+  },
+  "evidence": {
+    "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+    "rust_sha256": "9380a72c6b32793bf115cb848e24c178dd395cef0f6d7b2a425f86ce0147907b",
+    "report_sha256": "c49e4168cf50a24f7a45bbda86e045290d17d421a675fcdce94abdcda4851aab",
+    "recorded_windows_wrapper_comparisons": 5,
+    "new_windows_elf_pairs": 0,
+    "whole_pe_pairs": 0
+  },
+  "log_sha256": {
+    "first.log": "e4fa775111e24d1352e482c279811c2c0f8f8dfa9280ad660f416d4e9a51857a",
+    "native-read.log": "0cd1c121a074e1166f1d5ac4c1e3cd9be14f6403b1706d540c188c13ba8c6b95",
+    "native-read-fixed.log": "c819fb849a609f0a2f6f8915952f6607339ca74000d292c80ff8f6d3fc25db39",
+    "native-read-reviewed.log": "e8090009317227d68a0b53fdf638d68c95b19304a04ce00c6521d4225fcea472",
+    "connected.log": "74fe61ca8fd06b6d286406a9cbba578d58775e53f959b27c800dbc49a4074796",
+    "full.log": "9a41c1cd70eae37824a0f2fbf35d69f9df955dba11dc3902b63ed5376f093553",
+    "clippy-final.log": "d1bcdcfa17436e011f551d46e183970f8074b0c0172f2051a0f8eeb9f478d3d9",
+    "python.log": "bb951eab6ca26668f0c0dcad4ee25bb500e98f2fd483062367ac9363575bc4ad",
+    "replay.log": "fb025527c5111c47017d0e76d980cf8348b0345f2837e5ccb7e48d18e5825a76"
+  },
+  "retained_attempts": {
+    "first.log": "old expected boundary rejected because original entry now reached the later lazy call",
+    "native-read.log": "test attempted to mutate private Capability field; corrected to use an independently constructed runtime anchor",
+    "native-read-fixed.log": "test incorrectly expected unknown FLS state to return; existing conservative rejection preserved and asserted instead",
+    "clippy.log": "newly production-included PTD module had pre-existing style lints; equivalent as_chunks/alignment checks fixed"
+  },
+  "prior_ci_failure": {
+    "head": "99d677512fae36392dd87174971e18fa349b63e2",
+    "run": 41107853543,
+    "job": 124242290134,
+    "step": "authored-windows-fixture: independent original corpus",
+    "original_case": 19,
+    "pe_sha256": "9c270dc29de9abc8803a09e309ede4a8ad2c20e365cf76f35fb96575fff3fa09",
+    "failure": "original Windows process.wait timeout after15 seconds",
+    "corpus_launch_artifact": 13002965454,
+    "artifact_zip_sha256": "bb381d82123f4778fea26a4674ab86c2d0d6804af1702562ccdbb50555920cbb",
+    "other_jobs_passed": 8,
+    "cause": "unresolved; no output-present claim without reading this artifact",
+    "retry": "none; original failure preserved"
+  },
+  "next_scope": {
+    "object": "UCRT calloc(1,0x364) =868 bytes, distinct from40-byte VCRUNTIME view",
+    "effects": [
+      "original sentinel/publication/failure cleanup",
+      "initializer40a067 and locale/reference helpers409efb/40a00d",
+      "EH4 registration, logical indexed locks, pointer-bearing fields and LOCK INC/XADD",
+      "canonical allocation identity, initialized bounds and LastError restoration"
+    ],
+    "current_locked_ir": "register-source OR/AND only; INC/XADD rejected"
+  },
+  "limits": [
+    "explicit-profile component only; default/full startup/rcedit not admitted",
+    "static-import read does not publish dynamic export or simulate FlsGetValue2",
+    "stationary fiber subset, no general switching/multithreading/destructor support",
+    "unknown/supplied/stale allocations cannot issue initial-null or pointer authority",
+    "Windows resource-failure equivalence and historical/new timeout causes unresolved",
+    "exact new-head CI and substantive review still required"
+  ]
+}

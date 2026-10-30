@@ -1,0 +1,58 @@
+{
+  "head": "fe0d0dccf32a9ed0a5bf45cf830ca02bfc107e26",
+  "run": 40949077644,
+  "job": 123714769651,
+  "scope": "GitHub job logs; artifact creation failed with ECONNRESET, leaving later comparisons unexecuted. This is not a diagnosis of historical original-Windows timeouts.",
+  "failed": [
+    {
+      "number": 26,
+      "name": "Run actions/upload-artifact@v4"
+    }
+  ],
+  "skipped": [
+    {
+      "number": 27,
+      "name": "Run actions/download-artifact@v4"
+    },
+    {
+      "number": 28,
+      "name": "Run actions/download-artifact@v4"
+    },
+    {
+      "number": 29,
+      "name": "Run actions/download-artifact@v4"
+    },
+    {
+      "number": 30,
+      "name": "Compare independent LLVM outcomes"
+    },
+    {
+      "number": 32,
+      "name": "Compare frozen stateful composition outcomes"
+    },
+    {
+      "number": 34,
+      "name": "Compare stateful CRLF converter outcomes"
+    },
+    {
+      "number": 36,
+      "name": "Convert same hashed PE on Linux and compare native execution"
+    }
+  ],
+  "log_excerpt": [
+    "2026-10-29T20:34:40.9118711Z 6 emitted programs:48 scripted error classes +24 forced partial-I/O runs;10 unsafe mutations rejected",
+    "2026-10-29T20:34:43.8502023Z ##[error]Failed to CreateArtifact: Unable to make request: ECONNRESET"
+  ],
+  "infrastructure_retry": {
+    "requested_job": 123714769651,
+    "run": 40949077644,
+    "head": "fe0d0dccf32a9ed0a5bf45cf830ca02bfc107e26",
+    "attempt": 2,
+    "observed_status": "completed",
+    "scope": "Only failed compiler-native-linux job retried through normal GitHub API. Attempt1 remains failed evidence; retry does not validate newer heads.",
+    "conclusion": "success",
+    "rerun_job": 123720191590,
+    "started_at": "2026-10-29T20:42:25Z",
+    "completed_at": "2026-10-29T20:50:19Z"
+  }
+}

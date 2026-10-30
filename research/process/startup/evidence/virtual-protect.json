@@ -1,0 +1,86 @@
+{
+  "kind": "Original VirtualProtect callback and shared data-page memory semantics; component only",
+  "reviewed_commit": "d193e00318f328004892f0203690a7ba91a77f38",
+  "source_sha256": {
+    "src/guest_memory.rs": "daeec4a352559bc8d33e35dc32085dd379b3fd2a3bf19e929faddf39749b6272",
+    "src/guest_memory_tests.rs": "db67578694168ab08026048a68b073ab4606c627a7fea8d7b53ae053fac165f2",
+    "src/crt_stream_runtime.rs": "691f647deac612da8cd673f283ef2db017b0877b8cccb3ccdbf06c55228be4bf",
+    "src/crt_stream_cpu.rs": "28c49b012a80702dc62b5ca6c3937a87b916d1eabe7aba9aff5d50be85d8c7d2",
+    "src/crt_startup_table.rs": "9c4171ac587564c643952418aedec97ee4817e2ff9ff4a418218e7f12ae57767",
+    "src/crt_normal_frame_tests.rs": "90d29aa4e0703cd4188c8e72e96cb41e019867e0b77fa28dcb3d1a8f00c947a6",
+    "research/process/startup/check_normal_wrapper.py": "bfdda5eea14bbb6be4bf9e3da1d4dd6bf34ac7185fa8955246aea82ac1cedddc",
+    "research/process/startup/protect_probe.c": "8e4c40bbe73ec6a689e2aa5bd784bc5ed42558e5b12143134ebdbebdf6a6b6f9",
+    "research/process/startup/protect-frozen.json": "d0f08ff386b336fc9dd9fda486daf61b26a263617189f682d819695c6e133741",
+    "research/process/startup/protect_conformance.py": "141a7483ee2be0adbfe3cf77fab1e2e09309b5653cdd9fd6eb5aaa6c1686edec",
+    "research/process/startup/measure_protect.py": "3887e24d81235e0399bfe6f728eba8e7ac1e8cbcbb8ef4871c8afaf9265bceee",
+    "research/process/startup/test_protect_conformance.py": "bde0bc93fdd63699e93f7c8caccc9b9f53a475f847aa1a1f4008aa2bf40165f0",
+    ".github/workflows/startup-inventory.yml": "a04b9b9104e0089db24a87db3e4a62ce98a6435000786f93e887f513e5f0fd87"
+  },
+  "validation": {
+    "root_passed": 182,
+    "crt_passed": 283,
+    "crt_ignored_in_full": 2,
+    "artifact_tests": "both passed in reviewed replay",
+    "new_memory_tests": 7,
+    "native_protection_cases": 22,
+    "retained_table_cases": 18,
+    "python_run": 76,
+    "python_skip": 1,
+    "clippy": "passed",
+    "format": "passed"
+  },
+  "component": {
+    "callback": "408113",
+    "api_call": "408129; kernel32.dll!VirtualProtect at original IAT4150b0",
+    "requested": {
+      "address": "41e000",
+      "size": 128,
+      "new_protection": 2,
+      "output": "original owned stack local EBP-4"
+    },
+    "effect": "containing page becomes read-only; first old-protection output stored; protected return completes",
+    "next_boundary": "original loop selects index3/401bd5; body binding unproved",
+    "default_admission": "402b00 remains rejected",
+    "whole_pe_pairs": 0
+  },
+  "evidence": {
+    "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+    "rust_sha256": "792d8ac794b516beeb97179aaad5808dba54c7dfd39e07c525efe5bc1a348d67",
+    "replay_report_sha256": "f7dee70c9dc4f4aabb11ebab90765f20a17ee41891c1b787327f0660d3219dd8",
+    "recorded_windows_wrapper_comparisons": 5,
+    "fresh_windows_protection_observations": "pending new CI; six frozen cases are not claimed as observed",
+    "protection_windows_elf_pairs": 0
+  },
+  "review_regressions": {
+    "typed_read": "compiled mutant removing permission check returns pointer on PAGE_NOACCESS; regression fails",
+    "opaque_object": "prototype accepted protection of live global lock page; regression reproduced before fix; whole-page opaque checks now reject",
+    "transport": "retired pointer transport remains permitted as data; dereference rejects",
+    "observer": "reserved-page Protect is undefined; state checked and protection bits retained without equality oracle",
+    "typed_read_mutant_sha256": "46cbda10d8edea2ede8db9e89d467d4736b7d7bef456df2151e1dbfd150e694c"
+  },
+  "log_sha256": {
+    "root.log": "23d1d88c0d008583553803e9027c5b2310327ba17a4f75efc071f458d2ed2df9",
+    "crt-reviewed.log": "fd1f332110d57d94470761b4cd8b815d866cf22396348e96fc0a3bedd70ca113",
+    "clippy-reviewed.log": "140bc568a2184114cf2ce9dbedd9cd779f0f602781da6c5480141496d5cecf74",
+    "python-reviewed.log": "52c87d9396d25323a04b3bc60711cfbac3ce6c35c0a85f6ae24b6cde40befa4c",
+    "opaque-after-fix.log": "8ffc7d499cdc23a888a9615d0d52ecf6aca732320a895e988b53dd3cb262bb37",
+    "opaque-before-fix.log": "84df5b5db5faa6351b4642a62ae58938ea67b0c57ffb2101ed60a89b33364961",
+    "typed-read-build.log": "49effd318418ac53c38971ea52bd5a3bc71a86cd0f61869268e7667eabe5cd38",
+    "typed-read-mutant.log": "8585a0047a674529d67b8419521e876c5918790d99daf9fee67b4343e710dfbb",
+    "connected-first.log": "90db38721d05a15cd0a17e93a57d81efe005612b0adea13333bb7cf80161792c",
+    "connected-tests.log": "2bcdf7cc1efaf3a97c719a6b4e8f3acb934caf9986d08ddec85d0bd719f7dafd",
+    "connected-reviewed.log": "b51a6a7fb63e64891c4d067855f9392496d172cf0cbff489665a3ee509400b36"
+  },
+  "predecessor_ci": {
+    "41079430919": "completed success",
+    "41079420433": "completed success",
+    "41079420489": "completed success"
+  },
+  "remaining": [
+    "native rejection is not a Windows FALSE/LastError implementation",
+    "cross-section/reservation, output-alias, executable/guard/COW and live opaque object transitions unsupported",
+    "complete startup/rcedit/default admission unproved",
+    "historical original-Windows timeout causes unresolved",
+    "fresh final-head CI and protection observation pending"
+  ]
+}

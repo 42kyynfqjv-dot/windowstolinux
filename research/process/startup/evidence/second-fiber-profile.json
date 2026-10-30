@@ -1,0 +1,68 @@
+{
+  "kind": "Versioned second-fiber module/missing-export contract; component only",
+  "reviewed_commit": "573d518448512d5cb5fb5e12dbcc66abb3b06b22",
+  "source_sha256": {
+    "src/crt_resident_loader.rs": "d1c439c307945e050b7609c6299a8a0ec85f8997db5b6f537b1f0c6c00aeee8d",
+    "src/crt_normal_frame_tests.rs": "ed2cb0df39460a81f6ee4bb8a23f75248e1af29ea7611aba46630d30c698c203",
+    "research/process/startup/check_normal_wrapper.py": "3ae5d02a79a9fe17281cf91b57095233e2a8eccca63c093b6ab2b6d5e038eb5e",
+    "research/process/startup/second_fiber_probe_v2.c": "4edcf7e86d2a7f24acdcfce6ac3fd8bc25511b4fb93cfcf0166966baa35a1fef",
+    "research/process/startup/second-fiber-frozen-v2.json": "b779b6635c8142ede4285b76403c10b1c239678b027cca4c19c45b6befc851e2",
+    "research/process/startup/measure_second_fiber_v2.py": "7fd68089f2187a59a30ad49051941497462f3bbd52e702dabf4816d81b20ef26"
+  },
+  "profile": "w2l-native-second-fiber-20348-2398cc6a-v1",
+  "windows_evidence": {
+    "version": "10.0.20348",
+    "module": "x86 KernelBase.dll",
+    "module_sha256": "2398cc6ad909530545b4e4fbef7d7775447483431afdd90ab7306b8eed0a2ea1",
+    "api_set": "api-ms-win-core-fibers-l1-1-2",
+    "symbol": "FlsGetValue2",
+    "lookup_result": "NULL/error127",
+    "run": 41095617411,
+    "job": 124200454937,
+    "artifact": 12996845680,
+    "corrected_observer_commit": "e169e4c32860c56c3bf377c16a6114ab3b9e6f26",
+    "intermediate_observer_defect": "e384d89 duplicate release corrected before identity evidence used"
+  },
+  "validation": {
+    "crt_passed": 286,
+    "ignored_in_full": 2,
+    "artifact_tests": "both passed in reviewed replay",
+    "profile_native_cases": 12,
+    "python_run": 76,
+    "python_skip": 1,
+    "guard_mutants_detected": 7,
+    "emitted_frame_vectors": 10,
+    "clippy": "passed",
+    "format": "passed"
+  },
+  "component": {
+    "executed": "LoadLibraryExW407f1d; owned module-cache XCHG407eed; GetProcAddress407efe",
+    "next_boundary": "indexed-lock CALL407e92->40bdcf unbound",
+    "module_cell": "41ceac contains owned existing KernelBase module",
+    "function_cache": "41e00c remains zero/read-only",
+    "second_fls_index_allocated": false,
+    "default_admission": "402b00 blocked; old profile rejects extension"
+  },
+  "evidence": {
+    "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+    "rust_sha256": "2fa004d07d1f8c2b9c4a7139dd94a5a205247ff3c2a610d85afd2c4d5bc07e6b",
+    "report_sha256": "41a4720e11f5a149635bdb87e379e09833f1bde779dfa4145566b45d98a691fa",
+    "recorded_windows_wrapper_comparisons": 5,
+    "new_profile_windows_elf_pairs": 0,
+    "whole_pe_pairs": 0
+  },
+  "log_sha256": {
+    "full.log": "0c28a91c9fadb802053ae4a05980998c58b5c133180cbaf2f632821e6492ea4f",
+    "cases-fixed.log": "b26776e6d57f62782c6d388ca00432ad8b38992d1a1ca116e7c4bfc3b25e57c5",
+    "clippy.log": "02db5a66fa0c60ca8618bd08aac556eac4f3ec863e8630a0d353dba6a0f6e126",
+    "python.log": "e28b1c4cdb7c2d6f7c5d537e73fff9cec19d57d429ebb12f395395dabf5bb866",
+    "memory-mutations.log": "9e375eb448d2c6575b085cf190827436072230e94625022c8b4551a3f0f3ba7e"
+  },
+  "limits": [
+    "observed image revision, not all20348/Win11/XP7",
+    "unimplemented exports reject, only explicit observed absence returnsNULL",
+    "indexed-lock/cache-write/release and subsequent PTD/FLS/teardown unbound",
+    "historical Windows timeouts unresolved",
+    "final-head CI and substantive review pending"
+  ]
+}

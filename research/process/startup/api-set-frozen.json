@@ -1,0 +1,14 @@
+{
+  "source_sha256": "5b8dd4a4502529d9c851db54f57473789594df3cf9f628ccfea06991e777bf3e",
+  "target": "Windows Server 2022 build 20348, x86 observer; per-run ntdll/module hashes pin actual revision",
+  "flags": 2048,
+  "expected": [
+    "three published contracts load and expose named symbols",
+    "two loads return same module handle",
+    "export remains valid after one owned release",
+    "invented contract fails with nonzero error"
+  ],
+  "host_names": "unfrozen observations; never assumed KernelBase or kernel32",
+  "initialization": "unproved; observer does not execute target exports",
+  "translated_pairs": 0
+}

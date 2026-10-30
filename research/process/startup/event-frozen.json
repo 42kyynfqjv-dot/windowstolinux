@@ -1,0 +1,19 @@
+{
+  "source_sha256": "9d49e62eaa187a43c0c5d910c33eed62168e8a9db3fb06d7e57e16e91f268a35",
+  "expected_result": 42,
+  "disposition": 0,
+  "ip_delta": 2,
+  "preserved_registers": [
+    "ECX",
+    "EDX",
+    "EBX",
+    "ESP",
+    "EBP",
+    "ESI",
+    "EDI"
+  ],
+  "flags": 514,
+  "scope": "v2 authored raw UD2 handler and MOV continuation; same slice ABI, stop before guest RET in native observation",
+  "expected_edx": 42,
+  "event_bytes": 5
+}

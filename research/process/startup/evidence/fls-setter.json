@@ -1,0 +1,107 @@
+{
+  "kind": "Original FLS setter and opaque current-fiber publication; component only",
+  "reviewed_commit": "ddd780e6b3a4b28356d4e39ffca9176666ef5522",
+  "source_sha256": {
+    "src/crt_stream_runtime.rs": "60ca31ab8483db34cd454e3e76f84adc4beb4e672e14941e711603a1e3c9cf40",
+    "src/crt_stream_cpu.rs": "918c3f045a01eced04eed8fa4dfe052fe5d926c215b089dd7b874f7fc4ea98e1",
+    "src/crt_resident_loader.rs": "f4099ddc4ce5b69f055c2db9cd707230cc52aa8d482bee1b306ed85741e85f4a",
+    "src/crt_startup_modules.rs": "9663f0ca73097ec9bc0845390d9550ed2e34e1b9b998d6a616882c8095530b05",
+    "src/crt_startup_entry.rs": "f89a323ac40b15a8c5413a053acae647ab08cd832b93a60b570e91ac0d69f1b4",
+    "src/crt_normal_frame_tests.rs": "de7a76d2cb7162bb8566002132b6a1a4ca88e2e54f7b2b85482e31a895fa3e88",
+    "src/crt_provider_tests.rs": "5a0b480c841b05e4c357a6c0d2b04735464d868dfe5d662036de271765d8ca69",
+    "research/process/startup/check_normal_wrapper.py": "3f5fec4e7d934247b741d63fd561e88f358ed93cdd681a7146649ccafce77e54"
+  },
+  "recovery": {
+    "head_before": "ddd780e",
+    "unpublished_files": 5,
+    "reset_or_replacement": false,
+    "provider_wrapper_changes_were_present": true,
+    "verified_original_call_offsets": {
+      "resolver": "402c04",
+      "guard": "402c1a",
+      "guard_continuation": "402c20",
+      "indirect": "402c20",
+      "fallback": "402c24/415064",
+      "cleanup": 8
+    }
+  },
+  "validation": {
+    "crt_passed": 282,
+    "ignored_in_full": 2,
+    "artifact_tests": "both passed in final replay",
+    "native_setter_scenarios": 13,
+    "declared_profile_cases": 13,
+    "python_run": 75,
+    "python_skip": 1,
+    "clippy": "passed",
+    "format": "passed",
+    "constrained_stack": "retained and passed"
+  },
+  "boundaries": {
+    "default": "LoadLibraryExW402b00 remains rejected",
+    "explicit_native_fls_profile": "initializer continuation40195f",
+    "process_index_allocated": true,
+    "index_stored_at": "41c060",
+    "fiber_value_published": true,
+    "value": "opaque scalar41ccc4; no pointer/PTD authority",
+    "module_initializer_original_ret_executed": true,
+    "next_inventoried_call": "401967 ->407653 ->40c926",
+    "next_table": "415fb8..416038,16 init/cleanup pairs",
+    "windows_resource_equivalence": "unclosed"
+  },
+  "regression": {
+    "protected_argument_pre_fix": "ebc41cc4e5a8464c31328702586860c0c44d60130434cc68ca9af95bbb32d83d",
+    "post_fix": "fcb90a22a7c65797d23d504b7c54424d88cc62ad82a46464722dad8236618692",
+    "defect": "invalid-index LastError effect preceded protected-argument RET rejection",
+    "fix": "reject protected arguments before native API effect",
+    "intermediate_snapshot_compile_failure": "ebd87dd15e71bee99acb086a6d312ed6ea856d8d99e8b72d8566a5768e4fe342",
+    "snapshot_fix": "retain Clone/Debug/equality on fixed value tables"
+  },
+  "native_value_policy": {
+    "native_indices": "known opaque scalar values allowed without pointer authority",
+    "supplied_adapters": "prior restricted value rules retained",
+    "invalid_index": "FLS_OUT_OF_INDEXES returns false/error87 without value mutation",
+    "other_stale_unsupported_indices": "domain rejection",
+    "value_storage": "fixed64 bootstrap-owned slots, no per-operation allocation",
+    "callback_teardown": "nonnull execution remains unclosed"
+  },
+  "replay": {
+    "kind": "original prolog/epilog component comparison with explicit unexecuted body boundary",
+    "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+    "rust_sha256": "19ff45065ad0319e2700e5b2f25a03b158a5987d6ad3ad4f67a27766e6a3f6a8",
+    "comparisons": 5,
+    "scope": "Live registry fixture; body EAX/flags inputs; original stack/FS/saved-state restoration only",
+    "whole_pe_translation_pairs": 0
+  },
+  "report_sha256": "39a72ed2898b07dd83685a9e55e5b45f285411f36997f5dd2f4f580a46fd794f",
+  "logs": {
+    "full-final-fixed.log": "32bdbcccd9fbea2a7dc93bc4dbbfe5047638641ae8a18e24d33ec647d199a105",
+    "clippy-fixed.log": "ce77780e52d6b141ec03cce8e9f268a49e064a4500649194657cc2a1cd391045",
+    "format-fixed.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "python.log": "cc553765395708358d5d72a5fe649ede999cbe39296472666307343c61961e56",
+    "protected-before.log": "ebc41cc4e5a8464c31328702586860c0c44d60130434cc68ca9af95bbb32d83d",
+    "protected-after.log": "fcb90a22a7c65797d23d504b7c54424d88cc62ad82a46464722dad8236618692"
+  },
+  "predecessor_ci": [
+    {
+      "run": 41067674960,
+      "conclusion": "success"
+    },
+    {
+      "run": 41067661881,
+      "conclusion": "success"
+    },
+    {
+      "run": 41067662045,
+      "conclusion": "success"
+    }
+  ],
+  "fresh_windows_stack_confirmation": {
+    "job": 124103242394,
+    "result": "281 passed,0 failed,2 ignored at predecessor ddd780e"
+  },
+  "new_windows_observations": 0,
+  "new_whole_pe_pairs": 0,
+  "primary_contract": "https://learn.microsoft.com/en-us/windows/win32/api/fibersapi/nf-fibersapi-flssetvalue",
+  "historical_windows_timeouts": "retained, unresolved"
+}

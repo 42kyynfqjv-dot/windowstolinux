@@ -1,0 +1,54 @@
+{
+  "kind": "Original startup module control and lock resolver prefix; explicit component effects, no whole-PE translation",
+  "reviewed_parent": "dcbab09ce583ce2702866aaad5ddcdd71ce09e62",
+  "parent_ci_at_last_read": {
+    "41033417519": "in_progress",
+    "41033408404": "in_progress",
+    "41033408417": "in_progress"
+  },
+  "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "generated_rust_sha256": "91aeca7f3a6734b32bff0a2e29ca6e15b9d7756e5d6ed7df4bf769d37c6742dc",
+  "new_windows_pairs": 0,
+  "retained_recorded_windows_component_pairs": 5,
+  "crt_passed": 259,
+  "ignored_tests_separately_passed": 2,
+  "python_run": 60,
+  "python_existing_skip": 1,
+  "strict_clippy": "passed",
+  "module_control_cases": 9,
+  "source_binding_byte_mutants": 245,
+  "first_unsupported": {
+    "call": "0x402c42",
+    "target": "0x402a53",
+    "path": [
+      "0x40195a",
+      "0x4024ca",
+      "0x4029b4",
+      "0x402c2d"
+    ]
+  },
+  "supplied_component_effects": [
+    "lock construction outcome",
+    "FLS allocation numeric outcome",
+    "destruction observation"
+  ],
+  "unclosed": [
+    "actual constructor resolver/API effect",
+    "FlsAlloc process index and fiber value authority",
+    "module-backed bootstrap object41ccc4 and destructor4028a7; distinct from recursiveFFFFFFFF sentinel",
+    "actual FLS setter/free effects"
+  ],
+  "failure_logs_sha256": {
+    "connected.log": "88d0f47a5bbe4e1de7d17d759c76cbf42b12abbcc7c2e05191ec0c412ae3a81d",
+    "connected-fixed.log": "af07459a0247b19c610a83ca4ccc1cf366e2361f3a9d0beefc6769801bae3565",
+    "connected-final.log": "ea212f78076c2849865e093a561d4fff8d2b4143a2a7edc2109739f8c0be59b9"
+  },
+  "passing_logs_sha256": {
+    "connected-byte.log": "f32d9645e59f3044f7161192592fd0f56ceb2645e68627be4424b8818b3bacdc",
+    "crt.log": "5bb2c97d8ff97c5cb7ed5ec1a5a91f24662ffe104309a0df560061e6f953b64b",
+    "clippy.log": "f7c53d8c5441e751c428fd8981a38225e2a2b8844aa81da11ab1d1a340e7d8ce",
+    "python.log": "6a17be717eda66f1f1db54a224a8d9ee24ebc4472c76c6ae082a7b22000c2d3c",
+    "replay/report.json": "b10af14b9e2c4024df0caa51da311106ba6fe659422e044564cbe7b0fc46f700"
+  },
+  "historical_windows_timeouts": "unresolved"
+}

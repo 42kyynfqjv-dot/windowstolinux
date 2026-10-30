@@ -1,0 +1,104 @@
+{
+  "kind": "Original FLS allocation wrapper and explicit native service; component only",
+  "reviewed_commit": "a9164460076a77eba8195484c609f5fd197204b6",
+  "source_sha256": {
+    "src/crt_stream_runtime.rs": "82befc72fc52c3b1ab95d33791816105c612da9903e3bbc68af4666fc7846c6d",
+    "src/crt_resident_loader.rs": "35fed627ef8c686a284f93598ae5cb63bebd10f71ea32844891b8dd94aeb0996",
+    "src/crt_startup_modules.rs": "7e58518f5d98f0696e2e93bab2c0dd8a3bea94a3b1629abe1d03d2fb58844afe",
+    "src/crt_normal_frame_tests.rs": "a2e9c95a2160a0acbdd61c3930d54316185443a2979e262ce8ce84dc5634d09f",
+    "src/crt_stream_lifecycle.rs": "1686f94d8ce69a95c58d6c7038b7ff882f4520bbd417ec5d9c1ecf35d5ac86f2",
+    "research/process/startup/check_normal_wrapper.py": "e179d50f5be98b98a4c0f72a6c2675f1f19434251c70517087c158b1940582f8"
+  },
+  "validation": {
+    "crt_passed": 281,
+    "ignored_in_full": 2,
+    "artifact_tests": "both passed in replay",
+    "declared_profile_cases": 12,
+    "original_fls_wrapper_fallback_cases": 3,
+    "native_fls_producer_cases_retained": 10,
+    "python_run": 75,
+    "python_skip": 1,
+    "clippy": "passed",
+    "format": "passed",
+    "constrained_stack_regression": "passed at1048576 bytes"
+  },
+  "boundaries": {
+    "default": "LoadLibraryExW0x402b00 remains rejected",
+    "sync_only_profile": "native platform FLS provider not enabled",
+    "explicit_fls_service": "setter0x402981 ->0x402bef",
+    "entry_fls_index_allocated": true,
+    "entry_fls_index_stored_at": "0x41c060",
+    "entry_fls_value_published": false,
+    "wrapper_bytes": 59,
+    "wrapper_guard": "original401bf9",
+    "native_stdcall_cleanup": 4,
+    "fallback": "reject before TLS tail jump402b73/41505c after original register restoration"
+  },
+  "provider_domain": {
+    "kind": "explicit optional native kernel32/FlsAlloc service",
+    "namespace": [
+      "kernel32[.dll]",
+      "api-ms-win-core-fibers-l1-1-1[.dll]"
+    ],
+    "native_mapping_not_new_windows_observation": true,
+    "native_resource_capacity": 64,
+    "windows_resource_failure_equivalence": "unclosed"
+  },
+  "regressions": {
+    "windows_native_stack": {
+      "run": 41064618055,
+      "job": 124092655895,
+      "artifact": 12981578280,
+      "zip_sha256": "ce0011dba169070fc133fa6dbac897ff310206556b2a28d0cc3792d357f0f15f",
+      "failure": "279 passed,1 failed; generated native lifecycle main stack overflow",
+      "fix": "bootstrap-owned fixed table behind Box; per-allocation remains allocation-free",
+      "before": {
+        "path": "/workspace/w2l-build-tmp/w2l-crt-lifecycle-native-1019539/check",
+        "stack_bytes": 1048576,
+        "returncode": -6,
+        "stderr": "\nthread 'main' (1025695) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+      },
+      "after": {
+        "path": "/workspace/w2l-build-tmp/w2l-crt-lifecycle-native-1025982/check",
+        "stack_bytes": 1048576,
+        "returncode": 0,
+        "stderr": ""
+      },
+      "fresh_windows_confirmation": "pending new-head CI"
+    },
+    "original_windows_timeout": {
+      "run": 41064628433,
+      "job": 124092694135,
+      "case": "one",
+      "timeout_seconds": 15,
+      "fixture_pe_sha256": "852e4add3173b4519d319231bca7d6e240a52755e6768739032ad0dd83170916",
+      "cause": "unresolved; distinct from native stack overflow"
+    },
+    "predecessor_push": {
+      "run": 41064618160,
+      "conclusion": "success"
+    }
+  },
+  "replay": {
+    "kind": "original prolog/epilog component comparison with explicit unexecuted body boundary",
+    "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+    "rust_sha256": "3328b0885a145c8f569ee3686a0367a78ee2ce3600e1ff026787f060eaff740c",
+    "comparisons": 5,
+    "scope": "Live registry fixture; body EAX/flags inputs; original stack/FS/saved-state restoration only",
+    "whole_pe_translation_pairs": 0
+  },
+  "report_sha256": "0c102c9c364fd6860698af3c608122223d21bb9cdfc3d74f676eb3cedebffc9a",
+  "logs": {
+    "artifact-final.log": "d790508ed3ad5230a793b7a1abef1bea93a1b87f1b61804ff4de1d8fb8a8dc55",
+    "full.log": "119afe85ecb242ad8d9b73a37d4c4930779c6f79554e2968165f7b66e4ea3aad",
+    "clippy.log": "8107a20f866d0abdf40c66a539e319403b63aea21293bfbcbb154dd26a8568d1",
+    "format.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "python.log": "8559e4f7f59a4924282f677cdb8828e72c43827907053ac6a5f55fa512308357",
+    "stack-regression-final.log": "cfc4a7d866bbc2358903c6d67f7c64f7d26706e51d51142be78fe26c8a433e4e",
+    "stack-before.json": "874fc10ff2d98089609b2dd239cb5aafadf370be592b95f60ea4e537faeef8ac",
+    "stack-after.json": "2664f0980e2cb6b5915fefe2977e6e12cc463c356c5b67960332345f560a6c6a"
+  },
+  "new_windows_observations": 0,
+  "new_whole_pe_pairs": 0,
+  "historical_windows_timeouts": "retained and unresolved"
+}

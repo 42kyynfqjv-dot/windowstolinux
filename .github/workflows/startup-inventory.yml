@@ -1,0 +1,403 @@
+name: Pinned startup inventory
+on:
+  push:
+    branches: [feature/startup-records]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m unittest discover -s research/process/startup -v
+      - run: python3 research/process/startup/check_unwind.py --self-test
+      - uses: actions/download-artifact@v4
+        with:
+          name: rcedit-windows
+          run-id: 40577863473
+          github-token: ${{ github.token }}
+          path: original
+      - run: python3 research/process/startup/inventory.py original
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --locked --example stream_graph
+      - run: python3 research/process/startup/observe_boundary.py original target/debug/examples/stream_graph
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: startup-inventory
+          path: |
+            original/startup-inventory.json
+            original/execution-boundary.json
+  api-set-observation:
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Measure pinned x86 API-set mapping and reference behavior
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $install = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $vcvars = Join-Path $install 'VC\Auxiliary\Build\vcvarsall.bat'
+          cmd /c "`"$vcvars`" x86 -vcvars_ver=14.44 && python research/process/startup/measure_api_set.py %RUNNER_TEMP%/api-set-observation"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: startup-api-set-observation
+          path: ${{ runner.temp }}/api-set-observation
+  sync-observation:
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Observe authored critical-section conformance
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $install = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $vcvars = Join-Path $install 'VC\Auxiliary\Build\vcvarsall.bat'
+          cmd /c "`"$vcvars`" x86 -vcvars_ver=14.44 && python research/process/startup/measure_sync.py %RUNNER_TEMP%/sync-observation"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: startup-sync-observation
+          path: ${{ runner.temp }}/sync-observation
+  protect-observation:
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Observe authored data-page protection behavior
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $install = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $vcvars = Join-Path $install 'VC\Auxiliary\Build\vcvarsall.bat'
+          cmd /c "`"$vcvars`" x86 -vcvars_ver=14.44 && python research/process/startup/measure_protect.py %RUNNER_TEMP%/protect-observation"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: startup-protect-observation
+          path: ${{ runner.temp }}/protect-observation
+  second-fiber-observation:
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Observe original second-FLS resolver candidate availability
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $install = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $vcvars = Join-Path $install 'VC\Auxiliary\Build\vcvarsall.bat'
+          cmd /c "`"$vcvars`" x86 -vcvars_ver=14.44 && python research/process/startup/measure_second_fiber.py %RUNNER_TEMP%/second-fiber-observation"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: startup-second-fiber-observation
+          path: ${{ runner.temp }}/second-fiber-observation
+  second-fiber-identity-observation:
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Observe original second-FLS resolver candidate availability
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $install = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $vcvars = Join-Path $install 'VC\Auxiliary\Build\vcvarsall.bat'
+          cmd /c "`"$vcvars`" x86 -vcvars_ver=14.44 && python research/process/startup/measure_second_fiber_v2.py %RUNNER_TEMP%/second-fiber-identity-observation"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: startup-second-fiber-identity-observation
+          path: ${{ runner.temp }}/second-fiber-identity-observation
+  provider-failure-observation:
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Observe authored DLL process-attach failure and reference rollback
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $install = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $vcvars = Join-Path $install 'VC\Auxiliary\Build\vcvarsall.bat'
+          cmd /c "`"$vcvars`" x86 -vcvars_ver=14.44 && python research/process/startup/measure_provider_failure.py %RUNNER_TEMP%/provider-failure-observation"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: startup-provider-failure-observation
+          path: ${{ runner.temp }}/provider-failure-observation
+  native-sync-conformance:
+    needs: sync-observation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/download-artifact@v4
+        with:
+          name: startup-sync-observation
+          path: sync-observation
+      - run: python3 research/process/startup/check_sync.py sync-observation sync-native
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: startup-sync-native
+          path: sync-native
+  original-user-mode-probes:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check bounded owned-process diagnostics
+        run: python -m unittest discover -s corpus -p test_windows_wait_observer.py -v
+      - uses: actions/download-artifact@v4
+        with:
+          name: rcedit-windows
+          run-id: 40577863473
+          github-token: ${{ github.token }}
+          path: original
+      - name: Observe original entry thread state
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $install = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $vcvars = Join-Path $install 'VC\Auxiliary\Build\vcvarsall.bat'
+          cmd /c "`"$vcvars`" x86 -vcvars_ver=14.44 && python research/process/startup/measure_entry.py original %RUNNER_TEMP%/entry-observation"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: startup-entry-observation
+          path: ${{ runner.temp }}/entry-observation
+      - name: Measure frozen original exception and cleanup outcomes
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $install = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $vcvars = Join-Path $install 'VC\Auxiliary\Build\vcvarsall.bat'
+          cmd /c "`"$vcvars`" x86 -vcvars_ver=14.44 && python research/process/startup/measure_probe.py %RUNNER_TEMP%/startup-probes"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Measure frozen context restoration and nonlocal transfer
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $install = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $vcvars = Join-Path $install 'VC\Auxiliary\Build\vcvarsall.bat'
+          cmd /c "`"$vcvars`" x86 -vcvars_ver=14.44 && python research/process/startup/measure_context.py %RUNNER_TEMP%/context-probes"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: startup-original-probes
+          path: ${{ runner.temp }}/startup-probes
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: startup-context-probes
+          path: ${{ runner.temp }}/context-probes
+      - name: Observe independent root-boundary behavior without a debugger
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $install = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $vcvars = Join-Path $install 'VC\Auxiliary\Build\vcvarsall.bat'
+          cmd /c "`"$vcvars`" x86 -vcvars_ver=14.44 && python research/process/startup/measure_root.py %RUNNER_TEMP%/root-probes"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: startup-root-probes
+          path: ${{ runner.temp }}/root-probes
+      - name: Measure frozen original context handler slice
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $install = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $vcvars = Join-Path $install 'VC\Auxiliary\Build\vcvarsall.bat'
+          cmd /c "`"$vcvars`" x86 -vcvars_ver=14.44 && python research/process/startup/measure_slice.py %RUNNER_TEMP%/handler-slice"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: startup-handler-slice
+          path: ${{ runner.temp }}/handler-slice
+      - name: Measure frozen v2 event and resumed continuation
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $install = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $vcvars = Join-Path $install 'VC\Auxiliary\Build\vcvarsall.bat'
+          cmd /c "`"$vcvars`" x86 -vcvars_ver=14.44 && python research/process/startup/measure_event.py %RUNNER_TEMP%/handler-event"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: startup-handler-event
+          path: ${{ runner.temp }}/handler-event
+      - name: Measure frozen original nested cleanup and manual restore
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $install = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $vcvars = Join-Path $install 'VC\Auxiliary\Build\vcvarsall.bat'
+          cmd /c "`"$vcvars`" x86 -vcvars_ver=14.44 && python research/process/startup/measure_unwind.py %RUNNER_TEMP%/unwind-slice"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --locked --example frame_unwind
+      - name: Observe original dispatcher and FS state separately
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $install = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $vcvars = Join-Path $install 'VC\Auxiliary\Build\vcvarsall.bat'
+          cmd /c "`"$vcvars`" x86 -vcvars_ver=14.44 && python research/process/startup/observe_unwind.py %RUNNER_TEMP%/unwind-slice %RUNNER_TEMP%/unwind-observation"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: startup-unwind-observation
+          path: ${{ runner.temp }}/unwind-observation
+      - name: Check original frame fragments on Windows
+        shell: pwsh
+        run: |
+          python research/process/startup/check_frame.py "$env:RUNNER_TEMP/unwind-slice" target/debug/examples/frame_unwind.exe --output "$env:RUNNER_TEMP/unwind-slice/frame-native-windows"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Check connected original initialization and restoration on Windows
+        shell: pwsh
+        run: |
+          python research/process/startup/check_connected.py "$env:RUNNER_TEMP/unwind-slice" target/debug/examples/frame_unwind.exe --output "$env:RUNNER_TEMP/unwind-slice/connected-native-windows"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Check original dispatcher and owned FS composition on Windows
+        shell: pwsh
+        run: |
+          python research/process/startup/check_dispatched.py "$env:RUNNER_TEMP/unwind-slice" target/debug/examples/frame_unwind.exe --output "$env:RUNNER_TEMP/unwind-slice/dispatched-native-windows"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Check original software-exception invocation on Windows
+        shell: pwsh
+        run: |
+          python research/process/startup/check_raised.py "$env:RUNNER_TEMP/unwind-slice" target/debug/examples/frame_unwind.exe --output "$env:RUNNER_TEMP/unwind-slice/raised-native-windows"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Check original Main reporting and return under explicit CRT boundary
+        shell: pwsh
+        run: |
+          python research/process/startup/check_reported.py "$env:RUNNER_TEMP/unwind-slice" target/debug/examples/frame_unwind.exe --output "$env:RUNNER_TEMP/unwind-slice/reported-native-windows"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Observe original CRT short writes and flush lifecycle separately
+        shell: pwsh
+        run: |
+          python -m unittest discover -s research/process/startup -p test_observe_stdio.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $install = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $vcvars = Join-Path $install 'VC\Auxiliary\Build\vcvarsall.bat'
+          cmd /c "`"$vcvars`" x86 -vcvars_ver=14.44 && python research/process/startup/observe_stdio.py %RUNNER_TEMP%/unwind-slice %RUNNER_TEMP%/stdio-observation"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: startup-stdio-observation
+          path: ${{ runner.temp }}/stdio-observation
+      - name: Compile original CRT text component and compare independent effects
+        shell: pwsh
+        run: |
+          cargo test --locked --example crt_stream
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python research/process/startup/check_normal_wrapper.py "$env:RUNNER_TEMP/unwind-slice" "$env:RUNNER_TEMP/stdio-observation" "$env:RUNNER_TEMP/unwind-slice/normal-wrapper-windows"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python research/process/startup/check_stdio.py "$env:RUNNER_TEMP/unwind-slice" "$env:RUNNER_TEMP/stdio-observation" "$env:RUNNER_TEMP/unwind-slice/stdio-native-windows"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: startup-unwind-slice
+          path: ${{ runner.temp }}/unwind-slice
+  native-handler-slice:
+    needs: original-user-mode-probes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test --locked --example handler_slice
+      - run: cargo build --locked --example handler_slice
+      - uses: actions/download-artifact@v4
+        with:
+          name: startup-handler-slice
+          path: original-handler
+      - run: python3 research/process/startup/check_slice.py original-handler target/debug/examples/handler_slice
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: startup-handler-native
+          path: original-handler
+
+  native-handler-event:
+    needs: original-user-mode-probes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test --locked --example handler_event
+      - run: cargo build --locked --example handler_event
+      - uses: actions/download-artifact@v4
+        with:
+          name: startup-handler-event
+          path: original-event
+      - run: python3 research/process/startup/check_event.py original-event target/debug/examples/handler_event
+      - run: python3 research/process/startup/check_event_variants.py target/debug/examples/handler_event --output original-event/independent-vectors
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: startup-handler-event-native
+          path: original-event
+
+  native-unwind-slice:
+    needs: original-user-mode-probes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test --locked --example unwind_slice
+      - run: cargo build --locked --example unwind_slice
+      - run: cargo build --locked --example frame_unwind
+      - uses: actions/download-artifact@v4
+        with:
+          name: startup-unwind-slice
+          path: original-unwind
+      - uses: actions/download-artifact@v4
+        with:
+          name: startup-stdio-observation
+          path: original-stdio-observation
+      - run: cargo test --locked --example crt_stream
+      - run: python3 research/process/startup/check_normal_wrapper.py original-unwind original-stdio-observation original-unwind/normal-wrapper-linux --compare original-unwind/normal-wrapper-windows/report.json
+      - run: python3 research/process/startup/check_projection_boundary.py original-unwind/normal-wrapper-linux/normal-wrapper.rs original-unwind/projection-boundary
+      - run: python3 research/process/startup/check_stdio.py original-unwind original-stdio-observation original-unwind/stdio-native-linux --compare original-unwind/stdio-native-windows/report.json
+      - run: python3 research/process/startup/check_unwind.py original-unwind target/debug/examples/unwind_slice
+      - run: python3 research/process/startup/coff_binding.py --test-artifact original-unwind
+      - run: python3 research/process/startup/frame_binding.py --test-artifact original-unwind
+      - run: python3 research/process/startup/test_frame_gate.py --artifact original-unwind -v
+      - run: python3 research/process/startup/check_frame.py original-unwind target/debug/examples/frame_unwind --output original-unwind/frame-native-linux --require-windows-component
+      - run: python3 research/process/startup/check_connected.py --selftest
+      - run: python3 research/process/startup/check_connected.py original-unwind target/debug/examples/frame_unwind --output original-unwind/connected-native-linux --require-windows-component
+      - run: python3 research/process/startup/check_dispatched.py original-unwind target/debug/examples/frame_unwind --output original-unwind/dispatched-native-linux --require-windows-component
+      - run: python3 research/process/startup/check_raised.py --selftest
+      - run: python3 research/process/startup/check_raised.py original-unwind target/debug/examples/frame_unwind --output original-unwind/raised-native-linux --require-windows-component
+      - run: python3 research/process/startup/check_reported.py --selftest
+      - run: python3 research/process/startup/check_reported.py original-unwind target/debug/examples/frame_unwind --output original-unwind/reported-native-linux --require-windows-component
+      - run: python3 research/process/startup/check_unwind_variants.py target/debug/examples/unwind_slice --output original-unwind/independent-vectors
+      - run: python3 research/process/startup/check_dispatch_variants.py target/debug/examples/unwind_slice --output original-unwind/dispatch-vectors
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: startup-unwind-native
+          path: original-unwind

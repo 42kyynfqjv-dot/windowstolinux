@@ -1,0 +1,71 @@
+{
+  "reviewed_parent": "db8d1280ac53350f0fb77727b247e3eaff61343c",
+  "kind": "original abort branch and exit-wrapper component execution",
+  "new_windows_observations": 0,
+  "new_whole_pe_pairs": 0,
+  "native_branch_cases": 13,
+  "crt_tests_passed": 240,
+  "crt_ignored": 1,
+  "root_tests_passed": 175,
+  "python_tests": 60,
+  "python_existing_skips": 1,
+  "clippy": "passed",
+  "review_findings": [
+    "Independent review and old-guard mutant rerun reproduce prior wrongful release; corrected owner guard and twelve current query cases pass.",
+    "Original query return drives actual TEST/JZ, original flag bit test and signal/feature/exit argument pushes. Unknown relevant bits reject and unknown unrelated bits are preserved.",
+    "Signal dispatch and feature API calls have no supported effect contract and always reject before execution; graph pruning creates no success path.",
+    "Original exit wrapper executes until shared-exit CALL with actual status3/mode2/zero arguments; no fabricated process termination or flush.",
+    "Across callbacks the runtime anchor/thread/owner and active-call lifetime are validated.",
+    "Closed-runtime negative initially tried an ordinary marker read after retirement; corrected to retained backing bytes and immediate lifetime rejection without weakening assertions."
+  ],
+  "remaining_gates": [
+    "signal22 dispatch40cc14 EH4/selector/lock/encoded callback authority/default/ignore behavior",
+    "shared exit406e69 mode2 original FS frame and reachable lock/policy/API effects",
+    "feature API41501c then fast-fail/reporting if admitted",
+    "initial module/abort flags/lock/FLS state and actual Windows delivery",
+    "unchanged-binary whole startup/rcedit"
+  ],
+  "timeout_status": "Historical original-Windows timeouts, including14f7299 untaken job123897726848, remain unresolved. No retry or relaxed limits used.",
+  "local_log_sha256": {
+    "crt-final.log": "0efa632e1799d341c0a152d60560f64bf4598879025f6365011d4d5102b0dcda",
+    "root.log": "3041d919ca84e98ed438be006beef5edeef3c8996f68090454808fa8a9762d89",
+    "clippy-final.log": "02db5a66fa0c60ca8618bd08aac556eac4f3ec863e8630a0d353dba6a0f6e126",
+    "python.log": "a952e366516a8353804a05b9455ee84157bd00ce4c6bfad93e22ac4f995d6b51",
+    "old-lock-review.log": "df6511c8ea872fb97c456bf4e47e9d959c34f83d79dc3656667ef82b6cd0b77d",
+    "shared-exit-inventory.txt": "60764ebd0abb13472f3f74010b08231638facdda37c45e94d3cea56bacc32c8b"
+  },
+  "old_guard_mutant_result": "expected failure: foreign thread released live lock, actual0 versus expected1",
+  "next_model": "Bounded Astra justified for distinct inline FS record at406e69 (handler414af3, EBP-12, 24 locals/cookie, no existing saved-register helper layout), canonical registry lifetime across conditional return versus nonreturning process path. Sol can review current branch slice and handle routine verification.",
+  "retained_windows_component_comparisons": 5,
+  "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "rust_sha256": "8d763d3b0b1c60836bd396bc1d7cefc76b99b96bf3868e3950b7ff2eb00cf2e1",
+  "ordered_native_cases": 85,
+  "registered_errno_native_cases": 16,
+  "replay_report_sha256": "581c98001c0dfab4c9a7fa09017b0165e2d581e9e97458ba862612a8ed8717fe",
+  "abort_code_sha256": {
+    "abort-entry": "0592189e3b4528351b8bde51046a5a358ff5c27f2448f36e4007c7d4b734d5ed",
+    "abort-query": "78c3075082530d874bac4431ba22ff88171469176f14c31022baa68903962974",
+    "abort-locked": "19b588d07d323913e1f7ebca62aa89d2c5fa33130e3bdb44b9034364ac373736",
+    "abort-unlock": "f572c23c0739c08e4ef77ce1fe6036c154aaf76a7932ec587edc1a9f1dcf9db5",
+    "abort-scope": "16fd5fabfeaa475f1eb5bedef2cfb2932882eb5f7c668a990cdd4491a69fe32f",
+    "abort-abort": "3ba98d38d1207eccb49248fa2c39ecf74665be1eb957eb1798bd2864e728c846",
+    "abort-exit": "9fbf3260adcc9c385bb56574438989093a0d8bcccdde16b524ee7f0745333cfc"
+  },
+  "reviewed_parent_ci": [
+    {
+      "id": 41006636984,
+      "status": "in_progress",
+      "conclusion": null
+    },
+    {
+      "id": 41006631641,
+      "status": "in_progress",
+      "conclusion": null
+    },
+    {
+      "id": 41006631527,
+      "status": "completed",
+      "conclusion": "success"
+    }
+  ]
+}
