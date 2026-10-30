@@ -632,3 +632,53 @@ existing cached unwind path remains separately supported under its contract.
 Actual OS delivery acquisition, incoming-chain containment, collided unwind,
 loader/FLS creation, complete formatting/exit and whole unchanged-binary startup
 remain unproved. Historical Windows timeouts are not diagnosed by passing CI.
+
+## Reviewed live-heap calloc connection
+
+Sol review of `3c02eff` found the checked failure/quarantine and original errno
+store paths consistent with the stated component cuts. Success/failure assertions
+remain strict, including rejected allocator results and failed event completion.
+The live pending-event allocator now executes the original `0x407cf0` calloc
+body and mode getter instead of directly allocating and returning a fabricated
+callee result. Shared lowering retains the original arithmetic, overflow check,
+retry/new-handler call, HeapAlloc arguments, errno branch and checked return.
+
+`live_heap_alloc_result` requires the established runtime-owned process heap,
+known no-exception policy, flags 8 and a nonzero request. It creates only Buffer
+allocations. It accepts no initialization token and cannot construct descriptors
+or change heap policy. Existing startup-only allocation retains its old token
+checks. The generated live calloc also checks the expected heap identity and
+rejects descriptor requests before execution. API availability and new-handler
+results remain explicit component inputs.
+
+Nine independent native cases exercise success after startup authority ends,
+allocation failure, one successful retry, refused retry, arithmetic overflow,
+zero request, foreign heap, forbidden descriptor role and missing errno owner.
+The ordered component now has 85 cases. Its additional allocation-failure case
+reaches the original errno call, rejects with
+`pending calloc errno acquisition requires original UCRT producer`, preserves
+the FLS sentinel and issues no handler receipt or shadow errno. Existing eight
+lazy-event scenarios now run the original calloc body at their thunk target.
+
+### Exact remaining errno producer integration
+
+The UCRT getter at `0x40a332` has a distinct FLS index/global (`0x41c170` versus
+C++ dispatcher `0x41c060`) and its own prolog/epilog. `crt_ptd::source` currently
+calls `ptd_prolog`/`ptd_epilog`, whose `CrtPtdFrame::write_fs` updates a local view.
+That is insufficient during suspended-call delivery, where the child registry
+owns the canonical ordered thread chain. Supplying a new root token or reusing
+the C++ slot would invent authority.
+
+Next bind that original getter's actual registration and retirement to the live
+child epoch and canonical head, then route the original errno accessor through
+it. Preserve the checked parent suspension and captured/delivery distinction.
+Acceptance must execute cached UCRT PTD lookup and its original epilog on the
+same event, verify restored head/stack/errno cell, and reject wrong FLS owner,
+stale capture, malformed record, replay and failures after registration without
+rollback of prior writes. Null UCRT PTD, dynamic backend and recursive allocation
+remain explicit rejection until their producers are connected. This is a bounded
+Astra ownership question; routine verification/review can remain Sol.
+
+These are connected component results, with no added Windows observations or
+whole-PE pairs. Full startup/rcedit remains unsupported; historical Windows
+process timeouts are still unexplained.

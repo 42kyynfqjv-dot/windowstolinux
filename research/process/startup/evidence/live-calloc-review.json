@@ -1,0 +1,33 @@
+{
+  "reviewed_commit": "3c02effd423edd49d8e36ae4c1fbd814269c99d4",
+  "reviewed_ci": {
+    "41000164833": "success",
+    "41000160050": "success",
+    "41000160056": "success"
+  },
+  "review": "Original free failure ownership, canonical errno writes, protected scratch and strict pending-event assertions reviewed. No runtime defect found in the reviewed component domain.",
+  "change": "Original calloc and mode getter execute at the pending-event allocation thunk under separate live heap authority.",
+  "live_heap_calloc_native_cases": 9,
+  "ordered_native_cases": 85,
+  "pending_lazy_native_cases": 9,
+  "crt_tests": 233,
+  "crt_ignored_in_suite": 1,
+  "root_tests": 175,
+  "python_tests": 60,
+  "python_skipped": 1,
+  "clippy": "passed",
+  "whole_pe_pairs": 0,
+  "new_windows_observations": 0,
+  "primary_contract": "https://learn.microsoft.com/en-us/windows/win32/api/heapapi/nf-heapapi-heapalloc",
+  "contract_scope": "Established heap handle; flags8 zeroed storage, no-exception policy; failure NULL and no SetLastError. Descriptor construction remains startup-only.",
+  "remaining": "Original UCRT getter prolog/epilog updates local FS state; it needs canonical child-delivery registry ownership before errno acquisition can replace the pending callback. Actual API outcomes, recursive errno and new-handler/termination remain cuts.",
+  "test_development_corrections": [
+    "Foreign heap cannot be stored as a typed value into another runtime; negative test now passes foreign expected authority directly and asserts rejection.",
+    "Missing errno owner rejects at absolute region resolution; exact rejection assertion corrected.",
+    "Replaced stale standard-handle test-count gate with existing strict named completions to cover the new test."
+  ],
+  "retained_replay": "passed",
+  "recorded_windows_wrapper_comparisons": 5,
+  "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "wrapper_rust_sha256": "e3a3085850acd3148a2ec5b6a963f8c316103719d49ee9c711ce7e32ed6a4bc9"
+}

@@ -517,6 +517,14 @@ impl CrtStreamRuntime {
   if heap.exceptions!=Some(false)||flags!=8||size==0{return Err("CRT unproved heap flags/exception/zero request");}
   let result=if descriptor{if size%56!=0{return Err("CRT descriptor allocation extent");}self.alloc_descriptor_block(init,size/56,available)}else{self.allocate(size,true,available)}?;if result.is_some(){self.last_os_error=None;}Ok(result)
  }
+ /// Ordinary live heap calls do not borrow startup-exclusive authority. This
+ /// admits only zeroed, nonzero Buffer allocation from the established heap.
+ /// Descriptor construction and policy initialization remain startup-only.
+ fn live_heap_alloc_result(&mut self,heap:CrtHeap,flags:u32,size:u32,available:bool)->Result<Option<CrtPointer>,&'static str>{
+  self.heap_identity(heap)?;
+  if heap.exceptions!=Some(false)||flags!=8||size==0{return Err("CRT live allocation flags/exception/zero request");}
+  let result=self.allocate(size,true,available)?;if result.is_some(){self.last_os_error=None;}Ok(result)
+ }
  /// Select the allocation role before any pointer escapes; no Buffer alias
  /// is relabelled or allowed to bypass record locks.
  fn alloc_descriptor_block(&mut self,token:CrtInitialization,count:u32,available:bool)->Result<Option<CrtPointer>,&'static str>{

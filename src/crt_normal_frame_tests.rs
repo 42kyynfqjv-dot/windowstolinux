@@ -1490,7 +1490,7 @@ fn bound_invocation(){for delivery_mode in 0..34{let prefix=true;let mode=0;
   checked=true;Err::<(),_>("original child unwind completion is not OS delivery/restoration")
  });assert!(result.is_err());assert!(checked,"invocation case {} failed before its assertions",delivery_mode);assert_eq!(rt.initialization,None);assert_eq!(rt.module_references.len(),refs);assert_eq!(rt.memory.read(cache.address(),4).unwrap(),cache_before);assert_eq!(rt.last_os_error,saved_error);
 }}
-fn ordered_search_cases(){for mode in 0..84{
+fn ordered_search_cases(){for mode in 0..85{
  let(m,mut r,main,mut permit)=fixture_with_extra(&[(0x410000,0x420000)]);let mut rt=runtime(&r);let mut checked=false;let mut escaped_event=None;let mut escaped_lease=None;
  let selected=if mode>=21{
   let(mut next,init)=CrtStreamRuntime::new_initializing(r.identity.owner,r.identity.instance,0x8000,65536).unwrap();
@@ -1501,7 +1501,7 @@ fn ordered_search_cases(){for mode in 0..84{
   if mode>=76{
    let set=next.module_export_result(init,module,"FlsSetValue",0x722000).unwrap();next.store(next.offset(cache,12).unwrap(),32,CrtValue::Function(set)).unwrap();
    next.map_region(0x415d60,8,CrtRegionKind::Input,Some(&[0,0,0,0,2,0,0,0])).unwrap();next.map_region(0x415d68,12,CrtRegionKind::Input,Some(b"FlsSetValue\0")).unwrap();
-   let heap=next.process_heap_result(init,true,Some(false)).unwrap();let cell=next.map_region(0x41d2c8,4,CrtRegionKind::Module,None).unwrap();next.store(cell,32,heap).unwrap();
+   next.map_region(0x41ce80,4,CrtRegionKind::Module,Some(&0u32.to_le_bytes())).unwrap();let heap=next.process_heap_result(init,true,Some(false)).unwrap();let cell=next.map_region(0x41d2c8,4,CrtRegionKind::Module,None).unwrap();next.store(cell,32,heap).unwrap();
    let p=next.map_region(0x7100,32,CrtRegionKind::ThreadData,None).unwrap();next.store(next.offset(p,16).unwrap(),32,CrtValue::scalar(73)).unwrap();
   }
   let ptd=next.map_region(0x6000,40,CrtRegionKind::ThreadData,None).unwrap();next.store(next.offset(ptd,24).unwrap(),32,CrtValue::scalar(2)).unwrap();next.store(next.offset(ptd,32).unwrap(),32,if mode==74{CrtValue::Scalar{bits:0,known:0}}else{CrtValue::scalar(0)}).unwrap();let fiber=next.bind_fiber(next.thread).unwrap();let slot=next.bind_fls(fiber,3,if mode>=75{CrtValue::scalar(0)}else{CrtValue::Pointer(ptd)}).unwrap();if mode==55{next.bind_descriptor(1,44).unwrap();}next.end_initialization(init).unwrap();rt=next;Some((fiber,slot))
@@ -1627,7 +1627,7 @@ fn ordered_search_cases(){for mode in 0..84{
   if mode==59{let lease=objects.unobserved.as_ref().unwrap().clone();drop(event);assert_eq!(lease.validate(&rt),Err("unobserved context expired/foreign lease"));assert_eq!(rt.load(context,32),Err("unobserved context raw read requires acquisition proof"));checked=true;return Err("ordered rejection checked");}
   if mode==64{escaped_lease=Some(objects.unobserved.as_ref().unwrap().clone());escaped_event=Some(event);checked=true;return Err("ordered rejection checked");}
   let taken=original_live_search_return_advance(&mut search,returned,&mut event,&objects,&rt,&c,e,&b);
-  if matches!(mode,0|5|19|21..=68|74..=83){assert_eq!(taken,Ok(predecessor));assert_eq!(search.current,predecessor);assert_eq!(e.registry.head,RegistryHead::Normal(event.frame));assert_eq!(event.delivery,CrtNormalDelivery::ResultTaken);assert_eq!(c.r,saved);
+  if matches!(mode,0|5|19|21..=68|74..=84){assert_eq!(taken,Ok(predecessor));assert_eq!(search.current,predecessor);assert_eq!(e.registry.head,RegistryHead::Normal(event.frame));assert_eq!(event.delivery,CrtNormalDelivery::ResultTaken);assert_eq!(c.r,saved);
    if let Some((fiber,slot))=selected{
     rt.map_region(0x41b42c,36,CrtRegionKind::Module,Some(&cxx_meta_bytes()))?;rt.map_region(0x41b41c,16,CrtRegionKind::Module,Some(&cxx_map_bytes()))?;
     let rec=cxx_bind(&rt,&ancestor,&af)?;let stack=rt.resolve_absolute(0x9000,CrtRegionKind::Stack)?;
@@ -1647,9 +1647,11 @@ fn ordered_search_cases(){for mode in 0..84{
        Ok((u32::from(!matches!(mode,77|81)||!matches!(value,CrtValue::Pointer(_))),Some(100)))
       },allocation:&mut|rt,c,target|{
        if target==0x407cf0{let sp=CrtCpu::pointer(c.r[4])?;assert_eq!(rt.load(rt.offset(sp,4)?,32)?,CrtValue::scalar(1));assert_eq!(rt.load(rt.offset(sp,8)?,32)?,CrtValue::scalar(40));
-        let p=rt.allocate(40,true,true)?.ok_or("independent selected allocation unavailable")?;
+        let CrtValue::Heap(heap)=rt.load(rt.resolve_absolute(0x41d2c8,CrtRegionKind::Module)?,32)? else{return Err("pending allocator heap provenance")};
+        let value=calloc_live_original(rt,c,heap,if mode==84{(0,usize::MAX)}else{(1,1)},false,rt.resolve_absolute(0x7110,CrtRegionKind::ThreadData)?,&mut vec![],&mut|_,_|Err("pending calloc new handler remains unbound"))?;
+        let p=CrtCpu::pointer(value)?;
         if mode==80{rt.memory.release(context.cap,context.owner).map_err(|_|"test capture retirement")?;}
-        if mode==82{rt.free_allocation(p)?;}c.clobber(CrtValue::Pointer(p));c.finish(rt)
+        if mode==82{rt.free_allocation(p)?;}Ok(value)
        }else{assert_eq!(target,0x407d50);original_free(rt,c,&mut|_,_,_,_|Ok((0,Some(5))),&mut|rt,c|{
         let p=rt.resolve_absolute(0x7100,CrtRegionKind::ThreadData)?;
         if mode==81{rt.store(rt.offset(p,16)?,32,CrtValue::scalar(74))?;return Err("selected errno failure after prior write");}
@@ -1662,7 +1664,8 @@ fn ordered_search_cases(){for mode in 0..84{
       if mode==83{event.generation+=1;}
       let taken=cxx_take_selected_search(&mut search,&mut event,&objects,receipt,&rt,&c,e,&b,&ancestor,&af,&rec);
       assert_eq!(taken,if mode==83{Err("normal exception stale/foreign ownership")}else{Ok(1)});
-     }else{let expected=match mode{77=>"C++ required PTD termination effect unbound",78=>"CRT unknown scalar bits observed",79=>"CRT fiber identity/lifetime",80=>"CRT pointer lifetime",81=>"selected errno failure after prior write",82=>"CRT stale/foreign pointer",_=>unreachable!()};assert_eq!(result.err(),Some(expected),"lazy pending case {mode}");assert_eq!(search.phase,3);assert_eq!(event.delivery,CrtNormalDelivery::Failed);}
+     }else{let expected=match mode{77=>"C++ required PTD termination effect unbound",78=>"CRT unknown scalar bits observed",79=>"CRT fiber identity/lifetime",80=>"CRT pointer lifetime",81=>"selected errno failure after prior write",82=>"CRT stale/foreign pointer",84=>"pending calloc errno acquisition requires original UCRT producer",_=>unreachable!()};assert_eq!(result.err(),Some(expected),"lazy pending case {mode}");assert_eq!(search.phase,3);assert_eq!(event.delivery,CrtNormalDelivery::Failed);}
+     if mode==84{assert_eq!(rt.fls_get(fiber,slot,3)?,CrtValue::scalar(u32::MAX));assert!(rt.heap_ptds.is_empty());assert_eq!(rt.errno,None);}
      if mode==77||mode==81{assert_eq!(rt.uncertain_allocations.len(),1);let p=rt.uncertain_allocations[0];assert!(rt.valid(p,0).is_err());assert!(rt.memory.validate(p.cap,p.owner).is_ok());let field=rt.resolve_absolute(0x7110,CrtRegionKind::ThreadData)?;assert_eq!(rt.load(field,32)?,CrtValue::scalar(if mode==77{13}else{74}));assert!(rt.completed_failed_frees.is_empty());}
      assert_eq!(c.r,saved);assert!(!objects.unobserved.as_ref().unwrap().live.get());checked=true;return Err("ordered rejection checked");
     }
@@ -1708,7 +1711,7 @@ fn ordered_search_cases(){for mode in 0..84{
    assert_eq!(taken,Err(expected),"consume negative {mode}");assert_ne!(search.current,predecessor);
   }
   checked=true;Err::<(),_>("ordered rejection checked")
- });assert_eq!(result,Err(if mode==12||mode==69{"CRT scalar knowledge/type"}else if mode==74{"CRT unknown scalar bits observed"}else if mode==75{"C++ PTD lazy setter/allocation/free effect unbound"}else if matches!(mode,77..=82){match mode{77=>"C++ required PTD termination effect unbound",78=>"CRT unknown scalar bits observed",79=>"CRT fiber identity/lifetime",80=>"CRT pointer lifetime",81=>"selected errno failure after prior write",82=>"CRT stale/foreign pointer",_=>unreachable!()}}else{"ordered rejection checked"}),"outer case {mode}");assert!(checked,"case {mode} did not reach its required assertion");
+ });assert_eq!(result,Err(if mode==12||mode==69{"CRT scalar knowledge/type"}else if mode==74{"CRT unknown scalar bits observed"}else if mode==75{"C++ PTD lazy setter/allocation/free effect unbound"}else if matches!(mode,77..=82|84){match mode{77=>"C++ required PTD termination effect unbound",78=>"CRT unknown scalar bits observed",79=>"CRT fiber identity/lifetime",80=>"CRT pointer lifetime",81=>"selected errno failure after prior write",82=>"CRT stale/foreign pointer",84=>"pending calloc errno acquisition requires original UCRT producer",_=>unreachable!()}}else{"ordered rejection checked"}),"outer case {mode}");assert!(checked,"case {mode} did not reach its required assertion");
  if mode==64{let lease=escaped_lease.unwrap();assert!(lease.live.get(),"event deliberately retained outside epoch");assert!(!lease.epoch_live.get());assert_eq!(lease.validate(&rt),Err("unobserved context expired/foreign lease"));drop(escaped_event);assert!(!lease.live.get());}
 }}
 fn live_return_cases(){
@@ -2262,6 +2265,7 @@ if fault==1{{cpu.condition(0)?;}}
         cxx_cached.push_str(&crate::crt_cxx_ptd::lazy_extension_source().unwrap());
         // errno_routed_call is already provided by the allocator composition.
         cxx_cached.push_str(&crate::crt_heap_free::fixture_source_without_errno());
+        cxx_cached.push_str(&crate::crt_standard_handles_tests::live_allocator_source("return Err(\"pending calloc errno acquisition requires original UCRT producer\");"));
         let cxx_action=crate::crt_cxx_unwind::action_source([&bytes_hex(crate::crt_cxx_unwind::BRIDGE),&bytes_hex(crate::crt_cxx_unwind::NOTICE_PREFIX),&bytes_hex(crate::crt_cxx_unwind::NOTICE_TAIL),&bytes_hex(crate::crt_cxx_record::ACTION)]).unwrap();
         let cxx_state=crate::crt_cxx_record::unwind_state_source(&bytes_hex(crate::crt_cxx_record::UNWIND_STATE_GET),&bytes_hex(crate::crt_cxx_record::UNWIND_STATE_SET)).unwrap();
         let cxx_record=crate::crt_cxx_record::emit(&bytes_hex(crate::crt_cxx_record::METADATA),0x41b42c,&bytes_hex(crate::crt_cxx_record::UNWIND_MAP),0x41b41c).unwrap();

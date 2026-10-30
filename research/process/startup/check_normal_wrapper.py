@@ -289,8 +289,17 @@ def check(original, observation, out, compare=None):
         env=env, capture_output=True, timeout=180)
     (out/'standard-handles.stdout').write_bytes(standard_run.stdout)
     (out/'standard-handles.stderr').write_bytes(standard_run.stderr)
-    if standard_run.returncode or b'8 passed' not in standard_run.stdout:
-        raise ValueError('standard-handle component check failed')
+    require_test_completions(standard_run, [
+        b'crt_standard_handles_tests::original_standard_handles_preserve_inheritance_and_classify_api_results',
+        b'crt_standard_handles_tests::original_inherited_records_feed_standard_initialization_with_checked_bounds',
+        b'crt_standard_handles_tests::word_compare_and_signed_selection_keep_independent_boundaries',
+        b'crt_standard_handles_tests::original_descriptor_construction_connects_inheritance_and_destruction',
+        b'crt_standard_handles_tests::original_allocation_manager_scope_orders_lock_publication_and_cleanup',
+        b'crt_standard_handles_tests::original_heap_producer_calloc_and_descriptor_constructor_preserve_error_paths',
+        b'crt_standard_handles_tests::two_operand_imul_keeps_signed_overflow_unknowns_and_memory_ownership',
+        b'crt_standard_handles_tests::original_errno_router_binds_ptd_or_fallback_without_alias_or_lifetime_renewal',
+        b'crt_standard_handles_tests::original_calloc_uses_live_heap_without_startup_or_descriptor_authority',
+    ])
     ptd_run = subprocess.run(['cargo', 'test', '--locked', '--example', 'crt_stream', 'crt_ptd::'],
                              env=env, capture_output=True, timeout=180)
     (out/'ptd-components.stdout').write_bytes(ptd_run.stdout)
@@ -419,7 +428,7 @@ def check(original, observation, out, compare=None):
                   main_scope_header_sha256=sha((out/'Main-scope-header.bin').read_bytes()),
                   locale_state_evidence=locale_state_evidence(image),
                   unwind_binding_source_sha256=sha((out/'cxx-unwind-connected.rs').read_bytes()),
-                  heap_free_native_cases=28, heap_free_new_windows_pairs=0, pending_lazy_native_cases=8, pending_lazy_new_windows_pairs=0, lazy_common_handler_native_cases=24, lazy_common_handler_new_windows_pairs=0, heap_ptd_view_native_cases=17, lazy_ptd_native_cases=20, lazy_ptd_new_windows_pairs=0, ordered_search_native_cases=84, unobserved_context_native_cases=27, unobserved_context_new_windows_pairs=0, original_empty_search_native_cases=1, ordered_search_new_windows_pairs=0, shared_chain_native_cases=24, shared_chain_effect_lifetime_cases=4, shared_chain_new_windows_pairs=0, chain_ownership_diagnostic_experiments=1, chain_ownership_new_windows_pairs=0, bound_cxx_invocation_native_cases=34, bound_cxx_invocation_new_windows_pairs=0, prefix_delivery_unwind_native_cases=14, prefix_delivery_new_windows_pairs=0, dispatcher_delivery_unwind_native_cases=8, dispatcher_delivery_new_windows_pairs=0, delivery_child_native_cases=14, delivery_cached_unwind_native_cases=4, delivery_new_windows_pairs=0,
+                  heap_free_native_cases=28, heap_free_new_windows_pairs=0, pending_lazy_native_cases=9, pending_lazy_new_windows_pairs=0, lazy_common_handler_native_cases=24, lazy_common_handler_new_windows_pairs=0, heap_ptd_view_native_cases=17, lazy_ptd_native_cases=20, lazy_ptd_new_windows_pairs=0, ordered_search_native_cases=85, unobserved_context_native_cases=27, unobserved_context_new_windows_pairs=0, original_empty_search_native_cases=1, ordered_search_new_windows_pairs=0, shared_chain_native_cases=24, shared_chain_effect_lifetime_cases=4, shared_chain_new_windows_pairs=0, chain_ownership_diagnostic_experiments=1, chain_ownership_new_windows_pairs=0, bound_cxx_invocation_native_cases=34, bound_cxx_invocation_new_windows_pairs=0, prefix_delivery_unwind_native_cases=14, prefix_delivery_new_windows_pairs=0, dispatcher_delivery_unwind_native_cases=8, dispatcher_delivery_new_windows_pairs=0, delivery_child_native_cases=14, delivery_cached_unwind_native_cases=4, delivery_new_windows_pairs=0,
                   unwind_native_cases=24, cached_unwind_native_cases=14, cached_unwind_new_windows_pairs=0, unwind_new_windows_pairs=0, unwind_binding_rust_tests=1,
                   unwind_state_source_sha256=sha((out/'unwind-state-live.rs').read_bytes()),
                   unwind_state_native_cases=12, unwind_state_new_windows_pairs=0,
@@ -431,7 +440,7 @@ def check(original, observation, out, compare=None):
                   dynamic_fls_native_cases=19, dynamic_fls_new_windows_pairs=0,
                   cold_resolver_source_sha256=sha((out/'cold-resolver-component.rs').read_bytes()),
                   cold_resolver_scripted_cases=17, cold_resolver_new_windows_pairs=0,
-                  cxx_record_rust_tests=10, cxx_record_new_windows_pairs=0, ptd_component_rust_tests=7, ptd_new_windows_pairs=0, errno_router_component_cases=9, errno_router_new_windows_pairs=0, heap_calloc_component_cases=13, heap_calloc_new_windows_pairs=0, registered_manager_component_cases=6, registered_manager_new_windows_pairs=0, manager_component_cases=6, manager_new_windows_pairs=0, descriptor_lifecycle_component_cases=4, descriptor_lifecycle_new_windows_pairs=0, inherited_component_cases=7, inherited_new_windows_pairs=0, standard_handle_component_cases=25, standard_handle_new_windows_pairs=0,
+                  cxx_record_rust_tests=10, cxx_record_new_windows_pairs=0, ptd_component_rust_tests=7, ptd_new_windows_pairs=0, errno_router_component_cases=9, errno_router_new_windows_pairs=0, live_heap_calloc_native_cases=9, heap_calloc_component_cases=13, heap_calloc_new_windows_pairs=0, registered_manager_component_cases=6, registered_manager_new_windows_pairs=0, manager_component_cases=6, manager_new_windows_pairs=0, descriptor_lifecycle_component_cases=4, descriptor_lifecycle_new_windows_pairs=0, inherited_component_cases=7, inherited_new_windows_pairs=0, standard_handle_component_cases=25, standard_handle_new_windows_pairs=0,
                   original_printf_routing_sha256=sha((out/'printf-routing-live.bin').read_bytes()),
                   original_printf_context_sha256=sha((out/'printf-context-live.bin').read_bytes()),
                   original_printf_entry_sha256=sha((out/'printf-entry-live.bin').read_bytes()),

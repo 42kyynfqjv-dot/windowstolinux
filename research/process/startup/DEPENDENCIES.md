@@ -378,3 +378,18 @@ component's initialization token is not general live-heap authority; do not pass
 an expired startup token through exception delivery. New-handler, recursive errno,
 required-getter termination, and lazy-path unwind remain rejected. See
 [the connected contract](CAPTURE-ACQUISITION.md#original-free-failure-and-pending-event-lazy-acquisition).
+
+### Original calloc under live heap authority
+
+The ordered lazy path now executes original calloc and its mode getter under a
+separate live process-heap contract; no expired initialization token or descriptor
+authority is used. Nine independent calloc cases and 85 ordered cases exercise
+success, retry/error and rejected ownership. Original HeapAlloc outcomes and
+new-handler results remain declared inputs. Allocation failure in the pending
+path explicitly rejects at original UCRT errno acquisition, retaining its FLS
+sentinel and issuing no success receipt.
+
+Next connect UCRT getter 0x40a332's prolog/epilog to the canonical delivery-child
+registry head. Its current local FS view cannot stand in for that ownership;
+UCRT and C++ FLS slots remain distinct. Then route both calloc and free errno
+access through this producer. See [the exact gate](CAPTURE-ACQUISITION.md#exact-remaining-errno-producer-integration).

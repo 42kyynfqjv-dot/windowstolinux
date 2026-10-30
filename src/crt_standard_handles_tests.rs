@@ -268,6 +268,12 @@ pub(super) fn allocator_source() -> String {
     allocator_source_with_errno(None)
 }
 pub(super) fn allocator_source_with_errno(accessor: Option<&str>) -> String {
+    allocator_source_mode(accessor, false)
+}
+pub(super) fn live_allocator_source(accessor: &str) -> String {
+    allocator_source_mode(Some(accessor), true)
+}
+fn allocator_source_mode(accessor: Option<&str>, live: bool) -> String {
     let heap_producer: Vec<u8> = "ff15f850410085c0a3c8d241000f95c0c3"
         .as_bytes()
         .chunks_exact(2)
@@ -285,6 +291,9 @@ pub(super) fn allocator_source_with_errno(accessor: Option<&str>) -> String {
         (&mode_getter, 0x4071c0, "mode_getter"),
         (&calloc_body, 0x407cf0, "calloc_original"),
     ] {
+        if live && name == "heap_producer" {
+            continue;
+        }
         let graph = Graph::decode(bytes, origin).unwrap();
         let body=crt_stream_emit::emit_body(&graph,|pc,target|{let next=pc+graph.nodes[&pc].length;let(pop,code)=match target{
    Target::Import(0x4150f8)=>(0,"let value=rt.process_heap_result(init,heap_available,policy)?;child.clobber(value);child.finish(rt)"),
@@ -299,6 +308,13 @@ pub(super) fn allocator_source_with_errno(accessor: Option<&str>) -> String {
             ""
         };
         extra.push_str(&format!("fn {name}(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,init:CrtInitialization,heap_available:bool,policy:Option<bool>,success_after:(usize,usize),descriptor:bool,errno:CrtPointer,allocations:&mut Vec<u32>,handler:&mut impl FnMut(&mut CrtStreamRuntime,u32)->Result<bool,&'static str>)->Result<CrtValue,&'static str>{{{entry}{body}}}"));
+    }
+    if live {
+        extra=extra.replace("let sp=CrtCpu::pointer(cpu.r[4])?;if rt.load(rt.offset(sp,4)?,32)?.known_scalar()?==0", "rt.heap_identity(expected_heap)?;if descriptor{return Err(\"live calloc descriptor authority rejected\");}let sp=CrtCpu::pointer(cpu.r[4])?;if rt.load(rt.offset(sp,4)?,32)?.known_scalar()?==0")
+          .replace("init:CrtInitialization,heap_available:bool,policy:Option<bool>","expected_heap:CrtHeap")
+          .replace("init,heap_available,policy,success_after","expected_heap,success_after")
+          .replace("rt.heap_alloc_result(init,heap,flags,size,descriptor,available)?","{if descriptor||heap!=expected_heap{return Err(\"live calloc heap/role authority\");}rt.live_heap_alloc_result(heap,flags,size,available)?}")
+          .replace("calloc_original(","calloc_live_original(").replace("mode_getter(","mode_getter_live(");
     }
     extra
 }
@@ -384,5 +400,36 @@ for fault in 0..9{
 }
 "#,
         "errno-route",
+    );
+}
+
+#[test]
+fn original_calloc_uses_live_heap_without_startup_or_descriptor_authority() {
+    let extra=format!("{}{}",errno_source(),live_allocator_source("errno_routed(rt,child,|rt|Ok(CrtValue::Pointer(rt.resolve_absolute(0x7100,CrtRegionKind::ThreadData)?)))"));
+    super::crt_stream_callees_tests::native(
+        &extra,
+        r#"
+for mode in 0..9 {
+ let(mut rt,init)=CrtStreamRuntime::new_initializing(1,2,0x8000,32768).unwrap();let CrtValue::Heap(heap)=rt.process_heap_result(init,true,Some(false)).unwrap()else{panic!()};
+ let cell=rt.map_region(0x41d2c8,4,CrtRegionKind::Module,None).unwrap();rt.store(cell,32,CrtValue::Heap(heap)).unwrap();
+ rt.map_region(0x41ce80,4,CrtRegionKind::Module,Some(&(if mode==2||mode==3{1u32}else{0}).to_le_bytes())).unwrap();
+ let ptd=rt.map_region(0x7100,32,CrtRegionKind::ThreadData,None).unwrap();let errno=rt.offset(ptd,16).unwrap();rt.store(errno,32,CrtValue::scalar(73)).unwrap();rt.end_initialization(init).unwrap();
+ assert!(rt.heap_alloc_result(init,heap,8,40,false,true).is_err());
+ let(mut other,oi)=CrtStreamRuntime::new_initializing(1,2,0x8000,32768).unwrap();let CrtValue::Heap(foreign)=other.process_heap_result(oi,true,Some(false)).unwrap()else{panic!()};
+ if mode==8{rt.retire_region(ptd).unwrap();}
+ let stack=rt.map_region(0x9000,2048,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,1536).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(1)).unwrap();
+ for(i,v)in [if mode==4{u32::MAX}else if mode==5{0}else{1},40].into_iter().enumerate(){rt.store(rt.offset(sp,4+i as i64*4).unwrap(),32,CrtValue::scalar(v)).unwrap();}
+ let mut cpu=CrtCpu::new(sp,1).unwrap();let mut allocations=vec![];let mut retries=0;
+ let result=calloc_live_original(&mut rt,&mut cpu,if mode==6{foreign}else{heap},if mode==0{(1,1)}else if mode==2{(0,1)}else{(0,usize::MAX)},mode==7,errno,&mut allocations,&mut|_,n|{assert_eq!(n,40);retries+=1;Ok(mode==2)});
+ match mode{
+  0|2=>{let p=CrtCpu::pointer(result.unwrap()).unwrap();assert_eq!(p.kind,CrtRegionKind::Buffer);assert_eq!(p.size,40);assert_eq!(rt.memory.read(p.address(),40).unwrap(),[0;40]);assert_eq!(allocations,if mode==0{vec![40]}else{vec![40,40]});assert_eq!(retries,if mode==0{0}else{1});assert_eq!(rt.load(errno,32).unwrap(),CrtValue::scalar(73));},
+  1|3|4=>{assert_eq!(result.unwrap(),CrtValue::scalar(0));assert_eq!(rt.load(errno,32).unwrap(),CrtValue::scalar(12));assert_eq!(rt.errno,Some(12));assert_eq!(retries,usize::from(mode==3));if mode==4{assert!(allocations.is_empty());}},
+  5|6|7|8=>{assert_eq!(result,Err(match mode{5=>"zero-request calloc domain unbound",6=>"CRT heap owner/lifetime",7=>"live calloc descriptor authority rejected",8=>"CRT undeclared absolute region/role",_=>unreachable!()}),"mode {mode}");assert!(!cpu.returned);if mode!=8{assert!(allocations.is_empty());}},
+  _=>unreachable!()
+ }
+ if mode<=4{assert!(cpu.returned);assert_eq!(rt.initialization,None);}
+}
+"#,
+        "live-heap-calloc",
     );
 }

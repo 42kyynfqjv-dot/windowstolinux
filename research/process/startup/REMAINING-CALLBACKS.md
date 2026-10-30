@@ -298,3 +298,11 @@ new-handler/recursive errno, lazy-path unwind and real OS delivery are unclosed.
 There are no additional whole-PE pairs. See
 [the current connected scope](CAPTURE-ACQUISITION.md#original-free-failure-and-pending-event-lazy-acquisition)
 and [evidence](evidence/free-pending-ptd.json).
+
+Live-heap review: the pending allocator thunk now executes original calloc and
+mode getter. Only the HeapAlloc availability and new-handler outcomes remain
+backend inputs there. Startup token and descriptor permissions stay separate.
+The pending errno call still rejects until the actual UCRT getter's registration
+and epilog are bound to the canonical child-delivery chain; its local-only FS
+view is insufficient. UCRT/C++ slots must stay distinct. See
+[the concrete registry gate](CAPTURE-ACQUISITION.md#exact-remaining-errno-producer-integration).
