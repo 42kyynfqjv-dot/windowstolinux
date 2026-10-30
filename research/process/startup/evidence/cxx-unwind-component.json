@@ -291,5 +291,12 @@
     "actual_capture_acquisition": false,
     "whole_event_static_certificate": false,
     "whole_pe_pairs": 0
+  },
+  "callee_composition_checkpoint": {
+    "evidence": "callee-composition.json",
+    "rust_sha256": "50e0c39edb170cd005db0367292b7bcfaf36deff152e34fd250034a200c75f94",
+    "ordered_native_cases": 76,
+    "recorded_wrapper_comparisons": 5,
+    "whole_pe_pairs": 0
   }
 }

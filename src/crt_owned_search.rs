@@ -18,6 +18,81 @@ pub(crate) struct Input<'a> {
     pub filters: &'a BTreeMap<u32, OriginalFilter<'a>>,
 }
 
+/// Verified helper bodies for the original EH4 search caller. This closes
+/// target/source composition, not producer initialization or exception effects.
+pub(crate) struct SearchCallees<'a> {
+    pub normalizer: &'a super::selection::CodeIdentity,
+    pub guard: &'a super::handler_guard::GuardProof,
+    pub context: &'a super::handler_context::ContextCheckProof,
+}
+impl SearchCallees<'_> {
+    fn bind<'a>(
+        &'a self,
+        prefix: &super::handler_checks::PrefixProof,
+        input: &Input<'_>,
+    ) -> Result<Vec<(u32, &'a [u8])>, String> {
+        use super::handler_checks::CallEffect;
+        let normalizer = self.normalizer.original();
+        let [guard, security] = self.guard.originals();
+        let context = self.context.original();
+        let expected = [
+            (CallEffect::NormalizeRecordCode, normalizer.0),
+            (CallEffect::ValidateGuards, guard.0),
+            (CallEffect::ValidateContext, context.0),
+        ];
+        if prefix.calls.len() != expected.len()
+            || prefix
+                .calls
+                .iter()
+                .zip(expected)
+                .any(|(call, (effect, target))| call.effect != effect || call.target != target)
+            || self.guard.cookie_va() != prefix.cookie_va
+            || self.normalizer.event_code() != input.proof.event_code
+            || input.table.get(..16)
+                != Some(
+                    self.guard
+                        .header()
+                        .map(i32::to_le_bytes)
+                        .concat()
+                        .as_slice(),
+                )
+        {
+            return Err("live search: callee target/domain/header binding".into());
+        }
+        let sources = vec![normalizer, guard, security, context];
+        let mut extents = vec![
+            (prefix.entry, prefix.end),
+            (
+                input.origin,
+                input
+                    .origin
+                    .checked_add(input.code.len() as u32)
+                    .ok_or("live search: body extent")?,
+            ),
+            (
+                input.table_va,
+                input
+                    .table_va
+                    .checked_add(input.table.len() as u32)
+                    .ok_or("live search: table extent")?,
+            ),
+        ];
+        for &(origin, bytes) in &sources {
+            let end = origin
+                .checked_add(u32::try_from(bytes.len()).map_err(|_| "live search: callee extent")?)
+                .ok_or("live search: callee extent")?;
+            if bytes.is_empty()
+                || origin == 0
+                || extents.iter().any(|&(a, b)| origin < b && a < end)
+            {
+                return Err("live search: overlapping callee source ownership".into());
+            }
+            extents.push((origin, end));
+        }
+        Ok(sources)
+    }
+}
+
 pub(crate) fn emit(input: Input<'_>, name: &str) -> Result<String, String> {
     let stop = input
         .proof
@@ -181,6 +256,7 @@ fn {name}(frame:&mut CrtOwnedFrameView<'_>,cpu:&mut CrtCpu,objects:&CrtOwnedPref
 pub(crate) fn emit_live_return(
     input: Input<'_>,
     prefix: &super::handler_checks::PrefixProof,
+    callees: &SearchCallees<'_>,
     name: &str,
 ) -> Result<String, String> {
     if prefix.source.is_empty()
@@ -197,6 +273,11 @@ pub(crate) fn emit_live_return(
     {
         return Err("live search: entry/table/level contract".into());
     }
+    let callee_sources = callees.bind(prefix, &input)?;
+    let callee_regions = callee_sources
+        .iter()
+        .map(|(origin, bytes)| format!("({origin}u32,&{bytes:?}[..]),"))
+        .collect::<String>();
     let (return_pc, expected) = match input.proof.actions.last() {
         Some(Action::ReturnDisposition { pc, value: 1 }) => (*pc, 1),
         _ => return Err("live search: requires proved ContinueSearch return".into()),
@@ -268,6 +349,12 @@ pub(crate) fn emit_live_return(
     let table = input.table;
     let prefix_raw = &prefix.source;
     let source = prefix.caller_body();
+    let helpers = format!(
+        "{}\n{}\n{}",
+        callees.normalizer.prefix_call("normalizer_prefix_call"),
+        callees.guard.prefix_call("guard_prefix_call"),
+        callees.context.bound_prefix_call("context_prefix_call")
+    );
     let entry = prefix.entry;
     let origin = input.origin;
     let table_va = input.table_va;
@@ -275,7 +362,7 @@ pub(crate) fn emit_live_return(
         r#"
 fn {name}_identity()->u32{{{entry}}}
 fn {name}_bytes(rt:&CrtStreamRuntime)->RegistryResult<()>{{
- let regions:&[(u32,&[u8])]=&[({entry}u32,&{prefix_raw:?}[..]),({origin}u32,&{raw:?}[..]),({table_va}u32,&{table:?}[..])];
+ let regions:&[(u32,&[u8])]=&[({entry}u32,&{prefix_raw:?}[..]),({origin}u32,&{raw:?}[..]),({table_va}u32,&{table:?}[..]),{callee_regions}];
  for &(base,bytes) in regions{{
   let p=rt.resolve_absolute(base,CrtRegionKind::Module)?;rt.valid(p,bytes.len()as u32)?;
   for(i,&b)in bytes.iter().enumerate(){{if rt.load(rt.offset(p,i as i64)?,8)?.known_scalar()?!=u32::from(b){{return Err("live search original code/table changed");}}}}
@@ -297,6 +384,7 @@ fn {name}_advance(search:&mut CrtOrderedSearch,returned:CrtOrderedReturn,event:&
  search.consume(returned,event,objects,rt,interrupted,epoch,binding)
 }}
 fn {name}(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,objects:&CrtNormalObjects)->RegistryResult<CrtValue>{{
+ {helpers}
  let result=(||{{
  frame.validate()?;objects.validate(frame.event,frame.rt,frame.epoch)?;{name}_bytes(frame.rt)?;
  if frame.binding.layout.handler!={entry}||frame.scope_address()!={table_va}||frame.state.level!= -2

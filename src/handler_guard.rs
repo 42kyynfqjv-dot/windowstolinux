@@ -7,6 +7,11 @@ use iced_x86::{Code, Decoder, DecoderOptions};
 use std::collections::{BTreeMap, BTreeSet};
 
 pub(crate) struct GuardProof {
+    origin: u32,
+    source: Vec<u8>,
+    security_origin: u32,
+    security_source: Vec<u8>,
+    cookie_va: u32,
     body: String,
     failure_target: u32,
     checked_offsets: Vec<i32>,
@@ -15,6 +20,21 @@ pub(crate) struct GuardProof {
     header: [i32; 4],
 }
 impl GuardProof {
+    #[allow(dead_code)]
+    pub(crate) fn originals(&self) -> [(u32, &[u8]); 2] {
+        [
+            (self.origin, &self.source),
+            (self.security_origin, &self.security_source),
+        ]
+    }
+    #[allow(dead_code)]
+    pub(crate) fn cookie_va(&self) -> u32 {
+        self.cookie_va
+    }
+    #[allow(dead_code)]
+    pub(crate) fn header(&self) -> [i32; 4] {
+        self.header
+    }
     #[allow(dead_code)] // CRT backend is not used by all slice examples.
     pub fn normal_call(&self, name: &str) -> String {
         self.emit_call(name, false, false)
@@ -491,6 +511,11 @@ pub(crate) fn prove_guard_offsets(
     }
     body.push_str("Ok(())\n");
     Ok(GuardProof {
+        origin,
+        source: code.to_vec(),
+        security_origin,
+        security_source: security_code.to_vec(),
+        cookie_va,
         body,
         failure_target,
         checked_offsets: state.checked,

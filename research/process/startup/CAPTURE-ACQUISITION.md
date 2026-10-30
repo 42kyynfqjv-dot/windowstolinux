@@ -285,3 +285,74 @@ flags/nested link, selector, metadata/PTD/FLS and incoming-chain containment bef
 whole-program admission. Numeric acquisition/restoration and non-bypass observations
 remain separate proof obligations. This is the concrete Astra scope; Sol can
 verify CI and review the new proof. Full startup/rcedit stays unsupported.
+
+## Caller/callee composition and the remaining PTD producer
+
+The pass from d192385 does **not** issue a closed whole-event certificate.
+It closes a concrete EH4 caller/helper composition gap: the ordered search
+emitter now requires the normalizer, guard/security and context proofs together.
+It checks their original targets and disjoint byte ranges, the event-code domain,
+cookie address and scope header. Generated local callbacks come from those same
+proofs, including the context decision, rather than independently named global
+callbacks. Live code checks cover all four helper bodies before execution and
+receipt consumption. The previous caller/table check did not cover the normalizer
+or guard bodies. This matters even when their previously compiled result would
+still look correct after code changes.
+
+Six compiler rejection cases cover a different event code, relocated normalizer
+and context, a different valid header/cookie, and independently valid helper
+proofs that claim conflicting bytes at one address. Four native mutations change
+the normalizer, guard, security checker and context helper. A separately compiled
+mutant removes only the normalizer byte check; it must fail the changed-code
+assertion, not compilation or an unrelated check. The existing same-event,
+unknown-byte, alias, lifetime, replay and earlier-write failure tests remain.
+
+Two connected counterexamples identify what a complete certificate must still
+prove. Both first execute and consume the original EH4 ContinueSearch result,
+then enter the original selected C++ handler with unknown, sealed CONTEXT bytes:
+
+| Missing producer fact | Original instruction/effect | Required outcome now |
+| --- | --- | --- |
+| Known PTD word at offset32 | `0x403d9c: cmp [eax+0x20],esi` | Exact unknown-scalar rejection; no C++ result receipt |
+| Non-null FLS slot value | `0x402906: call 0x402bef` after the null result branch | Exact unbound lazy-setter effect rejection; no C++ result receipt |
+
+Both failures revoke the no-read lease, retain the original record code and
+interrupted registers, and leave all 716 capture bytes unknown. Completed EH4
+scratch has already retired before the C++ call and cannot be asserted as live
+storage at that later failure. The earlier in-handler failure regression still
+checks its live prior write separately.
+
+The smallest connected implementation is the original C++ PTD lazy producer:
+its setter wrapper at 0x402bef (sentinel, publication and rollback), allocation at
+0x407850 and free at 0x407750, including LastError save/restore and the required
+getter's termination edge. Prove zero initialization of the actual 40-byte object
+from allocation effects before relying on offset32; do not reuse the unrelated
+UCRT errno object's contract or declare an existing slot non-null. Bind the real
+module/export/slot producer and lifetime. The unknown-word case also requires
+tracking any later authorized mutation before the dispatcher comparison.
+
+Only after that producer and the delivered-record predicates are closed can a
+conditional reachable-call/effect summary for the selected C++ handler compose
+with the EH4 path. The current ordered fixture still uses code 0xe0420042 and an
+explicit source-call boundary. The original initial RaiseException argument code
+is0xe0424242; the new different-domain rejection explicitly prevents reusing the
+wrong normalizer proof. Original import checking elsewhere in the artifact replay
+does not make that fixture a whole-program producer. Incoming-root containment,
+Windows delivery, collided unwind, termination and full formatter/exit remain
+separate gates. No runtime rejection is substituted for Windows behavior in
+production admission.
+
+Reviewed d192385 completed all three workflows successfully:
+40989022050,40989017448,40989017442. Its predecessor c3be6ab also completed
+40988106192,40988100925,40988101018 successfully. Historical timeouts remain
+unresolved. Current evidence and limits are recorded in
+[callee-composition.json](evidence/callee-composition.json). Sol can review this
+bounded emitter/provenance change and its exact CI; the PTD producer integration
+is the next connected semantic scope.
+
+Validation for this pass: 225 CRT and 175 root tests, Clippy, 76 ordered native
+cases (27 no-read scenarios), and the full retained-artifact replay pass. All
+three compiled mutants fail their intended assertions. The five recorded Windows
+wrapper comparisons remain component evidence; no new Windows observation or
+whole-PE pair is claimed. Generated Rust SHA256 is
+`50e0c39edb170cd005db0367292b7bcfaf36deff152e34fd250034a200c75f94`.

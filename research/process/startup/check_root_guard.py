@@ -43,6 +43,19 @@ def check(source: Path, output: Path, mutation="root"):
         left = b'left: Ok(())'
         right = b'right: Err("unobserved context expired/foreign lease")'
         observed = 'retained event lease survived the failed registry epoch'
+    if mutation == 'callee-bytes':
+        guard = 'fn original_live_search_return_bytes(rt:&CrtStreamRuntime)->RegistryResult<()>{'
+        start = text.index(guard)
+        end = text.index('Ok(())', start)
+        block = text[start:end]
+        loop = 'for &(base,bytes) in regions{'
+        if block.count(loop) != 1:
+            raise ValueError('callee mutation loop must be uniquely bound')
+        guard = block
+        replacement = block.replace(loop, loop+'if base==0x414a1b{continue;}', 1)
+        left = b'left: None'
+        right = b'right: Some("live search original code/table changed")'
+        observed = 'changed original normalizer executed from stale compiled effects'
     if text.count(guard) != 1:
         raise ValueError('mutation source binding must be unique')
     mutant = output / 'mutant.rs'
@@ -65,6 +78,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('source', type=Path)
     parser.add_argument('output', type=Path)
-    parser.add_argument('--mutation', choices=['root', 'flags', 'capture', 'unobserved-read', 'unobserved-epoch'], default='root')
+    parser.add_argument('--mutation', choices=['root', 'flags', 'capture', 'unobserved-read', 'unobserved-epoch', 'callee-bytes'], default='root')
     args = parser.parse_args()
     check(args.source, args.output, args.mutation)

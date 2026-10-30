@@ -16,6 +16,7 @@ use std::collections::{BTreeMap, BTreeSet};
 /// The containing proof owns the initialized selector word and its runtime
 /// value. The value stored in a PE file is not the live selector value.
 pub(crate) struct ContextCheckProof {
+    decision: Decision,
     origin: u32,
     source: Vec<u8>,
     body: String,
@@ -25,6 +26,10 @@ pub(crate) struct ContextCheckProof {
     temporary_bytes: u32,
 }
 impl ContextCheckProof {
+    #[allow(dead_code)]
+    pub(crate) fn original(&self) -> (u32, &[u8]) {
+        (self.origin, &self.source)
+    }
     /// Body of `ThreadContext::check(&self, owner:u64, selector:u32)
     /// -> Result<(), &'static str>`. Include EMITTED_TYPES in the same module.
     pub(crate) fn body(&self) -> &str {
@@ -152,6 +157,35 @@ impl CrtNormalException {{
             depth = self.temporary_bytes + 4
         )
     }
+    #[allow(dead_code)]
+    pub(crate) fn bound_prefix_call(&self, name: &str) -> String {
+        let projection = self
+            .decision
+            .source_for(ContextAccess::OpaqueProjection, "captured");
+        format!(
+            r#"fn {name}(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,objects:&CrtNormalObjects,continuation:u32)->RegistryResult<()>{{
+ fn check(frame:&CrtLiveFrame<'_,'_>,objects:&CrtNormalObjects)->RegistryResult<()>{{
+  objects.validate(frame.event,frame.rt,frame.epoch)?;
+  let rt=&*frame.rt;
+  let selector=rt.load(rt.resolve_absolute({selector},CrtRegionKind::Module)?,32)?.known_scalar()?;
+  if let Some(lease)=&objects.unobserved{{return lease.require_helper(rt,{origin},{selector},{bypass},&{code:?});}}
+  let captured=objects.capture_view(frame.epoch)?;let owner=objects.identity.owner;
+  captured.preflight(owner)?;{projection}
+ }}
+ frame.validate()?;check(frame,objects)?;
+ let sp=CrtCpu::pointer(cpu.r[4])?;
+ if frame.rt.load(sp,32)?!=CrtValue::Pointer(objects.context){{return Err("context prefix argument");}}
+ let low=frame.rt.offset(sp,-{depth})?;frame.rt.valid(low,{depth})?;frame.stack_range(low.address(),u64::from(sp.address()))?;
+ if frame.rt.overlapping_tags(low.address(),{depth}).iter().any(|(_,v)|matches!(v,CrtValue::ProtectedReturn(_)|CrtValue::OpaqueSaved(_)|CrtValue::ThreadHead(_))){{return Err("context temporary protected overlap");}}
+ frame.call(cpu,continuation,|f,child|{{check(f,objects)?;child.clobber(CrtValue::Scalar{{bits:0,known:0}});child.finish(f.rt)}})?;Ok(())
+}}"#,
+            origin = self.origin,
+            selector = self.selector_va,
+            bypass = self.bypass_selector,
+            code = self.source,
+            depth = self.temporary_bytes + 4
+        )
+    }
     pub(crate) fn selector_va(&self) -> u32 {
         self.selector_va
     }
@@ -269,6 +303,9 @@ enum ContextAccess {
 }
 impl Decision {
     fn source(&self, access: ContextAccess) -> String {
+        self.source_for(access, "self")
+    }
+    fn source_for(&self, access: ContextAccess, receiver: &str) -> String {
         match self {
             Self::Return => "Ok(())".into(),
             Self::FailFast13 => {
@@ -278,22 +315,26 @@ impl Decision {
                 let predicate = match predicate {
                     Predicate::SelectorEquals(value) => format!("selector=={value}u32"),
                     Predicate::EspBelowLimit => match access {
-                        ContextAccess::Numeric => "self.captured_esp<self.limit".into(),
+                        ContextAccess::Numeric => {
+                            format!("{receiver}.captured_esp<{receiver}.limit")
+                        }
                         ContextAccess::OpaqueProjection => {
-                            "self.captured_below_limit(owner)?".into()
+                            format!("{receiver}.captured_below_limit(owner)?")
                         }
                     },
                     Predicate::EspAtMostBase => match access {
-                        ContextAccess::Numeric => "self.captured_esp<=self.base".into(),
+                        ContextAccess::Numeric => {
+                            format!("{receiver}.captured_esp<={receiver}.base")
+                        }
                         ContextAccess::OpaqueProjection => {
-                            "self.captured_at_most_base(owner)?".into()
+                            format!("{receiver}.captured_at_most_base(owner)?")
                         }
                     },
                 };
                 format!(
                     "if {predicate} {{ {} }} else {{ {} }}",
-                    yes.source(access),
-                    no.source(access)
+                    yes.source_for(access, receiver),
+                    no.source_for(access, receiver)
                 )
             }
         }
@@ -628,6 +669,7 @@ pub(crate) fn prove_context_check(
             "self.preflight(owner)?;\n{}\n",
             decision.source(ContextAccess::OpaqueProjection)
         ),
+        decision: decision.clone(),
         selector_va,
         bypass_selector: *bypass,
         temporary_bytes: proof.temporary_bytes,

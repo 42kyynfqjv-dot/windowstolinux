@@ -303,3 +303,19 @@ no completed receipt or capture value is produced. The next executable gate is
 the closed ContinueSearch observation/call summary described in
 [the review](CAPTURE-ACQUISITION.md#sol-review-of-c3be6ab), followed by its producer
 and API/import provenance obligations. Runtime success does not issue that proof.
+
+## Bound helper composition; concrete producer barrier
+
+The ordered EH4 emitter now composes the actual normalizer, guard/security and
+context proofs by target, byte extent, event domain, cookie and scope header,
+and emits the callbacks from those proofs. Changed live helper bytes reject.
+This closes a source-binding gap, not complete capture acquisition or a
+whole-event effect proof. See [the contract and counterexamples](CAPTURE-ACQUISITION.md#callercallee-composition-and-the-remaining-ptd-producer).
+
+With the first handler completed, unknown PTD[32] rejects at original CMP 0x403d9c;
+a null FLS slot reaches unbound CALL 0x402906→0x402bef. The next cohesive gate is
+that C++ lazy producer's setter/sentinel, allocation/publication/rollback/free,
+LastError and termination effects, using the actual module/fiber/slot ownership.
+A 40-byte zeroed object must come from the proven allocator. Supplied initialization
+and a successful component run cannot discharge those obligations. Full startup,
+rcedit and historical timeout causes remain unresolved.

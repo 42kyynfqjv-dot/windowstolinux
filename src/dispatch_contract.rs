@@ -775,6 +775,7 @@ mod tests {
     fn local_trace_retains_original_order_and_requires_matching_after_state() {
         let g = graph(&[(-2, 0, 0x1000), (0, 0x1100, 0x1200), (1, 0, 0x1300)]);
         let plan = handler_dispatch::DispatchProof {
+            event_code: 0,        // Routing-only fixture; no normalizer composition.
             source_table: vec![], // Scratch-accounting fixture, not an emission certificate.
             actions: vec![handler_dispatch::Action::LocalUnwind {
                 pc: 0x4000,

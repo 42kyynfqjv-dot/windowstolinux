@@ -302,6 +302,9 @@ pub fn prove_filter(
 /// derived event code. It does not assert identity for another event or establish
 /// the lifetime/initialization of the supplied global read capabilities.
 pub struct CodeIdentity {
+    origin: u32,
+    source: Vec<u8>,
+    event_code: u32,
     body: String,
     returns: usize,
     temporary_bytes: u32,
@@ -309,6 +312,14 @@ pub struct CodeIdentity {
     globals: Vec<u32>,
 }
 impl CodeIdentity {
+    #[allow(dead_code)] // Shared caller composition is not linked by every example.
+    pub(crate) fn original(&self) -> (u32, &[u8]) {
+        (self.origin, &self.source)
+    }
+    #[allow(dead_code)]
+    pub(crate) fn event_code(&self) -> u32 {
+        self.event_code
+    }
     /// Body for `(code:u32) -> Result<u32,&'static str>`. Original guard loads can
     /// be eliminated only because every possible guard result was proved to
     /// return this same code without observable writes.
@@ -658,6 +669,9 @@ pub fn prove_code_identity(
         return Err("selection helper: no proved return".into());
     }
     Ok(CodeIdentity {
+        origin,
+        source: code.to_vec(),
+        event_code,
         body: format!(
             "if code!={event_code}u32{{return Err(\"original code-transform domain\");}} Ok(code)\n"
         ),

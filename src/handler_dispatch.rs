@@ -106,6 +106,8 @@ pub(crate) struct InstructionStep {
 }
 
 pub(crate) struct DispatchProof {
+    #[allow(dead_code)]
+    pub(crate) event_code: u32,
     #[allow(dead_code)] // Retained for native live-source table binding.
     pub source_table: Vec<u8>,
     pub actions: Vec<Action>,
@@ -907,6 +909,7 @@ pub(crate) fn prove_dispatch(
         })
         .collect();
     Ok(DispatchProof {
+        event_code,
         source_table: table_bytes.to_vec(),
         actions,
         instructions,
@@ -1044,6 +1047,7 @@ mod tests {
         // tests. Actual prefix-byte certification is tested by handler_checks;
         // the retained original-body smoke test uses that real certificate.
         let prefix = PrefixProof {
+            cookie_va: b.cookie,
             source: Vec::new(), // No native prefix certificate in this routing-only fixture.
             unwind_caller: String::new(),
             entry: 0, // Routing-only fixture.
