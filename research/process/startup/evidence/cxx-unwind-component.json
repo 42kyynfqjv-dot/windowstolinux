@@ -235,5 +235,31 @@
     },
     "next_gate": "CAPTURE-ACQUISITION.md; normal pending-event certificate and predicate-only lifetime, no numeric witness",
     "crt_223_and_root_175": "verified reviewed-base evidence; no runtime source changed in this review"
+  },
+  "capture_observation_proof_fix": {
+    "reviewed": "398466603639d2831255fbbd90e196a5300275eb",
+    "defect": "dead pre-selector context/TEB reads erased by decision tree",
+    "fix": "path-sensitive permission for context/TEB/FS observation only on non-bypass arm",
+    "new_instruction_negatives": 2,
+    "context_proof_tests": 7,
+    "mutant": {
+      "kind": "disabled capture-read guard; compiler proof test only",
+      "mutant_sha256": "d5d6b5e9191eb6018267ff2f6c657c85137414fe747ba57b861ff9085295af85",
+      "returncode": 101,
+      "observed": "old proof accepts dead pre-selector observation",
+      "new_windows_observations": 0,
+      "whole_pe_pairs": 0
+    },
+    "whole_event_capture_issuer_implemented": false,
+    "new_windows_observations": 0,
+    "whole_pe_pairs": 0,
+    "validation": {
+      "crt_passed": 224,
+      "context_proof_tests": 7,
+      "all_target_clippy": "passed",
+      "recorded_wrapper_replay": "passed separately",
+      "generated_harness_unchanged": true,
+      "fresh_windows_observations": 0
+    }
   }
 }

@@ -87,3 +87,46 @@ later failure. Preserve the existing numeric/masked domain and its rejection tes
 Record artifact/source hashes and distinguish recorded wrapper replay from fresh
 Windows comparisons. Whole-program acceptance still requires unchanged header
 entry through stdout/stderr/exit without supplied state or skipped startup.
+
+## Observation-proof defect found during implementation
+
+The first acquisition-certificate implementation pass found a prerequisite defect
+in `handler_context::Proof::walk`: its decision tree could discard an unused
+CONTEXT or FS/TEB load before the selector comparison. Both original outcomes
+could still match the required tree while the bypass path performed an extra
+memory access. That access can fault, so the old tree alone was insufficient as
+a no-observation certificate.
+
+The walker now tracks whether the current path is the selector's non-bypass arm.
+Any CONTEXT/TEB/FS memory access before that decision or on the bypass arm rejects.
+The flag travels with each symbolic path; it is not inferred from the sample
+selector value. Original unchanged helper proof/emission remains supported.
+Two independent instruction insertions exercise an unused EDX context load and
+an unused FS self load. Disabling the new guard in a separately compiled copy
+reproduces acceptance of the changed helper and fails the exact regression.
+This is compiler-proof evidence, with no new Windows or whole-PE comparison.
+
+The whole-event certificate and lifetime issuer are still unimplemented. The
+corrected local helper proof is a necessary leaf of that certificate. The next
+connected step must compose observation summaries for the EH4 prefix, return
+path and C++ callees, including discarded reads and external effects, before
+issuing any normal-event opaque capture token. The actual bypass branch may need
+no captured ESP predicate at all; do not fabricate valid-stack knowledge merely
+to satisfy today's numeric preflight. Preserve ownership checks independently of
+whether a guest branch reads captured state. Other selector values still need
+the justified predicate/acquisition domain. No new capture authority is granted
+by this correction, and full startup/rcedit remains rejected.
+
+Validation: 224 CRT tests and all-target Clippy passed; the observation-dependent
+test passed separately with retained original-code regions and Windows vectors.
+Generated harness SHA256 remains
+`8f32a1b51989e531b6e50809461763aad6ae3cd80bd46bf8ff2ccb84269ec21b`.
+The five recorded comparisons remain component evidence. No fresh Windows run
+or whole-PE result was added. To reproduce the adversarial compiler experiment,
+copy src/handler_context.rs, replace the single condition
+`if capture_read && !state.capture_observation_allowed` with
+`if false && capture_read && !state.capture_observation_allowed`, and compile
+that copy as a Rust test with the project's built iced_x86 dependency. Run
+`bypass_certificate_rejects_dead_capture_reads_before_selector`. Compilation must
+succeed, then the test must fail with actual `None` versus the expected rejection;
+an unrelated compiler/runtime failure is not counterexample evidence.

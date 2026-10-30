@@ -217,6 +217,7 @@ struct State {
     sp: i32,
     flags: Option<(Scalar, Scalar)>,
     visited: BTreeSet<u32>,
+    capture_observation_allowed: bool,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Predicate {
@@ -362,6 +363,18 @@ impl Proof<'_> {
             let next = pc
                 .checked_add(i.len() as u32)
                 .ok_or("context helper: instruction overflow")?;
+            // The predicate projection must preserve absence of capture reads
+            // on the selector bypass. Dead loads still observe memory/faults.
+            let capture_read = (0..i.op_count()).any(|operand| {
+                i.op_kind(operand) == OpKind::Memory
+                    && (i.segment_prefix() == Register::FS
+                        || register(i.memory_base()).ok().is_some_and(|r| {
+                            matches!(state.registers[r], Value::Context | Value::Teb)
+                        }))
+            });
+            if capture_read && !state.capture_observation_allowed {
+                return Err("context helper: capture read before non-bypass decision".into());
+            }
             match i.code() {
                 Code::Push_r32 | Code::Pushd_imm8 | Code::Pushd_imm32 => {
                     let value = operand(i, 0, &state, self.selector_va)?;
@@ -427,7 +440,12 @@ impl Proof<'_> {
                             return Err("context helper: unknown or unsupported branch flags".into())
                         }
                     };
-                    let yes = self.walk(i.near_branch32(), state.clone())?;
+                    let mut yes_state = state.clone();
+                    if matches!(predicate, Predicate::SelectorEquals(_)) {
+                        yes_state.capture_observation_allowed = false;
+                        state.capture_observation_allowed = true;
+                    }
+                    let yes = self.walk(i.near_branch32(), yes_state)?;
                     let no = self.walk(next, state)?;
                     return Ok(Decision::Branch(predicate, Box::new(yes), Box::new(no)));
                 }
@@ -541,6 +559,7 @@ pub(crate) fn prove_context_check(
             sp: 0,
             flags: None,
             visited: BTreeSet::new(),
+            capture_observation_allowed: false,
         },
     )?;
     if proof.covered.len() != instructions.len() {
@@ -624,6 +643,25 @@ mod tests {
                 .unwrap()
                 .body()
         );
+    }
+    #[test]
+    fn bypass_certificate_rejects_dead_capture_reads_before_selector() {
+        // EDX is volatile and never subsequently observed. The old decision
+        // tree discarded this load, although it can fault on the bypass path.
+        for early in [
+            vec![0x8b, 0x55, 8, 0x8b, 0x92, 0xc4, 0, 0, 0],
+            vec![0x64, 0x8b, 0x15, 0x18, 0, 0, 0],
+        ] {
+            let mut changed = code();
+            changed.splice(3..3, early);
+            assert_eq!(
+                prove_context_check(&changed, ORIGIN, SELECTOR)
+                    .err()
+                    .as_deref(),
+                Some("context helper: capture read before non-bypass decision")
+            );
+        }
+        prove_context_check(&code(), ORIGIN, SELECTOR).unwrap();
     }
     #[test]
     fn changed_offsets_branches_failure_and_saved_state_reject() {

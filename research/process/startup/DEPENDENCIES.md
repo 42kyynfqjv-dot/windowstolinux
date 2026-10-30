@@ -252,3 +252,10 @@ updated capture mutant compiled and failed its intended assertion. There are
 zero fresh Windows observations or whole-PE pairs. The reviewed base's 223 CRT
 and 175 root tests remain base evidence; this review changes tests and documents,
 not runtime semantics. Current harness and mutant hashes are in the evidence JSON.
+
+Acquisition-certificate implementation uncovered and fixed erased pre-selector
+CONTEXT/TEB reads in the context-helper proof. Per-path observation validation now
+rejects them; the previous decision tree alone was not a no-observation proof.
+A separately compiled guard-removal mutant confirms the counterexample. See
+CAPTURE-ACQUISITION.md. Whole-event observation composition and the same-event
+capture lifetime issuer remain unimplemented; no supplied value gained authority.
