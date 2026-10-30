@@ -212,8 +212,10 @@ fn extended(i: &Instruction, raw: &[u8], tables: &[JumpTable<'_>]) -> Result<Op,
     }
     // Word TEST/CMP forms used by bounded UTF-16 traversal. Decode only;
     // live initialized read authority remains an execution obligation.
-    if matches!(i.code(), Code::Test_rm16_r16 | Code::Cmp_r16_rm16)
-        && raw.first() == Some(&0x66)
+    if matches!(
+        i.code(),
+        Code::Test_rm16_r16 | Code::Cmp_r16_rm16 | Code::Cmp_rm16_r16
+    ) && raw.first() == Some(&0x66)
         && !i.has_lock_prefix()
         && i.segment_prefix() == Register::None
     {

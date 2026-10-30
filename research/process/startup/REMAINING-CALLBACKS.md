@@ -340,3 +340,9 @@ return-mode front rejects at manager `0x406cfa`. Original epilog component tests
 establish unlink/return ownership but do not connect that body or model termination.
 Handler `0x414af3`, manager cleanup, managed exit, physical exit and signal dispatch
 remain unresolved; no successful callback or full-startup claim replaces them.
+
+The original managed-image query is executable with an explicit checked image
+view and modeled GetModuleHandleW(NULL) outcome. The startup main-module role,
+image mapping producer and loader effects remain an input cut; the default
+pending path rejects it. Native/managed query branches now reach their actual
+unbound manager406cfa/managed-termination406f55 calls with supplied image authority.

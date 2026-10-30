@@ -962,3 +962,56 @@ was compiled and run: the fabricated-return case incorrectly retired successfull
 (`Ok(())`) instead of rejecting `inline exit incomplete return`. The corrected
 implementation rejects it; the retained mutant log and source hashes are recorded
 in [the review evidence](evidence/inline-exit-review.json).
+
+## Checked module-image query component
+
+The original `0x401d51..0x401d93` query is mechanically lowered, including
+`GetModuleHandleW(NULL)`, MZ/e_lfanew/PE/PE32/directory checks and AL selection.
+A checked image binding requires an existing live executable-module capability,
+its full mapped Module root at the same base, process ownership and initialization
+authority. Numeric handles, interior pointers and arbitrary subranges cannot
+manufacture a view. Every subsequent original instruction revalidates module
+and storage lifetime; unload/reload generations and released mappings reject.
+Existing memory bounds govern all header reads, including malformed offsets.
+Header values remain live reads rather than a cached native/managed Boolean.
+
+The API result is still a **modeled component input**: `Some(view)` selects an
+already justified main-image result; `None` models a NULL result. Both applied
+results leave LastError unknown because success preservation is not established.
+Success borrows existing ownership;
+it neither acquires a module reference nor invents loader/TLS effects. The view
+constructor does not prove that this module is the process main module. Actual
+startup must provide that role and its image mapping before this input cut closes.
+The default connected pending path still rejects missing main-image authority.
+
+With an explicit image view, the exit front now executes the query and its actual
+AL-dependent caller instructions. Native headers reach manager `0x406cfa` with
+original pointer/lock arguments. Managed headers push the actual status and reject
+managed termination `0x406f55`. Neither missing callee returns success. Fifteen
+independent query cases cover both classifications, malformed/truncated headers,
+unknown directory data, NULL results, interior alias, foreign runtime, unload,
+reload and released storage. Two additional inline-exit cases exercise both caller
+branches while retaining the live registration. All 66 changed query bytes reject.
+The replay checks the unchanged PE region and GetModuleHandleW IAT identity.
+
+Lifting required the reusable `CMP r/m16,r16` form alongside the existing word
+compare forms. Twenty-four independent native truth cases vary four register
+choices and include equality, unsigned borrow and signed overflow, checking that
+upper register bits remain unchanged. Local test development corrected a ModRM
+literal and an expected unknown-value rejection class; those were test defects,
+not reasons to relax the runtime checks.
+
+Next executable gap: establish the startup-owned main-module/image producer so
+the pending path can pass this checked view without a supplied role. Then connect
+manager `0x406cfa` and its lock/cleanup/error effects. Managed termination,
+handler414af3, signal dispatch, physical exit and the full entry-to-exit domain
+remain unsupported. This component does not add a Windows observation or a whole
+PE comparison. Historical Windows timeout causes remain unresolved.
+
+Contract references: [GetModuleHandleW](https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-getmodulehandlew)
+(NULL names the calling process executable; the returned handle does not add a
+reference) and [PE format](https://learn.microsoft.com/en-us/windows/win32/debug/pe-format).
+The current runtime module model represents owned acquisitions. Actual bootstrap
+therefore still needs a distinct process-owned main-module lifetime and mapped
+image authority, rather than a fabricated LoadLibrary acquisition. That ownership
+extension is a concrete bounded Astra question after Sol reviews this component.

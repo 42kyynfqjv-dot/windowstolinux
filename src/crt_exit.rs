@@ -64,7 +64,7 @@ pub(crate) fn source(prefix: &[u8], front: &[u8], tail: &[u8]) -> Result<String,
         }
         let at = (pc - 0x406e90) as usize;
         let mut n = decode_one(front.get(at..).ok_or("exit front range")?, pc)?;
-        if matches!(n.op, Op::Call(_)) {
+        if matches!(n.op, Op::Call(_)) && pc != 0x406e96 {
             n.successors.clear();
         } else {
             todo.extend(n.successors.iter().copied());
@@ -81,8 +81,9 @@ pub(crate) fn source(prefix: &[u8], front: &[u8], tail: &[u8]) -> Result<String,
         |pc, target| {
             Ok(match (pc, target) {
                 (0x406e96, Target::Direct(0x401d51)) => {
-                    "return Err(\"shared exit managed-runtime query 0x401d51 unbound\");"
+                    "let view=image.ok_or(\"shared exit managed-runtime query 0x401d51 unbound\")?;cpu.call_activation(rt,0x406e9b,0,|rt,c|managed_image_query(rt,c,Some(view)))?;"
                 }
+                (0x406ea2, Target::Direct(0x406f55)) => {"return Err(\"shared exit managed termination 0x406f55 unbound\");"}
                 (0x406eda, Target::Direct(0x406cfa)) => {
                     "return Err(\"shared exit lock/cleanup manager 0x406cfa unbound\");"
                 }
@@ -122,7 +123,9 @@ pub(crate) fn source(prefix: &[u8], front: &[u8], tail: &[u8]) -> Result<String,
             ))
         },
     )?;
-    Ok(format!("{TYPES}\nfn shared_exit_prolog(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,epoch:&mut NormalCallEpoch<'_>,frame:&mut CrtInlineExit)->RegistryResult<CrtValue>{{{p}}}\nfn shared_exit_front(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,epoch:&mut NormalCallEpoch<'_>,frame:&mut CrtInlineExit)->RegistryResult<CrtValue>{{{b}}}\nfn shared_exit_return(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,epoch:&mut NormalCallEpoch<'_>,frame:&mut CrtInlineExit)->RegistryResult<CrtValue>{{{t}}}\nfn abort_shared_exit_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,epoch:&mut NormalCallEpoch<'_>)->RegistryResult<CrtValue>{{let result=(||{{let mut frame=CrtInlineExit::new(rt,cpu,epoch)?;shared_exit_prolog(rt,cpu,epoch,&mut frame)?;shared_exit_front(rt,cpu,epoch,&mut frame)}})();match result{{Ok(v)=>Ok(v),Err(e)=>epoch.fail(e)}}}}"))
+    let module_query =
+        crate::crt_module_image::source(&crate::crt_ptd::raw(crate::crt_module_image::QUERY))?;
+    Ok(format!("{TYPES}\n{module_query}\nfn shared_exit_prolog(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,epoch:&mut NormalCallEpoch<'_>,frame:&mut CrtInlineExit)->RegistryResult<CrtValue>{{{p}}}\nfn shared_exit_front_image(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,epoch:&mut NormalCallEpoch<'_>,frame:&mut CrtInlineExit,image:Option<&CrtModuleImage>)->RegistryResult<CrtValue>{{{b}}}\nfn shared_exit_front(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,epoch:&mut NormalCallEpoch<'_>,frame:&mut CrtInlineExit)->RegistryResult<CrtValue>{{shared_exit_front_image(rt,cpu,epoch,frame,None)}}\nfn shared_exit_return(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,epoch:&mut NormalCallEpoch<'_>,frame:&mut CrtInlineExit)->RegistryResult<CrtValue>{{{t}}}\nfn abort_shared_exit_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,epoch:&mut NormalCallEpoch<'_>)->RegistryResult<CrtValue>{{let result=(||{{let mut frame=CrtInlineExit::new(rt,cpu,epoch)?;shared_exit_prolog(rt,cpu,epoch,&mut frame)?;shared_exit_front(rt,cpu,epoch,&mut frame)}})();match result{{Ok(v)=>Ok(v),Err(e)=>epoch.fail(e)}}}}"))
 }
 const TYPES: &str = r#"
 struct CrtInlineExit{anchor:guest_memory::Capability,identity:RegistryIdentity,fiber:Option<CrtFiber>,epoch:u64,lease:Option<DeliveryChildAuthority>,entry:[CrtValue;8],owner:u64,bp:CrtPointer,low:CrtPointer,previous:RegistryHead,token:CrtThreadHead,id:Option<RegistrationId>,phase:u8}

@@ -312,3 +312,6 @@ mod crt_abort;
 #[cfg(test)]
 #[path = "../src/crt_exit.rs"]
 mod crt_exit;
+#[cfg(test)]
+#[path = "../src/crt_module_image.rs"]
+mod crt_module_image;

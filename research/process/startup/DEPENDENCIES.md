@@ -446,3 +446,20 @@ mode reaches manager `0x406cfa` and rejects. The original unlink/LEAVE/RET has
 separate native component coverage; body-to-return and process termination are
 not connected. Missing effects retain live frames, not successful cleanup.
 [Current lifetime boundary and next executable gate](CAPTURE-ACQUISITION.md#inline-shared-exit-record-and-return-lifetime).
+
+## Checked image query available with explicit main-image authority
+
+Original401d51 now executes against a lifetime-bound module image and original
+header reads. Supplying the independently modeled main-image role lets shared
+exit reach manager406cfa (native) or managed termination406f55; both remain rejected.
+The default pending path still lacks the actual startup main-image producer.
+[Current checked-image contract](CAPTURE-ACQUISITION.md#checked-module-image-query-component).
+
+The remaining main-image issuer must derive identity and mapping from the loaded
+input PE/process bootstrap, bind the complete mapping once per process, and survive
+ordinary thread/fiber changes while expiring at process teardown. It must not issue
+an owned LoadLibrary reference or permit ordinary FreeLibrary receipt replay to
+retire the process identity. Adversarial acceptance should cover duplicate issuers,
+foreign/replaced mappings, process teardown, fake main-role assignment and concurrent
+owned references to the same module. This is the concrete next ownership contract;
+current supplied image inputs do not establish it.
