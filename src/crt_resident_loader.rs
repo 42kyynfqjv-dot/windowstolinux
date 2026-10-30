@@ -35,17 +35,19 @@ impl CrtResidentLoader {
 /// Explicit native replacement environment, not an inferred Windows loader state.
 /// Mapping revision 1 is grounded in the x86 Windows 10.0.20348 observation.
 /// Only this named domain is supported; no generic Windows version claim follows.
-struct CrtNativePlatform {anchor:guest_memory::Capability,function:CrtFunction,fls:Option<CrtFunction>,fls_set:Option<CrtFunction>}
+struct CrtNativePlatform {anchor:guest_memory::Capability,function:CrtFunction,fls:Option<CrtFunction>,fls_set:Option<CrtFunction>,second_fiber:bool}
 impl CrtNativePlatform {
  const PROFILE:&'static str="w2l-native-sync-20348-v1";
  const CONTRACT:&'static str="api-ms-win-core-synch-l1-2-0";
+ const SECOND_FIBER_PROFILE:&'static str="w2l-native-second-fiber-20348-2398cc6a-v1";
+ fn enable_second_fiber(&mut self,rt:&CrtStreamRuntime,init:CrtInitialization,profile:&str)->Result<(),&'static str>{self.validate(rt,init)?;if profile!=Self::SECOND_FIBER_PROFILE||self.second_fiber{return Err("second fiber profile unsupported/already enabled");}self.second_fiber=true;Ok(())}
  fn prepare(rt:&mut CrtStreamRuntime,init:CrtInitialization,profile:&str,handle:u32,address:u32)->Result<Self,&'static str>{
   rt.initialization(init)?;if profile!=Self::PROFILE{return Err("native platform profile unsupported");}
   // Native bootstrap executes before guest entry. A failed bootstrap issues no
   // guest LoadLibrary result, fabricated LastError or DLL initialization receipt.
   let ticket=rt.provider_begin(init,"kernelbase.dll",handle,1)?;
   let(_,function)=rt.provider_initialize_sync(init,&ticket,address)?;
-  Ok(Self{anchor:rt.anchor,function,fls:None,fls_set:None})
+  Ok(Self{anchor:rt.anchor,function,fls:None,fls_set:None,second_fiber:false})
  }
  /// Explicit optional native kernel32/FLS service, prepared before entry.
  fn enable_fls(&mut self,rt:&mut CrtStreamRuntime,init:CrtInitialization,handle:u32,address:u32)->Result<(),&'static str>{
@@ -74,6 +76,7 @@ impl CrtNativePlatform {
    let f=self.fls.ok_or("native platform FLS provider not enabled")?;rt.native_api_identity(f)?;rt.provider_ready(f.module)?;
    let owned=rt.native_provider_acquire(init,f)?;rt.last_os_error=None;return Ok(owned.reference.module);
   }
+  if self.second_fiber&&(bare.eq_ignore_ascii_case("api-ms-win-core-fibers-l1-1-2")||bare.eq_ignore_ascii_case("kernelbase")){let owned=rt.native_provider_acquire(init,self.function)?;rt.last_os_error=None;return Ok(owned.reference.module);}
   if !bare.eq_ignore_ascii_case(Self::CONTRACT){return Err("native platform API-set mapping unsupported");}
   // No host allocation here. Exhaustion rejects the component; it is never a
   // guest BOOL/null return. Whole-program admission must establish this budget.
@@ -96,6 +99,11 @@ impl CrtNativePlatform {
    let p=CrtCpu::pointer(rt.load(rt.offset(sp,8)?,32)?)?;let mut bytes=[0u8;256];let mut len=None;
    for(i,b)in bytes.iter_mut().enumerate(){let unit=rt.load(rt.offset(p,i as i64)?,8)?.known_scalar()?;if unit==0{len=Some(i);break;}*b=unit as u8;}
    let len=len.ok_or("native platform export unterminated name")?;let name=std::str::from_utf8(&bytes[..len]).map_err(|_|"native platform export encoding")?;
+   if self.second_fiber&&module==self.function.module&&name=="FlsGetValue2"{
+    rt.provider_ready(module)?;
+    if rt.exports.values().any(|e|e.function.module==module&&e.symbol==name){return Err("second fiber profile contradicts export state");}
+    rt.last_os_error=Some(127);cpu.clobber(CrtValue::scalar(0));return cpu.finish_pop(rt,8);
+   }
    let f=rt.native_named_export(init,module,name)?;cpu.clobber(CrtValue::Function(f));return cpu.finish_pop(rt,8)
   }
   if iat!=0x415074{return Err("native platform release contract unbound");}

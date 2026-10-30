@@ -1,5 +1,12 @@
 # Remaining entry-to-exit dependencies
 
+Current checkpoint: explicit extension `w2l-native-second-fiber-20348-2398cc6a-v1`
+uses verified x86 KernelBase identity and missing FlsGetValue2/error127. Unchanged
+entry publishes the owned module and executes lookup, then rejects indexed lock
+CALL `0x407e92 -> 0x40bdcf`. No second index, feature-flag result or function-cache
+publication is claimed. Older profile/default admission remain blocked.
+[Versioned contract, Windows provenance and tests](SECOND-FLS-PROFILE.md).
+
 Current checkpoint: original callback `0x40a407`, selector and second resolver
 execute to `LoadLibraryExW` at `0x407f1d`, first candidate
 `api-ms-win-core-fibers-l1-1-2` while resolving `FlsGetValue2`. The explicit native
