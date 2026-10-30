@@ -119,7 +119,8 @@ pub(crate) fn entropy_source(
         &Default::default(),
         128,
     )?;
-    Ok(format!("{ENTROPY_TYPES}\nfn cookie_entropy(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,backend:&mut impl CrtEntropyBackend)->Result<CrtValue,&'static str>{{cpu.validate_active(rt)?;inputs.validate(rt)?;let p=rt.process_image_pointer(inputs.image,0x401b24,77)?;if rt.memory.read(p.address(),77).map_err(|_|\"cookie entropy code lifetime\")?!=&{bytes:?}{{return Err(\"cookie entropy live code changed\");}}{body}}}"))
+    let native = crate::crt_cookie_native::TYPES;
+    Ok(format!("{ENTROPY_TYPES}\n{native}\nfn cookie_entropy(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,backend:&mut impl CrtEntropyBackend)->Result<CrtValue,&'static str>{{cpu.validate_active(rt)?;inputs.validate(rt)?;let p=rt.process_image_pointer(inputs.image,0x401b24,77)?;if rt.memory.read(p.address(),77).map_err(|_|\"cookie entropy code lifetime\")?!=&{bytes:?}{{return Err(\"cookie entropy live code changed\");}}{body}}}"))
 }
 const ENTROPY_TYPES: &str = r#"
 struct CrtEntropyInputs{init:CrtInitialization,image:CrtProcessImage,owner:u64,thread:u64,process_id:u32,thread_id:u32}
@@ -135,6 +136,7 @@ impl CrtEntropyInputs{
  }
 }
 trait CrtEntropyBackend{
+ fn validate(&self,_rt:&CrtStreamRuntime,_inputs:&CrtEntropyInputs)->Result<(),&'static str>{Ok(())}
  // Independently acquired observations, never an expected cookie/result.
  fn filetime(&mut self)->Result<u64,&'static str>;
  // The bounded profile requires a valid successful QPC result. An acquisition
@@ -142,7 +144,7 @@ trait CrtEntropyBackend{
  fn counter(&mut self)->Result<u64,&'static str>;
 }
 fn entropy_api(rt:&mut CrtStreamRuntime,c:&mut CrtCpu,inputs:&CrtEntropyInputs,backend:&mut impl CrtEntropyBackend,kind:u8)->Result<CrtValue,&'static str>{
- c.validate_active(rt)?;inputs.validate(rt)?;
+ c.validate_active(rt)?;inputs.validate(rt)?;backend.validate(rt,inputs)?;
  let result=match kind{
   0|3=>{
    let sp=CrtCpu::pointer(c.r[4])?;let p=CrtCpu::pointer(rt.load(rt.offset(sp,4)?,32)?)?;let bp=CrtCpu::pointer(c.r[5])?;

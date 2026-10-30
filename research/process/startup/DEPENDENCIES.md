@@ -517,3 +517,24 @@ IDs and individual time/counter observations remain supplied contract inputs.
 No native acquisition, fresh Windows entropy pair or full startup is claimed.
 Next replace those inputs with justified live producers and connect40161f; see
 [contract and primary sources](CAPTURE-ACQUISITION.md#default-cookie-helper-executes-under-explicit-acquisition-inputs).
+
+### Bounded native Linux identity/clock producer connected
+
+The cookie component can now acquire actual namespace PID/TID and UTC/monotonic
+clock observations under a live canonical initialization binding. It executes
+original helper/initializer/registered-record instructions with that producer.
+Cross-thread/runtime use, changed IDs, stale initialization, malformed procfs
+identity and clock range/reversal reject. This closes supplied acquisition for
+the declared single-process Linux entropy domain, not general QPC/Windows ID
+semantics. Next connect startup40161f's actual caller sequence and remaining
+manager/locale/FILE initialization. No new Windows or whole-PE pair.
+
+Original-entry inspection for the next gate: PE AddressOfEntryPoint is4017a4.
+Its ten unchanged bytes are `e8c8030000e971feffff`: CALL401b71 then JMP40161f.
+The latter starts with PUSH14/PUSH41b238/CALL401e60 (existing normal prolog),
+then PUSH1/CALL401945 and tests AL before later startup work. Lift the entry
+shim and bind this first initializer outcome from actual code, including its
+failure edge40178e; do not jump directly to Main. Root activation, incoming
+thread state and remaining initializer effects stay proof prerequisites. This
+is a concrete Sol implementation/review scope; escalate a reproduced ownership
+or external-effect uncertainty, not routine CI work.

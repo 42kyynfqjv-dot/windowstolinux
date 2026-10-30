@@ -319,3 +319,7 @@ mod crt_module_image;
 #[allow(dead_code)]
 #[path = "../src/crt_cookie_init.rs"]
 mod crt_cookie_init;
+
+#[allow(dead_code)]
+#[path = "../src/crt_cookie_native.rs"]
+mod crt_cookie_native;

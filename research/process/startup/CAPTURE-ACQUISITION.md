@@ -1273,3 +1273,54 @@ Independent mutation removed complete-pair preflight while preserving the later
 word-store checks. The baseline rejected without changing the low word; the
 mutant rejected only after changing it, and the independent nonmutation assertion
 failed. Logs and source hashes are retained in cookie-entropy review evidence.
+
+## Native Linux cookie acquisition connected
+
+`CrtNativeEntropy::acquire` now obtains the host PID from `std::process::id` and
+TID from the calling thread's `/proc/thread-self` link. It binds both to the live
+initialization token, canonical image/anchor, logical owner/thread and Rust host
+thread identity. Every bound API call validates the binding, live initialization,
+current PID/TID and current Rust thread before observing clocks or returning IDs.
+Reusing a backend on another runtime, host thread, after initialization, or with
+changed numeric inputs rejects. Supplied-input tests still use their explicitly
+named backend; they are not counted as runtime acquisition.
+
+The supported profile is one guest process executed in one native Linux process,
+with a trusted mounted procfs exposing `/proc/thread-self` (Linux3.17 or later),
+stable PID namespace, and an OS/Rust monotonic clock. IDs are native namespace
+IDs, not internal capabilities cast to numbers. This does not define guest
+process spawning, fibers, cross-process sharing or Windows system-wide numeric
+identity. No Windows host implementation is provided by this producer.
+
+SystemTime is converted to FILETIME using the1601-to-1970 epoch offset, checked
+100ns arithmetic and truncation of sub100ns precision. Times before1970 and
+numeric overflow reject this bounded profile. The performance-counter input is
+elapsed nanoseconds from a single process-local OnceLock Instant origin. It is
+only admitted as an entropy input: no generic QueryPerformanceFrequency,
+Windows boot-epoch, cross-process timing or suspend-equivalence claim follows.
+Clock reversal or range overflow rejects. Wall time may move backwards and the
+tests deliberately do not require it to be monotonic. No entropy-strength or
+cryptographic unpredictability claim is made.
+
+Primary references checked2026-10-30:
+
+* [Linux proc thread-self](https://man7.org/linux/man-pages/man5/proc_thread-self.5.html).
+* [FILETIME units and epoch](https://learn.microsoft.com/en-us/windows/win32/api/minwinbase/ns-minwinbase-filetime).
+* [Rust Instant guarantees and limitations](https://doc.rust-lang.org/std/time/struct.Instant.html).
+
+The original77-byte helper and initializer execute with these actual acquisitions,
+then their resulting cookie feeds the original registered-record prolog/epilog
+on the same mapped bytes. A future-origin clock fault injection rejects at the
+actual counter call after earlier original effects; it leaves the default cookie
+unchanged. Cross-thread use, cross-runtime reuse, changed IDs and expired
+initialization reject. Independent tests cover UTC epoch conversion, sub100ns
+truncation, overflow and malformed/mismatched procfs identities. Existing checked
+buffer/partial-write/failure tests still apply before backend observations.
+
+This is Linux native component execution using unchanged authored PE slices, not
+an unchanged-binary entry-to-exit result or a new Windows entropy comparison.
+Replay reports one native runtime cycle on Linux and zero on Windows explicitly;
+those counts are not compared as Windows/ELF pairs. The generated Rust remains
+deterministic even though its runtime observations vary. Next connect the actual
+startup40161f call sequence to the acquired producer and existing canonical
+manager/locale/FILE state; loader, actual delivery and physical exit remain open.

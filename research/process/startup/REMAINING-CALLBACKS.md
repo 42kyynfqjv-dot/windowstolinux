@@ -386,3 +386,12 @@ are still explicit inputs. Their ownership check does not manufacture OS
 acquisition or uniqueness. No new Windows/whole-PE pairs. The next producer gate
 is live identity/time/counter acquisition, then original40161f composition; older
 loader, delivery and exit gaps remain.
+
+### Native cookie producer available for the declared Linux domain
+
+Actual PID/TID and UTC/monotonic clock acquisition now replace supplied values
+in a separate checked native backend. The older scripted backend remains explicit
+component input. Native binding revalidates runtime, initialization and host
+thread identity on every API call. This does not supply Windows loader effects,
+guest process creation or a general cross-process QPC contract. Actual startup
+caller40161f and remaining manager/locale/FILE composition are the next gate.
