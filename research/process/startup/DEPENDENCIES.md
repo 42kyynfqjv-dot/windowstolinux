@@ -329,3 +329,20 @@ allocator effect; copying/retagging must not create authority. Connect that view
 to setter publication/rollback, free and slot/fiber lifetime. See the review in
 CAPTURE-ACQUISITION.md and evidence/ptd-setter-review.json. No runtime semantics or
 admission expanded in this review.
+
+### Heap PTD allocation/view and lazy setter checkpoint
+
+The allocator's Buffer identity now survives a checked, single-use PTD object
+view; aliases share the same storage and lifetime. The native component executes
+original getter/setter control flow, allocator/free thunks, the decoded calloc
+body under explicit backend contracts, publication/rollback and LastError restore.
+Free-body effects remain checked callback inputs. FLS failure leaves value
+knowledge unknown, and cleanup failure preserves earlier effects.
+
+The ordered common handler still uses its cached-only getter. Connect the lazy
+producer through that pending-event adapter next, retaining explicit heap,
+new-handler/errno, setter outcome and module/fiber/slot contracts. Required-getter
+termination, free body, actual acquisition and incoming-chain containment remain
+unclosed. This checkpoint adds no whole-PE acceptance. See
+[the view contract and review gate](CAPTURE-ACQUISITION.md#heap-ptd-view-and-original-setter-connection)
+and [preserved predecessor CI failures](evidence/ci-db4fc00.json).

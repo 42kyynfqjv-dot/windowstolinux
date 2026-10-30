@@ -1,0 +1,39 @@
+{
+  "kind": "heap PTD view and original lazy control flow; native component evidence only",
+  "base_commit": "db4fc00f7eeff64b3a3bf2e07d44913acce75ea8",
+  "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "wrapper_rust_sha256": "c80246b200b7e172221f982424c4e93c627c361866705a426db19b921282fe3d",
+  "lazy_component_source_sha256": "5df4f407b8576df823ca4181f62eeca656f257d46180ee99672c88e8130428fa",
+  "recorded_windows_wrapper_comparisons": 5,
+  "fresh_windows_observations": 0,
+  "whole_pe_pairs": 0,
+  "native_view_cases": 17,
+  "native_lazy_cases": 15,
+  "ordered_native_cases": 76,
+  "crt_tests": 228,
+  "ignored_test": "observation-dependent wrapper test passes separately in retained-artifact replay",
+  "root_tests": 175,
+  "python_tests": 60,
+  "python_skipped": 1,
+  "all_target_clippy": "passed",
+  "binding_hashes": {
+    "cxx-lookup-setter": "3253edd32054f6461e89969674b51a4e5e35488ae129e3718fafe75a77157a2f",
+    "cxx-dispatcher-calloc_thunk": "650d6eb5ba093f19a582e8d4ef0b72ab7d31608ba87e5663e1b4fed70a8f87e3",
+    "cxx-dispatcher-free_thunk": "dfbf600c3d70f7d6f6d2549c023ec3c46b72172f05d8e60de8560002cc010a50",
+    "calloc_body": "6ffc612ae6e4e97d1cd27f395e35733f077fbd2d65ceaadd2c9d9638c98d9555"
+  },
+  "remaining_inputs": [
+    "heap availability and exception policy",
+    "allocator new-handler and errno contracts",
+    "FlsSetValue BOOL/LastError outcomes",
+    "free-body effect callback (normal-return HeapFree failure remains rejected)",
+    "initial stationary fiber/FLS slot and module/export identities",
+    "ordered common handler still uses cached-only getter",
+    "whole-event acquisition, original delivery and incoming-chain containment"
+  ],
+  "test_development_corrections": [
+    "Initial emitter origin inference required explicit u32/decoder u64 conversion.",
+    "Test first read FLS after return and then incorrectly expected LastError preserved; FlsGetValue intentionally invalidates LastError knowledge. Moved the assertion to the actual getter return boundary. No runtime behavior was changed to satisfy that test."
+  ],
+  "ci_predecessor_evidence": "ci-db4fc00.json"
+}

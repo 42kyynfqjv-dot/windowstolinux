@@ -463,7 +463,50 @@ pub(crate) const INDIRECT_GUARD: &str = "c20000";
 /// Only the byte-bound return-only guard domain is supported; a patched guard
 /// or a missing TLS fallback contract rejects at its original call site.
 pub(crate) fn dynamic_source(wrapper: &[u8], guard: &[u8]) -> Result<String, String> {
-    if wrapper != crate::crt_ptd::raw(WRAPPER) || guard != crate::crt_ptd::raw(INDIRECT_GUARD) {
+    dynamic_wrapper_source(wrapper, guard, false)
+}
+pub(crate) const SETTER: &str = "558bec5668685d410068605d410068685d41006a03e84afeffff83c4108bf0ff750cff750885f6740c8bceff1528514100ffd6eb06ff15645041005e5dc3";
+pub(crate) fn setter_source(wrapper: &[u8], guard: &[u8]) -> Result<String, String> {
+    dynamic_wrapper_source(wrapper, guard, true)
+}
+fn dynamic_wrapper_source(wrapper: &[u8], guard: &[u8], setter: bool) -> Result<String, String> {
+    let (origin, end, names_at, symbol_at, cache_at, symbol, name, pop) = if setter {
+        (
+            0x402befu32,
+            0x402c2d,
+            0x415d60,
+            0x415d68,
+            0x41cd20,
+            "FlsSetValue",
+            "cxx_dynamic_setter",
+            8,
+        )
+    } else {
+        (
+            0x402bb4,
+            0x402bef,
+            0x415d4c,
+            0x415d54,
+            0x41cd1c,
+            "FlsGetValue",
+            "cxx_dynamic_lookup",
+            4,
+        )
+    };
+    let guard_name = format!("{name}_guard");
+    let outcome_parameter = if setter {
+        ",set_result:&mut impl FnMut(&mut CrtStreamRuntime,u32,CrtValue)->Result<(u32,Option<u32>),&'static str>"
+    } else {
+        ""
+    };
+    let effect = if setter {
+        "let value=rt.load(rt.offset(sp,8)?,32)?;rt.fls_value_for(slot,value)?;rt.check_fiber(fiber)?;if slot.fiber!=fiber||slot.index!=index||rt.fls.get(&index).map(|x|x.0)!=Some(slot){return Err(\"CRT FLS setter owner/index/lifetime\");}let (result,last_error)=set_result(rt,index,value)?;rt.function_identity(f,Some(\"FlsSetValue\"))?;rt.fls_set(fiber,slot,index,value,result!=0,last_error)?;CrtValue::scalar(result)"
+    } else {
+        "rt.fls_get(fiber,slot,index)?"
+    };
+    if wrapper != crate::crt_ptd::raw(if setter { SETTER } else { WRAPPER })
+        || guard != crate::crt_ptd::raw(INDIRECT_GUARD)
+    {
         return Err("C++ dynamic lookup/guard binding".into());
     }
     let guard_graph = Graph::decode(guard, 0x401bf9)?;
@@ -474,21 +517,21 @@ pub(crate) fn dynamic_source(wrapper: &[u8], guard: &[u8]) -> Result<String, Str
         2,
     )?;
     let mut nodes = BTreeMap::new();
-    let mut decoder =
-        iced_x86::Decoder::with_ip(32, wrapper, 0x402bb4, iced_x86::DecoderOptions::NONE);
+    let mut decoder = iced_x86::Decoder::with_ip(
+        32,
+        wrapper,
+        u64::from(origin),
+        iced_x86::DecoderOptions::NONE,
+    );
     while decoder.can_decode() {
         let i = decoder.decode();
-        let offset = (i.ip32() - 0x402bb4) as usize;
+        let offset = (i.ip32() - origin) as usize;
         nodes.insert(
             i.ip32(),
             Graph::decode_instruction(&wrapper[offset..offset + i.len()], i.ip32())?,
         );
     }
-    let graph = Graph {
-        origin: 0x402bb4,
-        end: 0x402bef,
-        nodes,
-    };
+    let graph = Graph { origin, end, nodes };
 
     let body = crate::crt_stream_emit::emit_body_with_indirect(
         &graph,
@@ -496,10 +539,10 @@ pub(crate) fn dynamic_source(wrapper: &[u8], guard: &[u8]) -> Result<String, Str
             let next = pc + graph.nodes[&pc].length;
             Ok(match t {
                 Target::Direct(0x402a53) => format!(
-                    r#"let sp=CrtCpu::pointer(cpu.r[4])?;let names=rt.resolve_absolute(0x415d4c,CrtRegionKind::Input)?;if rt.load(names,32)?.known_scalar()?!=0||rt.load(rt.offset(names,4)?,32)?.known_scalar()?!=2{{return Err("C++ module index list");}}let symbol=rt.resolve_absolute(0x415d54,CrtRegionKind::Input)?;for(i,b)in b"FlsGetValue\0".iter().enumerate(){{if rt.load(rt.offset(symbol,i as i64)?,8)?.known_scalar()?!=u32::from(*b){{return Err("C++ dynamic symbol bytes");}}}}for(offset,address,value)in [(4,0x415d54,symbol),(8,0x415d4c,names),(12,0x415d54,rt.offset(names,8)?)]{{let p=rt.offset(sp,offset)?;if rt.load(p,32)?.known_scalar()?!=address{{return Err("C++ lookup pointer immediate");}}rt.store(p,32,CrtValue::Pointer(value))?;}}cpu.call_activation(rt,{next},0,|rt,c|cxx_cold_resolver(rt,c,access,api))?;"#
+                    r#"let sp=CrtCpu::pointer(cpu.r[4])?;let names=rt.resolve_absolute({names_at},CrtRegionKind::Input)?;if rt.load(names,32)?.known_scalar()?!=0||rt.load(rt.offset(names,4)?,32)?.known_scalar()?!=2{{return Err("C++ module index list");}}let symbol=rt.resolve_absolute({symbol_at},CrtRegionKind::Input)?;for(i,b)in b"{symbol}\0".iter().enumerate(){{if rt.load(rt.offset(symbol,i as i64)?,8)?.known_scalar()?!=u32::from(*b){{return Err("C++ dynamic symbol bytes");}}}}for(offset,address,value)in [(4,{symbol_at},symbol),(8,{names_at},names),(12,{symbol_at},rt.offset(names,8)?)]{{let p=rt.offset(sp,offset)?;if rt.load(p,32)?.known_scalar()?!=address{{return Err("C++ lookup pointer immediate");}}rt.store(p,32,CrtValue::Pointer(value))?;}}cpu.call_activation(rt,{next},0,|rt,c|cxx_cold_resolver(rt,c,access,api))?;"#
                 ),
                 Target::Import(0x415128) => format!(
-                    r#"let cell=rt.resolve_absolute(0x415128,CrtRegionKind::Module)?;if rt.load(cell,32)?.known_scalar()?!=0x401bf9{{return Err("C++ live guard target unbound");}}let CrtValue::Function(f)=cpu.r[1] else{{return Err("C++ guard function authority");}};rt.function_identity(f,Some("FlsGetValue"))?;if cpu.r[6]!=CrtValue::Function(f){{return Err("C++ guard target mismatch");}}cpu.call_activation(rt,{next},0,|rt,c|cxx_lookup_guard(rt,c))?;guarded=Some(f);"#
+                    r#"let cell=rt.resolve_absolute(0x415128,CrtRegionKind::Module)?;if rt.load(cell,32)?.known_scalar()?!=0x401bf9{{return Err("C++ live guard target unbound");}}let CrtValue::Function(f)=cpu.r[1] else{{return Err("C++ guard function authority");}};rt.function_identity(f,Some("{symbol}"))?;if cpu.r[6]!=CrtValue::Function(f){{return Err("C++ guard target mismatch");}}cpu.call_activation(rt,{next},0,|rt,c|{guard_name}(rt,c))?;guarded=Some(f);"#
                 ),
                 _ => "return Err(\"C++ TLS fallback effect remains unbound\");".into(),
             })
@@ -514,11 +557,11 @@ pub(crate) fn dynamic_source(wrapper: &[u8], guard: &[u8]) -> Result<String, Str
         |pc, _| {
             let next = pc + graph.nodes[&pc].length;
             Ok(format!(
-                r#"let CrtValue::Function(f)=target else{{return Err("C++ indirect function provenance");}};if guarded.take()!=Some(f){{return Err("C++ missing/replayed guard receipt");}}rt.function_identity(f,Some("FlsGetValue"))?;let cache=rt.resolve_absolute(0x41cd1c,CrtRegionKind::Module)?;if rt.load(cache,32)?!=target{{return Err("C++ indirect cache target changed");}}cpu.call_activation(rt,{next},4,|rt,c|{{rt.function_identity(f,Some("FlsGetValue"))?;let sp=CrtCpu::pointer(c.r[4])?;let index=rt.load(rt.offset(sp,4)?,32)?.known_scalar()?;let value=rt.fls_get(fiber,slot,index)?;c.clobber(value);c.finish_pop(rt,4)}})?;"#
+                r#"let CrtValue::Function(f)=target else{{return Err("C++ indirect function provenance");}};if guarded.take()!=Some(f){{return Err("C++ missing/replayed guard receipt");}}rt.function_identity(f,Some("{symbol}"))?;let cache=rt.resolve_absolute({cache_at},CrtRegionKind::Module)?;if rt.load(cache,32)?!=target{{return Err("C++ indirect cache target changed");}}cpu.call_activation(rt,{next},{pop},|rt,c|{{rt.function_identity(f,Some("{symbol}"))?;let sp=CrtCpu::pointer(c.r[4])?;let index=rt.load(rt.offset(sp,4)?,32)?.known_scalar()?;let value={{{effect}}};c.clobber(value);c.finish_pop(rt,{pop})}})?;"#
             ))
         },
     )?;
-    Ok(format!("fn cxx_lookup_guard(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->Result<CrtValue,&'static str>{{{guard_body}}}fn cxx_dynamic_lookup(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,access:CrtResolverAccess,fiber:CrtFiber,slot:CrtFlsSlot,api:&mut impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu,u32)->Result<CrtValue,&'static str>)->Result<CrtValue,&'static str>{{access.check(rt)?;let mut guarded:Option<CrtFunction>=None;{body}}}"))
+    Ok(format!("fn {guard_name}(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->Result<CrtValue,&'static str>{{{guard_body}}}fn {name}(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,access:CrtResolverAccess,fiber:CrtFiber,slot:CrtFlsSlot,api:&mut impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu,u32)->Result<CrtValue,&'static str>{outcome_parameter})->Result<CrtValue,&'static str>{{access.check(rt)?;let mut guarded:Option<CrtFunction>=None;{body}}}"))
 }
 
 #[test]

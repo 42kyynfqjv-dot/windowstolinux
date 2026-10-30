@@ -403,3 +403,96 @@ The generated wrapper remains SHA256
 Five recorded Windows comparisons remain component evidence. This review adds
 zero fresh Windows observations and zero whole-PE pairs. Historical Windows
 process timeouts remain unresolved.
+
+## Heap PTD view and original setter connection
+
+The component now executes the original null-FLS getter branch through the
+FlsSetValue wrapper, including sentinel publication, allocation, PTD publication,
+rollback, cleanup thunk and LastError restoration. Getter and setter share the
+same wrapper lowering, with distinct original bytes, resolver indices, cache
+cells, symbols and stdcall argument sizes. The setter preserves the supplied
+nonzero BOOL value rather than manufacturing a Boolean return register.
+
+`CrtHeapPtdAllocation` is a non-Clone ticket issued before the protected allocation
+call. It records runtime identity, the current fiber/slot generation and every
+already live allocation. After a validated return, its consumer requires the
+returned root to be a new, live, unassigned 40-byte heap allocation whose complete
+contents are known zero. The resulting view retains the original Buffer pointer,
+capability and allocation owner. No pointer is relabeled, copied or converted
+from an address integer. A caller cannot provide its own before-set.
+
+The view gives no permanent zero-value promise. Original aliases can write the
+object, including making bytes unknown; subsequent reads see those effects.
+Publication is scoped to the same live fiber/slot. Dispatcher access requires
+actual successful publication. Allocation free or slot retirement removes the
+view; stale capabilities and tickets, reused slots and foreign runtimes reject.
+A live PTD view also cannot be claimed as a FILE buffer.
+
+The native test executes the original allocation thunk and the existing decoded
+calloc body, with explicit heap availability/new-handler/errno inputs. It also
+executes the original free thunk; the free body remains an explicit checked
+effect callback. It requires the allocation to have actually retired on a
+successful free callback return. An unexpected failure preserves earlier writes
+and publication/rollback effects. FlsSetValue failure makes slot knowledge
+unknown: its public BOOL contract does not prove failure atomicity. A later
+successful rollback can establish null; a failed rollback cannot.
+
+Primary contracts remain [FlsSetValue](https://learn.microsoft.com/en-us/windows/win32/api/fibersapi/nf-fibersapi-flssetvalue),
+[HeapAlloc](https://learn.microsoft.com/en-us/windows/win32/api/heapapi/nf-heapapi-heapalloc)
+and [calloc](https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/calloc).
+The PTD role restrictions describe this checked component domain, not restrictions
+on arbitrary Windows FLS values. Backend BOOL/LastError outcomes, initial slot,
+module/export acquisition and stationary fiber state are still explicit inputs.
+
+Seventeen allocation/view cases and fifteen connected lazy-path cases cover
+success, sentinel failure, allocation failure, publication and rollback failure,
+missing/free failure, existing/truncated/unknown allocation returns, alias writes,
+foreign tickets, stale slots/fibers/modules, changed guard, unknown word reads,
+replay and effects before failure. Every original setter-byte mutation rejects
+before emission. The retained-artifact runner additionally compares setter and
+both thunk byte strings and fallback imports to the unchanged PE. These are
+native component cases, not new original-Windows observations or whole-PE pairs.
+
+The prior pinned workflow failed after its full CRT test suite passed because
+the component runner retained an eleven-test assertion after a twelfth test was
+added. The replacement requires actual named completion rows and a consistent
+successful libtest summary; independent tests reject missing, ignored, failed,
+duplicate and inconsistent results. Evidence and the distinct unresolved original
+Windows helper timeout are preserved in [ci-db4fc00.json](evidence/ci-db4fc00.json).
+A fresh replay verifies the correction; it does not diagnose that timeout.
+
+### Next connected gate and Sol review scope
+
+Sol can review the ticket/view lifecycle, wrapper ABI, actual original control
+flow, strict failure assertions and exact commit CI. Inspect the checked effect
+boundaries rather than treating their Rust types as proof of external behavior.
+
+Next, carry the lazy producer through the pending-event/common-handler adapter
+under explicit allocator and setter contracts. Replace its current cached-only
+getter boundary without synthesizing a non-null PTD or known offset32. The new
+lazy source is intentionally separate from the existing ordered handler emitter;
+the latter still rejects a null slot. Close original free body 0x407d50, allocator
+new-handler/errno recursion and required-getter termination 0x4077ff before calling
+those paths fully supported. Actual FlsAlloc/fiber initialization, loader effects,
+TLS fallback, delivery/record predicates and incoming-chain containment remain
+open. No whole-event acquisition certificate or full startup/rcedit admission is
+created by this change.
+
+The concrete free-body follow-up is not a guessed unconditional deallocation:
+0x407d50..0x407d8a tests null, calls HeapFree through IAT0x415098, and on a false
+result calls GetLastError, error mapping0x407c12 and errno accessor0x407ccd before
+returning normally. The current component's checked free callback admits an
+actual retirement or rejects; it does not yet admit that normal-return failure
+path. Closing it requires an owned HeapFree outcome and justified failure
+lifetime/errno effects, not treating function return alone as proof of free.
+
+Validation: 228 CRT tests, 175 root tests, all-target Clippy and formatting pass;
+Python discovery runs 60 tests with one existing skip. Final retained-artifact
+replay passes five recorded Windows wrapper comparisons and 76 ordered cases,
+plus 17 view and 15 lazy-path native cases. The separately generated lazy source
+SHA256 is 5df4f407b8576df823ca4181f62eeca656f257d46180ee99672c88e8130428fa;
+wrapper Rust SHA256 is c80246b200b7e172221f982424c4e93c627c361866705a426db19b921282fe3d.
+The unchanged PE SHA256 remains 1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4.
+[Machine-readable evidence](evidence/heap-ptd-view.json) records counts, bindings,
+remaining cuts and test-development corrections. No fresh Windows observations
+or whole-PE comparisons are added by these local runs.

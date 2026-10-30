@@ -42,6 +42,19 @@ def observations(directory):
     return report, observed
 
 
+def require_test_completions(result, required):
+    """Require actual named passes and a consistent successful libtest summary.
+
+    New tests may be added without making a stale hardcoded count reject a
+    successful run. Missing tests, ignored tests and false success still reject.
+    """
+    rows = re.findall(rb'^test ([^\r\n ]+) \.\.\. ok\r?$', result.stdout, re.M)
+    summary = re.findall(rb'^test result: ok\. (\d+) passed; 0 failed; 0 ignored;', result.stdout, re.M)
+    if (result.returncode or len(summary) != 1 or int(summary[0]) != len(rows)
+            or len(rows) != len(set(rows)) or not set(required).issubset(rows)):
+        raise ValueError('original C++ owned record component failed: named completions/summary')
+
+
 def check(original, observation, out, compare=None):
     out.mkdir(parents=True, exist_ok=False)
     image = (original/'unwind.exe').read_bytes()
@@ -205,7 +218,7 @@ def check(original, observation, out, compare=None):
             raise ValueError('C++ unwind frame/action original bytes differ')
         file_regions['cxx-unwind-'+name.lower()]=sha(raw)
     cxx_ptd_source=(Path(__file__).resolve().parents[3]/'src/crt_cxx_ptd.rs').read_text()
-    for name,start,length in [('REQUIRED',0x4028c3,14),('GETTER',0x4028d1,146)]:
+    for name,start,length in [('REQUIRED',0x4028c3,14),('GETTER',0x4028d1,146),('CALLOC_THUNK',0x407850,11),('FREE_THUNK',0x407750,5)]:
         raw=mapped(image,start,length,executable=True)
         fixture=re.search(r'const\s+'+name+r'\s*:\s*&str\s*=\s*"([0-9a-f]+)"',cxx_ptd_source)
         if fixture is None or bytes.fromhex(fixture[1])!=raw:
@@ -215,7 +228,7 @@ def check(original, observation, out, compare=None):
         if tuple(import_at_iat(image,address-base))!=('kernel32.dll',name):
             raise ValueError('C++ TLS fallback import changed; UCRT FLS is distinct')
     lookup_source=(Path(__file__).resolve().parents[3]/'src/crt_cxx_lookup.rs').read_text()
-    for name,start,length in [('PREFIX',0x402a53,37),('EPILOG',0x402aca,3),('WRAPPER',0x402bb4,59),('COLD_FULL',0x402a53,160),('LOAD_HELPER',0x402af3,75),('WIDE_COMPARE',0x4078e0,67),('INDIRECT_GUARD',0x401bf9,3)]:
+    for name,start,length in [('PREFIX',0x402a53,37),('EPILOG',0x402aca,3),('WRAPPER',0x402bb4,59),('COLD_FULL',0x402a53,160),('LOAD_HELPER',0x402af3,75),('WIDE_COMPARE',0x4078e0,67),('INDIRECT_GUARD',0x401bf9,3),('SETTER',0x402bef,62)]:
         raw=mapped(image,start,length,executable=True)
         fixture=re.search(r'const\s+'+name+r'\s*:\s*&str\s*=\s*"([0-9a-f]+)"',lookup_source)
         if fixture is None or bytes.fromhex(fixture[1])!=raw:
@@ -226,6 +239,8 @@ def check(original, observation, out, compare=None):
             raise ValueError('cold resolver module API identity changed')
     if mapped(image,0x415d54,12)!=b'FlsGetValue\0':
         raise ValueError('C++ dynamic lookup symbol changed')
+    if mapped(image,0x415d68,12)!=b'FlsSetValue\0':
+        raise ValueError('C++ dynamic setter symbol changed')
     # A branch into this body is not a returning cleanup receipt. Preserve its
     # complete original bytes for independent effect analysis, not execution.
     termination = mapped(image,0x40770c,60,executable=True)
@@ -276,8 +291,13 @@ def check(original, observation, out, compare=None):
                              env=env,capture_output=True,timeout=180)
     (out/'cxx-record-components.stdout').write_bytes(cxx_run.stdout)
     (out/'cxx-record-components.stderr').write_bytes(cxx_run.stderr)
-    if cxx_run.returncode or b'11 passed' not in cxx_run.stdout:
-        raise ValueError('original C++ owned record component failed')
+    require_test_completions(cxx_run, [
+        b'crt_cxx_ptd::allocated_dispatcher_ptd_cannot_gain_fls_role_by_retagging_or_copying',
+        b'crt_cxx_ptd::heap_ptd_views_preserve_aliases_and_expire_with_allocation_or_slot',
+        b'crt_cxx_ptd::original_lazy_ptd_setter_publication_and_cleanup_preserve_heap_identity',
+        b'crt_cxx_record::owned_cxx_record_keeps_state_metadata_and_continuation_distinct',
+        b'crt_cxx_record::common_handler_executes_cached_getter_with_owned_context_and_no_loader_authority',
+    ])
     unwind_run=subprocess.run(['cargo','test','--locked','--example','crt_stream','original_cxx_unwind_registers_eh4_preserves_pending_action_and_counter_failures'],env=env,capture_output=True,timeout=180)
     (out/'cxx-unwind-native.stdout').write_bytes(unwind_run.stdout)
     (out/'cxx-unwind-native.stderr').write_bytes(unwind_run.stderr)
@@ -379,7 +399,7 @@ def check(original, observation, out, compare=None):
                   main_scope_header_sha256=sha((out/'Main-scope-header.bin').read_bytes()),
                   locale_state_evidence=locale_state_evidence(image),
                   unwind_binding_source_sha256=sha((out/'cxx-unwind-connected.rs').read_bytes()),
-                  ordered_search_native_cases=76, unobserved_context_native_cases=27, unobserved_context_new_windows_pairs=0, original_empty_search_native_cases=1, ordered_search_new_windows_pairs=0, shared_chain_native_cases=24, shared_chain_effect_lifetime_cases=4, shared_chain_new_windows_pairs=0, chain_ownership_diagnostic_experiments=1, chain_ownership_new_windows_pairs=0, bound_cxx_invocation_native_cases=34, bound_cxx_invocation_new_windows_pairs=0, prefix_delivery_unwind_native_cases=14, prefix_delivery_new_windows_pairs=0, dispatcher_delivery_unwind_native_cases=8, dispatcher_delivery_new_windows_pairs=0, delivery_child_native_cases=14, delivery_cached_unwind_native_cases=4, delivery_new_windows_pairs=0,
+                  heap_ptd_view_native_cases=17, lazy_ptd_native_cases=15, lazy_ptd_new_windows_pairs=0, ordered_search_native_cases=76, unobserved_context_native_cases=27, unobserved_context_new_windows_pairs=0, original_empty_search_native_cases=1, ordered_search_new_windows_pairs=0, shared_chain_native_cases=24, shared_chain_effect_lifetime_cases=4, shared_chain_new_windows_pairs=0, chain_ownership_diagnostic_experiments=1, chain_ownership_new_windows_pairs=0, bound_cxx_invocation_native_cases=34, bound_cxx_invocation_new_windows_pairs=0, prefix_delivery_unwind_native_cases=14, prefix_delivery_new_windows_pairs=0, dispatcher_delivery_unwind_native_cases=8, dispatcher_delivery_new_windows_pairs=0, delivery_child_native_cases=14, delivery_cached_unwind_native_cases=4, delivery_new_windows_pairs=0,
                   unwind_native_cases=24, cached_unwind_native_cases=14, cached_unwind_new_windows_pairs=0, unwind_new_windows_pairs=0, unwind_binding_rust_tests=1,
                   unwind_state_source_sha256=sha((out/'unwind-state-live.rs').read_bytes()),
                   unwind_state_native_cases=12, unwind_state_new_windows_pairs=0,
