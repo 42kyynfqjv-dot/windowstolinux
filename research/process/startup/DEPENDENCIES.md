@@ -158,3 +158,31 @@ There are zero new Windows observations and zero whole-PE pairs. Review of
 4a44eca confirmed eight jobs passed in each Rust workflow, final Linux jobs
 123803368463/123803467001 still active, and pinned startup40975183290 passed.
 These conclusions do not validate the new changed head or diagnose old timeouts.
+
+Pending-call acquisition now produces record code/flags/zero parameter count from
+validated RaiseException arguments on fresh checked storage; all other record and
+CONTEXT fields retain unknown/supplied status. The34-case ordered selector checks
+producer replay, stale event, initialized storage rejection, unknown-byte retention
+and replacement of the produced record. Incoming Owned nodes must still be live
+and linked; borrowed or unbound source shapes reject. Registry validation alone
+does not acquire incoming handler storage or effects. See THREAD-CHAIN.md for the
+remaining nonempty EH4 selection/containment and actual captured-context gate.
+
+| Delivery input | Current producer or remaining assumption |
+| --- | --- |
+| Record storage | Supplied fresh checked 80-byte region; allocation not acquired here |
+| Record code, flags, parameter count | Produced once from the live validated zero-parameter RaiseException CALL |
+| Nested-record link | Explicit supplied null input for the existing non-nested domain |
+| Exception address, unused information | Unknown; never filled with zero or guessed from CALL PC |
+| Saved CONTEXT / ESP | Supplied captured object; exact identity/value/lifetime validated, no acquisition claim |
+| Saved general registers / flags | Never copied from raised-call registers as a substitute for capture |
+| Incoming owned predecessor | Must be a live linked registration; handler storage/effects still need composition |
+| Borrowed root / dispatcher | Reject without containment proof; no default incoming handler or empty-chain assumption |
+
+Capture-boundary checkpoint validation passed223 CRT tests, all-target Clippy and
+retained-artifact replay, including34 ordered cases and five recorded wrapper
+comparisons. The observation-dependent case passed separately. Current source
+hashes are in the evidence JSON; there are zero fresh Windows observations and
+zero whole-PE pairs. The reviewed05fc38c Rust jobs each had eight successes and
+final Linux jobs123807523849/123807819719 pending; pinned original-probes job
+123806170041 was pending at inspection. Historical timeouts remain undiagnosed.

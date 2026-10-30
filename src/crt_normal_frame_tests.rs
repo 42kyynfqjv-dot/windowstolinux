@@ -1490,7 +1490,7 @@ fn bound_invocation(){for delivery_mode in 0..34{let prefix=true;let mode=0;
   checked=true;Err::<(),_>("original child unwind completion is not OS delivery/restoration")
  });assert!(result.is_err());assert!(checked,"invocation case {} failed before its assertions",delivery_mode);assert_eq!(rt.initialization,None);assert_eq!(rt.module_references.len(),refs);assert_eq!(rt.memory.read(cache.address(),4).unwrap(),cache_before);assert_eq!(rt.last_os_error,saved_error);
 }}
-fn ordered_search_cases(){for mode in 0..31{
+fn ordered_search_cases(){for mode in 0..34{
  let(m,mut r,main,mut permit)=fixture_with_extra(&[(0x410000,0x420000)]);let mut rt=runtime(&r);let mut checked=false;
  let selected=if mode>=21{
   let(mut next,init)=CrtStreamRuntime::new_initializing(r.identity.owner,r.identity.instance,0x8000,65536).unwrap();
@@ -1508,7 +1508,18 @@ fn ordered_search_cases(){for mode in 0..31{
   for arg in [0,0,0,0xe0420042]{c.push(&mut rt,CrtValue::scalar(arg))?;}
   let mut event=CrtNormalException::issue(&mut rt,&mut c,e,&b,raise_site())?;let saved=c.r;
   let record=rt.map_region(0x50000,80,CrtRegionKind::Context,None)?;let context=rt.map_region(0x51000,716,CrtRegionKind::Context,None)?;
-  for(offset,value)in [(0,event.code),(4,0),(8,0),(16,0)]{rt.store(rt.offset(record,offset)?,32,CrtValue::scalar(value))?;}
+  if mode==0{
+   event.generation+=1;assert_eq!(event.produce_record_fields(&mut rt,&c,e,&b,record),Err("normal exception stale/foreign ownership"));event.generation-=1;
+   assert!(rt.load(record,32)?.known_scalar().is_err());assert!(event.produced_record.is_none());
+   let initialized=rt.map_region(0x54000,80,CrtRegionKind::Context,Some(&[0;80]))?;
+   assert_eq!(event.produce_record_fields(&mut rt,&c,e,&b,initialized),Err("normal record producer requires fresh storage"));assert!(event.produced_record.is_none());
+  }
+  event.produce_record_fields(&mut rt,&c,e,&b,record).expect("record fields from actual pending API arguments");
+  assert_eq!(event.produce_record_fields(&mut rt,&c,e,&b,record),Err("normal record producer phase/role/replay"));
+  assert!(rt.load(rt.offset(record,12)?,32)?.known_scalar().is_err());assert!(rt.load(rt.offset(record,20)?,32)?.known_scalar().is_err());
+  // Supplied input boundary: nested-record link and captured ESP are not
+  // acquired by the API-argument record producer.
+  rt.store(rt.offset(record,8)?,32,CrtValue::scalar(0))?;
   rt.store(rt.offset(context,0xc4)?,32,CrtValue::scalar(0x9500))?;
   let mut objects=CrtNormalObjects::bind(&event,&rt,e,record,context)?;
   let mut d=cpu(&mut rt,0xc000,1303);let sp=rt.resolve_absolute(0xbfc0,CrtRegionKind::Stack)?;d.r[4]=CrtValue::Pointer(sp);
@@ -1547,7 +1558,7 @@ fn ordered_search_cases(){for mode in 0..31{
    _=>{}
   }
   let taken=original_live_search_return_advance(&mut search,returned,&mut event,&objects,&rt,&c,e,&b);
-  if matches!(mode,0|5|19|21..=30){assert_eq!(taken,Ok(predecessor));assert_eq!(search.current,predecessor);assert_eq!(e.registry.head,RegistryHead::Normal(event.frame));assert_eq!(event.delivery,CrtNormalDelivery::ResultTaken);assert_eq!(c.r,saved);
+  if matches!(mode,0|5|19|21..=33){assert_eq!(taken,Ok(predecessor));assert_eq!(search.current,predecessor);assert_eq!(e.registry.head,RegistryHead::Normal(event.frame));assert_eq!(event.delivery,CrtNormalDelivery::ResultTaken);assert_eq!(c.r,saved);
    if let Some((fiber,slot))=selected{
     rt.map_region(0x41b42c,36,CrtRegionKind::Module,Some(&cxx_meta_bytes()))?;rt.map_region(0x41b41c,16,CrtRegionKind::Module,Some(&cxx_map_bytes()))?;
     let rec=cxx_bind(&rt,&ancestor,&af)?;let stack=rt.resolve_absolute(0x9000,CrtRegionKind::Stack)?;
@@ -1561,11 +1572,14 @@ fn ordered_search_cases(){for mode in 0..31{
      let mut receipt=result.expect("selected original C++ search must return");assert_eq!(receipt.receipt.value,CrtValue::scalar(1));
      if mode==26{receipt.registration.generation+=1;}
      if mode==27{receipt.serial+=1;}
+     if mode==31{let RegistryHead::Owned(id)=e.registry.cxx[0].previous else{panic!("expected owned predecessor")};let index=e.registry.frame_index(id)?;e.registry.frames[index].linked=false;}
+     if mode==32{e.registry.cxx[0].previous=RegistryHead::BorrowedRoot(e.registry.identity);}
+     if mode==33{objects.record=rt.map_region(0x53000,80,CrtRegionKind::Context,None)?;}
      if mode==28{rt.store(rt.resolve_absolute(0x41b42c,CrtRegionKind::Module)?,8,CrtValue::scalar(0))?;}
      if mode==30{assert_eq!(cxx_invoke_selected_search(&mut search,&mut event,&objects,&mut rt,&c,e,&b,&mut d,&ancestor,&af,&rec,stack,fiber,slot,0x401900).err(),Some("selected C++ repeated execution"));checked=true;return Err("ordered rejection checked");}
      let replay=if mode==29{Some(CrtSelectedCxxReturn{receipt:CrtNormalHandlerReturn{identity:receipt.receipt.identity,epoch:receipt.receipt.epoch,frame:receipt.receipt.frame,generation:receipt.receipt.generation,level:receipt.receipt.level,value:receipt.receipt.value},serial:receipt.serial,registration:receipt.registration,handler:receipt.handler,owner:receipt.owner,context:CrtCxxContext::bind_normal(&rt,&ancestor,&af,&objects,stack)?})}else{None};
      let got=cxx_take_selected_search(&mut search,&mut event,&objects,receipt,&rt,&c,e,&b,&ancestor,&af,&rec);
-     if matches!(mode,26|27|28){assert_eq!(got,Err(if mode==28{"C++ metadata mutated/unknown"}else{"selected C++ foreign/replayed executed receipt"}));}
+     if matches!(mode,26|27|28|31|32|33){assert_eq!(got,Err(match mode{28=>"C++ metadata mutated/unknown",31=>"ordered search incoming owned predecessor unlinked",32=>"ordered search stale source/order/children",33=>"normal record producer object mismatch",_=>"selected C++ foreign/replayed executed receipt"}));}
      else{assert_eq!(got,Ok(1));assert_eq!(search.phase,5);assert_eq!(search.current,e.registry.cxx[0].previous);assert_eq!(event.delivery,CrtNormalDelivery::ResultTaken);}
      if let Some(replay)=replay{assert_eq!(cxx_take_selected_search(&mut search,&mut event,&objects,replay,&rt,&c,e,&b,&ancestor,&af,&rec),Err("ordered search stale source/order/children"));}
     }else{

@@ -366,3 +366,47 @@ allocations still participate in the earlier registration/order negatives; they
 are not claimed as new successful handler execution. The compiled original handler
 prefix retains its own frame-shape checks. Tests cannot supply a body or a success
 receipt to the selected-call operation.
+
+## Pending-call record production and incoming-boundary review
+
+Review of05fc38c confirmed two actual original handler returns, separate receipt
+types and strict success assertions. A missing incoming-owner lifetime check was
+identified: the C++ predecessor walk stopped at an Owned node without checking
+that node remained live and linked. The walk now validates it through the registry
+before minting or consuming handler results. A borrowed root/dispatcher is an
+explicit unproved-containment rejection; a different source shape needs its own
+binding. The linked owned-node check validates registry lifetime only, and grants
+no permission to execute its handler from supplied/projected storage.
+
+The pending RaiseException token now produces the three record fields determined
+by its validated zero-parameter API arguments: ExceptionCode, ExceptionFlags and
+NumberParameters. Production requires the same live suspended source, Pending
+phase, a fresh aligned full80-byte Context-region allocation and a single-use
+producer slot. Every byte is checked unknown before the first write. Supplied
+initialized storage, stale events, replay and replacing the produced record reject.
+The producer leaves ExceptionAddress, nested-record link and unused information
+unknown; it neither zeros those bytes nor converts CALL registers into CONTEXT.
+The existing object binding still requires an explicit supplied nested link and
+captured ESP. Allocation of record storage itself remains a component input.
+
+All34 ordered cases now use these actual pending-call field effects. They retain
+the31 previous execution/rejection cases and add an unlinked incoming owned
+predecessor, changed predecessor inventory and replaced produced record. Additional
+assertions cover stale-event production, fresh-versus-initialized storage, producer
+replay and unknown address/parameter bytes. This reduces supplied record contents;
+it does not establish acquisition of a Windows captured CONTEXT or incoming-chain
+behavior. Full startup/rcedit and the historical Windows timeouts remain unresolved.
+
+Next connected gate: compose the actual pending event with nonempty original EH4
+search/selection and cleanup/restoration, deriving containment from executed scope
+and filter proofs before any borrowed incoming node. Saved-context acquisition
+must follow an independently justified observable-effect contract. If only stack
+bounds are observed by an admitted domain, prove that restriction over all its
+supported paths before using a projected context; never select invented saved
+register values or treat successful component traces as that proof.
+
+Record field requirements come from the documented RaiseException arguments and
+EXCEPTION_RECORD fields already referenced in [RAISED-EVENT.md](RAISED-EVENT.md).
+This producer admits only the existing validated zero-parameter domain. It does
+not assign an exception instruction address, infer register capture timing, invoke
+debugger stages or provide default handling for an uncontained search.

@@ -372,6 +372,7 @@ impl CrtNormalObjects {
   event.validate_pending(rt,epoch)?;
   if rt.anchor!=self.anchor||event.identity!=self.identity||event.epoch!=self.epoch||event.generation!=self.generation
    ||self.captured_esp<epoch.registry.limit||self.captured_esp>epoch.registry.base{return Err("normal exception captured object identity/bounds");}
+  if event.produced_record.is_some_and(|p|p!=self.record){return Err("normal record producer object mismatch");}
   rt.valid(self.record,80)?;rt.valid(self.context,716)?;
   for (offset,value) in [(0,event.code),(4,u32::from(event.noncontinuable)),(8,0),(16,0)]{
    if rt.load(rt.offset(self.record,offset)?,32)?.known_scalar()?!=value{return Err("normal exception record input mismatch");}
@@ -388,7 +389,7 @@ impl CrtNormalObjects {
 struct CrtNormalException {
  anchor:guest_memory::Capability,identity:RegistryIdentity,epoch:u64,frame:NormalFrameId,
  generation:u64,code:u32,noncontinuable:bool,continuation:u32,
- call_registers:[CrtValue;8],call_flags:CrtFlags,return_id:u64,delivery:CrtNormalDelivery,
+ call_registers:[CrtValue;8],call_flags:CrtFlags,return_id:u64,delivery:CrtNormalDelivery,produced_record:Option<CrtPointer>,
 }
 impl CrtNormalException {
  /// Called only at a separately proved FF /2 RaiseException import boundary.
@@ -425,12 +426,23 @@ impl CrtNormalException {
   if rt.tags.values().any(|v|*v==CrtValue::ProtectedReturn(return_id)){return Err("normal exception return collision");}
   let pending=Self{anchor:rt.anchor,identity:epoch.registry.identity,epoch:epoch.generation,frame,
    generation,code:args[0],noncontinuable:args[1]!=0,continuation,
-   call_registers:cpu.r,call_flags:cpu.flags,return_id,delivery:CrtNormalDelivery::Pending};
+   call_registers:cpu.r,call_flags:cpu.flags,return_id,delivery:CrtNormalDelivery::Pending,produced_record:None};
   // Publish suspension only after the original CALL push succeeds. No argument
   // cleanup, clobber, captured-register synthesis, unlock or frame retirement.
   cpu.push(rt,CrtValue::ProtectedReturn(return_id))?;rt.generation=generation;
   epoch.registry.normal_epoch.as_mut().ok_or("normal exception missing epoch")?.pending_exception=Some(generation);
   Ok(pending)
+ }
+ /// Materialize only fields fixed by the validated zero-parameter API CALL.
+ /// CONTEXT, ExceptionAddress, nested link and unused parameter bytes stay
+ /// outside this producer's knowledge; no CALL register becomes saved state.
+ fn produce_record_fields(&mut self,rt:&mut CrtStreamRuntime,interrupted:&CrtCpu,epoch:&NormalCallEpoch<'_>,binding:&CrtNormalBinding,record:CrtPointer)->RegistryResult<()>{
+  self.dispatch_source(rt,interrupted,epoch,binding)?;
+  if self.delivery!=CrtNormalDelivery::Pending||self.produced_record.is_some()||record.kind!=CrtRegionKind::Context||record.address()%4!=0{return Err("normal record producer phase/role/replay");}
+  rt.valid(record,80)?;
+  for i in 0..80{if !matches!(rt.load(rt.offset(record,i)?,8)?,CrtValue::Scalar{known,..} if known&255==0){return Err("normal record producer requires fresh storage");}}
+  for(offset,value)in [(0,self.code),(4,u32::from(self.noncontinuable)),(16,0)]{rt.store(rt.offset(record,offset)?,32,CrtValue::scalar(value))?;}
+  self.produced_record=Some(record);Ok(())
  }
  /// Establish the actual interrupted EH4 source before any handler dispatch.
  /// This read-only projection does not grant normal-call or restoration authority.
@@ -702,7 +714,13 @@ impl CrtOrderedSearch {
   // the source's pending exception. It grants no predecessor execution rights.
   let mut head=self.previous;
   for _ in 0..32{
-   let RegistryHead::Cxx(id)=head else{return Ok(());};
+   let RegistryHead::Cxx(id)=head else{
+    return match head{
+     RegistryHead::Owned(id)=>{let f=&epoch.registry.frames[epoch.registry.frame_index(id)?];if !f.linked{return Err("ordered search incoming owned predecessor unlinked");}Ok(())},
+     RegistryHead::BorrowedRoot(_)|RegistryHead::BorrowedDispatcher{..}=>Err("ordered search incoming borrowed containment unproved"),
+     _=>Err("ordered search incoming source shape unbound"),
+    };
+   };
    let f=epoch.registry.cxx.iter().find(|f|f.id==id&&f.linked).ok_or("ordered search missing predecessor")?;
    if f.epoch!=self.epoch{return Err("ordered search foreign predecessor epoch");}
    let entry=rt.resolve_absolute(u32::try_from(f.high-4).map_err(|_|"ordered predecessor extent")?,CrtRegionKind::Stack)?;
