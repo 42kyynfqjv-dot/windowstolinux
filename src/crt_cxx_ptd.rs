@@ -219,3 +219,39 @@ for mode in 0..29 {
         }
     }
 }
+
+#[test]
+fn allocated_dispatcher_ptd_cannot_gain_fls_role_by_retagging_or_copying() {
+    crate::crt_stream_callees_tests::native(
+        "",
+        r#"
+let mut rt=CrtStreamRuntime::new(17,29,0x8000,65536).unwrap();
+let fiber=rt.bind_fiber(29).unwrap();let slot=rt.bind_fls(fiber,7,CrtValue::scalar(0)).unwrap();
+let allocated=rt.allocate(40,true,true).unwrap().expect("actual zeroed allocation");
+assert_eq!(allocated.kind,CrtRegionKind::Buffer);
+assert_eq!(rt.load(rt.offset(allocated,32).unwrap(),32).unwrap(),CrtValue::scalar(0));
+let old=rt.fls.clone();rt.last_os_error=Some(313);
+assert_eq!(rt.fls_set(fiber,slot,7,CrtValue::Pointer(allocated),true,None),Err("CRT FLS PTD root/extent"));
+assert_eq!(rt.fls,old);assert_eq!(rt.last_os_error,Some(313));
+let retagged=CrtPointer{kind:CrtRegionKind::ThreadData,..allocated};
+assert_eq!(rt.fls_set(fiber,slot,7,CrtValue::Pointer(retagged),true,None),Err("CRT pointer complete range/identity"));
+assert_eq!(rt.fls,old);assert_eq!(rt.last_os_error,Some(313));
+// Copying contents produces a different allocation, not an alias or receipt
+// transferring the original heap object's role or lifetime.
+let copied=rt.map_region(0x7000,40,CrtRegionKind::ThreadData,Some(&[0;40])).unwrap();
+assert_ne!(copied.cap,allocated.cap);
+assert_eq!(rt.difference(allocated,copied),Err("CRT unrelated pointer subtraction"));
+rt.free_allocation(allocated).unwrap();
+assert_eq!(rt.fls_set(fiber,slot,7,CrtValue::Pointer(allocated),true,None),Err("CRT stale/foreign pointer"));
+assert_eq!(rt.fls,old);assert_eq!(rt.last_os_error,Some(313));
+assert_eq!(rt.load(rt.offset(copied,32).unwrap(),32).unwrap(),CrtValue::scalar(0));
+// Existing explicit-input ThreadData and sentinel paths still work; they do
+// not establish an allocator-to-PTD conversion for the original guest object.
+assert_eq!(rt.fls_set(fiber,slot,7,CrtValue::Pointer(copied),true,None),Ok(true));
+assert_eq!(rt.fls_get(fiber,slot,7).unwrap(),CrtValue::Pointer(copied));
+assert_eq!(rt.fls_set(fiber,slot,7,CrtValue::scalar(u32::MAX),true,None),Ok(true));
+assert_eq!(rt.fls_get(fiber,slot,7).unwrap(),CrtValue::scalar(u32::MAX));
+"#,
+        "dispatcher-ptd-allocation-role",
+    );
+}

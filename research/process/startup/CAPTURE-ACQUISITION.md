@@ -356,3 +356,50 @@ three compiled mutants fail their intended assertions. The five recorded Windows
 wrapper comparisons remain component evidence; no new Windows observation or
 whole-PE pair is claimed. Generated Rust SHA256 is
 `50e0c39edb170cd005db0367292b7bcfaf36deff152e34fd250034a200c75f94`.
+
+## Independent Sol review of 5c9d4c2
+
+No runtime defect was found in the bounded helper composition. Call targets,
+event domain, cookie/header and nonoverlapping source extents are checked before
+emission; the local callbacks use the matched proofs. Every helper's live bytes
+are checked by the ordered caller before execution and consumption. The context
+callback retains the existing predicate order and no-read lease checks. Successful
+cases explicitly require both dispositions; rejection cases require their actual
+error, so an unrelated failure cannot count as success.
+
+The original setter inventory is now bound independently to the retained PE:
+0x402bef..0x402c2d resolves index 3 (`FlsSetValue`, cache 0x41cd20), invokes the guard,
+then calls the selected function with two arguments. Its fallback is the distinct
+`TlsSetValue` import 0x415064. The existing getter wrapper is index 2 and cannot be
+reused by changing only the function name. Original bytes and SHA256 are in
+[ptd-setter-review.json](evidence/ptd-setter-review.json).
+
+The connected allocation boundary has an additional concrete type/lifetime gap.
+`CrtStreamRuntime::allocate(40,true,...)` returns a heap-owned `Buffer`; `fls_value`
+requires a rooted `ThreadData`. The new native regression proves that both the
+allocator result and a forged ThreadData tag reject before changing FLS or
+LastError. A byte copy into a separately mapped ThreadData object has a different
+capability and lifetime. Freeing the heap object invalidates its original aliases,
+while the copy survives; it cannot stand in for that allocation. Existing explicit
+ThreadData and sentinel controls still succeed. No production role check changed.
+The first test run used the wrong name for the existing subtraction error; the
+strict expectation was corrected to `CRT unrelated pointer subtraction`.
+
+Astra's next bounded refactor should preserve the immutable heap allocation and
+all its aliases, and attach a checked PTD object view/authority derived from the
+actual original allocator effect. Define who may publish it in FLS, when zeroed
+fields become known, and how free, failure, slot/fiber retirement and nested use
+invalidate the view. Then connect the original cached setter wrapper, its actual
+BOOL/LastError effects and publication/rollback sequence. Cold loader and TLS
+fallback paths must retain their own contracts and rejection boundaries. Simply
+retagging a pointer/region or copying 40 bytes is not this transition. Complete
+capture certification remains blocked until these producers and delivered-record
+facts are justified; no whole-event authority was added by this review.
+
+Review validation: 226 CRT tests, the separately run recorded-wrapper test,
+76 ordered cases, all-target Clippy and three independently compiled mutants pass.
+The generated wrapper remains SHA256
+`50e0c39edb170cd005db0367292b7bcfaf36deff152e34fd250034a200c75f94`.
+Five recorded Windows comparisons remain component evidence. This review adds
+zero fresh Windows observations and zero whole-PE pairs. Historical Windows
+process timeouts remain unresolved.

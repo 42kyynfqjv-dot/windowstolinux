@@ -319,3 +319,13 @@ LastError and termination effects, using the actual module/fiber/slot ownership.
 A 40-byte zeroed object must come from the proven allocator. Supplied initialization
 and a successful component run cannot discharge those obligations. Full startup,
 rcedit and historical timeout causes remain unresolved.
+
+Independent Sol review of 5c9d4c2 found no helper-composition defect. The actual
+setter is resolver index 3/FlsSetValue with a distinct TlsSetValue fallback, not
+the getter's index 2 contract. A new allocation regression identifies the next
+code-level blocker: heap Buffer capability versus rooted ThreadData role. Keep
+the same heap identity and aliases through a checked PTD view derived from the
+allocator effect; copying/retagging must not create authority. Connect that view
+to setter publication/rollback, free and slot/fiber lifetime. See the review in
+CAPTURE-ACQUISITION.md and evidence/ptd-setter-review.json. No runtime semantics or
+admission expanded in this review.
