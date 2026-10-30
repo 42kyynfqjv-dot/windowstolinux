@@ -410,3 +410,92 @@ EXCEPTION_RECORD fields already referenced in [RAISED-EVENT.md](RAISED-EVENT.md)
 This producer admits only the existing validated zero-parameter domain. It does
 not assign an exception instruction address, infer register capture timing, invoke
 debugger stages or provide default handling for an uncontained search.
+
+## Epoch-root containment binding
+
+Review of12e0e22 found record production limited to the documented pending-call
+fields, with unknown bytes and replay rejection intact. Incoming-chain validation
+now also retains the epoch's established root when the cursor is created. Every
+mint/consume step requires the epoch's previous head and selected Owned root to
+still match that identity, and traversal must reach that exact root. Merely
+finding some linked Owned frame is insufficient. Existing linked/live checks
+remain; borrowed and unbound source shapes still reject.
+
+The37-case selector retains all34 earlier cases and adds changed epoch previous
+head, changed selected root and retired incoming owner. Record production also
+rejects a mismatched interrupted register snapshot and a forged storage role,
+before any field write. The stale-event, nested-event, wrong-capture, alias,
+replay, handler/table mutation and prior-effect cases remain. These checks close
+root-identity/lifetime attribution, not incoming handler effect containment.
+
+## Concrete capture refactor boundary
+
+There are two existing representations, not an absence of all context work:
+
+* `exception_event::CapturedContext` implements the original decoded helper's
+  predicate projection (`projection_body`) under the explicit valid-stack,
+  fault-free capture premise. It exposes no numeric ESP or general registers.
+* The live normal chain binds `CrtNormalObjects::captured_esp:u32`, loads the exact
+  word in `bind/validate`, snapshots that word in `CrtOrderedSearch`, and refines
+  it into `CrtCxxContext::esp` plus `esp_value`. Delivery/unwind has its separate
+  full storage/snapshot contract. A predicate token cannot satisfy those numeric
+  contracts, and the saved value must not be filled from CALL registers.
+
+A bounded Astra High pass is warranted for this semantic connection. Define a
+capture-view sum type retaining the numeric supplied boundary while allowing an
+event-owned predicate view only after a certificate proves the admitted original
+path's observations. Bind the certificate to code/targets, source event, stack
+bounds, all reachable helper/filter effects and permitted context operations.
+Use the existing decoded context decision tree, including selector and original
+failure edges. Keep lifetime validation even on selector bypass. Unknown raw
+fields remain unknown in storage; any raw field read, mutation, pointer escape,
+new callback or API effect outside the certificate rejects before emission.
+Do not turn the explicit valid-stack/no-unproved-interception premise into an
+assertion about arbitrary Windows executions or incoming OS handlers.
+
+Acceptance should remove the manually supplied numeric ESP from the connected
+original EH4-to-C++ path, while retaining actual instructions and both receipts.
+Require independent lower/upper predicate outcomes and ordering, stale/foreign/
+nested capture rejection, raw-read/escape/mutation and changed-code negatives,
+then same-artifact host comparisons with component/whole-PE labels intact. New
+nonempty scope selection, cleanup/restoration, real startup producers and incoming
+handler effect closure remain their own admission obligations. An enum alone or
+a passing sampled trace is insufficient. This pass has not implemented that
+semantic refactor; full capture acquisition and startup/rcedit remain rejected.
+
+The root regression was independently challenged by compiling the generated
+harness with just the epoch-root guard removed. It compiled, then case34 returned
+Ok(1) where the changed-root rejection was required. The strict regression failed
+with that exact unexpected-success assertion (exit101); an unrelated build or
+runtime failure does not count. Reproduce on the native Linux validation host:
+
+```
+python3 research/process/startup/check_root_guard.py GENERATED_NORMAL_WRAPPER.rs NEW_OUTPUT
+```
+
+This is a deliberately weakened authored-component mutation, not a PE conversion
+or Windows observation. The unmodified37-case selector passes. Counterexample
+source/report hashes are retained in the component evidence JSON.
+
+## Reserved flag correction from this review
+
+The earlier record producer overclaimed complete ExceptionFlags knowledge from
+dwExceptionFlags. EXCEPTION_RECORD reserves additional bits for system use;
+this component has not closed that delivery footprint. Production now sets only
+the known noncontinuable bit (`known=1`) and leaves every other bit unknown.
+Code and zero parameter count remain known. The ordered harness independently
+asserts that exact known-bit mask and that object binding rejects before the
+explicit delivered-flags input is established. Only afterward does the existing
+conditional handler composition receive flags0. This is a supplied delivery
+contract, not a consequence of the RaiseException argument or a sample run.
+
+The producer/assumption table in DEPENDENCIES.md supersedes earlier shorthand
+saying the full flags word was produced. No reserved bit silently becomes zero,
+and no new complete capture/API-effect claim follows. A mutation restoring the
+old full-known flags store must fail the known-bit regression before dispatch.
+
+The flag correction was independently challenged with `--mutation flags` on the
+same checker. Restoring the old full-known store compiled but failed the exact
+native assertion: actual known mask4294967295 versus required mask1. Both root
+and flags mutations require compilation followed by the intended assertion;
+other errors or timeouts cannot count as a detected proof defect.

@@ -171,7 +171,8 @@ remaining nonempty EH4 selection/containment and actual captured-context gate.
 | Delivery input | Current producer or remaining assumption |
 | --- | --- |
 | Record storage | Supplied fresh checked 80-byte region; allocation not acquired here |
-| Record code, flags, parameter count | Produced once from the live validated zero-parameter RaiseException CALL |
+| Record code, parameter count | Produced once from the live validated zero-parameter RaiseException CALL |
+| Noncontinuable flag bit | Produced from dwExceptionFlags; all reserved/system bits stay unknown until a separate delivered-flags contract |
 | Nested-record link | Explicit supplied null input for the existing non-nested domain |
 | Exception address, unused information | Unknown; never filled with zero or guessed from CALL PC |
 | Saved CONTEXT / ESP | Supplied captured object; exact identity/value/lifetime validated, no acquisition claim |
@@ -186,3 +187,35 @@ hashes are in the evidence JSON; there are zero fresh Windows observations and
 zero whole-PE pairs. The reviewed05fc38c Rust jobs each had eight successes and
 final Linux jobs123807523849/123807819719 pending; pinned original-probes job
 123806170041 was pending at inspection. Historical timeouts remain undiagnosed.
+
+Epoch-root binding now closes another incoming ownership check: cursor creation
+retains the established root, every subsequent transition rechecks epoch previous
+head and selected identity, and the predecessor walk must reach that exact live
+linked root. The37-case selector adds changed epoch head/selection and retired
+incoming owner, retaining record/capture/code/lifetime cases. This is root
+attribution, not authorization to run an unknown incoming handler.
+
+The concrete next capture gate is documented in THREAD-CHAIN.md: connect the
+existing event-owned predicate representation to the live numeric context path
+only under a code/effect observation certificate. The current u32 ESP and C++
+stack-pointer refinements cannot consume that capability. This is a bounded
+Astra High architecture step; choosing a numeric witness or filling context bytes
+would invent observable state. Existing valid-stack/interception premises remain
+explicit, and full startup/rcedit support remains unproven.
+
+Review correction: the argument producer's full ExceptionFlags mask was not
+justified. It now produces only known bit0; reserved/system bits stay unknown.
+The component explicitly supplies delivered flags0 only after testing that the
+partial record cannot bind as a fully known delivery. Code/count production is
+unchanged. Compiled proof mutations independently demonstrate detection of both
+a removed root guard and the old full-known flag store. Complete flag delivery
+and capture remain open effects; no whole-PE compatibility is inferred.
+
+Current review validation passed223 CRT tests, all-target Clippy and full retained
+artifact replay, including37 ordered cases and five recorded wrapper comparisons.
+The observation-dependent case passed separately. Both independently compiled
+mutants were caught by their exact expected assertions. The evidence JSON retains
+PE/harness/mutant hashes. New Windows observations and whole-PE pairs remain zero.
+Reviewed12e0e22 pinned jobs passed; Rust runs40977516921/40977509102 each had eight
+passed jobs and final Linux123811087881/123810696537 still active at inspection.
+No failure was observed; passing checks do not explain historical timeouts.

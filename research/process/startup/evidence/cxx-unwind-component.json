@@ -1,6 +1,6 @@
 {
   "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
-  "rust_sha256": "e7f4e5c881b646500851319492e814dfc4eb74095b93bc571297921826be743f",
+  "rust_sha256": "c6d52edc1b93a4924a6a53380d1a65b0124a7de9f7d8881f9dbcd30f83ba7ac4",
   "unwind_binding_source_sha256": "0b1ff9343211301d646e52c8a46d831fcd795ef33cf481ad97f98daa959fbfba",
   "unwind_native_cases": 24,
   "unwind_new_windows_pairs": 0,
@@ -64,7 +64,7 @@
   "chain_ownership_diagnostic_experiments": 1,
   "chain_ownership_new_windows_pairs": 0,
   "chain_selection_status": "Original EH4 return/advance followed by selected C++ search return/advance now executes under the same pending source; physical head/source CALL remain live.",
-  "next_contract": "THREAD-CHAIN.md: actual captured-context effects and nonempty original EH4 selection/cleanup containment; no borrowed incoming dispatch without proof.",
+  "next_contract": "THREAD-CHAIN.md: bounded Astra High predicate/numeric capture-view integration under instruction/effect observation certificate; no invented saved values or incoming handler effects.",
   "shared_chain_native_cases": 24,
   "shared_chain_new_windows_pairs": 0,
   "shared_chain_checks": [
@@ -90,7 +90,7 @@
     "ordered_advance": false
   },
   "ordered_dispatch_gate": "First source return/advance implemented. Next: derive selected C++ owner from the actual registration and invoke its original search path under the same pending source; supplied-owner unwind receipts do not authorize that selection.",
-  "ordered_search_native_cases": 34,
+  "ordered_search_native_cases": 37,
   "original_empty_search_native_cases": 1,
   "ordered_search_new_windows_pairs": 0,
   "return_path_integration": {
@@ -116,17 +116,19 @@
   "pending_record_producer": {
     "fields": [
       "ExceptionCode",
-      "ExceptionFlags",
-      "NumberParameters=0"
+      "NumberParameters=0",
+      "ExceptionFlags: noncontinuable bit only, known mask1"
     ],
     "source": "same live zero-parameter RaiseException CALL token",
     "freshness": "80 checked unknown bytes, aligned Context region, single producer per event",
     "remaining_inputs": [
       "record allocation",
+      "delivered reserved/system flags",
       "nested-record null link",
       "captured CONTEXT/ESP"
     ],
     "unknown_fields": [
+      "reserved/system flag bits",
       "ExceptionAddress",
       "unused information"
     ],
@@ -146,5 +148,32 @@
     "fix": "frame_index requires live identity; linked required; borrowed/unbound incoming boundaries reject",
     "new_ordered_cases": 3,
     "storage_effect_containment_proven": false
+  },
+  "epoch_root_review": {
+    "reviewed": "12e0e22",
+    "root": "retained from established epoch; previous head and selected root revalidated, traversal must reach exactly it",
+    "new_ordered_cases": 3,
+    "full_capture_acquired": false,
+    "concrete_capture_blocker": "predicate-only OwnedEvent capture cannot satisfy live u32 ESP/C++ pointer bindings without a certified observation-domain refactor",
+    "mutations": [
+      {
+        "kind": "root proof mutation; native component only",
+        "source_sha256": "c6d52edc1b93a4924a6a53380d1a65b0124a7de9f7d8881f9dbcd30f83ba7ac4",
+        "mutant_sha256": "712bdbaef389fc7ca9d087f6fd0c56c6c4fccd730d5157e7a59dd92052f4b485",
+        "returncode": 101,
+        "observed": "Ok(1) where changed-root rejection was required",
+        "whole_pe_pairs": 0,
+        "new_windows_observations": 0
+      },
+      {
+        "kind": "flags proof mutation; native component only",
+        "source_sha256": "c6d52edc1b93a4924a6a53380d1a65b0124a7de9f7d8881f9dbcd30f83ba7ac4",
+        "mutant_sha256": "877acbe3275851481d852916febc6dff276c5ddf9c65aa7847b80ddef08dcd61",
+        "returncode": 101,
+        "observed": "reserved bits became known zero instead of remaining unknown",
+        "whole_pe_pairs": 0,
+        "new_windows_observations": 0
+      }
+    ]
   }
 }

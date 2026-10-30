@@ -433,7 +433,7 @@ impl CrtNormalException {
   epoch.registry.normal_epoch.as_mut().ok_or("normal exception missing epoch")?.pending_exception=Some(generation);
   Ok(pending)
  }
- /// Materialize only fields fixed by the validated zero-parameter API CALL.
+ /// Materialize code/count and documented noncontinuable-bit knowledge only.
  /// CONTEXT, ExceptionAddress, nested link and unused parameter bytes stay
  /// outside this producer's knowledge; no CALL register becomes saved state.
  fn produce_record_fields(&mut self,rt:&mut CrtStreamRuntime,interrupted:&CrtCpu,epoch:&NormalCallEpoch<'_>,binding:&CrtNormalBinding,record:CrtPointer)->RegistryResult<()>{
@@ -441,7 +441,10 @@ impl CrtNormalException {
   if self.delivery!=CrtNormalDelivery::Pending||self.produced_record.is_some()||record.kind!=CrtRegionKind::Context||record.address()%4!=0{return Err("normal record producer phase/role/replay");}
   rt.valid(record,80)?;
   for i in 0..80{if !matches!(rt.load(rt.offset(record,i)?,8)?,CrtValue::Scalar{known,..} if known&255==0){return Err("normal record producer requires fresh storage");}}
-  for(offset,value)in [(0,self.code),(4,u32::from(self.noncontinuable)),(16,0)]{rt.store(rt.offset(record,offset)?,32,CrtValue::scalar(value))?;}
+  for(offset,value)in [(0,self.code),(16,0)]{rt.store(rt.offset(record,offset)?,32,CrtValue::scalar(value))?;}
+  // Only the documented noncontinuable bit follows from dwExceptionFlags.
+  // Reserved/system delivery bits need a separate effect contract.
+  rt.store(rt.offset(record,4)?,32,CrtValue::Scalar{bits:u32::from(self.noncontinuable),known:1})?;
   self.produced_record=Some(record);Ok(())
  }
  /// Establish the actual interrupted EH4 source before any handler dispatch.
@@ -685,7 +688,7 @@ impl CrtNormalException {
 /// execute the predecessor, grant a child lease, or authorize restoration.
 struct CrtOrderedSearch {
  identity:RegistryIdentity,epoch:u64,event:u64,source:NormalFrameId,serial:u64,
- current:RegistryHead,previous:RegistryHead,handler:u32,owner:u64,
+ current:RegistryHead,previous:RegistryHead,root:RegistryHead,handler:u32,owner:u64,
  record:CrtPointer,context:CrtPointer,captured_esp:u32,cxx:Vec<RegistryCxxFrame>,normal_count:usize,phase:u8,
 }
 struct CrtOrderedReturn { serial:u64,source:NormalFrameId,previous:RegistryHead,handler:u32,receipt:CrtNormalHandlerReturn }
@@ -695,7 +698,7 @@ impl CrtOrderedSearch {
   event.dispatch_source(rt,interrupted,epoch,binding)?;objects.validate(event,rt,epoch)?;
   let serial=epoch.registry.next_id()?.generation;
   let s=Self{identity:event.identity,epoch:event.epoch,event:event.generation,source:event.frame,serial,
-   current:RegistryHead::Normal(event.frame),previous:binding.previous,handler:binding.layout.handler,owner:binding.return_id,
+   current:RegistryHead::Normal(event.frame),previous:binding.previous,root:epoch.registry.normal_epoch.as_ref().ok_or("ordered search missing root")?.previous,handler:binding.layout.handler,owner:binding.return_id,
    record:objects.record,context:objects.context,captured_esp:objects.captured_esp,cxx:epoch.registry.cxx.clone(),normal_count:epoch.registry.normal_epoch.as_ref().ok_or("ordered search missing epoch")?.frames.len(),phase:0};
   s.validate(event,objects,rt,interrupted,epoch,binding)?;Ok(s)
  }
@@ -710,13 +713,15 @@ impl CrtOrderedSearch {
    ||epoch.registry.cxx!=self.cxx||epoch.registry.normal_epoch.as_ref().is_none_or(|s|s.frames.len()!=self.normal_count||s.delivery.is_some()){
    return Err("ordered search stale source/order/children");
   }
+  let state=epoch.registry.normal_epoch.as_ref().ok_or("ordered search expired root epoch")?;
+  if state.previous!=self.root||self.root!=RegistryHead::Owned(state.selected){return Err("ordered search incoming root authority changed");}
   // Unlike normal-call acquisition, this read-only check deliberately permits
   // the source's pending exception. It grants no predecessor execution rights.
   let mut head=self.previous;
   for _ in 0..32{
    let RegistryHead::Cxx(id)=head else{
     return match head{
-     RegistryHead::Owned(id)=>{let f=&epoch.registry.frames[epoch.registry.frame_index(id)?];if !f.linked{return Err("ordered search incoming owned predecessor unlinked");}Ok(())},
+     RegistryHead::Owned(id)=>{if head!=self.root{return Err("ordered search does not reach established root");}let f=&epoch.registry.frames[epoch.registry.frame_index(id)?];if !f.linked{return Err("ordered search incoming owned predecessor unlinked");}Ok(())},
      RegistryHead::BorrowedRoot(_)|RegistryHead::BorrowedDispatcher{..}=>Err("ordered search incoming borrowed containment unproved"),
      _=>Err("ordered search incoming source shape unbound"),
     };
