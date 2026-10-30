@@ -151,6 +151,36 @@ pub(crate) fn delivered_common_source() -> Result<String, String> {
         )?
     ))
 }
+/// Search delivery uses the same checked handler and common instructions.
+/// Only generated Rust identifiers differ; unwind still needs a bound producer.
+pub(crate) fn delivered_lazy_source() -> Result<String, String> {
+    let guard = crate::crt_stream_callees::prove_security(
+        &crate::crt_ptd::raw("3b0d00c041007501c3e97c020000"),
+        0x40154c,
+    )?;
+    let common = common_source_provider(
+        &crate::crt_ptd::raw(COMMON),
+        &crate::crt_ptd::raw(DISPATCH_THUNK),
+        &crate::crt_ptd::raw(DISPATCH_ENTRY),
+        &crate::crt_ptd::raw(DISPATCH_TAIL),
+        false,
+        true,
+        true,
+    )?;
+    let prefix = handler_prefix_mode(
+        &crate::crt_ptd::raw(HANDLER),
+        0x414ad6,
+        0x41b42c,
+        0x403002,
+        &guard,
+        false,
+        true,
+    )?;
+    Ok(format!("{common}\n{prefix}")
+        .replace("cxx_common(", "cxx_lazy_common(")
+        .replace("cxx_handler_prefix(", "cxx_handler_lazy_prefix(")
+        .replace("cxx_handler_identity(", "cxx_lazy_handler_identity("))
+}
 fn common_source_mode(
     common: &[u8],
     thunk: &[u8],
@@ -249,6 +279,7 @@ fn common_source_provider(
         &graph,
         |pc, target| {
             if delivery
+                && cached
                 && pc == 0x403de2
                 && matches!(target, crate::crt_stream_ir::Target::Direct(0x4041a4))
             {
@@ -886,10 +917,21 @@ impl CrtCxxInvocation{
   self.objects(event.code,rt,owner,frame,record,context)
  }
 }
+/// External API cuts only. The pending-event entry always executes the original
+/// lazy getter/setter and checked thunk calls; no supplied whole-handler result.
+struct CrtLazyPtdBackend<'a>{
+ fiber:CrtFiber,slot:CrtFlsSlot,
+ api:&'a mut dyn FnMut(&mut CrtStreamRuntime,&mut CrtCpu,u32)->RegistryResult<CrtValue>,
+ setter:&'a mut dyn FnMut(&mut CrtStreamRuntime,u32,CrtValue)->RegistryResult<(u32,Option<u32>)>,
+ allocation:&'a mut dyn FnMut(&mut CrtStreamRuntime,&mut CrtCpu,u32)->RegistryResult<CrtValue>,
+}
 struct CrtSelectedCxxReturn{receipt:CrtNormalHandlerReturn,serial:u64,registration:RegistrationId,handler:[u32;3],owner:u64,context:CrtCxxContext}
 /// Execute exactly the selected live C++ registration. A rejected search backend
 /// yields no result/advance/restoration receipt. Earlier original effects remain.
 fn cxx_invoke_selected_search(search:&mut CrtOrderedSearch,event:&mut CrtNormalException,objects:&CrtNormalObjects,rt:&mut CrtStreamRuntime,interrupted:&CrtCpu,epoch:&mut NormalCallEpoch<'_>,binding:&CrtNormalBinding,dispatcher:&mut CrtCpu,owner:&CrtCpu,frame:&CrtPtdFrame,record:&CrtCxxRecord,stack:CrtPointer,fiber:CrtFiber,slot:CrtFlsSlot,continuation:u32)->RegistryResult<CrtSelectedCxxReturn>{
+ cxx_invoke_selected_search_with(search,event,objects,rt,interrupted,epoch,binding,dispatcher,owner,frame,record,stack,fiber,slot,continuation,None)
+}
+fn cxx_invoke_selected_search_with(search:&mut CrtOrderedSearch,event:&mut CrtNormalException,objects:&CrtNormalObjects,rt:&mut CrtStreamRuntime,interrupted:&CrtCpu,epoch:&mut NormalCallEpoch<'_>,binding:&CrtNormalBinding,dispatcher:&mut CrtCpu,owner:&CrtCpu,frame:&CrtPtdFrame,record:&CrtCxxRecord,stack:CrtPointer,fiber:CrtFiber,slot:CrtFlsSlot,continuation:u32,mut provider:Option<&mut CrtLazyPtdBackend<'_>>)->RegistryResult<CrtSelectedCxxReturn>{
  let ready=(||{
   if search.phase!=2{return Err("selected C++ repeated execution");}
   search.validate_stage(event,objects,rt,interrupted,epoch,binding,true)?;
@@ -908,7 +950,8 @@ fn cxx_invoke_selected_search(search:&mut CrtOrderedSearch,event:&mut CrtNormalE
  let context=match ready{Ok(c)=>c,Err(e)=>{search.phase=3;if let Some(lease)=&event.unobserved{lease.revoke();}return Err(e);}};
  search.phase=4;event.delivery=CrtNormalDelivery::Pending;
  let result=event.execute_child_handler(rt,interrupted,epoch,binding,dispatcher,continuation,|rt,cpu,child|{
-  cxx_handler_prefix(rt,cpu,owner,frame,record,&context,child,fiber,slot)
+  if let Some(provider)=provider.as_mut(){cxx_handler_lazy_prefix(rt,cpu,owner,frame,record,&context,child,&mut|rt,c|cxx_lazy_ptd_required(rt,c,CrtResolverAccess::Cached,provider.fiber,provider.slot,&mut|rt,c,target|(provider.api)(rt,c,target),&mut|rt,index,value|(provider.setter)(rt,index,value),&mut|rt,c,target|(provider.allocation)(rt,c,target)))}
+  else{cxx_handler_prefix(rt,cpu,owner,frame,record,&context,child,fiber,slot)}
  });
  match result{Err(e)=>{search.phase=3;Err(e)},Ok(receipt)=>{
   search.validate_stage(event,objects,rt,interrupted,epoch,binding,true)?;context.check(rt,owner,frame)?;

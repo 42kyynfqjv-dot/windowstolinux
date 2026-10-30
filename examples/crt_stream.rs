@@ -301,3 +301,7 @@ mod crt_cxx_lookup;
 #[cfg(test)]
 #[path = "../src/crt_cxx_unwind.rs"]
 mod crt_cxx_unwind;
+
+#[cfg(test)]
+#[path = "../src/crt_heap_free.rs"]
+mod crt_heap_free;

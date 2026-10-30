@@ -550,3 +550,85 @@ new 24 common-handler cases. Wrapper Rust SHA256 is
 aedf1f817e42f95331861e73866590152796db03de12f68fe597b19af8f63e26.
 [Review, component hashes and independent original free inventory](evidence/common-lazy-ptd.json)
 record the exact boundary and inputs. Full startup/rcedit remains unsupported.
+
+## Original free failure and pending-event lazy acquisition
+
+This connected component supersedes the preceding cached-only ordered-adapter
+checkpoint. It does **not** establish complete startup or rcedit admission.
+
+### Failure ownership and original errno writes
+
+The pinned free body at `0x407d50` executes through the shared checked CPU/memory
+emitter. NULL skips HeapFree. Non-NULL requires the exact live Buffer allocation
+root, matching process heap, flags zero, and the explicit no-heap-exception
+policy. The API outcome is still a supplied component input, not an observed
+Windows failure or a native implementation of every Windows heap condition.
+
+[Microsoft's HeapFree contract](https://learn.microsoft.com/en-us/windows/win32/api/heapapi/nf-heapapi-heapfree)
+specifies nonzero success, zero failure and GetLastError, but supplies no
+unchanged-content/lifetime guarantee for a failed block. Therefore:
+
+- Success retires the allocation and every alias through the existing kernel.
+- Failure revokes all CRT dereference/view authority for that allocation while
+  retaining the underlying charged allocation. It neither frees/reuses the
+  address nor asserts that Windows retained usable bytes. Pointer transport does
+  not renew access. This is conservative proof state, not a Windows allocator
+  implementation or a claim that its entire heap metadata effect is closed.
+- Failure is distinct from out-of-domain rejection. Original instructions call
+  GetLastError, the proved original mapper/search with its original table, and
+  the original errno router, then write the actual selected owned errno cell.
+  UCRT PTD lookup remains an explicit callback here; no shadow errno is created.
+- The mapper uses the existing complete instruction/algorithm proof. Its 68-byte
+  private scratch extent must be owned and cannot overlap protected activation
+  words. Facts in that scratch are forgotten conservatively; later reads cannot
+  observe preserved values which the original helper could have overwritten.
+- A single-use observation can authorize normal cleanup completion only after
+  the original free body finishes its checked return. Unknown LastError,
+  interrupted errno acquisition, or a stale errno owner rejects at that point,
+  retaining earlier API/errno effects and leaving no completion receipt.
+- The lazy caller consumes completion for the same allocation after its own
+  protected CALL returns. A prior, different-runtime/thread, wrong-allocation,
+  or already-consumed failure cannot satisfy that call. Existing missing-free
+  rejection remains; merely returning without a free effect does not pass.
+
+Eighteen native free-body scenarios and ten receipt/ownership scenarios include
+NULL, noncanonical true BOOL, error 5/87/UINT_MAX, unknown LastError, stale/interior
+pointers, cross-runtime/thread completion, failed/malformed errno lookup,
+protected scratch and prior-write preservation. Five additional lazy-producer
+scenarios execute publication rollback → original free → original errno write
+or rejection. They do not constitute fresh Windows HeapFree failure observations.
+
+### Same pending event, actual original producer
+
+The ordered adapter can now execute its selected C++ handler using the original
+lazy getter, setter and allocation/free thunk instructions under the same live
+child-delivery lease. It cannot substitute an arbitrary whole-PTD return: the
+adapter invokes `cxx_lazy_ptd_required` itself. Backend inputs remain restricted
+to resolver/API, setter outcomes and allocation/free effects. Generated names
+separate this call graph from the retained cached path; original bytes and targets
+are unchanged and checked by the reproduction harness.
+
+Eight additional ordered cases bring that component to 84. They cover actual
+fresh publication and single-use handler completion, failed publication plus
+HeapFree FALSE/errno, unknown PTD reads, cross-fiber authority, capture retirement
+during allocation, errno failure after a prior write, a freed allocator result,
+and a changed event before receipt consumption. The interrupted registers remain
+unchanged. A failed child cannot issue a success receipt or authorize advancement.
+The no-read CONTEXT lease still never supplies captured bytes.
+
+### Remaining executable gate and review
+
+Sol can independently review the failure receipt, uncertainty isolation, stack
+scratch effect, hard-wired original pending-event producer and exact CI evidence.
+Next replace the pending adapter's allocation and UCRT errno lookup callbacks
+with their actual original producers. The earlier calloc component currently
+requires startup-exclusive initialization authority; it cannot simply reuse an
+expired token during a suspended call. Separate justified live-heap allocation
+authority from startup-only descriptor construction before composing it here.
+Preserve new-handler/recursive errno and required-getter termination rejection.
+The lazy-delivery variant deliberately rejects its unbound unwind call; the
+existing cached unwind path remains separately supported under its contract.
+
+Actual OS delivery acquisition, incoming-chain containment, collided unwind,
+loader/FLS creation, complete formatting/exit and whole unchanged-binary startup
+remain unproved. Historical Windows timeouts are not diagnosed by passing CI.

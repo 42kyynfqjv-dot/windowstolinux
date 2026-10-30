@@ -4,15 +4,33 @@ use std::collections::BTreeMap;
 pub(crate) const REQUIRED: &str = "e80900000085c00f842f4f0000c3";
 pub(crate) const GETTER:&str="833d60c04100ff750333c0c35357ff1544504100ff3560c041008bf8e8c20200008bd85983fbff741785db75596affff3560c04100e8e4020000595985c0750433dbeb42566a286a01e8314f00008bf0595985f6741256ff3560c04100e8bc020000595985c0751233db53ff3560c04100e8a80200005959eb048bde33f656e8fb4d0000595e57ff15485041005f8bc35bc3";
 pub(crate) fn source(getter: &[u8], required: &[u8]) -> Result<String, String> {
-    emit_source(getter, required, false, false)
+    emit_source(getter, required, false, false, true)
 }
 pub(crate) fn dynamic_source(getter: &[u8], required: &[u8]) -> Result<String, String> {
-    emit_source(getter, required, true, false)
+    emit_source(getter, required, true, false, true)
 }
 pub(crate) const CALLOC_THUNK: &str = "8bff558bec5de995040000";
 pub(crate) const FREE_THUNK: &str = "e9fb050000";
 pub(crate) fn lazy_source(getter: &[u8], required: &[u8], setter: &[u8]) -> Result<String, String> {
-    let mut out = emit_source(getter, required, true, true)?;
+    lazy_source_mode(getter, required, setter, true)
+}
+pub(crate) fn lazy_extension_source() -> Result<String, String> {
+    Ok(lazy_source_mode(
+        &crate::crt_ptd::raw(GETTER),
+        &crate::crt_ptd::raw(REQUIRED),
+        &crate::crt_ptd::raw(crate::crt_cxx_lookup::SETTER),
+        false,
+    )?
+    .replace("cxx_ptd_required(", "cxx_lazy_ptd_required(")
+    .replace("cxx_ptd_get(", "cxx_lazy_ptd_get("))
+}
+fn lazy_source_mode(
+    getter: &[u8],
+    required: &[u8],
+    setter: &[u8],
+    dependencies: bool,
+) -> Result<String, String> {
+    let mut out = emit_source(getter, required, true, true, dependencies)?;
     out.push_str(&crate::crt_cxx_lookup::setter_source(
         setter,
         &crate::crt_ptd::raw(crate::crt_cxx_lookup::INDIRECT_GUARD),
@@ -59,6 +77,7 @@ fn emit_source(
     required: &[u8],
     dynamic: bool,
     lazy: bool,
+    dependencies: bool,
 ) -> Result<String, String> {
     let parameters = if lazy {
         "access:CrtResolverAccess,fiber:CrtFiber,slot:CrtFlsSlot,api:&mut impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu,u32)->Result<CrtValue,&'static str>,set_result:&mut impl FnMut(&mut CrtStreamRuntime,u32,CrtValue)->Result<(u32,Option<u32>),&'static str>,allocation:&mut impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu,u32)->Result<CrtValue,&'static str>"
@@ -100,7 +119,7 @@ fn emit_source(
  Target::Direct(0x402bb4)=>format!("cpu.call_activation(rt,{next},0,|rt,child|{lookup}(rt,child,{lookup_arguments}))?;"),
  Target::Direct(0x402bef) if lazy=>format!("cpu.call_activation(rt,{next},0,|rt,child|cxx_dynamic_setter(rt,child,access,fiber,slot,api,set_result))?;"),
  Target::Direct(0x407850) if lazy=>format!("let sp=CrtCpu::pointer(cpu.r[4])?;if rt.load(sp,32)?.known_scalar()?!=1||rt.load(rt.offset(sp,4)?,32)?.known_scalar()?!=40{{return Err(\"C++ PTD allocation argument domain\");}}let ticket=rt.begin_heap_ptd_allocation(fiber,slot)?;let value=cpu.call_activation(rt,{next},0,|rt,child|cxx_ptd_allocate(rt,child,allocation))?;match value{{CrtValue::Pointer(p)=>rt.bind_heap_ptd_return(ticket,p)?,CrtValue::Scalar{{bits:0,known:u32::MAX}}=>{{}},_=>return Err(\"C++ PTD allocator result authority\")}}"),
- Target::Direct(0x407750) if lazy=>format!("let sp=CrtCpu::pointer(cpu.r[4])?;let value=rt.load(sp,32)?;match value{{CrtValue::Pointer(p)=>rt.heap_ptd_view(p,slot)?,CrtValue::Scalar{{bits:0,known:u32::MAX}}=>{{}},_=>return Err(\"C++ PTD free argument authority\")}}cpu.call_activation(rt,{next},0,|rt,child|cxx_ptd_free(rt,child,allocation))?;if let CrtValue::Pointer(p)=value{{if rt.valid(p,0).is_ok(){{return Err(\"C++ PTD free effect missing\");}}}}"),
+ Target::Direct(0x407750) if lazy=>format!("let sp=CrtCpu::pointer(cpu.r[4])?;let value=rt.load(sp,32)?;match value{{CrtValue::Pointer(p)=>rt.heap_ptd_view(p,slot)?,CrtValue::Scalar{{bits:0,known:u32::MAX}}=>{{}},_=>return Err(\"C++ PTD free argument authority\")}}let before=rt.serial;cpu.call_activation(rt,{next},0,|rt,child|cxx_ptd_free(rt,child,allocation))?;if let CrtValue::Pointer(p)=value{{rt.take_ptd_free_completion(p,before)?;}}"),
  _=>"return Err(\"C++ PTD lazy setter/allocation/free effect unbound\");".into()})
         },
         &roles,
@@ -149,7 +168,7 @@ fn emit_source(
         Some(0x4077ff),
     )?;
     out.push_str(&format!("fn cxx_ptd_required(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,{parameters})->Result<CrtValue,&'static str>{{{entry}let value=(||->Result<CrtValue,&'static str>{{{body}}})()?;if cpu.returned{{return Ok(value);}}Err(\"C++ required PTD termination effect unbound\")}}"));
-    if dynamic {
+    if dynamic && dependencies {
         out.push_str(&crate::crt_cxx_lookup::cold_source(
             &crate::crt_ptd::raw(crate::crt_cxx_lookup::COLD_FULL),
             &crate::crt_ptd::raw(crate::crt_cxx_lookup::LOAD_HELPER),
@@ -158,7 +177,7 @@ fn emit_source(
             &crate::crt_ptd::raw(crate::crt_cxx_lookup::WRAPPER),
             &crate::crt_ptd::raw(crate::crt_cxx_lookup::INDIRECT_GUARD),
         )?);
-    } else {
+    } else if !dynamic && dependencies {
         out.push_str(&crate::crt_cxx_lookup::source(
             &crate::crt_ptd::raw(crate::crt_cxx_lookup::PREFIX),
             &crate::crt_ptd::raw(crate::crt_cxx_lookup::EPILOG),
@@ -373,6 +392,7 @@ fn original_lazy_ptd_setter_publication_and_cleanup_preserve_heap_identity() {
     )
     .unwrap();
     extra.push_str(&crate::crt_standard_handles_tests::allocator_source_with_errno(None));
+    extra.push_str(&crate::crt_heap_free::fixture_source());
     if let Some(out) = std::env::var_os("W2L_EH4_EVIDENCE") {
         std::fs::write(
             std::path::Path::new(&out).join("lazy-ptd-component.rs"),
@@ -388,7 +408,7 @@ fn original_lazy_ptd_setter_publication_and_cleanup_preserve_heap_identity() {
     crate::crt_stream_callees_tests::native(
         &extra,
         r#"
-for mode in 0..15 {
+for mode in 0..20 {
  let(mut rt,init)=CrtStreamRuntime::new_initializing(17,29,0x8000,65536).unwrap();
  rt.map_region(0x41c060,4,CrtRegionKind::Module,Some(&7u32.to_le_bytes())).unwrap();
  let(module,reference)=rt.module_acquire_result(init,"independent runtime backend",0x710000).unwrap();
@@ -402,6 +422,7 @@ for mode in 0..15 {
  let heapcell=rt.map_region(0x41d2c8,4,CrtRegionKind::Module,Some(&0u32.to_le_bytes())).unwrap();
  rt.map_region(0x41ce80,4,CrtRegionKind::Module,Some(&0u32.to_le_bytes())).unwrap();
  let errno=rt.map_region(0x7000,4,CrtRegionKind::Context,Some(&0u32.to_le_bytes())).unwrap();
+ let error_ptd=rt.map_region(0x7100,32,CrtRegionKind::ThreadData,None).unwrap();let error_cell=rt.offset(error_ptd,16).unwrap();rt.store(error_cell,32,CrtValue::scalar(73)).unwrap();
  let stack=rt.map_region(0x9000,4096,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,3072).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(1)).unwrap();let mut cpu=CrtCpu::new(sp,1).unwrap();
  cpu.call_activation(&mut rt,0x1110,0,|rt,c|heap_producer(rt,c,init,true,Some(false),(1,1),false,errno,&mut vec![],&mut|_,_|panic!("heap producer new handler"))).unwrap();
  assert!(matches!(rt.load(heapcell,32).unwrap(),CrtValue::Heap(_)));let saved=cpu.r;
@@ -411,7 +432,7 @@ for mode in 0..15 {
   if mode==10&&n==1{rt.retire_fls(fiber,slot)?;return Ok((1,None));}
   if mode==11&&n==1{rt.module_release_result(init,reference,true)?;return Ok((1,None));}
   if mode==14&&n==1{rt.store(rt.offset(issued.get().unwrap(),32)?,32,CrtValue::scalar(9))?;return Err("independent setter failure after write");}
-  Ok((if mode==1&&n==0||matches!(mode,2|3|7|13)&&n==1||mode==3&&n==2{0}else{7},Some(101+n as u32)))
+  Ok((if mode==1&&n==0||(matches!(mode,2|3|7|13)||mode>=15)&&n==1||mode==3&&n==2{0}else{7},Some(101+n as u32)))
  },&mut |rt,c,target|{
   let sp=CrtCpu::pointer(c.r[4])?;let a=rt.load(rt.offset(sp,4)?,32)?;
   if target==0x407cf0{
@@ -425,11 +446,17 @@ for mode in 0..15 {
    c.clobber(p.map(CrtValue::Pointer).unwrap_or(CrtValue::scalar(0)));c.finish(rt)
   }else{assert_eq!(target,0x407d50);effects.borrow_mut().push("free");
    if mode==7{return Err("independent free failure");}
+   if mode>=15{return original_free(rt,c,&mut|_,_,_,_|Ok((0,if mode==17{None}else{Some(if mode==16{87}else{5})})),&mut|rt,child|{
+    if mode==18{rt.store(error_cell,32,CrtValue::scalar(74))?;return Err("independent cleanup errno failure");}
+    if mode==19{rt.retire_region(error_ptd)?;}
+    child.clobber(CrtValue::Pointer(error_ptd));child.finish(rt)
+   });}
+
    if let CrtValue::Pointer(p)=a{if mode!=13{rt.free_allocation(p)?;}}else{assert_eq!(a,CrtValue::scalar(0));}
    c.clobber(CrtValue::Scalar{bits:0,known:0});c.finish(rt)
   }
  });
- if matches!(mode,0..=4){assert_eq!(rt.last_os_error,Some(55),"mode {mode}");}
+ if matches!(mode,0..=4|15|16){assert_eq!(rt.last_os_error,Some(55),"mode {mode}");}
  match mode {
   0=>{let p=issued.get().unwrap();assert_eq!(result.unwrap(),CrtValue::Pointer(p));rt.dispatcher_ptd(p).unwrap();assert_eq!(p.kind,CrtRegionKind::Buffer);assert_eq!(rt.load(rt.offset(p,32).unwrap(),32).unwrap(),CrtValue::scalar(0));assert_eq!(&*effects.borrow(),&["setter","allocate","setter","free"]);},
   1=>{assert_eq!(result.unwrap(),CrtValue::scalar(0));assert_eq!(&*effects.borrow(),&["setter"]);assert!(rt.fls_get(fiber,slot,7).is_err());},
@@ -442,9 +469,11 @@ for mode in 0..15 {
   12=>{assert_eq!(result,Err("CRT export owner/symbol"));assert!(setters.borrow().is_empty());},
   13=>{assert_eq!(result,Err("C++ PTD free effect missing"));assert!(rt.valid(issued.get().unwrap(),40).is_ok());},
   14=>{assert_eq!(result,Err("independent setter failure after write"));assert_eq!(rt.load(rt.offset(issued.get().unwrap(),32).unwrap(),32).unwrap(),CrtValue::scalar(9));},
+  15|16=>{assert_eq!(result.unwrap(),CrtValue::scalar(0));let p=issued.get().unwrap();assert_eq!(rt.uncertain_allocations,[p]);assert!(rt.memory.validate(p.cap,p.owner).is_ok());assert!(rt.valid(p,0).is_err());assert!(rt.heap_ptds.is_empty());assert!(rt.completed_failed_frees.is_empty());assert_eq!(rt.errno,Some(if mode==16{22}else{13}));assert_eq!(rt.load(error_cell,32).unwrap(),CrtValue::scalar(if mode==16{22}else{13}));assert_eq!(&*effects.borrow(),&["setter","allocate","setter","setter","free"]);assert_eq!(rt.fls_get(fiber,slot,7).unwrap(),CrtValue::scalar(0));},
+  17|18|19=>{assert_eq!(result,Err(match mode{17=>"CRT scalar knowledge/type",18=>"independent cleanup errno failure",19=>"CRT stale/foreign pointer",_=>unreachable!()}));assert_eq!(rt.uncertain_allocations,[issued.get().unwrap()]);assert!(rt.completed_failed_frees.is_empty());assert_eq!(rt.last_os_error,if mode==17{None}else{Some(5)});if mode==18{assert_eq!(rt.load(error_cell,32).unwrap(),CrtValue::scalar(74));}},
   _=>unreachable!()
  }
- if matches!(mode,0..=4){assert!(cpu.returned);for r in [3,5,6,7]{assert_eq!(cpu.r[r],saved[r]);}assert!(cxx_ptd_get(&mut rt,&mut cpu,CrtResolverAccess::Cached,fiber,slot,&mut|_,_,_|panic!(),&mut|_,_,_|panic!(),&mut|_,_,_|panic!()).is_err());}else{assert!(!cpu.returned);}
+ if matches!(mode,0..=4|15|16){assert!(cpu.returned);for r in [3,5,6,7]{assert_eq!(cpu.r[r],saved[r]);}assert!(cxx_ptd_get(&mut rt,&mut cpu,CrtResolverAccess::Cached,fiber,slot,&mut|_,_,_|panic!(),&mut|_,_,_|panic!(),&mut|_,_,_|panic!()).is_err());}else{assert!(!cpu.returned);}
  assert!(rt.valid(preexisting,40).is_ok());
 }
 "#,

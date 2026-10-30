@@ -280,3 +280,21 @@ still unbound: result receipts need the actual executing registration/handler
 identity before they can authorize cursor advancement. See [THREAD-CHAIN.md](THREAD-CHAIN.md).
 Actual capture acquisition, incoming-chain containment and collided delivery are
 not replaced by these components; full startup/rcedit remains unsupported.
+
+## Current ordered lazy-PTD checkpoint
+
+Later work supersedes the cached-only and separate-head checkpoints above. The
+ordered EH4 → C++ search now binds the original lazy PTD getter to its live
+pending-event child lease. Original setter/free thunks and checked publication
+run before the dispatcher consumes the PTD. Original free failure executes the
+proved error mapper and original errno router/store; failure conservatively
+revokes allocation access without claiming release or unchanged storage.
+
+Explicit cuts still include module/FLS creation, API availability/outcomes,
+allocation body effects in the pending adapter, and UCRT PTD lookup for errno.
+The original calloc and UCRT getter have separate components but need compatible
+live-heap and nested-delivery authority here. Required-getter termination,
+new-handler/recursive errno, lazy-path unwind and real OS delivery are unclosed.
+There are no additional whole-PE pairs. See
+[the current connected scope](CAPTURE-ACQUISITION.md#original-free-failure-and-pending-event-lazy-acquisition)
+and [evidence](evidence/free-pending-ptd.json).

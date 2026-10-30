@@ -224,6 +224,16 @@ def check(original, observation, out, compare=None):
         if fixture is None or bytes.fromhex(fixture[1])!=raw:
             raise ValueError('C++ dispatcher PTD code differs from original PE')
         file_regions['cxx-dispatcher-'+name.lower()]=sha(raw)
+    free_source=(Path(__file__).resolve().parents[3]/'src/crt_heap_free.rs').read_text()
+    for name,start,length,executable in [('FREE',0x407d50,58,True),('MAPPER',0x407c12,95,True),('SEARCH',0x407b93,127,True),('UPDATER',0x407c94,36,True),('TABLE',0x416038,360,False)]:
+        raw=mapped(image,start,length,executable=executable)
+        fixture=re.search(r'const\s+'+name+r'\s*:\s*&str\s*=\s*"([0-9a-f]+)"',free_source)
+        if fixture is None or bytes.fromhex(fixture[1])!=raw:
+            raise ValueError('original free/error-map evidence differs from PE')
+        file_regions['free-'+name.lower()]=sha(raw)
+    for address,name in [(0x415098,'HeapFree'),(0x415044,'GetLastError')]:
+        if tuple(import_at_iat(image,address-base))!=('kernel32.dll',name):
+            raise ValueError('free/error import changed')
     for address,name in [(0x415060,'TlsGetValue'),(0x415064,'TlsSetValue')]:
         if tuple(import_at_iat(image,address-base))!=('kernel32.dll',name):
             raise ValueError('C++ TLS fallback import changed; UCRT FLS is distinct')
@@ -298,6 +308,15 @@ def check(original, observation, out, compare=None):
         b'crt_cxx_record::owned_cxx_record_keeps_state_metadata_and_continuation_distinct',
         b'crt_cxx_record::common_handler_executes_cached_getter_with_owned_context_and_no_loader_authority',
         b'crt_cxx_record::common_handler_acquires_heap_ptd_through_original_lazy_producer',
+    ])
+    free_run = subprocess.run(['cargo','test','--locked','--example','crt_stream','crt_heap_free::'],
+                              env=env,capture_output=True,timeout=180)
+    (out/'heap-free-components.stdout').write_bytes(free_run.stdout)
+    (out/'heap-free-components.stderr').write_bytes(free_run.stderr)
+    require_test_completions(free_run, [
+        b'crt_heap_free::original_free_failure_executes_mapping_and_owned_errno_without_lifetime_claim',
+        b'crt_heap_free::failed_free_receipt_cannot_cross_runtime_thread_or_reauthorize_aliases',
+        b'crt_heap_free::original_free_rejects_changed_code_and_mapping',
     ])
     unwind_run=subprocess.run(['cargo','test','--locked','--example','crt_stream','original_cxx_unwind_registers_eh4_preserves_pending_action_and_counter_failures'],env=env,capture_output=True,timeout=180)
     (out/'cxx-unwind-native.stdout').write_bytes(unwind_run.stdout)
@@ -400,7 +419,7 @@ def check(original, observation, out, compare=None):
                   main_scope_header_sha256=sha((out/'Main-scope-header.bin').read_bytes()),
                   locale_state_evidence=locale_state_evidence(image),
                   unwind_binding_source_sha256=sha((out/'cxx-unwind-connected.rs').read_bytes()),
-                  lazy_common_handler_native_cases=24, lazy_common_handler_new_windows_pairs=0, heap_ptd_view_native_cases=17, lazy_ptd_native_cases=15, lazy_ptd_new_windows_pairs=0, ordered_search_native_cases=76, unobserved_context_native_cases=27, unobserved_context_new_windows_pairs=0, original_empty_search_native_cases=1, ordered_search_new_windows_pairs=0, shared_chain_native_cases=24, shared_chain_effect_lifetime_cases=4, shared_chain_new_windows_pairs=0, chain_ownership_diagnostic_experiments=1, chain_ownership_new_windows_pairs=0, bound_cxx_invocation_native_cases=34, bound_cxx_invocation_new_windows_pairs=0, prefix_delivery_unwind_native_cases=14, prefix_delivery_new_windows_pairs=0, dispatcher_delivery_unwind_native_cases=8, dispatcher_delivery_new_windows_pairs=0, delivery_child_native_cases=14, delivery_cached_unwind_native_cases=4, delivery_new_windows_pairs=0,
+                  heap_free_native_cases=28, heap_free_new_windows_pairs=0, pending_lazy_native_cases=8, pending_lazy_new_windows_pairs=0, lazy_common_handler_native_cases=24, lazy_common_handler_new_windows_pairs=0, heap_ptd_view_native_cases=17, lazy_ptd_native_cases=20, lazy_ptd_new_windows_pairs=0, ordered_search_native_cases=84, unobserved_context_native_cases=27, unobserved_context_new_windows_pairs=0, original_empty_search_native_cases=1, ordered_search_new_windows_pairs=0, shared_chain_native_cases=24, shared_chain_effect_lifetime_cases=4, shared_chain_new_windows_pairs=0, chain_ownership_diagnostic_experiments=1, chain_ownership_new_windows_pairs=0, bound_cxx_invocation_native_cases=34, bound_cxx_invocation_new_windows_pairs=0, prefix_delivery_unwind_native_cases=14, prefix_delivery_new_windows_pairs=0, dispatcher_delivery_unwind_native_cases=8, dispatcher_delivery_new_windows_pairs=0, delivery_child_native_cases=14, delivery_cached_unwind_native_cases=4, delivery_new_windows_pairs=0,
                   unwind_native_cases=24, cached_unwind_native_cases=14, cached_unwind_new_windows_pairs=0, unwind_new_windows_pairs=0, unwind_binding_rust_tests=1,
                   unwind_state_source_sha256=sha((out/'unwind-state-live.rs').read_bytes()),
                   unwind_state_native_cases=12, unwind_state_new_windows_pairs=0,

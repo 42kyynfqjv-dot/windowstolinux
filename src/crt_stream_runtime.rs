@@ -36,6 +36,9 @@ struct CrtHeapPtdView {pointer:CrtPointer,slot:CrtFlsSlot}
 /// Non-Clone, consumed after the protected allocation return. A caller cannot
 /// supply its own before-set or transfer the ticket to another runtime/slot.
 struct CrtHeapPtdAllocation {anchor:guest_memory::Capability,slot:CrtFlsSlot,before:Vec<guest_memory::Capability>}
+/// Single-use API observation. Failure revokes allocation knowledge; it does
+/// not claim Windows released the block or left its contents unchanged.
+struct CrtHeapFreeEffect {anchor:guest_memory::Capability,thread:u64,serial:u64,pointer:CrtPointer,failed:bool}
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 enum CrtValue {Module(CrtModule),Function(CrtFunction),Heap(CrtHeap),Dispatcher(CrtDispatcherContext),Scalar{bits:u32,known:u32},Pointer(CrtPointer),Handle(CrtDescriptorId),ThreadHead(CrtThreadHead),OpaqueSaved(u8),ProtectedReturn(u64)}
 impl CrtValue {
@@ -105,7 +108,7 @@ struct CrtRegion {pointer:CrtPointer,heap:bool,file_owner:Option<u32>}
 struct CrtDescriptor {id:CrtDescriptorId,live:bool,record:Option<CrtPointer>,record_initialized:bool}
 struct CrtStreamRuntime {
  loader_cells:std::collections::BTreeMap<u32,(CrtPointer,bool)>,modules:std::collections::BTreeMap<u32,CrtLoadedModule>,module_references:std::collections::BTreeMap<u64,CrtModuleReference>,exports:std::collections::BTreeMap<u64,CrtExport>,
- heap_ptds:Vec<CrtHeapPtdView>,fiber:Option<CrtFiber>,fls:std::collections::BTreeMap<u32,(CrtFlsSlot,CrtValue)>,
+ uncertain_allocations:Vec<CrtPointer>,completed_failed_frees:Vec<(guest_memory::Capability,u64)>,heap_ptds:Vec<CrtHeapPtdView>,fiber:Option<CrtFiber>,fls:std::collections::BTreeMap<u32,(CrtFlsSlot,CrtValue)>,
  unobserved_contexts:Vec<(CrtPointer,std::rc::Rc<std::cell::Cell<bool>>)>,heap:Option<CrtHeap>,memory:guest_memory::Space,owner:u64,thread:u64,anchor:guest_memory::Capability,
  dispatchers:std::collections::BTreeMap<u64,CrtDispatcherContext>,regions:Vec<CrtRegion>,retired:Vec<CrtPointer>,tags:std::collections::BTreeMap<u32,CrtValue>,
  partial:std::collections::BTreeMap<u32,(u8,u8)>,descriptors:Vec<CrtDescriptor>,
@@ -122,7 +125,7 @@ impl CrtStreamRuntime {
   let mut memory=guest_memory::Space::new(byte_limit,64).map_err(|_|"CRT memory budget")?;
   let anchor=memory.map(file_address,size,guest_memory::Owner::Module(owner),guest_memory::Permissions::READ_WRITE,false).map_err(|_|"CRT FILE mapping")?;
   let pointer=CrtPointer{cap:anchor,owner:guest_memory::Owner::Module(owner),base:file_address,size,address:file_address,kind:CrtRegionKind::File};
-  Ok(Self{loader_cells:std::collections::BTreeMap::new(),modules:std::collections::BTreeMap::new(),module_references:std::collections::BTreeMap::new(),exports:std::collections::BTreeMap::new(),heap_ptds:vec![],fiber:None,fls:std::collections::BTreeMap::new(),unobserved_contexts:vec![],heap:None,memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],global_objects:std::collections::BTreeMap::new(),global_locks:vec![],record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,canonical_errno:false,errno_cell:None,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([file_address])})
+  Ok(Self{loader_cells:std::collections::BTreeMap::new(),modules:std::collections::BTreeMap::new(),module_references:std::collections::BTreeMap::new(),exports:std::collections::BTreeMap::new(),uncertain_allocations:vec![],completed_failed_frees:vec![],heap_ptds:vec![],fiber:None,fls:std::collections::BTreeMap::new(),unobserved_contexts:vec![],heap:None,memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],global_objects:std::collections::BTreeMap::new(),global_locks:vec![],record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,canonical_errno:false,errno_cell:None,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([file_address])})
  }
  /// Apply an independently established successful executable-module load.
  /// This records reference effects only; it does not attest DllMain/TLS effects.
@@ -342,7 +345,7 @@ impl CrtStreamRuntime {
  }
  fn end_dispatcher(&mut self,token:CrtDispatcherContext)->Result<(),&'static str>{self.dispatcher(token)?;self.dispatchers.remove(&token.serial);Ok(())}
  fn pointer_transport(&self,p:CrtPointer)->Result<(),&'static str>{
-  let root=self.regions.iter().map(|r|r.pointer).chain(self.retired.iter().copied()).find(|r|r.cap==p.cap).ok_or("CRT foreign/unissued pointer value")?;
+  let root=self.regions.iter().map(|r|r.pointer).chain(self.retired.iter().copied()).chain(self.uncertain_allocations.iter().copied()).find(|r|r.cap==p.cap).ok_or("CRT foreign/unissued pointer value")?;
   if p.owner!=root.owner||p.kind!=root.kind||p.base<root.base||u64::from(p.base)+u64::from(p.size)>u64::from(root.base)+u64::from(root.size)||p.address<p.base||u64::from(p.address)>u64::from(p.base)+u64::from(p.size){return Err("CRT pointer value provenance");}Ok(())
  }
  fn reserve_retirement(&mut self)->Result<(),&'static str>{if self.retired.len()>=4096{return Err("CRT retired provenance budget");}self.retired.try_reserve(1).map_err(|_|"CRT retired provenance storage")}
@@ -561,6 +564,42 @@ impl CrtStreamRuntime {
   if p.base!=root.base||(p.kind==CrtRegionKind::Descriptor&&p.size!=root.size)||self.record_objects.iter().any(|r|r.cap==p.cap)||self.record_locks.iter().any(|l|l.record.cap==p.cap)||self.descriptors.iter().any(|d|d.live&&d.record.is_some_and(|r|r.cap==p.cap)){return Err("CRT allocation incomplete/live record ownership");}self.reserve_retirement()?;
   self.memory.heap_free(self.memory.process_heap(),0,p.base).map_err(|_|"CRT allocation lifetime")?;self.regions.remove(index);self.retired.push(root);self.heap_ptds.retain(|v|v.pointer.cap!=root.cap);
   self.tags.retain(|&at,_|at<root.base||u64::from(at)>=u64::from(root.base)+u64::from(root.size));self.partial.retain(|&at,_|at<root.base||u64::from(at)>=u64::from(root.base)+u64::from(root.size));Ok(())
+ }
+ /// Apply a supplied synchronous HeapFree outcome only to an owned whole
+ /// Buffer. FALSE gives no documented unchanged-content/lifetime guarantee.
+ /// Keep the underlying allocation charged and revoke every dereference fact.
+ fn heap_free_preflight(&self,heap:CrtHeap,flags:u32,p:CrtPointer)->Result<usize,&'static str>{
+  self.heap_identity(heap)?;self.valid(p,0)?;
+  let index=self.regions.iter().position(|r|r.pointer==p&&r.heap&&r.file_owner.is_none()).ok_or("CRT HeapFree whole unowned buffer")?;
+  if flags!=0||heap.exceptions!=Some(false)||p.kind!=CrtRegionKind::Buffer||p.address!=p.base{return Err("CRT HeapFree domain");}Ok(index)
+ }
+ fn heap_free_result(&mut self,heap:CrtHeap,flags:u32,p:CrtPointer,raw:u32,last_error:Option<u32>)->Result<CrtHeapFreeEffect,&'static str>{
+  let index=self.heap_free_preflight(heap,flags,p)?;
+  let serial=self.serial.checked_add(1).ok_or("CRT HeapFree serial")?;
+  if raw==0{
+   if self.uncertain_allocations.len()>=64{return Err("CRT uncertain heap budget");}
+   self.uncertain_allocations.try_reserve(1).map_err(|_|"CRT uncertain heap storage")?;
+   self.regions.remove(index);self.uncertain_allocations.push(p);self.heap_ptds.retain(|v|v.pointer.cap!=p.cap);
+   if self.errno_cell.is_some_and(|q|q.cap==p.cap){self.errno_cell=None;self.errno=None;}
+  }else{self.free_allocation(p)?;}
+  self.serial=serial;self.last_os_error=if raw==0{last_error}else{None};
+  Ok(CrtHeapFreeEffect{anchor:self.anchor,thread:self.thread,serial,pointer:p,failed:raw==0})
+ }
+ /// Called only after the original free body has returned through its checked
+ /// CALL, including the actual errno store. A rejected later effect leaves the
+ /// allocation uncertain but cannot issue normal-return authority.
+ fn complete_heap_free(&mut self,effect:CrtHeapFreeEffect)->Result<(),&'static str>{
+  if effect.anchor!=self.anchor||effect.thread!=self.thread||self.closed{return Err("CRT HeapFree foreign completion");}
+  if effect.failed{
+   if !self.uncertain_allocations.contains(&effect.pointer)||self.completed_failed_frees.iter().any(|(c,_)|*c==effect.pointer.cap){return Err("CRT HeapFree stale completion");}
+   self.completed_failed_frees.push((effect.pointer.cap,effect.serial));
+  }else if !self.retired.contains(&effect.pointer){return Err("CRT HeapFree retirement missing");}
+  Ok(())
+ }
+ fn take_ptd_free_completion(&mut self,p:CrtPointer,after:u64)->Result<(),&'static str>{
+  if self.retired.iter().any(|q|q.cap==p.cap)&&!self.uncertain_allocations.iter().any(|q|q.cap==p.cap){return Ok(());}
+  if let Some(i)=self.completed_failed_frees.iter().position(|(cap,serial)|*cap==p.cap&&*serial>after){self.completed_failed_frees.remove(i);return Ok(());}
+  Err("C++ PTD free effect missing")
  }
  fn retire_region(&mut self,p:CrtPointer)->Result<(),&'static str>{
   self.valid(p,0)?;let index=self.regions.iter().position(|r|r.pointer.cap==p.cap).ok_or("CRT region identity")?;let root=self.regions[index].pointer;

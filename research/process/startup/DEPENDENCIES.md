@@ -361,3 +361,20 @@ kernel has successful retirement and explicit rejection, not a Windows FALSE
 outcome. Do not remove the missing-free check or infer atomicity. Then carry the
 producer through the pending-event delivery lease. Details and the predecessor
 CI conclusions are in [the common-handler contract](CAPTURE-ACQUISITION.md#common-handler-with-the-live-lazy-ptd-producer).
+
+### HeapFree failure and ordered lazy producer
+
+The original free body, error mapper/search/table, errno router and owned errno
+store now compose on declared heap/API/UCRT PTD inputs. FALSE revokes allocation
+access knowledge without claiming successful release or unchanged memory; a
+normal cleanup receipt requires the actual checked return. Earlier effects
+remain when a later step rejects. The ordered C++ handler now invokes the
+original lazy producer within its pending-event child lease (84 ordered cases,
+eight new); actual delivery is still supplied. No whole-PE acceptance is added.
+
+Next integrate the actual calloc and UCRT PTD producers into that pending adapter.
+Its current allocator/errno callbacks are explicit cuts. The existing calloc
+component's initialization token is not general live-heap authority; do not pass
+an expired startup token through exception delivery. New-handler, recursive errno,
+required-getter termination, and lazy-path unwind remain rejected. See
+[the connected contract](CAPTURE-ACQUISITION.md#original-free-failure-and-pending-event-lazy-acquisition).

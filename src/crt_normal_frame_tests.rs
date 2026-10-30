@@ -1490,15 +1490,21 @@ fn bound_invocation(){for delivery_mode in 0..34{let prefix=true;let mode=0;
   checked=true;Err::<(),_>("original child unwind completion is not OS delivery/restoration")
  });assert!(result.is_err());assert!(checked,"invocation case {} failed before its assertions",delivery_mode);assert_eq!(rt.initialization,None);assert_eq!(rt.module_references.len(),refs);assert_eq!(rt.memory.read(cache.address(),4).unwrap(),cache_before);assert_eq!(rt.last_os_error,saved_error);
 }}
-fn ordered_search_cases(){for mode in 0..76{
+fn ordered_search_cases(){for mode in 0..84{
  let(m,mut r,main,mut permit)=fixture_with_extra(&[(0x410000,0x420000)]);let mut rt=runtime(&r);let mut checked=false;let mut escaped_event=None;let mut escaped_lease=None;
  let selected=if mode>=21{
   let(mut next,init)=CrtStreamRuntime::new_initializing(r.identity.owner,r.identity.instance,0x8000,65536).unwrap();
   next.map_region(0x9000,0x6000,CrtRegionKind::Stack,None).unwrap();next.map_region(0x41c000,4,CrtRegionKind::Module,Some(&0x12345678u32.to_le_bytes())).unwrap();
   let(module,_)=next.module_acquire_result(init,"independent selected search dependency",0x720000).unwrap();let f=next.module_export_result(init,module,"FlsGetValue",0x721000).unwrap();
-  let cache=next.map_region(0x41cd14,12,CrtRegionKind::Module,None).unwrap();next.store(next.offset(cache,8).unwrap(),32,CrtValue::Function(f)).unwrap();
+  let cache=next.map_region(0x41cd14,if mode>=76{16}else{12},CrtRegionKind::Module,None).unwrap();next.store(next.offset(cache,8).unwrap(),32,CrtValue::Function(f)).unwrap();
   next.map_region(0x415d4c,8,CrtRegionKind::Input,Some(&[0,0,0,0,2,0,0,0])).unwrap();next.map_region(0x415d54,12,CrtRegionKind::Input,Some(b"FlsGetValue\0")).unwrap();next.map_region(0x41c060,4,CrtRegionKind::Module,Some(&3u32.to_le_bytes())).unwrap();
-  let ptd=next.map_region(0x6000,40,CrtRegionKind::ThreadData,None).unwrap();next.store(next.offset(ptd,24).unwrap(),32,CrtValue::scalar(2)).unwrap();next.store(next.offset(ptd,32).unwrap(),32,if mode==74{CrtValue::Scalar{bits:0,known:0}}else{CrtValue::scalar(0)}).unwrap();let fiber=next.bind_fiber(next.thread).unwrap();let slot=next.bind_fls(fiber,3,if mode==75{CrtValue::scalar(0)}else{CrtValue::Pointer(ptd)}).unwrap();if mode==55{next.bind_descriptor(1,44).unwrap();}next.end_initialization(init).unwrap();rt=next;Some((fiber,slot))
+  if mode>=76{
+   let set=next.module_export_result(init,module,"FlsSetValue",0x722000).unwrap();next.store(next.offset(cache,12).unwrap(),32,CrtValue::Function(set)).unwrap();
+   next.map_region(0x415d60,8,CrtRegionKind::Input,Some(&[0,0,0,0,2,0,0,0])).unwrap();next.map_region(0x415d68,12,CrtRegionKind::Input,Some(b"FlsSetValue\0")).unwrap();
+   let heap=next.process_heap_result(init,true,Some(false)).unwrap();let cell=next.map_region(0x41d2c8,4,CrtRegionKind::Module,None).unwrap();next.store(cell,32,heap).unwrap();
+   let p=next.map_region(0x7100,32,CrtRegionKind::ThreadData,None).unwrap();next.store(next.offset(p,16).unwrap(),32,CrtValue::scalar(73)).unwrap();
+  }
+  let ptd=next.map_region(0x6000,40,CrtRegionKind::ThreadData,None).unwrap();next.store(next.offset(ptd,24).unwrap(),32,CrtValue::scalar(2)).unwrap();next.store(next.offset(ptd,32).unwrap(),32,if mode==74{CrtValue::Scalar{bits:0,known:0}}else{CrtValue::scalar(0)}).unwrap();let fiber=next.bind_fiber(next.thread).unwrap();let slot=next.bind_fls(fiber,3,if mode>=75{CrtValue::scalar(0)}else{CrtValue::Pointer(ptd)}).unwrap();if mode==55{next.bind_descriptor(1,44).unwrap();}next.end_initialization(init).unwrap();rt=next;Some((fiber,slot))
  }else{None};
  let result=r.with_normal_calls(&m,&mut permit,&main,|e|{
   let mut ancestor=cpu(&mut rt,0xe800,1300);ancestor.return_pop=0;ancestor.push(&mut rt,CrtValue::scalar(if mode>=21{0}else{(mode%3)*16}))?;ancestor.r[0]=CrtValue::scalar(0x414ad6);
@@ -1621,7 +1627,7 @@ fn ordered_search_cases(){for mode in 0..76{
   if mode==59{let lease=objects.unobserved.as_ref().unwrap().clone();drop(event);assert_eq!(lease.validate(&rt),Err("unobserved context expired/foreign lease"));assert_eq!(rt.load(context,32),Err("unobserved context raw read requires acquisition proof"));checked=true;return Err("ordered rejection checked");}
   if mode==64{escaped_lease=Some(objects.unobserved.as_ref().unwrap().clone());escaped_event=Some(event);checked=true;return Err("ordered rejection checked");}
   let taken=original_live_search_return_advance(&mut search,returned,&mut event,&objects,&rt,&c,e,&b);
-  if matches!(mode,0|5|19|21..=68|74|75){assert_eq!(taken,Ok(predecessor));assert_eq!(search.current,predecessor);assert_eq!(e.registry.head,RegistryHead::Normal(event.frame));assert_eq!(event.delivery,CrtNormalDelivery::ResultTaken);assert_eq!(c.r,saved);
+  if matches!(mode,0|5|19|21..=68|74..=83){assert_eq!(taken,Ok(predecessor));assert_eq!(search.current,predecessor);assert_eq!(e.registry.head,RegistryHead::Normal(event.frame));assert_eq!(event.delivery,CrtNormalDelivery::ResultTaken);assert_eq!(c.r,saved);
    if let Some((fiber,slot))=selected{
     rt.map_region(0x41b42c,36,CrtRegionKind::Module,Some(&cxx_meta_bytes()))?;rt.map_region(0x41b41c,16,CrtRegionKind::Module,Some(&cxx_map_bytes()))?;
     let rec=cxx_bind(&rt,&ancestor,&af)?;let stack=rt.resolve_absolute(0x9000,CrtRegionKind::Stack)?;
@@ -1635,7 +1641,31 @@ fn ordered_search_cases(){for mode in 0..76{
      for(i,&byte)in alternate.iter().enumerate(){rt.store(rt.resolve_absolute(0x402877+i as u32,CrtRegionKind::Module)?,8,CrtValue::scalar(u32::from(byte)))?;}
      objects.unobserved.as_mut().unwrap().code=alternate;event.unobserved.as_mut().unwrap().code=alternate;
     }
-    let result=cxx_invoke_selected_search(&mut search,&mut event,&objects,&mut rt,&c,e,&b,&mut d,&ancestor,&af,&rec,stack,fiber,slot,0x401900);
+    let result=if mode>=76{
+     cxx_invoke_selected_search_with(&mut search,&mut event,&objects,&mut rt,&c,e,&b,&mut d,&ancestor,&af,&rec,stack,fiber,slot,0x401900,Some(&mut CrtLazyPtdBackend{fiber:if mode==79{CrtFiber{thread:fiber.thread+1,..fiber}}else{fiber},slot,api:&mut|_,_,_|Err("selected lazy loader remains unbound"),setter:&mut|rt,_,value|{
+       if let CrtValue::Pointer(p)=value{if mode==78{rt.store(rt.offset(p,32)?,32,CrtValue::Scalar{bits:0,known:0})?;}}
+       Ok((u32::from(!matches!(mode,77|81)||!matches!(value,CrtValue::Pointer(_))),Some(100)))
+      },allocation:&mut|rt,c,target|{
+       if target==0x407cf0{let sp=CrtCpu::pointer(c.r[4])?;assert_eq!(rt.load(rt.offset(sp,4)?,32)?,CrtValue::scalar(1));assert_eq!(rt.load(rt.offset(sp,8)?,32)?,CrtValue::scalar(40));
+        let p=rt.allocate(40,true,true)?.ok_or("independent selected allocation unavailable")?;
+        if mode==80{rt.memory.release(context.cap,context.owner).map_err(|_|"test capture retirement")?;}
+        if mode==82{rt.free_allocation(p)?;}c.clobber(CrtValue::Pointer(p));c.finish(rt)
+       }else{assert_eq!(target,0x407d50);original_free(rt,c,&mut|_,_,_,_|Ok((0,Some(5))),&mut|rt,c|{
+        let p=rt.resolve_absolute(0x7100,CrtRegionKind::ThreadData)?;
+        if mode==81{rt.store(rt.offset(p,16)?,32,CrtValue::scalar(74))?;return Err("selected errno failure after prior write");}
+        c.clobber(CrtValue::Pointer(p));c.finish(rt)
+       })}
+      }}))
+    }else{cxx_invoke_selected_search(&mut search,&mut event,&objects,&mut rt,&c,e,&b,&mut d,&ancestor,&af,&rec,stack,fiber,slot,0x401900)};
+    if mode>=76{
+     if matches!(mode,76|83){let receipt=result.expect("same-event lazy original handler must return");assert_eq!(receipt.receipt.value,CrtValue::scalar(1));let CrtValue::Pointer(actual)=rt.fls_get(fiber,slot,3)? else{panic!("missing actual allocation")};assert_eq!(actual.kind,CrtRegionKind::Buffer);rt.dispatcher_ptd(actual)?;
+      if mode==83{event.generation+=1;}
+      let taken=cxx_take_selected_search(&mut search,&mut event,&objects,receipt,&rt,&c,e,&b,&ancestor,&af,&rec);
+      assert_eq!(taken,if mode==83{Err("normal exception stale/foreign ownership")}else{Ok(1)});
+     }else{let expected=match mode{77=>"C++ required PTD termination effect unbound",78=>"CRT unknown scalar bits observed",79=>"CRT fiber identity/lifetime",80=>"CRT pointer lifetime",81=>"selected errno failure after prior write",82=>"CRT stale/foreign pointer",_=>unreachable!()};assert_eq!(result.err(),Some(expected),"lazy pending case {mode}");assert_eq!(search.phase,3);assert_eq!(event.delivery,CrtNormalDelivery::Failed);}
+     if mode==77||mode==81{assert_eq!(rt.uncertain_allocations.len(),1);let p=rt.uncertain_allocations[0];assert!(rt.valid(p,0).is_err());assert!(rt.memory.validate(p.cap,p.owner).is_ok());let field=rt.resolve_absolute(0x7110,CrtRegionKind::ThreadData)?;assert_eq!(rt.load(field,32)?,CrtValue::scalar(if mode==77{13}else{74}));assert!(rt.completed_failed_frees.is_empty());}
+     assert_eq!(c.r,saved);assert!(!objects.unobserved.as_ref().unwrap().live.get());checked=true;return Err("ordered rejection checked");
+    }
     if mode==21||(mode>=26&&mode!=47&&mode!=66&&mode<74){
      let mut receipt=result.expect("selected original C++ search must return");assert_eq!(receipt.receipt.value,CrtValue::scalar(1));
      if mode==26{receipt.registration.generation+=1;}
@@ -1678,7 +1708,7 @@ fn ordered_search_cases(){for mode in 0..76{
    assert_eq!(taken,Err(expected),"consume negative {mode}");assert_ne!(search.current,predecessor);
   }
   checked=true;Err::<(),_>("ordered rejection checked")
- });assert_eq!(result,Err(if mode==12||mode==69{"CRT scalar knowledge/type"}else if mode==74{"CRT unknown scalar bits observed"}else if mode==75{"C++ PTD lazy setter/allocation/free effect unbound"}else{"ordered rejection checked"}),"outer case {mode}");assert!(checked,"case {mode} did not reach its required assertion");
+ });assert_eq!(result,Err(if mode==12||mode==69{"CRT scalar knowledge/type"}else if mode==74{"CRT unknown scalar bits observed"}else if mode==75{"C++ PTD lazy setter/allocation/free effect unbound"}else if matches!(mode,77..=82){match mode{77=>"C++ required PTD termination effect unbound",78=>"CRT unknown scalar bits observed",79=>"CRT fiber identity/lifetime",80=>"CRT pointer lifetime",81=>"selected errno failure after prior write",82=>"CRT stale/foreign pointer",_=>unreachable!()}}else{"ordered rejection checked"}),"outer case {mode}");assert!(checked,"case {mode} did not reach its required assertion");
  if mode==64{let lease=escaped_lease.unwrap();assert!(lease.live.get(),"event deliberately retained outside epoch");assert!(!lease.epoch_live.get());assert_eq!(lease.validate(&rt),Err("unobserved context expired/foreign lease"));drop(escaped_event);assert!(!lease.live.get());}
 }}
 fn live_return_cases(){
@@ -2227,7 +2257,11 @@ if fault==1{{cpu.condition(0)?;}}
         let allocator_native=format!("{} {}",crate::crt_standard_handles_tests::errno_source(),crate::crt_standard_handles_tests::allocator_source_with_errno(Some("let ptd=rt.resolve_absolute(0x6ff0,CrtRegionKind::ThreadData)?;errno_routed(rt,child,|_|Ok(CrtValue::Pointer(ptd)))")));
         let manager_native=format!("{}\n{}\n{}\nfn manager_return_move(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->RegistryResult<CrtValue>{{{move_body}}}",crate::crt_standard_handles_tests::manager_source_with_allocator(Some("let errno=rt.resolve_absolute(0x7000,CrtRegionKind::ThreadData)?;let mut requests=vec![];let result=calloc_original(rt,child,init,true,Some(false),if available{(1,1)}else{(0,usize::MAX)},true,errno,&mut requests,&mut |_,_|Err(\"startup handler not bound\"))?;if let CrtValue::Pointer(p)=result{*allocated=Some(p);}Ok(result)")),manager_p.emit("manager_prolog").unwrap(),manager_e.emit("manager_epilog").unwrap());
         let cxx_unwind=crate::crt_cxx_unwind::source(&bytes_hex(crate::crt_cxx_unwind::WRAPPER),&bytes_hex(crate::crt_cxx_unwind::BODY),&super::tests::bytes(),&bytes_hex(crate::crt_cxx_unwind::SCOPE)).unwrap();
-        let cxx_cached=format!("{}\n{}\n{}\n{}",crate::crt_cxx_unwind::cached_source().unwrap(),crate::crt_cxx_record::delivered_common_source().unwrap(),crate::crt_cxx_record::delivered_prefix_source().unwrap(),crate::crt_cxx_record::invocation_source());
+        let mut cxx_cached=format!("{}\n{}\n{}\n{}",crate::crt_cxx_unwind::cached_source().unwrap(),crate::crt_cxx_record::delivered_common_source().unwrap(),crate::crt_cxx_record::delivered_prefix_source().unwrap(),crate::crt_cxx_record::invocation_source());
+        cxx_cached.push_str(&crate::crt_cxx_record::delivered_lazy_source().unwrap());
+        cxx_cached.push_str(&crate::crt_cxx_ptd::lazy_extension_source().unwrap());
+        // errno_routed_call is already provided by the allocator composition.
+        cxx_cached.push_str(&crate::crt_heap_free::fixture_source_without_errno());
         let cxx_action=crate::crt_cxx_unwind::action_source([&bytes_hex(crate::crt_cxx_unwind::BRIDGE),&bytes_hex(crate::crt_cxx_unwind::NOTICE_PREFIX),&bytes_hex(crate::crt_cxx_unwind::NOTICE_TAIL),&bytes_hex(crate::crt_cxx_record::ACTION)]).unwrap();
         let cxx_state=crate::crt_cxx_record::unwind_state_source(&bytes_hex(crate::crt_cxx_record::UNWIND_STATE_GET),&bytes_hex(crate::crt_cxx_record::UNWIND_STATE_SET)).unwrap();
         let cxx_record=crate::crt_cxx_record::emit(&bytes_hex(crate::crt_cxx_record::METADATA),0x41b42c,&bytes_hex(crate::crt_cxx_record::UNWIND_MAP),0x41b41c).unwrap();
