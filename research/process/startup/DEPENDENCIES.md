@@ -665,3 +665,10 @@ returned1114 twice with no acquirable failed module; the accepting control
 retained/unloaded exactly across its two owned releases. This is evidence-only
 progress. No detach/effect trace or system API-set initialization proof was issued;
 original entry still rejects0x402b00. See PROVIDER-FAILURE.md and its JSON evidence.
+
+The native synchronization replacement now has a connected construction/cleanup
+transaction and actual owned-reference acquisition/release, executing only its
+implemented export. This is native component progress; original entry remains
+blocked at0x402b00. Windows DLL initialization, error1114 and ordinary final-release
+unloading are not substituted by the process-owned native root policy. See
+[NATIVE-PROVIDER-INITIALIZATION.md](NATIVE-PROVIDER-INITIALIZATION.md).

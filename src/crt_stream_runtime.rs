@@ -28,6 +28,8 @@ struct CrtProviderExport {record:CrtFunction}
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 enum CrtNativeApi {InitializeGlobalCriticalSectionEx}
 /// A native registry construction ticket, not a Windows DLL initialization proof.
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+struct CrtNativeProviderReference {reference:CrtModuleReference,function:CrtFunction}
 struct CrtProviderBuild {anchor:guest_memory::Capability,thread:u64,serial:u64,handle:u32}
 struct CrtNativeProvider {serial:u64,identity:String,root:Option<CrtModuleReference>,exports:Vec<u64>,limit:usize}
 
@@ -322,6 +324,36 @@ impl CrtStreamRuntime {
   if self.native_sync.values().any(|(f,_,_)|f.module==module||self.exports.get(&f.serial).is_some_and(|e|e.target==module))||self.module_references.values().any(|r|r.module==module&&*r!=root)||self.exports.values().any(|e|e.target==module&&e.function.module!=module){return Err("CRT provider still acquired/borrowed");}
   // All rejection checks precede teardown; unrelated earlier effects survive.
   self.exports.retain(|_,e|e.function.module!=module);self.providers.remove(&module.handle);self.module_references.remove(&root.serial);self.modules.remove(&module.handle);Ok(())
+ }
+ /// Complete a pending native replacement provider. This executes Rust
+ /// initialization only; it is not a Windows DllMain or API-set certificate.
+ /// Failed construction removes its own namespace, retaining unrelated effects
+ /// and monotonic serials. Host OOM outside fallible reserves remains unclosed.
+ fn provider_initialize_sync(&mut self,init:CrtInitialization,ticket:&CrtProviderBuild,address:u32)->Result<(CrtModule,CrtFunction),&'static str>{
+  self.provider_build(init,ticket)?;
+  let mut published=None;
+  let result=(||{
+   if address==0||address==u32::MAX||self.exports.len()>=256||self.serial.checked_add(2).is_none(){return Err("CRT native provider initialization bounds");}
+   let module=self.provider_publish(init,ticket)?;published=Some(module);
+   let descriptor=self.provider_export(init,module,module,"InitializeCriticalSectionEx",address)?;
+   let function=self.bind_native_sync(init,descriptor)?;Ok((module,function))
+  })();
+  if result.is_err(){match published{Some(module)=>self.provider_destroy(init,module)?,None=>self.provider_abort(init,ticket)?,}}
+  result
+ }
+ /// Real native reference bookkeeping, with no supplied load-success result.
+ /// Only the already implemented synchronization operation is eligible.
+ fn native_provider_acquire(&mut self,init:CrtInitialization,function:CrtFunction)->Result<CrtNativeProviderReference,&'static str>{
+  self.initialization(init)?;self.native_sync_identity(function)?;self.provider_ready(function.module)?;
+  if self.module_references.len()>=256{return Err("CRT native provider reference budget");}
+  let serial=self.serial.checked_add(1).ok_or("CRT native provider reference serial")?;
+  let reference=CrtModuleReference{module:function.module,serial};self.module_references.insert(serial,reference);self.serial=serial;
+  Ok(CrtNativeProviderReference{reference,function})
+ }
+ fn native_provider_release(&mut self,init:CrtInitialization,owned:CrtNativeProviderReference)->Result<(),&'static str>{
+  self.initialization(init)?;self.native_sync_identity(owned.function)?;let p=self.provider_ready(owned.reference.module)?;
+  if owned.reference.module!=owned.function.module||p.root==Some(owned.reference)||self.module_references.get(&owned.reference.serial)!=Some(&owned.reference){return Err("CRT native provider reference owner/replay");}
+  self.module_references.remove(&owned.reference.serial);Ok(())
  }
  /// This issuer binds only the implemented, startup-exclusive global-lock API.
  fn bind_native_sync(&mut self,init:CrtInitialization,descriptor:CrtProviderExport)->Result<CrtFunction,&'static str>{

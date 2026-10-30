@@ -471,3 +471,9 @@ not invented Windows errors. Ex failure triggers/error/poststate and system-prov
 initialization remain unproved. Actual original entry is still blocked at402b00;
 see [SYNC-RESOURCES.md](SYNC-RESOURCES.md). No additional success samples are needed
 to restate this remaining semantic decision.
+
+Native provider construction/reference operations no longer require supplied
+load-success observations for their bounded component. API-set/version/flag
+binding and the Windows-to-native initial-state/resource contract still block
+original0x402b00. The new native initializer is not a Windows DllMain executor;
+see NATIVE-PROVIDER-INITIALIZATION.md. Actual FLS publication remains unproved.

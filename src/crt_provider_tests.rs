@@ -255,3 +255,41 @@ r.memory.release(first.cap,first.owner).unwrap();assert!(r.native_sync_delete(i,
         "native-sync-partial-resource",
     );
 }
+
+#[test]
+fn native_provider_initializer_rolls_back_only_owned_pending_state() {
+    native(
+        "",
+        r#"
+let(mut r,i)=CrtStreamRuntime::new_initializing(2,3,0x8000,65536).unwrap();let data=r.map_region(0x9000,4,CrtRegionKind::Module,None).unwrap();r.store(data,32,CrtValue::scalar(73)).unwrap();r.last_os_error=Some(1114);
+let old=r.provider_begin(i,"Unrelated",0x710000,1).unwrap();let old=r.provider_publish(i,&old).unwrap();
+for address in [0,u32::MAX]{let ticket=r.provider_begin(i,"Failed",0x700000,1).unwrap();let serial=r.serial;assert_eq!(r.provider_initialize_sync(i,&ticket,address),Err("CRT native provider initialization bounds"));assert_eq!(r.serial,serial);assert!(!r.providers.contains_key(&0x700000));assert!(!r.modules.contains_key(&0x700000));assert!(r.exports.is_empty());assert!(r.provider_publish(i,&ticket).is_err());assert_eq!(r.last_os_error,Some(1114));r.module_identity(old).unwrap();assert_eq!(r.load(data,32).unwrap(),CrtValue::scalar(73));}
+// Reject a corrupted construction limit after root publication, then retire
+// only this attempt; monotonic serials must not revive the failed ticket.
+let partial=r.provider_begin(i,"Partial",0x730000,1).unwrap();r.providers.get_mut(&partial.handle).unwrap().limit=0;let before=r.serial;assert_eq!(r.provider_initialize_sync(i,&partial,0x731000),Err("CRT provider export bounds/duplicate"));assert!(r.serial>before);assert!(!r.modules.contains_key(&partial.handle));assert!(!r.providers.contains_key(&partial.handle));assert!(!r.module_references.values().any(|x|x.module.handle==partial.handle));assert!(r.exports.is_empty());assert_eq!(r.last_os_error,Some(1114));assert_eq!(r.load(data,32).unwrap(),CrtValue::scalar(73));r.module_identity(old).unwrap();
+// Intervening identity collision is not this transaction's property to undo.
+let t=r.provider_begin(i,"Collision",0x700000,1).unwrap();let (foreign,reference)=r.module_acquire_result(i,"COLLISION",0x720000).unwrap();assert_eq!(r.provider_initialize_sync(i,&t,0x701000),Err("CRT provider publication identity collision"));r.module_identity(foreign).unwrap();assert_eq!(r.module_references.get(&reference.serial),Some(&reference));assert!(!r.providers.contains_key(&t.handle));
+let t=r.provider_begin(i,"Retry",0x700000,1).unwrap();r.thread=4;assert!(r.provider_initialize_sync(i,&t,0x701000).is_err());assert!(r.providers.contains_key(&t.handle));r.thread=3;let(m,f)=r.provider_initialize_sync(i,&t,0x701000).unwrap();r.native_sync_identity(f).unwrap();assert_eq!(f.module,m);assert!(r.provider_initialize_sync(i,&t,0x701000).is_err());
+"#,
+        "native-provider-initialization",
+    );
+}
+
+#[test]
+fn native_provider_references_bind_implemented_calls_and_teardown_lifetime() {
+    native(
+        "",
+        r#"
+let(mut r,i)=CrtStreamRuntime::new_initializing(2,3,0x8000,65536).unwrap();let t=r.provider_begin(i,"OwnedNative",0x700000,2).unwrap();let(m,f)=r.provider_initialize_sync(i,&t,0x701000).unwrap();
+let unimplemented=r.provider_export(i,m,m,"Unimplemented",0x702000).unwrap();assert!(r.native_provider_acquire(i,unimplemented.record).is_err());
+let serial=r.serial;r.serial=u64::MAX;assert_eq!(r.native_provider_acquire(i,f),Err("CRT native provider reference serial"));assert_eq!(r.module_references.len(),1);r.serial=serial;
+let a=r.native_provider_acquire(i,f).unwrap();let b=r.native_provider_acquire(i,f).unwrap();assert_eq!(r.module_references.len(),3);
+let(mut other,oi)=CrtStreamRuntime::new_initializing(2,3,0x8000,65536).unwrap();assert!(other.native_provider_acquire(oi,f).is_err());assert!(other.native_provider_release(oi,a).is_err());r.thread=4;assert!(r.native_provider_release(i,a).is_err());r.thread=3;assert_eq!(r.module_references.len(),3);assert!(r.provider_destroy(i,m).is_err());
+let mut forged=a;forged.reference=r.providers[&m.handle].root.unwrap();assert!(r.native_provider_release(i,forged).is_err());assert_eq!(r.module_references.len(),3);
+let p=r.map_region(0x9000,24,CrtRegionKind::Module,Some(&[0;24])).unwrap();assert_eq!(r.native_sync_initialize(i,f,0,p,0,0),Ok(1));r.native_provider_release(i,a).unwrap();assert!(r.native_provider_release(i,a).is_err());r.native_sync_identity(f).unwrap();r.native_provider_release(i,b).unwrap();assert_eq!(r.module_references.len(),1);assert!(r.provider_destroy(i,m).is_err());
+r.native_sync_delete(i,f,0,p).unwrap();r.provider_destroy(i,m).unwrap();assert!(r.native_provider_acquire(i,f).is_err());assert!(r.native_provider_release(i,b).is_err());
+let t2=r.provider_begin(i,"OwnedNative",0x700000,1).unwrap();let(m2,f2)=r.provider_initialize_sync(i,&t2,0x701000).unwrap();assert_ne!(m,m2);assert!(r.native_provider_acquire(i,f).is_err());r.native_provider_acquire(i,f2).unwrap();
+"#,
+        "native-provider-references",
+    );
+}
