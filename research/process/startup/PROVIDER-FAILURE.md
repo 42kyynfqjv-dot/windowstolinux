@@ -21,7 +21,7 @@ executes value7, survives one owned release and disappears after the final relea
 The observer saves LastError immediately after each failed load, before module
 queries can change it. It reports no arbitrary success LastError guarantee.
 
-The [LoadLibraryExW primary contract](https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-loadlibraryexw)
+The [DllMain primary contract](https://learn.microsoft.com/en-us/windows/win32/dlls/dllmain)
 states that a FALSE initialization return causes load failure and unloading.
 The [system error list](https://learn.microsoft.com/en-us/windows/win32/debug/system-error-codes--1000-1299-)
 defines1114 as ERROR_DLL_INIT_FAILED. The exact1114 observation is a pinned-host
@@ -32,8 +32,7 @@ The approved existing startup workflow runs the two DLL builds and observer in
 an isolated Windows2022 job, preserving source/compiler/artifact hashes, complete
 commands, raw output and partial timeout diagnostics. Limits remain60s per build
 and15s per process; no retry or threshold relaxation. These are original Windows
-API observations, zero Windows/ELF pairs. Until CI completes they are pending,
-not measurements. This change adds no callable native provider or API-set admission.
+API observations, zero Windows/ELF pairs. They were frozen as pending before execution; the completed result is below. This change adds no callable native provider or API-set admission.
 
 The expected failed-load namespace rollback does not imply all prior DllMain
 writes, external effects or dependency loads are undone. This minimal DLL has no
@@ -63,3 +62,25 @@ and uses __declspec(dllexport)'s compiler-generated directive. Original C source
 and semantic expectations are unchanged. Build failures now also print the saved
 compiler/linker diagnostics to the job log. This is a build correction, not an
 observed Windows initialization failure, retry success or timeout diagnosis.
+
+## Completed original Windows result
+
+At44a1bd6, run41051942996/job124049912153 passed on x86 MSVC14.44.35207
+and Windows10.0.20348. Both failed loads returned1114 and left no queryable
+module. The accepting control returned7, survived one owned release and was absent
+after the final release. Original source hashes and exact commands/artifact hashes
+are in [provider-failure-observed.json](evidence/provider-failure-observed.json).
+Artifact12974812972 retains the DLLs/observer and raw logs. Its ZIP digest is
+upload-reported, not independently downloaded locally. The earlier failed build
+remains recorded separately; a corrected build does not erase it.
+
+This closes the narrow ordinary-DLL failure/reference observation gap. It adds
+zero translated executions and moves the original entry zero instructions.
+The primary DllMain contract requires PROCESS_DETACH after a FALSE attach return,
+but distinguishes a thrown exception, for which that notification is absent.
+The observer does not record detach execution or its effects; merely removing a
+pending provider ticket cannot stand in for that cleanup. Next production gate:
+account for actual initialization/notification effects and the declared native
+system-provider initial state before publishing load/export authority. Keep the
+Ex resource-failure relation separate. Sol can inspect this evidence/CI; resolving
+the native-provider/Windows initial-state relation may warrant bounded AstraHigh.

@@ -659,3 +659,9 @@ authored rejecting DllMain and accepting control, in a separate Windows job.
 This closes no execution gate until measured; failed-load namespace rollback is
 separate from rollback of arbitrary initializer effects. Original entry remains
 0x402b00. See [PROVIDER-FAILURE.md](PROVIDER-FAILURE.md).
+
+Original ordinary-DLL attach failure is now measured: Windows job124049912153
+returned1114 twice with no acquirable failed module; the accepting control
+retained/unloaded exactly across its two owned releases. This is evidence-only
+progress. No detach/effect trace or system API-set initialization proof was issued;
+original entry still rejects0x402b00. See PROVIDER-FAILURE.md and its JSON evidence.
