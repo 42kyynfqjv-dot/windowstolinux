@@ -591,3 +591,14 @@ is no actual FlsAlloc/FlsSetValue producer or bootstrap-PTD publication yet.
 See [STARTUP-RESOLVER.md](STARTUP-RESOLVER.md) for evidence, stationary-fiber
 limits and the next loader/constructor/bootstrap-object gates. Full startup
 and rcedit remain unsupported.
+
+### Resident ordinary-DLL acquisition
+
+Original load helper402af3 now executes its LoadLibraryExW call through a
+checked resident-module backend when an explicit initialized ordinary-DLL
+process environment is supplied. Reference acquisition and lifetime are real
+runtime transitions; missing authority/search/API-set cases reject. The default
+original entry still stops at402b00 because api-ms-win-core-synch-l1-2-0 mapping
+and initialization effects are not established. Next: justify the system-module
+namespace and native export contracts, then constructor/FLS effects. See
+[RESIDENT-LOADER.md](RESIDENT-LOADER.md). No new whole-PE support.

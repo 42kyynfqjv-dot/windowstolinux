@@ -16,6 +16,11 @@ pub(crate) fn source(regions: &[Vec<u8>]) -> Result<String, String> {
         [0x41c060, 0x41ccc4, 0x41ccec, 0x41cd04].map(|a| (a, "CrtRegionKind::Module".into())),
     );
     let mut out = crate::crt_cxx_lookup::mapped_source()?;
+    out.push_str(crate::crt_resident_loader::TYPES);
+    out.push_str(&format!(
+        "fn resident_load_helper_code()->Vec<u8>{{vec!{:?}}}",
+        crate::crt_ptd::raw(crate::crt_cxx_lookup::LOAD_HELPER)
+    ));
     for (i, bytes) in regions.iter().enumerate() {
         let (name, origin, literal) = REGIONS[i];
         let expected: Vec<_> = literal

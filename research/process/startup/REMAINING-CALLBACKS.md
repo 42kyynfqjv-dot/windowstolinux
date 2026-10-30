@@ -427,3 +427,11 @@ now have separate process-index and fiber-value ownership, with callback-image
 lifetime and failure invalidation. Actual FlsAlloc, constructor indirect/fallback
 API effects, module-backed bootstrap PTD publication, callback execution and
 FlsFree/setter failure composition remain open. See STARTUP-RESOLVER.md.
+
+Resident loader update: established ordinary DLLs can acquire an additional
+checked reference through original402af3. The process environment is still an
+explicit component premise. API-set mapping and first-load initialization remain
+unbound, so actual entry still rejects at402b00. Native named-export/constructor,
+FLS allocation/publication and bootstrap PTD callbacks remain open. See
+RESIDENT-LOADER.md; missing authority is never converted to an assumed failed or
+successful Windows load.
