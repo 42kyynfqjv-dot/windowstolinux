@@ -66,12 +66,13 @@ struct CrtInitializerTable{{begin:CrtPointer,len:usize,pairs:[(u32,u32);16]}}
 impl CrtInitializerTable{{
  fn bind(rt:&CrtStreamRuntime,image:CrtProcessImage,begin:u32,end:u32)->Result<Self,&'static str>{{
   let size=end.checked_sub(begin).filter(|n|*n<=128&&*n%8==0).ok_or("initializer table extent")?;if begin%4!=0{{return Err("initializer table alignment");}}
-  let p=rt.process_image_pointer(image,begin,size.max(1))?;if rt.memory.validate_writable(p.cap,p.owner,p.address(),size.max(1)).is_ok(){{return Err("initializer table must be immutable");}}
+  let p=rt.process_image_pointer(image,begin,size.max(1))?;if rt.memory.validate_immutable(p.cap,p.owner,p.address(),size.max(1)).is_err(){{return Err("initializer table must be immutable");}}
   let mut pairs=[(0,0);16];for(i,pair)in pairs.iter_mut().take((size/8)as usize).enumerate(){{*pair=(rt.load(rt.offset(p,(i*8)as i64)?,32)?.known_scalar()?,rt.load(rt.offset(p,(i*8+4)as i64)?,32)?.known_scalar()?);}}
   Ok(Self{{begin:p,len:(size/8)as usize,pairs}})
  }}
  fn validate(&self,rt:&CrtStreamRuntime,image:CrtProcessImage)->Result<(),&'static str>{{
   if rt.process_image_pointer(image,self.begin.address(),(self.len as u32*8).max(1))?!=self.begin{{return Err("initializer table owner changed");}}
+  if rt.memory.validate_immutable(self.begin.cap,self.begin.owner,self.begin.address(),(self.len as u32*8).max(1)).is_err(){{return Err("initializer table permission changed");}}
   let code=rt.process_image_code(image,0x40c926,{length})?;if rt.memory.read(code.address(),{length}).map_err(|_|"initializer loop code read")?!=&{bytes:?}{{return Err("initializer loop code changed");}}
   for(i,pair)in self.pairs[..self.len].iter().enumerate(){{if (rt.load(rt.offset(self.begin,(i*8)as i64)?,32)?.known_scalar()?,rt.load(rt.offset(self.begin,(i*8+4)as i64)?,32)?.known_scalar()?)!=*pair{{return Err("initializer table changed");}}}}Ok(())
  }}
@@ -99,7 +100,7 @@ fn startup_table_loop(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,image:CrtProcessI
  ("startup_table_third",0x408113,"8bff558bec518d45fc506a0268800000006800e04100ff15b050410085c00f95c0c9c3")]{
   let bytes=raw(code);let g=Graph::decode(&bytes,origin)?;
   let roles=std::collections::BTreeMap::from_iter([0x41d134,0x41c000,0x41cea0,0x41d2cc,0x41d2d0,0x41d2d4,0x41d2d8,0x41d2dc,0x41cd3c,0x41ce5c,0x41e000].map(|a|(a,"CrtRegionKind::Module".into())));
-  let body=crate::crt_stream_emit::emit_body(&g,|pc,t|{let next=pc+g.nodes[&pc].length;if t==Target::Direct(0x40c926){return Ok(format!("cpu.call_activation(rt,{next},0,|rt,c|startup_table_loop(rt,c,inputs.image,callback))?;"));}else if t==Target::Import(0x4150b0){return Ok(format!("cpu.call_activation(rt,{next},16,|_,_|Err(\"startup VirtualProtect effect unbound at 0x408129\"))?;"));}let callee=match t{Target::Direct(0x407a8c)=>"startup_init_store_a",Target::Direct(0x40ca00)=>"startup_init_store_b",Target::Direct(0x40cbf6)=>"startup_init_store_c",Target::Direct(0x406660)=>"startup_init_store_d",Target::Direct(0x406fd7)=>"startup_init_store_e",_=>return Err("initializer callback call binding".into())};Ok(format!("cpu.call_activation(rt,{next},0,|rt,c|{callee}(rt,c,inputs))?;"))},&roles,512)?;
+  let body=crate::crt_stream_emit::emit_body(&g,|pc,t|{let next=pc+g.nodes[&pc].length;if t==Target::Direct(0x40c926){return Ok(format!("cpu.call_activation(rt,{next},0,|rt,c|startup_table_loop(rt,c,inputs.image,callback))?;"));}else if t==Target::Import(0x4150b0){return Ok(format!("rt.process_image_import(inputs.image,0x4150b0,\"kernel32.dll\",\"VirtualProtect\")?;cpu.call_activation(rt,{next},16,|rt,c|c.virtual_protect_call(rt,inputs.image))?;"));}let callee=match t{Target::Direct(0x407a8c)=>"startup_init_store_a",Target::Direct(0x40ca00)=>"startup_init_store_b",Target::Direct(0x40cbf6)=>"startup_init_store_c",Target::Direct(0x406660)=>"startup_init_store_d",Target::Direct(0x406fd7)=>"startup_init_store_e",_=>return Err("initializer callback call binding".into())};Ok(format!("cpu.call_activation(rt,{next},0,|rt,c|{callee}(rt,c,inputs))?;"))},&roles,512)?;
   let params=if name=="startup_table_entry"{",callback:&mut impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu,usize,bool,CrtPointer)->Result<CrtValue,&'static str>"}else{""};
   out.push_str(&format!("fn {name}(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs{params})->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;let p=rt.process_image_code(inputs.image,{origin},{})?;if rt.memory.read(p.address(),{}).map_err(|_|\"initializer helper code read\")?!=&{bytes:?}{{return Err(\"initializer helper code changed\");}}{body}}}",bytes.len(),bytes.len()));
  }

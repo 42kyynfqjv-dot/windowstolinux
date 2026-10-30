@@ -1,5 +1,7 @@
 # Original initializer table, callback ownership and ordered rollback
 
+Historical checkpoint at `d193e00`. The subsequent [page-permission integration](VIRTUAL-PROTECT.md) executes the third callback; the original evidence below is retained.
+
 ## Connected original execution
 
 The explicit native profile now executes the original initializer continuation

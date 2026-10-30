@@ -1,5 +1,15 @@
 # Remaining entry-to-exit dependencies
 
+Current checkpoint: the explicit native profile executes original callback
+`0x408113`, its `VirtualProtect` call at `0x408129`, original zero/nonzero result
+handling and protected return. `.fptable` becomes read-only with canonical mapping
+identity; old protection is written to the original stack local. Prior callback,
+FLS and lock effects survive. The original loop next selects index 3 / `0x401bd5`
+and rejects its unbound body. See [page contract and exact next scope](VIRTUAL-PROTECT.md).
+Default admission, full startup/rcedit and Windows failure equivalence remain open.
+The checkpoints below retain earlier evidence and are superseded where stated.
+
+
 Current checkpoint: original16-entry initialization/rollback loop executes with
 index/phase/owner-bound callback receipts. Two original callbacks and all five
 scalar-store callees execute; the third reaches VirtualProtect408129 with checked

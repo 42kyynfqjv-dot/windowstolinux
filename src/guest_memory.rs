@@ -5,6 +5,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 static NEXT_PROCESS: AtomicU64 = AtomicU64::new(1);
 pub const MAX_BYTES: usize = 1024 * 1024;
 pub const MAX_REGIONS: usize = 64;
+pub const PAGE_SIZE: u32 = 4096;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Fault {
@@ -29,6 +30,27 @@ pub struct Permissions {
     execute: bool,
 }
 impl Permissions {
+    pub const NONE: Self = Self {
+        read: false,
+        write: false,
+        execute: false,
+    };
+    pub fn windows_data(self) -> Result<u32, Fault> {
+        match self {
+            Self::NONE => Ok(1),
+            Self::READ => Ok(2),
+            Self::READ_WRITE => Ok(4),
+            _ => Err(Fault::Permission),
+        }
+    }
+    pub fn from_windows_data(value: u32) -> Result<Self, Fault> {
+        match value {
+            1 => Ok(Self::NONE),
+            2 => Ok(Self::READ),
+            4 => Ok(Self::READ_WRITE),
+            _ => Err(Fault::Permission),
+        }
+    }
     pub const READ: Self = Self {
         read: true,
         write: false,
@@ -63,10 +85,46 @@ pub struct ReadFact {
 struct Region {
     capability: Capability,
     permissions: Permissions,
+    pages: Vec<Permissions>,
+    protected_pages: bool,
     bytes: Vec<u8>,
     defined: Vec<bool>,
     epoch: u64,
     heap_allocation: bool,
+}
+impl Region {
+    fn reserved_end(&self) -> u64 {
+        let end = u64::from(self.capability.base) + self.bytes.len() as u64;
+        if self.protected_pages {
+            end.div_ceil(u64::from(PAGE_SIZE)) * u64::from(PAGE_SIZE)
+        } else {
+            end
+        }
+    }
+    fn page_range(&self, address: u32, size: u32) -> std::ops::Range<usize> {
+        let first = self.capability.base / PAGE_SIZE;
+        let last = (u64::from(address) + u64::from(size) - 1) / u64::from(PAGE_SIZE);
+        (address / PAGE_SIZE - first) as usize..(last - u64::from(first) + 1) as usize
+    }
+    fn permits(&self, address: u32, size: u32, test: impl Fn(Permissions) -> bool) -> bool {
+        self.pages[self.page_range(address, size)]
+            .iter()
+            .copied()
+            .all(test)
+    }
+}
+fn page_permissions(
+    base: u32,
+    size: u32,
+    permission: Permissions,
+) -> Result<Vec<Permissions>, Fault> {
+    end(base, size)?;
+    let count =
+        ((u64::from(base % PAGE_SIZE) + u64::from(size)).div_ceil(u64::from(PAGE_SIZE))) as usize;
+    let mut pages = Vec::new();
+    pages.try_reserve_exact(count).map_err(|_| Fault::Budget)?;
+    pages.resize(count, permission);
+    Ok(pages)
 }
 /// Not Clone: independent spaces must never share a proof identity.
 pub struct Space {
@@ -130,10 +188,11 @@ impl Space {
         if permissions.write && permissions.execute {
             return Err(Fault::Permission);
         }
-        if self.regions.iter().any(|r| {
-            u64::from(base) < u64::from(r.capability.base) + r.bytes.len() as u64
-                && u64::from(r.capability.base) < limit
-        }) {
+        if self
+            .regions
+            .iter()
+            .any(|r| u64::from(base) < r.reserved_end() && u64::from(r.capability.base) < limit)
+        {
             return Err(Fault::Overlap);
         }
         let total = self.bytes.checked_add(size as usize).ok_or(Fault::Budget)?;
@@ -158,9 +217,12 @@ impl Space {
             generation,
             owner,
         };
+        let pages = page_permissions(base, size, permissions)?;
         self.regions.push(Region {
             capability,
             permissions,
+            pages,
+            protected_pages: false,
             bytes,
             defined,
             epoch: 0,
@@ -391,7 +453,95 @@ impl Space {
     ) -> Result<(), Fault> {
         self.validate_range(cap, owner, address, size)?;
         let (i, _) = self.locate(address, size)?;
-        if !self.regions[i].permissions.write {
+        if !self.regions[i].permits(address, size, |p| p.write) {
+            return Err(Fault::Permission);
+        }
+        Ok(())
+    }
+    /// Read permission without asserting initialization, including typed loads.
+    pub fn validate_readable(
+        &self,
+        cap: Capability,
+        owner: Owner,
+        address: u32,
+        size: u32,
+    ) -> Result<(), Fault> {
+        self.validate_range(cap, owner, address, size)?;
+        let (i, _) = self.locate(address, size)?;
+        if !self.regions[i].permits(address, size, |p| p.read) {
+            return Err(Fault::Permission);
+        }
+        Ok(())
+    }
+    /// Bounded VirtualProtect storage transaction. One page-aligned module region,
+    /// data protections only; no executable transitions or heap-page inference.
+    /// The last mapped page may be partial: its protection changes, but its absent
+    /// bytes remain inaccessible. Separate section/reservation spans reject.
+    /// Output must be disjoint from every affected page. All validation and epoch
+    /// reservation precedes the permission change AND output write; no allocation
+    /// or fallible operation remains after the commit point. Errors are rejection
+    /// of this subset, not fabricated Windows BOOL/LastError observations.
+    pub fn protect_data_with_old(
+        &mut self,
+        target: (Capability, Owner, u32, u32),
+        protection: u32,
+        output: (Capability, Owner, u32),
+    ) -> Result<(), Fault> {
+        let (target, owner, address, size) = target;
+        let (output, output_owner, old_address) = output;
+        let new = Permissions::from_windows_data(protection)?;
+        self.validate_range(target, owner, address, size)?;
+        let i = self.token(target, owner)?;
+        if !matches!(owner, Owner::Module(_)) || !target.base.is_multiple_of(PAGE_SIZE) {
+            return Err(Fault::Permission);
+        }
+        let pages = self.regions[i].page_range(address, size);
+        let page_begin = u64::from(address / PAGE_SIZE * PAGE_SIZE);
+        let page_end =
+            (end(address, size)? + u64::from(PAGE_SIZE) - 1) & !(u64::from(PAGE_SIZE) - 1);
+        // Reject another region sharing any affected page, even if logical bytes
+        // do not overlap. A capability is not authority over its neighbors.
+        if self.regions.iter().enumerate().any(|(j, r)| {
+            j != i && u64::from(r.capability.base) < page_end && page_begin < r.reserved_end()
+        }) {
+            return Err(Fault::Overlap);
+        }
+        if self.regions[i].pages[pages.clone()]
+            .iter()
+            .any(|p| p.execute)
+        {
+            return Err(Fault::Permission);
+        }
+        self.validate_writable(output, output_owner, old_address, 4)?;
+        let (j, destination) = self.locate(old_address, 4)?;
+        if u64::from(old_address) < page_end && page_begin < end(old_address, 4)? {
+            return Err(Fault::Overlap);
+        }
+        let old = self.regions[i].pages[pages.start].windows_data()?;
+        let target_epoch = self.regions[i].epoch.checked_add(1).ok_or(Fault::Budget)?;
+        let output_epoch = self.regions[j]
+            .epoch
+            .checked_add(if i == j { 2 } else { 1 })
+            .ok_or(Fault::Budget)?;
+        self.regions[i].pages[pages].fill(new);
+        self.regions[i].protected_pages = true;
+        self.regions[i].epoch = target_epoch;
+        self.regions[j].bytes[destination.clone()].copy_from_slice(&old.to_le_bytes());
+        self.regions[j].defined[destination].fill(true);
+        self.regions[j].epoch = output_epoch;
+        Ok(())
+    }
+    /// Every page in a snapshot's range must remain non-writable.
+    pub fn validate_immutable(
+        &self,
+        cap: Capability,
+        owner: Owner,
+        address: u32,
+        size: u32,
+    ) -> Result<(), Fault> {
+        self.validate_range(cap, owner, address, size)?;
+        let (i, _) = self.locate(address, size)?;
+        if !self.regions[i].permits(address, size, |p| !p.write) {
             return Err(Fault::Permission);
         }
         Ok(())
@@ -407,7 +557,7 @@ impl Space {
     ) -> Result<(), Fault> {
         self.validate_range(cap, owner, address, size)?;
         let (i, _) = self.locate(address, size)?;
-        if !self.regions[i].permissions.execute {
+        if !self.regions[i].permits(address, size, |p| p.execute) {
             return Err(Fault::Permission);
         }
         Ok(())
@@ -420,7 +570,7 @@ impl Space {
     pub fn read(&self, address: u32, size: u32) -> Result<&[u8], Fault> {
         let (i, s) = self.locate(address, size)?;
         let r = &self.regions[i];
-        if !r.permissions.read {
+        if !r.permits(address, size, |p| p.read) {
             return Err(Fault::Permission);
         }
         if !r.defined[s.clone()].iter().all(|&b| b) {
@@ -434,7 +584,7 @@ impl Space {
     pub fn destination(&mut self, address: u32, size: u32) -> Result<&mut [u8], Fault> {
         let (i, s) = self.locate(address, size)?;
         let r = &mut self.regions[i];
-        if !r.permissions.write {
+        if !r.permits(address, size, |p| p.write) {
             return Err(Fault::Permission);
         }
         r.epoch = r.epoch.checked_add(1).ok_or(Fault::Budget)?;
@@ -444,7 +594,7 @@ impl Space {
     pub fn define(&mut self, address: u32, size: u32) -> Result<(), Fault> {
         let (i, s) = self.locate(address, size)?;
         let r = &mut self.regions[i];
-        if !r.permissions.write {
+        if !r.permits(address, size, |p| p.write) {
             return Err(Fault::Permission);
         }
         r.epoch = r.epoch.checked_add(1).ok_or(Fault::Budget)?;
@@ -454,7 +604,7 @@ impl Space {
     pub fn forget(&mut self, address: u32, size: u32) -> Result<(), Fault> {
         let (i, s) = self.locate(address, size)?;
         let r = &mut self.regions[i];
-        if !r.permissions.write {
+        if !r.permits(address, size, |p| p.write) {
             return Err(Fault::Permission);
         }
         r.epoch = r.epoch.checked_add(1).ok_or(Fault::Budget)?;
@@ -596,11 +746,8 @@ impl Space {
                 .iter()
                 .enumerate()
                 .filter(|(i, _)| Some(*i) != exclude)
-                .filter(|(_, r)| {
-                    base < u64::from(r.capability.base) + r.bytes.len() as u64
-                        && u64::from(r.capability.base) < limit
-                })
-                .map(|(_, r)| u64::from(r.capability.base) + r.bytes.len() as u64)
+                .filter(|(_, r)| base < r.reserved_end() && u64::from(r.capability.base) < limit)
+                .map(|(_, r)| r.reserved_end())
                 .max();
             match blocker {
                 None => return Ok(base as u32),
@@ -666,7 +813,7 @@ impl Space {
         let fits = limit <= HEAP_END
             && !self.regions.iter().enumerate().any(|(j, r)| {
                 i != j
-                    && u64::from(address) < u64::from(r.capability.base) + r.bytes.len() as u64
+                    && u64::from(address) < r.reserved_end()
                     && u64::from(r.capability.base) < limit
             });
         let base = if fits {
@@ -695,9 +842,12 @@ impl Space {
             generation,
             owner: PROCESS_HEAP_OWNER,
         };
+        let pages = page_permissions(base, size, Permissions::READ_WRITE)?;
         self.regions[i] = Region {
             capability,
             permissions: Permissions::READ_WRITE,
+            pages,
+            protected_pages: false,
             bytes,
             defined,
             epoch: 0,

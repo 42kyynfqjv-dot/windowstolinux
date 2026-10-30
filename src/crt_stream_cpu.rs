@@ -33,6 +33,19 @@ impl CrtCpu{
   if matches!(value,CrtValue::OpaqueSaved(_)|CrtValue::ProtectedReturn(_)|CrtValue::ThreadHead(_)){return Err("CRT FLS setter protected argument");}
   let ok=rt.native_fls_set(init,fiber,index,value)?;self.clobber(CrtValue::scalar(u32::from(ok)));self.finish_pop(rt,8)
  }
+ fn virtual_protect_call(&mut self,rt:&mut CrtStreamRuntime,image:CrtProcessImage)->Result<CrtValue,&'static str>{
+  self.validate_active(rt)?;
+  if self.return_pop!=16||self.r[4]!=self.entry[4]||[3,5,6,7].iter().any(|&i|self.r[i]!=self.entry[i]){return Err("CRT protection stdcall frame");}
+  let sp=Self::pointer(self.r[4])?;rt.offset(sp,20)?;
+  let address=rt.load(rt.offset(sp,4)?,32)?;let size=rt.load(rt.offset(sp,8)?,32)?.known_scalar()?;let flags=rt.load(rt.offset(sp,12)?,32)?.known_scalar()?;let output=Self::pointer(rt.load(rt.offset(sp,16)?,32)?)?;
+  let target=match address{CrtValue::Pointer(p)=>p,CrtValue::Scalar{bits,known:u32::MAX}=>rt.process_image_pointer(image,bits,size)?,_=>return Err("CRT protection address authority")};
+  // Restrict the API output to outside the protected return/argument slots.
+  if output.cap==sp.cap&&u64::from(output.address())<u64::from(sp.address())+20&&u64::from(sp.address())<u64::from(output.address())+4{return Err("CRT protection ABI output alias");}
+  rt.memory.validate_writable(sp.cap,sp.owner,sp.address(),20).map_err(|_|"CRT protection return stack permission")?;
+  rt.protect_image_data(image,target,size,flags,output)?;
+  // Success does not guarantee LastError preservation. Unknown stays unknown.
+  rt.last_os_error=None;self.clobber(CrtValue::scalar(1));self.finish_pop(rt,16)
+ }
  fn tick(&mut self,budget:u32)->Result<(),&'static str>{self.steps=self.steps.checked_add(1).ok_or("CRT instruction counter overflow")?;if self.steps>budget{return Err("CRT certified instruction bound exceeded");}Ok(())}
  fn bits(v:CrtValue)->Result<(u32,u32),&'static str>{match v{CrtValue::Module(m)=>Ok((m.handle,u32::MAX)),CrtValue::Function(f)=>Ok((f.address,u32::MAX)),CrtValue::Scalar{bits,known}=>Ok((bits,known)),CrtValue::Pointer(p)=>Ok((p.address(),u32::MAX)),CrtValue::Handle(h)=>Ok((h.handle,u32::MAX)),CrtValue::OpaqueSaved(_)=>Ok((0,0)),CrtValue::Heap(_)|CrtValue::Dispatcher(_)|CrtValue::ProtectedReturn(_)|CrtValue::ThreadHead(_)=>Err("CRT protected control bits")}}
  fn number(v:CrtValue)->Result<u32,&'static str>{let(b,k)=Self::bits(v)?;if k!=u32::MAX{return Err("CRT unknown scalar bits observed");}Ok(b)}

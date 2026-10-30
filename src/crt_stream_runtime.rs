@@ -254,6 +254,47 @@ impl CrtStreamRuntime {
   self.process_image(token)?;let p=self.main_image_regions.iter().find(|p|address>=p.base&&address.checked_add(size).is_some_and(|end|end<=p.base+p.size)).ok_or("CRT process image section range")?;
   if size==0{return Err("CRT process image empty range");}Ok(CrtPointer{address,..*p})
  }
+ /// Validate a named original PE import before binding its replacement effect.
+ /// Bounded unrelocated PE32 image; a loader-modified IAT needs a separate binding.
+ fn process_image_import(&self,image:CrtProcessImage,iat:u32,module:&str,symbol:&str)->Result<(),&'static str>{
+  let root=self.process_image(image)?;let base=root.base;
+  let word=|a:u32|->Result<u32,&'static str>{self.load(self.process_image_pointer(image,a,4)?,32)?.known_scalar()};
+  let add=|a:u32,b:u32|a.checked_add(b).ok_or("CRT import address overflow");
+  let string=|rva:u32,want:&str,fold:bool|->Result<bool,&'static str>{
+   if want.len()>256{return Err("CRT import name budget");}let a=add(base,rva)?;
+   let p=self.process_image_pointer(image,a,want.len() as u32+1)?;
+   let bytes=self.memory.read(p.address(),want.len() as u32+1).map_err(|_|"CRT import name read")?;
+   Ok(bytes[want.len()]==0&&if fold{bytes[..want.len()].eq_ignore_ascii_case(want.as_bytes())}else{&bytes[..want.len()]==want.as_bytes()})
+  };
+  let nt=add(base,word(add(base,60)?)?)?;let directory=word(add(nt,128)?)?;let size=word(add(nt,132)?)?;
+  if directory==0||size<20||size>1280{return Err("CRT import directory bound");}
+  let mut found=false;
+  for n in 0..size/20{let d=add(add(base,directory)?,n*20)?;let lookup=word(d)?;let name=word(add(d,12)?)?;let first=word(add(d,16)?)?;
+   if lookup==0&&name==0&&first==0{break;}if lookup==0||first==0{return Err("CRT import descriptor unsupported");}
+   let start=add(base,first)?;if iat<start||(iat-start)%4!=0{continue;}let index=(iat-start)/4;if index>=512{continue;}
+   if !string(name,module,true)?{continue;}let mut terminated=false;for k in 0..=index{if word(add(add(base,lookup)?,k*4)?)?==0{terminated=true;break;}}if terminated{continue;}
+   let entry=word(add(add(base,lookup)?,index*4)?)?;if entry&0x80000000!=0{continue;}
+   if string(name,module,true)?&&string(add(entry,2)?,symbol,false)?{
+    if found||word(iat)?!=entry{return Err("CRT import ambiguous/changed IAT");}found=true;
+   }
+  }
+  if !found{return Err("CRT original named import unbound");}Ok(())
+ }
+ /// Successful data-page protection only. Invalid ranges/outputs and unsupported
+ /// flags reject before effects; no Windows failure error is invented. Scalar
+ /// stack output is deliberately narrower than the public Win32 API contract.
+ fn protect_image_data(&mut self,image:CrtProcessImage,target:CrtPointer,size:u32,flags:u32,output:CrtPointer)->Result<(),&'static str>{
+  if self.process_image_pointer(image,target.address(),size)?!=target{return Err("CRT protection canonical image alias");}
+  // Opaque API objects have stronger live-memory contracts than scalar data.
+  // Check the entire intersecting page envelope, not just the requested bytes.
+  let begin=target.address()&!4095;let end=((u64::from(target.address())+u64::from(size)+4095)&!4095).min(u64::from(target.base)+u64::from(target.size));
+  if begin<target.base{return Err("CRT protection page owner extent");}
+  self.ordinary_file_bytes(CrtPointer{address:begin,..target},u32::try_from(end-u64::from(begin)).map_err(|_|"CRT protection page extent")?)?;
+  self.valid(output,4)?;
+  if output.kind!=CrtRegionKind::Stack||self.has_overlapping_tags(output.address(),4)||self.unobserved_contexts.iter().any(|(p,_)|p.cap==output.cap){return Err("CRT protection output role/authority");}
+  self.memory.protect_data_with_old((target.cap,target.owner,target.address(),size),flags,(output.cap,output.owner,output.address())).map_err(|_|"CRT protection range/permission/output contract")?;
+  for n in 0..4{self.partial.remove(&(output.address()+n));}Ok(())
+ }
  fn process_image_code(&self,token:CrtProcessImage,address:u32,size:u32)->Result<CrtPointer,&'static str>{
   let p=self.process_image_pointer(token,address,size)?;self.memory.validate_executable(p.cap,p.owner,address,size).map_err(|_|"CRT process image code permission")?;Ok(p)
  }
@@ -771,6 +812,7 @@ impl CrtStreamRuntime {
  /// Internal storage validation only. Original guest loads always use load().
  fn load_unsealed(&self,p:CrtPointer,width:u8)->Result<CrtValue,&'static str>{
   let size=match width{8=>1,16=>2,32=>4,_=>return Err("CRT load width")};self.valid(p,size)?;self.ordinary_file_bytes(p,size)?;
+  self.memory.validate_readable(p.cap,p.owner,p.address,size).map_err(|_|"CRT read permission")?;
   // A checked scalar/typed load needs at most one matching tag. Inspect the
   // iterator directly so argument and protected-return reads cannot allocate.
   let mut tags=self.tags.iter().filter(|(at,_)|u64::from(**at)<u64::from(p.address)+u64::from(size)&&u64::from(p.address)<u64::from(**at)+4);
@@ -800,6 +842,7 @@ impl CrtStreamRuntime {
   if self.unobserved_contexts.iter().any(|(q,_)|q.cap==p.cap){return Err("unobserved context write requires effect proof");}
   let size=match width{8=>1,16=>2,32=>4,_=>return Err("CRT store width")};self.valid(p,size)?;self.ordinary_file_bytes(p,size)?;
   if matches!(p.kind,CrtRegionKind::Input){return Err("CRT immutable source write");}
+  self.memory.validate_writable(p.cap,p.owner,p.address,size).map_err(|_|"CRT storage write")?;
   if self.errno_cell.is_some_and(|q|q.cap==p.cap&&u64::from(p.address)<u64::from(q.address)+4&&u64::from(q.address)<u64::from(p.address)+u64::from(size))&&!matches!(value,CrtValue::Scalar{..}){return Err("CRT errno scalar field");}
   let old=self.overlapping_tags(p.address,size);
   if old.iter().any(|(_,v)|matches!(v,CrtValue::OpaqueSaved(_)|CrtValue::ProtectedReturn(_)|CrtValue::ThreadHead(_))){return Err("CRT protected saved/return overwrite");}
