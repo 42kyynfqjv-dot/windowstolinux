@@ -16,6 +16,8 @@ use std::collections::{BTreeMap, BTreeSet};
 /// The containing proof owns the initialized selector word and its runtime
 /// value. The value stored in a PE file is not the live selector value.
 pub(crate) struct ContextCheckProof {
+    origin: u32,
+    source: Vec<u8>,
     body: String,
     projection_body: String,
     selector_va: u32,
@@ -45,11 +47,37 @@ impl ContextCheckProof {
             r#"
 impl ThreadContext {{fn original_check(&self,owner:u64,selector:u32)->Result<(),&'static str>{{{body}}}}}
 impl CapturedStackView {{fn original_check(&self,owner:u64,selector:u32)->Result<(),&'static str>{{{projection}}}}}
+impl CrtNormalException {{
+ /// Component-only no-observation lease. This does not acquire OS delivery
+ /// state or permit full-image emission. All raw CONTEXT access stays blocked.
+ fn bind_unobserved_context(&mut self,rt:&mut CrtStreamRuntime,interrupted:&CrtCpu,epoch:&NormalCallEpoch<'_>,binding:&CrtNormalBinding,record:CrtPointer,context:CrtPointer)->RegistryResult<CrtNormalObjects>{{
+  self.dispatch_source(rt,interrupted,epoch,binding)?;
+  if self.delivery!=CrtNormalDelivery::Pending||self.unobserved.is_some()||self.produced_record!=Some(record){{return Err("unobserved context source/phase/replay");}}
+  if context.kind!=CrtRegionKind::Context||context.address()!=context.base||context.address()%4!=0||context.size!=716||record.cap==context.cap{{return Err("unobserved context storage role/alias");}}
+  rt.valid(context,716)?;
+  if rt.unobserved_contexts.len()>=32{{return Err("unobserved context lease budget");}}
+  for i in 0..716{{if !matches!(rt.load(rt.offset(context,i)?,8)?,CrtValue::Scalar{{known,..}} if known&255==0){{return Err("unobserved context requires unknown storage");}}}}
+  let selector=rt.resolve_absolute({selector},CrtRegionKind::Module)?;
+  if rt.load(selector,32)?.known_scalar()?!= {bypass}{{return Err("unobserved context requires decoded bypass");}}
+  let helper=rt.resolve_absolute({origin},CrtRegionKind::Module)?;
+  const CODE:&[u8]=&{code:?};
+  for(i,&b)in CODE.iter().enumerate(){{if rt.load(rt.offset(helper,i as i64)?,8)?.known_scalar()?!=u32::from(b){{return Err("unobserved context helper changed");}}}}
+  let lease=CrtUnobservedContext{{anchor:rt.anchor,thread:rt.thread,source:[self.identity.instance,self.epoch,self.frame.generation,self.generation],context,
+   return_slot:rt.offset(CrtCpu::pointer(self.call_registers[4])?,-4)?,return_id:self.return_id,selector,bypass:{bypass},helper,code:CODE,epoch_live:epoch.registry.normal_epoch.as_ref().ok_or("unobserved context missing epoch")?.live.clone(),live:std::rc::Rc::new(std::cell::Cell::new(true))}};
+  // Validate the independent record cut before publishing a seal. This does
+  // not fill reserved flags/nested link or manufacture any captured bit.
+  let objects=CrtNormalObjects{{anchor:rt.anchor,identity:self.identity,epoch:self.epoch,generation:self.generation,record,context,captured_esp:CrtValue::Scalar{{bits:0,known:0}},unobserved:Some(lease.clone())}};
+  objects.validate_record(self,rt,epoch)?;
+  rt.unobserved_contexts.push((context,lease.live.clone()));self.unobserved=Some(lease);
+  objects.validate(self,rt,epoch)?;Ok(objects)
+ }}
+}}
 impl CrtNormalObjects {{
  fn check_prefix_context(&self,frame:&CrtLiveFrame<'_,'_>)->RegistryResult<()>{{self.check_original_context(frame.event,frame.rt,frame.epoch)}}
  fn check_original_context(&self,event:&CrtNormalException,rt:&CrtStreamRuntime,epoch:&NormalCallEpoch<'_>)->RegistryResult<()>{{
   self.validate(event,rt,epoch)?;
   let selector=rt.load(rt.resolve_absolute({selector},CrtRegionKind::Module)?,32)?.known_scalar()?;
+  if let Some(lease)=&self.unobserved{{lease.require_helper(rt,{origin},{selector},{bypass},&{code:?})?;return Ok(());}}
   let captured=self.capture_view(epoch)?;
   captured.original_check(self.identity.owner,selector)
  }}
@@ -68,6 +96,9 @@ impl CrtNormalException {{
  }}
 }}
 "#,
+            origin = self.origin,
+            code = self.source,
+            bypass = self.bypass_selector,
             body = self.body,
             projection = self.projection_body,
             selector = self.selector_va,
@@ -587,6 +618,8 @@ pub(crate) fn prove_context_check(
         return Err("context helper: changed selector/bounds/failure decision".into());
     }
     Ok(ContextCheckProof {
+        origin,
+        source: code.to_vec(),
         body: format!(
             "self.preflight(owner)?;\n{}\n",
             decision.source(ContextAccess::Numeric)

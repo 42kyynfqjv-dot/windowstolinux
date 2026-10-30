@@ -1,12 +1,12 @@
 {
   "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
-  "rust_sha256": "8f32a1b51989e531b6e50809461763aad6ae3cd80bd46bf8ff2ccb84269ec21b",
-  "unwind_binding_source_sha256": "ed612ca9d8a6db43e5b52a6644bea91f2b1a00a494a47f5a3a7f15506e357675",
+  "rust_sha256": "29859347432ad38058fe61effcc3de216c71152239eaecdd27703a566e103d77",
+  "unwind_binding_source_sha256": "34c007e535c5ec2d2566a9c44a7c2b54adbb837ac28664696aa295d8f622a152",
   "unwind_native_cases": 24,
   "unwind_new_windows_pairs": 0,
   "unwind_binding_rust_tests": 1,
   "kind": "Original EH4 and selected registered C++ search execution with separate single-use receipts; component evidence only",
-  "rust_crt_tests_passed": 223,
+  "rust_crt_tests_passed": 225,
   "existing_observation_test_separate": true,
   "byte_mutations_rejected": 415,
   "recorded_wrapper_pairs": 5,
@@ -90,7 +90,7 @@
     "ordered_advance": false
   },
   "ordered_dispatch_gate": "First source return/advance implemented. Next: derive selected C++ owner from the actual registration and invoke its original search path under the same pending source; supplied-owner unwind receipts do not authorize that selection.",
-  "ordered_search_native_cases": 49,
+  "ordered_search_native_cases": 69,
   "original_empty_search_native_cases": 1,
   "ordered_search_new_windows_pairs": 0,
   "return_path_integration": {
@@ -282,6 +282,14 @@
     ],
     "whole_event_capture_certificate": false,
     "new_windows_observations": 0,
+    "whole_pe_pairs": 0
+  },
+  "unobserved_context_lease": {
+    "evidence": "unobserved-context-lease.json",
+    "new_native_cases": 20,
+    "all_context_bytes_unknown": true,
+    "actual_capture_acquisition": false,
+    "whole_event_static_certificate": false,
     "whole_pe_pairs": 0
   }
 }

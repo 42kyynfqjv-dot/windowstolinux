@@ -75,9 +75,10 @@ struct RegistryNormalFrame {
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 struct DeliveryChildAuthority {event:u64,lease:u64,parent:NormalFrameId,floor:usize,ceiling:u64,arguments_high:u64}
 struct NormalEpochState {
- generation:u64,event:u64,selected:RegistrationId,previous:RegistryHead,next_unwind:usize,
+ live:std::rc::Rc<std::cell::Cell<bool>>,generation:u64,event:u64,selected:RegistrationId,previous:RegistryHead,next_unwind:usize,
  context:[Option<u32>;10],frames:Vec<RegistryNormalFrame>,issued:usize,pending_exception:Option<u64>,delivery:Option<DeliveryChildAuthority>,
 }
+impl Drop for NormalEpochState {fn drop(&mut self){self.live.set(false);}}
 struct NormalCallEpoch<'a>{registry:&'a mut ThreadRegistry,generation:u64,delivery:Option<DeliveryChildAuthority>}
 #[derive(Debug)]
 struct NormalFrameReceipt {frame:NormalFrameId,caller_sp:u32,saved:[Option<u32>;8]}
@@ -92,8 +93,8 @@ impl ThreadRegistry {
   Ok(Self{identity,limit,base,bound:bound.to_vec(),cookie_address,head:RegistryHead::BorrowedRoot(identity),cxx:Vec::new(),frames:Vec::new(),temporary:Vec::new(),generation:0,selected:None,next_unwind:0,handlers:Vec::new(),borrowed_depth:0,failure:None,normal_authority:std::cell::Cell::new(None),normal_epoch:None})
  }
  fn available(&self)->RegistryResult<()>{if let Some(e)=self.failure{Err(e)}else{Ok(())}}
- fn fail<T>(&mut self,error:&'static str)->RegistryResult<T>{let error=*self.failure.get_or_insert(error);Err(error)}
- fn block(&mut self,error:&'static str){self.failure.get_or_insert(error);}
+ fn fail<T>(&mut self,error:&'static str)->RegistryResult<T>{if let Some(state)=&self.normal_epoch{state.live.set(false);}let error=*self.failure.get_or_insert(error);Err(error)}
+ fn block(&mut self,error:&'static str){let _=self.fail::<()>(error);}
  fn next_id(&mut self)->RegistryResult<RegistrationId>{
   self.generation=self.generation.checked_add(1).ok_or("registry generation exhaustion")?;
   Ok(RegistrationId{identity:self.identity,generation:self.generation})
@@ -330,7 +331,7 @@ impl ThreadRegistry {
   })();
   let next_stamp=match start{Ok(value)=>value,Err(e)=>return self.fail(e)};
   let generation=match self.next_id(){Ok(id)=>id.generation,Err(e)=>return self.fail(e)};
-  self.normal_epoch=Some(NormalEpochState{generation,event:permit.event,selected:permit.selected,
+  self.normal_epoch=Some(NormalEpochState{live:std::rc::Rc::new(std::cell::Cell::new(true)),generation,event:permit.event,selected:permit.selected,
    previous:self.head,next_unwind:self.next_unwind,context:permit.context,frames:Vec::new(),issued:0,pending_exception:None,delivery:None});
   let result=body(&mut NormalCallEpoch{registry:self,generation,delivery:None});
   let value=match result{Ok(value)=>value,Err(e)=>return self.fail(e)};

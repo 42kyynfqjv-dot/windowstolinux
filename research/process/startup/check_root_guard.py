@@ -31,6 +31,18 @@ def check(source: Path, output: Path, mutation="root"):
         left = b'left: None'
         right = b'right: Some("captured stack comparison unknown")'
         observed = 'ambiguous upper-bound capture admitted after ignoring unknown bits'
+    if mutation == 'unobserved-read':
+        guard = 'if self.unobserved_contexts.iter().any(|(q,_)|q.cap==p.cap){return Err("unobserved context raw read requires acquisition proof");}'
+        replacement = '// Intentionally removed raw observation gate.'
+        left = b'left: Ok(Scalar { bits: 0, known: 0 })'
+        right = b'right: Err("unobserved context raw read requires acquisition proof")'
+        observed = 'raw CONTEXT read admitted despite the no-read lease'
+    if mutation == 'unobserved-epoch':
+        guard = '!self.epoch_live.get()||'
+        replacement = ''
+        left = b'left: Ok(())'
+        right = b'right: Err("unobserved context expired/foreign lease")'
+        observed = 'retained event lease survived the failed registry epoch'
     if text.count(guard) != 1:
         raise ValueError('mutation source binding must be unique')
     mutant = output / 'mutant.rs'
@@ -53,6 +65,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('source', type=Path)
     parser.add_argument('output', type=Path)
-    parser.add_argument('--mutation', choices=['root', 'flags', 'capture'], default='root')
+    parser.add_argument('--mutation', choices=['root', 'flags', 'capture', 'unobserved-read', 'unobserved-epoch'], default='root')
     args = parser.parse_args()
     check(args.source, args.output, args.mutation)

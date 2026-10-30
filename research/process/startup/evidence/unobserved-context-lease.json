@@ -1,0 +1,86 @@
+{
+  "kind": "same-event no-read CONTEXT lease; connected original handler component, not capture acquisition or whole-PE translation",
+  "review_base": "5615c2bc4c50d949d0a22e5bad571417a1954df8",
+  "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "rust_sha256": "29859347432ad38058fe61effcc3de216c71152239eaecdd27703a566e103d77",
+  "original_context_helper_sha256": "2472c01cd9c5e286219ff8c07890ba030015dd8c4cdc62608ad79ffbd147b693",
+  "observations_sha256": "0feb586c7170dfd7e2390cf92ce1e5efa050c3e208d6c8903312e2d054c506cc",
+  "vectors_sha256": "6f9b74742366c0f207d397ccf8b1af4afc2d01b34fae21cafb68d38d71a6ec66",
+  "ordered_native_cases": 69,
+  "new_no_read_lease_cases": 20,
+  "recorded_windows_wrapper_comparisons": 5,
+  "new_windows_observations": 0,
+  "whole_pe_pairs": 0,
+  "root_tests_passed": 175,
+  "crt_tests_passed": 225,
+  "observation_dependent_test": "separately passed against retained original vectors",
+  "all_target_clippy": "passed",
+  "scope": {
+    "unknown_context_bytes": 716,
+    "raw_reads_and_writes": "rejected through all aliases, including low-I/O backend input",
+    "numeric_esp_or_stack_predicates": "not granted",
+    "max_sealed_contexts_per_runtime": 32,
+    "lifetime": "same pending event and source CALL; registry failure/retirement, delivery failure, component consumption and event destruction revoke",
+    "actual_windows_acquisition": "unimplemented",
+    "whole_event_static_observation_certificate": "unimplemented"
+  },
+  "independent_compiled_mutants": {
+    "unobserved-read": {
+      "kind": "unobserved-read proof mutation; native component only",
+      "source_sha256": "29859347432ad38058fe61effcc3de216c71152239eaecdd27703a566e103d77",
+      "mutant_sha256": "730f0993f96820fda971e00431e598a10ea399d5081a5bd48cb4bcbe42c79555",
+      "returncode": 101,
+      "observed": "raw CONTEXT read admitted despite the no-read lease",
+      "whole_pe_pairs": 0,
+      "new_windows_observations": 0
+    },
+    "unobserved-epoch": {
+      "kind": "unobserved-epoch proof mutation; native component only",
+      "source_sha256": "29859347432ad38058fe61effcc3de216c71152239eaecdd27703a566e103d77",
+      "mutant_sha256": "3b1310f3db98b4806cda2cf348aedbb2d0c6d0641f6170b2bc86b51f41d3c5f2",
+      "returncode": 101,
+      "observed": "retained event lease survived the failed registry epoch",
+      "whole_pe_pairs": 0,
+      "new_windows_observations": 0
+    }
+  },
+  "review_fixes": [
+    "callee independently requires same decoded helper proof",
+    "retained event cannot outlive failed registry epoch",
+    "failure/revocation remains monotonic",
+    "direct low-I/O byte read honors seal"
+  ],
+  "test_setup_failure": {
+    "log": "capture-seal-verified-all.log",
+    "case": 55,
+    "observed": "CRT foreign thread/unconstructed lock",
+    "resolution": "initialize descriptor during existing initialization cut, acquire its descriptor lock, then assert backend never called for zero/nonzero lengths",
+    "timeout_or_expected_rejection_relaxed": false
+  },
+  "remaining_supplied_inputs": [
+    "delivery system flags and nested-record link",
+    "incoming owned root",
+    "initialized selector and C++ metadata/PTD",
+    "module/export/fiber/FLS producers"
+  ],
+  "remaining_gates": [
+    "closed static observations/effects for all admitted original paths",
+    "actual API/import and delivery producer domain",
+    "incoming-chain containment and collided unwind",
+    "termination, complete formatter and exit"
+  ],
+  "reproduction": "python3 research/process/startup/check_normal_wrapper.py ORIGINAL OBSERVED NEW_OUTPUT; python3 research/process/startup/check_root_guard.py NEW_OUTPUT/normal-wrapper.rs NEW_MUTANT_OUTPUT --mutation unobserved-read (also unobserved-epoch)",
+  "ci_predecessor": {
+    "5615c2b": {
+      "40984728593": "success",
+      "40984721250": "success",
+      "40984721318": "success"
+    },
+    "72974f0": {
+      "40983899668": "success",
+      "40983899745": "success",
+      "40983904709": "failure: original-Windows output-probe timeout; unresolved"
+    }
+  },
+  "historical_windows_timeouts": "unresolved; preserved separately from local test setup failure"
+}

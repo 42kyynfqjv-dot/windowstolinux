@@ -289,11 +289,11 @@ fn {name}_dispatch(search:&mut CrtOrderedSearch,event:&mut CrtNormalException,ob
  search.validate(event,objects,rt,interrupted,epoch,binding)?;{name}_bytes(rt)?;
  if receipt.value!=CrtValue::scalar(1){{return Err("ordered search unexpected executed disposition");}}
  search.phase=1;Ok(CrtOrderedReturn{{serial:search.serial,source:search.source,previous:search.previous,handler:{entry},receipt}})
- }})();if result.is_err(){{search.phase=3;}}result
+ }})();if result.is_err(){{search.phase=3;if let Some(lease)=&event.unobserved{{lease.revoke();}}}}result
 }}
 fn {name}_advance(search:&mut CrtOrderedSearch,returned:CrtOrderedReturn,event:&mut CrtNormalException,objects:&CrtNormalObjects,rt:&CrtStreamRuntime,interrupted:&CrtCpu,epoch:&mut NormalCallEpoch<'_>,binding:&CrtNormalBinding)->RegistryResult<RegistryHead>{{
- if let Err(e)={name}_bytes(rt){{search.phase=3;return Err(e);}}
- if returned.handler!={entry}{{search.phase=3;return Err("ordered search wrong executed handler");}}
+ if let Err(e)={name}_bytes(rt){{search.phase=3;if let Some(lease)=&event.unobserved{{lease.revoke();}}return Err(e);}}
+ if returned.handler!={entry}{{search.phase=3;if let Some(lease)=&event.unobserved{{lease.revoke();}}return Err("ordered search wrong executed handler");}}
  search.consume(returned,event,objects,rt,interrupted,epoch,binding)
 }}
 fn {name}(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,objects:&CrtNormalObjects)->RegistryResult<CrtValue>{{

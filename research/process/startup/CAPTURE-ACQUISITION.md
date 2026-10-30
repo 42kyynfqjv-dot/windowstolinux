@@ -158,3 +158,97 @@ Only then can the component remove supplied ESP bits while leaving raw capture
 storage unknown. The no-read bypass path should carry no invented stack predicate;
 the non-bypass path still needs its explicit acquisition domain. Receipts must
 retain and revalidate that same authority, with single-use completion/retirement.
+
+## Connected no-read lease (current implementation)
+
+The original empty EH4 search and selected C++ ContinueSearch path can now execute
+with every one of the 716 CONTEXT bytes unknown. The component supplies no ESP
+bits, stack predicate, or numeric witness. This closes the adapters' unconditional
+ESP-preflight obstacle on the **proved selector bypass**. It does not complete the
+whole-event acquisition certificate described above.
+
+`ContextCheckProof` retains the original helper bytes and entry. Its generated
+`bind_unobserved_context` validates the actually pending CALL, suspended source
+frame, same-event produced record, fresh disjoint context storage, initialized
+live selector, and unchanged helper bytes. It issues one no-read lease per event,
+bound to the registry identity/epoch, source-frame generation, event generation,
+source CALL return slot, storage capability, and decoded helper. The lease grants
+no captured-value or restoration authority. Known or partly known input context
+storage rejects instead of being relabeled as acquired state.
+
+The shared runtime seals the entire context capability: all original loads and
+stores through any alias reject, including unused loads and writes of unknown
+values. The low-I/O backend read also rejects sealed input, including zero length. Only private freshness validation can inspect its abstract representation.
+The original helper's proved bypass is lowered without a context read; non-bypass
+selectors remain rejected for this lease. Both adapters independently require the
+same helper proof, so a lease cannot replace a different helper's observations.
+The existing numeric/masked input domain and its bounds checks remain intact.
+
+The EH4 and C++ handlers still execute their original instruction paths and issue
+their existing single-use receipts. A shared event/epoch lifetime revokes leases
+on failed delivery, failed ordered consumption, successful component consumption,
+event destruction, and registry failure/retirement. A retained event cannot keep
+a lease alive after its registry epoch fails. Revocation does not remove the
+storage seal, manufacture bytes, undo prior writes, or complete the guest event.
+The source CALL and incoming owner remain suspended/live under the prior contract.
+Limits are the existing region budget and at most 32 sealed contexts per runtime.
+
+There are 20 additional native scenarios, bringing ordered search to 69. They
+cover unknown storage through both original handlers; cross-event/source mismatch;
+changed selector/helper; read/write aliases; duplicate issuance; no fabricated
+numeric ESP; stale storage; event destruction; failure with prior writes; forged
+lease identity; replacement context; premature revocation; an event deliberately
+retained outside its failed epoch; partly initialized storage; a different valid
+helper proof; nested event rejection; and external storage corruption. Positive
+paths require both original dispositions, not just an intentionally rejected
+outer fixture. Independent compiled mutants remove the raw-read seal or epoch
+check and must fail their exact assertions after successful compilation.
+
+### What remains before an acquisition issuer is justified
+
+This is a connected **component no-observation contract**, not a complete static
+observation/effect certificate or actual Windows delivery acquisition. Runtime
+rejection protects component boundaries; it cannot substitute for conversion-time
+rejection of a whole program whose effect proof is missing. Production full-startup
+admission remains blocked. In particular:
+
+- The record's delivered system flags and nested-record link are still explicit
+  component inputs; the pending API producer only derives code/count and flag bit 0.
+- The incoming owned root, initialized selector, C++ metadata/PTD, cached export,
+  stationary fiber and FLS slot remain supplied state. ContinueSearch does not
+  execute the incoming root or establish containment.
+- The C++ dispatcher still contains paths to unbound search/unwind/termination
+  effects. Successful component runs do not prove those paths unreachable for
+  every admitted producer state. External module/loader mutation and Windows
+  delivery/collided-unwind effects are not closed.
+- No raw CONTEXT field can be used for restoration, pointer derivation or a
+  non-bypass predicate via this lease. Such use needs actual capture knowledge
+  and a separate lifetime/effect certificate.
+
+The next cohesive implementation is to derive a closed observation/effect summary
+from the original producer and both handler graphs, with explicit scalar/state
+preconditions proving each reachable call and context access. Tie that summary to
+API/import provenance and live initialization producers, then gate issuance before
+whole-program emission. Reuse this event/epoch/storage lease for the no-read case;
+do not turn its runtime error paths into Windows behavior or declare unknown
+predicates true. Sol can independently review the current kernel/adapter changes
+and evidence. Closing the static producer/callee proof remains a bounded Astra
+scope. Full startup/rcedit and all historical Windows timeout causes remain open.
+
+Implementation review also closed two lifetime/effect edges: an event retained
+outside a failed registry epoch must not keep its lease alive, and the low-I/O
+writer's direct memory read must honor the seal. The first new I/O test correctly
+failed because it requested an unconstructed FILE lock; its setup now initializes
+a descriptor and acquires the actual descriptor lock before testing backend
+exclusion. That was a test setup error, not evidence of an original Windows hang.
+No timeout or expected rejection was relaxed.
+
+Verified local evidence: 225 CRT tests, 175 root tests and all-target Clippy pass;
+the observation-dependent test passes separately against the five retained
+Windows wrapper vectors. The artifact-backed reproduction and both compiled
+mutants use generated Rust SHA256
+`29859347432ad38058fe61effcc3de216c71152239eaecdd27703a566e103d77`.
+The original PE hash remains unchanged. The 20 new lease cases are native-only
+component cases, not fresh Windows comparisons. Detailed hashes, mutation results,
+limits and the local test setup correction are in
+[unobserved-context-lease.json](evidence/unobserved-context-lease.json).

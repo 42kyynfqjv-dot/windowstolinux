@@ -61,12 +61,45 @@ trait CrtBackend {
  fn write_once(&mut self,endpoint:CrtDescriptorId,bytes:&[u8])->Result<CrtWriteResult,&'static str>;
  fn close_once(&mut self,_endpoint:CrtDescriptorId)->Result<bool,&'static str>{Err("CRT close effect unbound")}
 }
+/// No-read storage lease, not knowledge of a Windows captured register. Only
+/// the pending-event adapter issues this; dropping the event revokes every
+/// cloned view. Sealed bytes remain inaccessible even after revocation.
+#[derive(Clone)]
+struct CrtUnobservedContext {
+ anchor:guest_memory::Capability,thread:u64,source:[u64;4],context:CrtPointer,
+ return_slot:CrtPointer,return_id:u64,selector:CrtPointer,bypass:u32,
+ helper:CrtPointer,code:&'static [u8],epoch_live:std::rc::Rc<std::cell::Cell<bool>>,live:std::rc::Rc<std::cell::Cell<bool>>,
+}
+impl CrtUnobservedContext {
+ fn validate(&self,rt:&CrtStreamRuntime)->Result<(),&'static str>{
+  let result=(||{
+  if !self.live.get()||!self.epoch_live.get()||rt.closed||self.anchor!=rt.anchor||self.thread!=rt.thread
+   ||!rt.unobserved_contexts.iter().any(|(p,live)|*p==self.context&&std::rc::Rc::ptr_eq(live,&self.live)){
+   return Err("unobserved context expired/foreign lease");
+  }
+  rt.valid(self.context,716)?;
+  for i in (0..716).step_by(4){if self.load_word(rt,i)?!=(CrtValue::Scalar{bits:0,known:0}){return Err("unobserved context storage changed");}}
+  if rt.load(self.return_slot,32)?!=CrtValue::ProtectedReturn(self.return_id)
+   ||rt.tags.values().filter(|v|**v==CrtValue::ProtectedReturn(self.return_id)).count()!=1{return Err("unobserved context lost source CALL");}
+  if rt.load(self.selector,32)?.known_scalar()?!=self.bypass{return Err("unobserved context selector changed");}
+  for(i,&b)in self.code.iter().enumerate(){if rt.load(rt.offset(self.helper,i as i64)?,8)?.known_scalar()?!=u32::from(b){return Err("unobserved context helper changed");}}
+  Ok(())
+  })();if result.is_err(){self.revoke();}result
+ }
+ /// This checks representation freshness only and grants no guest read.
+ fn load_word(&self,rt:&CrtStreamRuntime,offset:i64)->Result<CrtValue,&'static str>{rt.load_unsealed(rt.offset(self.context,offset)?,32)}
+ fn require_helper(&self,rt:&CrtStreamRuntime,origin:u32,selector:u32,bypass:u32,code:&[u8])->Result<(),&'static str>{
+  self.validate(rt)?;
+  if self.helper.address()!=origin||self.selector.address()!=selector||self.bypass!=bypass||self.code!=code{self.revoke();return Err("unobserved context different helper proof");}Ok(())
+ }
+ fn revoke(&self){self.live.set(false);}
+}
 struct CrtRegion {pointer:CrtPointer,heap:bool,file_owner:Option<u32>}
 struct CrtDescriptor {id:CrtDescriptorId,live:bool,record:Option<CrtPointer>,record_initialized:bool}
 struct CrtStreamRuntime {
  loader_cells:std::collections::BTreeMap<u32,(CrtPointer,bool)>,modules:std::collections::BTreeMap<u32,CrtLoadedModule>,module_references:std::collections::BTreeMap<u64,CrtModuleReference>,exports:std::collections::BTreeMap<u64,CrtExport>,
  fiber:Option<CrtFiber>,fls:std::collections::BTreeMap<u32,(CrtFlsSlot,CrtValue)>,
- heap:Option<CrtHeap>,memory:guest_memory::Space,owner:u64,thread:u64,anchor:guest_memory::Capability,
+ unobserved_contexts:Vec<(CrtPointer,std::rc::Rc<std::cell::Cell<bool>>)>,heap:Option<CrtHeap>,memory:guest_memory::Space,owner:u64,thread:u64,anchor:guest_memory::Capability,
  dispatchers:std::collections::BTreeMap<u64,CrtDispatcherContext>,regions:Vec<CrtRegion>,retired:Vec<CrtPointer>,tags:std::collections::BTreeMap<u32,CrtValue>,
  partial:std::collections::BTreeMap<u32,(u8,u8)>,descriptors:Vec<CrtDescriptor>,
  global_objects:std::collections::BTreeMap<u32,CrtPointer>,global_locks:Vec<CrtGlobalLock>,record_objects:Vec<CrtPointer>,record_locks:Vec<CrtRecordLock>,locks:Vec<CrtLock>,descriptor_locks:Vec<CrtDescriptorLock>,serial:u64,generation:u64,canonical_errno:bool,errno_cell:Option<CrtPointer>,errno:Option<i32>,doserrno:Option<u32>,last_os_error:Option<u32>,
@@ -82,7 +115,7 @@ impl CrtStreamRuntime {
   let mut memory=guest_memory::Space::new(byte_limit,64).map_err(|_|"CRT memory budget")?;
   let anchor=memory.map(file_address,size,guest_memory::Owner::Module(owner),guest_memory::Permissions::READ_WRITE,false).map_err(|_|"CRT FILE mapping")?;
   let pointer=CrtPointer{cap:anchor,owner:guest_memory::Owner::Module(owner),base:file_address,size,address:file_address,kind:CrtRegionKind::File};
-  Ok(Self{loader_cells:std::collections::BTreeMap::new(),modules:std::collections::BTreeMap::new(),module_references:std::collections::BTreeMap::new(),exports:std::collections::BTreeMap::new(),fiber:None,fls:std::collections::BTreeMap::new(),heap:None,memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],global_objects:std::collections::BTreeMap::new(),global_locks:vec![],record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,canonical_errno:false,errno_cell:None,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([file_address])})
+  Ok(Self{loader_cells:std::collections::BTreeMap::new(),modules:std::collections::BTreeMap::new(),module_references:std::collections::BTreeMap::new(),exports:std::collections::BTreeMap::new(),fiber:None,fls:std::collections::BTreeMap::new(),unobserved_contexts:vec![],heap:None,memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],global_objects:std::collections::BTreeMap::new(),global_locks:vec![],record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,canonical_errno:false,errno_cell:None,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([file_address])})
  }
  /// Apply an independently established successful executable-module load.
  /// This records reference effects only; it does not attest DllMain/TLS effects.
@@ -343,6 +376,11 @@ impl CrtStreamRuntime {
   self.tags.iter().filter(|(at,_)|u64::from(**at)<u64::from(address)+u64::from(size)&&u64::from(address)<u64::from(**at)+4).map(|(&a,&v)|(a,v)).collect()
  }
  fn load(&self,p:CrtPointer,width:u8)->Result<CrtValue,&'static str>{
+  if self.unobserved_contexts.iter().any(|(q,_)|q.cap==p.cap){return Err("unobserved context raw read requires acquisition proof");}
+  self.load_unsealed(p,width)
+ }
+ /// Internal storage validation only. Original guest loads always use load().
+ fn load_unsealed(&self,p:CrtPointer,width:u8)->Result<CrtValue,&'static str>{
   let size=match width{8=>1,16=>2,32=>4,_=>return Err("CRT load width")};self.valid(p,size)?;self.ordinary_file_bytes(p,size)?;
   let tags=self.overlapping_tags(p.address,size);
   if !tags.is_empty(){if width!=32||tags.len()!=1||tags[0].0!=p.address{return Err("CRT partial typed-word read");}
@@ -356,6 +394,7 @@ impl CrtStreamRuntime {
   Ok(CrtValue::Scalar{bits,known:if width==32{known}else{known|(!0u32<<width)}})
  }
  fn store(&mut self,p:CrtPointer,width:u8,value:CrtValue)->Result<(),&'static str>{
+  if self.unobserved_contexts.iter().any(|(q,_)|q.cap==p.cap){return Err("unobserved context write requires effect proof");}
   let size=match width{8=>1,16=>2,32=>4,_=>return Err("CRT store width")};self.valid(p,size)?;self.ordinary_file_bytes(p,size)?;
   if matches!(p.kind,CrtRegionKind::Input){return Err("CRT immutable source write");}
   if self.errno_cell.is_some_and(|q|q.cap==p.cap&&u64::from(p.address)<u64::from(q.address)+4&&u64::from(q.address)<u64::from(p.address)+u64::from(size))&&!matches!(value,CrtValue::Scalar{..}){return Err("CRT errno scalar field");}
@@ -536,6 +575,7 @@ impl CrtStreamRuntime {
   if self.load(self.offset(record,40)?,8)?.known_scalar()?!=0x81||self.load(self.offset(record,41)?,8)?.known_scalar()?!=0{return Err("CRT descriptor is not owned open nonappend narrow text");}Ok(record)
  }
  fn write_once(&mut self,id:CrtDescriptorId,source:CrtPointer,count:u32,backend:&mut impl CrtBackend)->Result<CrtWriteResult,&'static str>{
+  if self.unobserved_contexts.iter().any(|(q,_)|q.cap==source.cap){return Err("unobserved context external observation unproved");}
   self.descriptor(id)?;if count>16384{return Err("CRT WriteFile source budget");}self.valid(source,count)?;self.ordinary_file_bytes(source,count)?;
   if !self.overlapping_tags(source.address,count).is_empty(){return Err("CRT WriteFile exposes typed object bytes");}
   let bytes=if count==0{&[][..]}else{self.memory.read(source.address,count).map_err(|_|"CRT WriteFile initialized full range")?};

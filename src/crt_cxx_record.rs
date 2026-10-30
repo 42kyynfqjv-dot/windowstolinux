@@ -78,12 +78,12 @@ fn context_source(code: &[u8]) -> Result<String, String> {
     Ok(format!(
         r#"{types}
 impl ThreadContext{{fn original_check(&self,owner:u64,selector:u32)->Result<(),&'static str>{{{body}}}}}
-struct CrtCxxContext{{anchor:guest_memory::Capability,thread:u64,outer:u64,bp:CrtPointer,context:CrtPointer,stack:CrtPointer,esp:Option<CrtPointer>,esp_value:CrtValue,live:bool}}
+struct CrtCxxContext{{anchor:guest_memory::Capability,thread:u64,outer:u64,bp:CrtPointer,context:CrtPointer,stack:CrtPointer,esp:Option<CrtPointer>,esp_value:CrtValue,unobserved:Option<CrtUnobservedContext>,live:bool}}
 impl CapturedStackView{{fn cxx_original_check(&self,owner:u64,selector:u32)->Result<(),&'static str>{{{projection}}}}}
 impl CrtCxxContext{{
  fn bind(rt:&CrtStreamRuntime,owner:&CrtCpu,frame:&CrtPtdFrame,context:CrtPointer,stack:CrtPointer)->Result<Self,&'static str>{{
   let esp=CrtCpu::pointer(rt.load(rt.offset(context,0xc4)?,32)?)?;
-  let token=Self{{anchor:rt.anchor,thread:rt.thread,outer:owner.return_id,bp:frame.bp,context,stack,esp:Some(esp),esp_value:CrtValue::Pointer(esp),live:true}};token.check(rt,owner,frame)?;Ok(token)
+  let token=Self{{anchor:rt.anchor,thread:rt.thread,outer:owner.return_id,bp:frame.bp,context,stack,esp:Some(esp),esp_value:CrtValue::Pointer(esp),unobserved:None,live:true}};token.check(rt,owner,frame)?;Ok(token)
  }}
  fn check(&self,rt:&CrtStreamRuntime,owner:&CrtCpu,frame:&CrtPtdFrame)->Result<(),&'static str>{{
   frame.live(rt,owner)?;
@@ -92,6 +92,10 @@ impl CrtCxxContext{{
   if !rt.regions.iter().any(|r|r.pointer==self.stack)||!rt.regions.iter().any(|r|r.pointer==self.context){{return Err("C++ captured context/root extent");}}
   rt.valid(self.context,200)?;rt.valid(self.stack,self.stack.size)?;
   if let Some(esp)=self.esp{{rt.valid(esp,0)?;if self.esp_value!=CrtValue::Pointer(esp)&&self.esp_value!=CrtValue::scalar(esp.address()){{return Err("C++ captured numeric view mismatch");}}}}
+  if let Some(lease)=&self.unobserved{{
+   if lease.context!=self.context||self.esp.is_some()||self.esp_value!=(CrtValue::Scalar{{bits:0,known:0}}){{return Err("C++ unobserved context representation");}}
+   return lease.require_helper(rt,0x402877,0x415128,{bypass},&{code:?});
+  }}
   if rt.load(rt.offset(self.context,0xc4)?,32)?!=self.esp_value{{return Err("C++ captured ESP changed/unknown");}}
   let base=self.stack.address().checked_add(self.stack.size).ok_or("C++ stack bound overflow")?;
   let(bits,known)=match self.esp_value{{CrtValue::Pointer(p)if self.esp==Some(p)=>(p.address(),u32::MAX),CrtValue::Scalar{{bits,known}}=>(bits,known),_=>return Err("C++ captured representation mismatch")}};
@@ -103,7 +107,8 @@ impl CrtCxxContext{{
  fn numeric_esp(&self)->Result<CrtPointer,&'static str>{{self.esp.ok_or("C++ unwind requires numeric captured ESP")}}
  fn retire(&mut self){{self.live=false;}}
 }}
-"#
+"#,
+        bypass = proof.bypass_selector()
     ))
 }
 
@@ -766,7 +771,7 @@ impl CrtCxxContext{ /// Preserve the checked event's exact scalar knowledge.
  /// This performs no guest CONTEXT store or capture acquisition.
  fn bind_normal(rt:&CrtStreamRuntime,owner:&CrtCpu,frame:&CrtPtdFrame,objects:&CrtNormalObjects,stack:CrtPointer)->Result<Self,&'static str>{
   let esp=match objects.captured_esp{CrtValue::Scalar{bits,known:u32::MAX}=>Some(rt.offset(stack,i64::from(bits)-i64::from(stack.address()))?),CrtValue::Scalar{..}=>None,_=>return Err("normal captured ESP requires scalar knowledge")};
-  let token=Self{anchor:rt.anchor,thread:rt.thread,outer:owner.return_id,bp:frame.bp,context:objects.context,stack,esp,esp_value:objects.captured_esp,live:true};
+  let token=Self{anchor:rt.anchor,thread:rt.thread,outer:owner.return_id,bp:frame.bp,context:objects.context,stack,esp,esp_value:objects.captured_esp,unobserved:objects.unobserved.clone(),live:true};
   token.check(rt,owner,frame)?;Ok(token)
  }
 }
@@ -829,7 +834,7 @@ fn cxx_invoke_selected_search(search:&mut CrtOrderedSearch,event:&mut CrtNormalE
   for(i,v)in [CrtValue::Pointer(objects.record),CrtValue::Pointer(rt.offset(frame.bp,-12)?),CrtValue::Pointer(objects.context)].into_iter().enumerate(){if rt.load(rt.offset(sp,i as i64*4)?,32)?!=v{return Err("selected C++ original arguments");}}
   Ok(context)
  })();
- let context=match ready{Ok(c)=>c,Err(e)=>{search.phase=3;return Err(e);}};
+ let context=match ready{Ok(c)=>c,Err(e)=>{search.phase=3;if let Some(lease)=&event.unobserved{lease.revoke();}return Err(e);}};
  search.phase=4;event.delivery=CrtNormalDelivery::Pending;
  let result=event.execute_child_handler(rt,interrupted,epoch,binding,dispatcher,continuation,|rt,cpu,child|{
   cxx_handler_prefix(rt,cpu,owner,frame,record,&context,child,fiber,slot)
@@ -850,8 +855,8 @@ fn cxx_take_selected_search(search:&mut CrtOrderedSearch,event:&mut CrtNormalExc
   let next=f.previous;
   if returned.receipt.value!=CrtValue::scalar(1){return Err("selected C++ unsupported search disposition");}
   let value=event.take_handler_result(returned.receipt,rt,interrupted,epoch,binding)?;
-  search.phase=5;search.current=next;Ok(value)
- })();if result.is_err(){search.phase=3;}result
+  search.phase=5;search.current=next;if let Some(lease)=&event.unobserved{lease.revoke();}Ok(value)
+ })();if result.is_err(){search.phase=3;if let Some(lease)=&event.unobserved{lease.revoke();}}result
 }
 
 fn cxx_invoke_unwind(event:&mut CrtNormalException,invocation:&mut CrtCxxInvocation,rt:&mut CrtStreamRuntime,interrupted:&CrtCpu,epoch:&mut NormalCallEpoch<'_>,binding:&CrtNormalBinding,dispatcher:&mut CrtCpu,owner:&CrtCpu,frame:&CrtPtdFrame,record:&CrtCxxRecord,context:&CrtCxxContext,fiber:CrtFiber,slot:CrtFlsSlot,continuation:u32)->RegistryResult<CxxInvocationReturn>{
@@ -885,7 +890,7 @@ fn cxx_take_invocation_result(event:&mut CrtNormalException,invocation:&mut CrtC
   invocation.objects(event.code,rt,owner,frame,record,context)?;
   event.take_handler_result(receipt.handler,rt,interrupted,epoch,binding)
  })();
- match result{Ok(value)=>{invocation.phase=CxxInvocationPhase::ResultTaken;Ok(value)},Err(error)=>{invocation.phase=CxxInvocationPhase::Failed;event.delivery=CrtNormalDelivery::Failed;epoch.fail(error)}}
+ match result{Ok(value)=>{invocation.phase=CxxInvocationPhase::ResultTaken;Ok(value)},Err(error)=>{invocation.phase=CxxInvocationPhase::Failed;event.fail_capture();epoch.fail(error)}}
 }
 
 "#;

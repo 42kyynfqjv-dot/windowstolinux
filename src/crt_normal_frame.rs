@@ -356,7 +356,7 @@ struct CrtNormalHandlerReturn { identity:RegistryIdentity,epoch:u64,frame:Normal
 /// an exact ESP or creates captured registers from guest CALL state.
 struct CrtNormalObjects {
  anchor:guest_memory::Capability,identity:RegistryIdentity,epoch:u64,generation:u64,
- record:CrtPointer,context:CrtPointer,captured_esp:CrtValue,
+ record:CrtPointer,context:CrtPointer,captured_esp:CrtValue,unobserved:Option<CrtUnobservedContext>,
 }
 impl CrtNormalObjects {
  fn bind(event:&CrtNormalException,rt:&CrtStreamRuntime,epoch:&NormalCallEpoch<'_>,record:CrtPointer,context:CrtPointer)->RegistryResult<Self>{
@@ -366,10 +366,10 @@ impl CrtNormalObjects {
    ||(u64::from(record.address())<u64::from(context.address())+716&&u64::from(context.address())<u64::from(record.address())+80){return Err("normal exception object roles/alias");}
   rt.valid(record,80)?;rt.valid(context,716)?;
   let captured_esp=rt.load(rt.offset(context,0xc4)?,32)?;
-  let objects=Self{anchor:rt.anchor,identity:event.identity,epoch:event.epoch,generation:event.generation,record,context,captured_esp};
+  let objects=Self{anchor:rt.anchor,identity:event.identity,epoch:event.epoch,generation:event.generation,record,context,captured_esp,unobserved:None};
   objects.validate(event,rt,epoch)?;Ok(objects)
  }
- fn validate(&self,event:&CrtNormalException,rt:&CrtStreamRuntime,epoch:&NormalCallEpoch<'_>)->RegistryResult<()>{
+ fn validate_record(&self,event:&CrtNormalException,rt:&CrtStreamRuntime,epoch:&NormalCallEpoch<'_>)->RegistryResult<()>{
   event.validate_pending(rt,epoch)?;
   if rt.anchor!=self.anchor||event.identity!=self.identity||event.epoch!=self.epoch||event.generation!=self.generation{return Err("normal exception captured object identity/bounds");}
   if event.produced_record.is_some_and(|p|p!=self.record){return Err("normal record producer object mismatch");}
@@ -377,11 +377,23 @@ impl CrtNormalObjects {
   for (offset,value) in [(0,event.code),(4,u32::from(event.noncontinuable)),(8,0),(16,0)]{
    if rt.load(rt.offset(self.record,offset)?,32)?.known_scalar()?!=value{return Err("normal exception record input mismatch");}
   }
+  Ok(())
+ }
+ fn validate(&self,event:&CrtNormalException,rt:&CrtStreamRuntime,epoch:&NormalCallEpoch<'_>)->RegistryResult<()>{
+  self.validate_record(event,rt,epoch)?;
+  if let Some(lease)=&self.unobserved{
+   if lease.context!=self.context||lease.source!=[event.identity.instance,event.epoch,event.frame.generation,event.generation]
+    ||event.unobserved.as_ref().is_none_or(|issued|!std::rc::Rc::ptr_eq(&issued.live,&lease.live))
+    ||self.captured_esp!=(CrtValue::Scalar{bits:0,known:0}){return Err("unobserved context wrong event/object");}
+   return lease.validate(rt);
+  }
+  if event.unobserved.is_some(){return Err("unobserved context cannot become supplied capture");}
   if rt.load(rt.offset(self.context,0xc4)?,32)?!=self.captured_esp{return Err("normal exception captured ESP input changed");}
   let view=self.capture_view(epoch)?;
   if view.captured_below_limit(self.identity.owner)?||!view.captured_at_most_base(self.identity.owner)?{return Err("normal exception captured object identity/bounds");}Ok(())
  }
  fn capture_view(&self,epoch:&NormalCallEpoch<'_>)->RegistryResult<CapturedStackView>{
+  if self.unobserved.is_some(){return Err("unobserved context has no captured predicates");}
   let CrtValue::Scalar{bits,known}=self.captured_esp else{return Err("normal captured ESP requires scalar knowledge");};
   CapturedStackView::from_bits(self.identity.owner,epoch.registry.limit,epoch.registry.base,bits,known)
  }
@@ -395,9 +407,11 @@ impl CrtNormalObjects {
 struct CrtNormalException {
  anchor:guest_memory::Capability,identity:RegistryIdentity,epoch:u64,frame:NormalFrameId,
  generation:u64,code:u32,noncontinuable:bool,continuation:u32,
- call_registers:[CrtValue;8],call_flags:CrtFlags,return_id:u64,delivery:CrtNormalDelivery,produced_record:Option<CrtPointer>,
+ call_registers:[CrtValue;8],call_flags:CrtFlags,return_id:u64,delivery:CrtNormalDelivery,produced_record:Option<CrtPointer>,unobserved:Option<CrtUnobservedContext>,
 }
+impl Drop for CrtNormalException {fn drop(&mut self){if let Some(lease)=&self.unobserved{lease.revoke();}}}
 impl CrtNormalException {
+ fn fail_capture(&mut self){if let Some(lease)=&self.unobserved{lease.revoke();}self.delivery=CrtNormalDelivery::Failed;}
  /// Called only at a separately proved FF /2 RaiseException import boundary.
  /// Initial domain: no exception parameters. The opcode/IAT effect binding is
  /// still a compiler prerequisite, never inferred from numeric address equality.
@@ -432,7 +446,7 @@ impl CrtNormalException {
   if rt.tags.values().any(|v|*v==CrtValue::ProtectedReturn(return_id)){return Err("normal exception return collision");}
   let pending=Self{anchor:rt.anchor,identity:epoch.registry.identity,epoch:epoch.generation,frame,
    generation,code:args[0],noncontinuable:args[1]!=0,continuation,
-   call_registers:cpu.r,call_flags:cpu.flags,return_id,delivery:CrtNormalDelivery::Pending,produced_record:None};
+   call_registers:cpu.r,call_flags:cpu.flags,return_id,delivery:CrtNormalDelivery::Pending,produced_record:None,unobserved:None};
   // Publish suspension only after the original CALL push succeeds. No argument
   // cleanup, clobber, captured-register synthesis, unlock or frame retirement.
   cpu.push(rt,CrtValue::ProtectedReturn(return_id))?;rt.generation=generation;
@@ -493,7 +507,7 @@ impl CrtNormalException {
    if after.try_level!=before.try_level{return Err("normal exception unproved scope transition");}
    Ok(CrtNormalHandlerReturn{identity:self.identity,epoch:self.epoch,frame:self.frame,generation:self.generation,level:after.try_level,value})
   })();
-  match result{Ok(receipt)=>{self.delivery=CrtNormalDelivery::Returned;Ok(receipt)},Err(error)=>{self.delivery=CrtNormalDelivery::Failed;epoch.fail(error)}}
+  match result{Ok(receipt)=>{self.delivery=CrtNormalDelivery::Returned;Ok(receipt)},Err(error)=>{self.fail_capture();epoch.fail(error)}}
  }
  /// Lend only child-frame authority during the protected handler CALL. The
  /// interrupted frame remains suspended; no finished-event permit is minted.
@@ -527,7 +541,7 @@ impl CrtNormalException {
    if after.try_level!=before.try_level{return Err("delivery child unproved scope transition");}
    Ok(CrtNormalHandlerReturn{identity:self.identity,epoch:self.epoch,frame:self.frame,generation:self.generation,level:after.try_level,value})
   })();
-  match result{Ok(receipt)=>{self.delivery=CrtNormalDelivery::Returned;Ok(receipt)},Err(error)=>{self.delivery=CrtNormalDelivery::Failed;epoch.fail(error)}}
+  match result{Ok(receipt)=>{self.delivery=CrtNormalDelivery::Returned;Ok(receipt)},Err(error)=>{self.fail_capture();epoch.fail(error)}}
  }
  /// Original handler binding must use the owned object boundary. The fourth
  /// dispatcher argument remains separately proved; no host pointer is inferred.
@@ -535,7 +549,7 @@ impl CrtNormalException {
  where F:FnOnce(&mut CrtStreamRuntime,&mut CrtCpu)->RegistryResult<CrtValue>{
   objects.check_arguments(self,rt,epoch,binding,dispatcher)?;
   let receipt=self.execute_handler(rt,interrupted,epoch,binding,dispatcher,continuation,body)?;
-  if let Err(error)=objects.validate(self,rt,epoch){self.delivery=CrtNormalDelivery::Failed;return epoch.fail(error);}Ok(receipt)
+  if let Err(error)=objects.validate(self,rt,epoch){self.fail_capture();return epoch.fail(error);}Ok(receipt)
  }
  /// Consume only an actually completed callback result for this live event.
  /// The returned scalar is not an EXCEPTION_DISPOSITION authorization: the
@@ -546,7 +560,7 @@ impl CrtNormalException {
     ||receipt.frame!=self.frame||receipt.generation!=self.generation{return Err("normal exception foreign/stale handler receipt");}
    if self.dispatch_source(rt,interrupted,epoch,binding)?.try_level!=receipt.level{return Err("normal exception changed returned scope");}receipt.value.known_scalar()
   })();
-  match result{Ok(value)=>{self.delivery=CrtNormalDelivery::ResultTaken;Ok(value)},Err(error)=>{self.delivery=CrtNormalDelivery::Failed;epoch.fail(error)}}
+  match result{Ok(value)=>{self.delivery=CrtNormalDelivery::ResultTaken;Ok(value)},Err(error)=>{self.fail_capture();epoch.fail(error)}}
  }
  fn validate_pending(&self,rt:&CrtStreamRuntime,epoch:&NormalCallEpoch<'_>)->RegistryResult<()>{
   epoch.registry.available()?;
@@ -685,7 +699,7 @@ impl CrtNormalException {
   });
   match result {
    Ok(value)=>{self.delivery=CrtNormalDelivery::Returned;Ok(CrtNormalHandlerReturn{identity:self.identity,epoch:self.epoch,frame:self.frame,generation:self.generation,level:state.level,value})},
-   Err(error)=>{self.delivery=CrtNormalDelivery::Failed;epoch.fail(error)},
+   Err(error)=>{self.fail_capture();epoch.fail(error)},
   }
  }
 }
@@ -749,7 +763,7 @@ impl CrtOrderedSearch {
    if returned.receipt.value!=CrtValue::scalar(1){return Err("ordered search requires ContinueSearch disposition");}
    if event.take_handler_result(returned.receipt,rt,interrupted,epoch,binding)?!=1{return Err("ordered search disposition changed");}
    self.phase=2;self.current=self.previous;Ok(self.current)
-  })();if result.is_err(){self.phase=3;}result
+  })();if result.is_err(){self.phase=3;if let Some(lease)=&event.unobserved{lease.revoke();}}result
  }
 }
 

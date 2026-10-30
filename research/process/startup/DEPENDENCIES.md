@@ -273,3 +273,26 @@ Review validation passed all 225 CRT tests, including eight context-proof tests
 and the existing 49 ordered cases, plus all-target Clippy. The observation-dependent
 test remains separately verified at 72974f0; this test/documentation-only review
 adds no generated runtime change or new Windows/whole-PE comparison.
+
+## Connected unknown-context checkpoint
+
+The no-read selector path now executes both original ordered handlers with all
+716 context bytes unknown (69 ordered cases, including 20 new lease scenarios).
+The event-issued lease binds source CALL, registry/epoch, frame/event generations,
+storage capability and exact helper proof. Raw reads/writes reject through aliases;
+no numeric ESP or captured-stack predicate is created. Event/epoch failure and
+receipt consumption revoke the lease without rolling back previous effects.
+See [capture contract and exact remaining gate](CAPTURE-ACQUISITION.md#connected-no-read-lease-current-implementation).
+
+This removes supplied capture **values** from the component path, not its supplied
+delivery flags/nested link, incoming root, module/PTD/FLS initialization or complete
+API-effect assumptions. A static whole-event observation/producer certificate is
+still missing; runtime rejection is not whole-program equivalence. Full startup
+and rcedit remain rejected. No fresh Windows observation or whole-PE pair follows
+from the 20 new native scenarios.
+
+Reviewed baseline 5615c2b completed Rust40984728593/40984721250 and
+pinned40984721318 successfully. For72974f0, push40983899668 and pinned40983899745
+passed; PR40983904709 failed the preserved original-Windows output-probe timeout
+(job123830245636). That difference does not establish a cause or erase the failure.
+The changed lease implementation requires its own exact-head CI.
