@@ -338,3 +338,7 @@ mod crt_startup_modules;
 #[cfg(test)]
 #[path = "../src/crt_resident_loader.rs"]
 mod crt_resident_loader;
+
+#[cfg(test)]
+#[path = "../src/crt_provider_tests.rs"]
+mod crt_provider_tests;

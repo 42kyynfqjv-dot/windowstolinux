@@ -443,3 +443,11 @@ publication/rollback, final-release lifetime, export behavior and unsupported
 loader callbacks remain explicit requirements in
 [API-SET-BOUNDARY.md](API-SET-BOUNDARY.md). No resident-fixture assumption has
 been promoted to actual original-entry acquisition.
+
+Native provider registry construction, publication and teardown now have owned
+runtime transitions, including separate target-provider borrows. Published export
+descriptors remain noncallable, and the old observed-export entry point cannot
+promote them. The callable implementation issuer, API-set mapping and first
+synchronization export's actual effects remain unbound at402b00. See
+[PROVIDER-OWNERSHIP.md](PROVIDER-OWNERSHIP.md); this replaces no Windows outcome
+with a fabricated success callback.

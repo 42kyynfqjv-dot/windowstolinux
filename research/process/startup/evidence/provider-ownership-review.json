@@ -1,0 +1,56 @@
+{
+  "kind": "Native provider registry ownership and noncallable descriptor implementation; no Windows loader admission",
+  "reviewed_parent": "5d7c93b2e261af338a5d64e5e04d2f4b4ba3862e",
+  "parent_ci": {
+    "41042803882": "success",
+    "41042795874": "success",
+    "41042795689": "success"
+  },
+  "crt_passed": 267,
+  "crt_ignored_artifact_tests": 2,
+  "artifact_replay": "passed; ignored artifact tests executed separately; exact current emitted runtime verified in replay Rust",
+  "new_native_test_functions": 6,
+  "python_run": 70,
+  "python_existing_skip": 1,
+  "clippy": "passed -D warnings",
+  "fmt": "passed",
+  "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "generated_rust_sha256": "76046d6b19c3cd0f2e094d5209f2976b4d35899c46ed4520e9cc2c65bdd9d719",
+  "retained_recorded_windows_component_pairs": 5,
+  "new_windows_pairs": 0,
+  "actual_entry_boundary": {
+    "call": "0x402b00",
+    "iat": "0x415074",
+    "missing": "native synchronization implementation, callable issuer and justified API-set/provider initialization effects"
+  },
+  "review_correction": "Native export descriptors must not become CrtFunction call authority from names/addresses. Added explicit noncallable kind and transport/cache rejection.",
+  "local_failure": {
+    "file": "provider-disk-full.txt",
+    "failed_tests": 28,
+    "explicit_ENOSPC_failures": 27,
+    "concurrent_linker_SIGBUS": 1,
+    "filesystem": "32G overlay full, zero available; w2l-build-tmp held 21G",
+    "recovery": "removed only inactive generated ELF binaries older than one hour in task build temp; retained sources, logs, Windows artifacts and all evidence",
+    "removed_files": 2077,
+    "reclaimed_bytes": 18171562888,
+    "after": "17G available; full same-code suite passed 267 after cleanup",
+    "limit": "Linker SIGBUS coincided with disk exhaustion; exact linker mechanism not independently established. Historical original Windows timeouts remain unrelated/unresolved."
+  },
+  "limits": [
+    "native registry construction is not Windows DllMain/TLS or API-set initialization",
+    "export descriptors cannot be called",
+    "process root and target borrow semantics are explicit native policy, not inferred Windows refcounts",
+    "no forced native OOM/Windows initialization failure",
+    "Rust map/string allocation OOM is not modeled as a recoverable Windows failure",
+    "startup-exclusive mutation; no general concurrent/cyclic provider dependency support",
+    "full formatter/startup/rcedit unsupported"
+  ],
+  "logs_sha256": {
+    "crt-after-disk-recovery.log": "c01c206af95d868f6d870ea57c1b35460c87fe6338c644170c2c8cd6af10eeee",
+    "crt-final-6.log": "0e30f18e04c3996e0145c050f2e40ccadf9c87c0d2b12959a241a88352a1aec6",
+    "clippy-final.log": "02db5a66fa0c60ca8618bd08aac556eac4f3ec863e8630a0d353dba6a0f6e126",
+    "python.log": "9d15d6cb36c73602fd9b2f367ebcf4918e83202c5d32aaf1f8686c0082e56713",
+    "report.json": "a968746cb3d2cac01d454914ed65fa6e67ded95156774651cda84385017d5edd",
+    "build-cleanup.json": "65c6eaf2ee3022df59a6bc346a01aa4761bdb88547ca1ea2fc1f83eb69491eea"
+  }
+}

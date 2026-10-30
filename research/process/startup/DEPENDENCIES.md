@@ -612,3 +612,14 @@ no observation issues native initialization authority. Next: a process-owned,
 initialized lock provider with documented ABI/effects and failure-atomic export
 publication, then dynamic FLS. See [API-SET-BOUNDARY.md](API-SET-BOUNDARY.md).
 This is a measurement gate, not actual acquisition or new PE/ELF evidence.
+
+### Native provider ownership prerequisite
+
+The emitted runtime now constructs a process-owned native provider registry,
+separates process roots from acquired references, and keeps load/source ownership
+distinct from the target borrowed by a forwarded export descriptor. Pending,
+failed, replayed and stale lifetimes reject. Descriptors cannot become callable
+or enter a function cache without an implementation issuer; actual native API
+semantics and original entry mapping at402b00 remain open. See
+[PROVIDER-OWNERSHIP.md](PROVIDER-OWNERSHIP.md). No Windows initialization or new
+whole-PE execution follows from registry construction.

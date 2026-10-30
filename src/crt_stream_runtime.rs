@@ -22,7 +22,13 @@ struct CrtProcessImage {anchor:guest_memory::Capability,owner:u64,generation:u64
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 struct CrtFunction {module:CrtModule,address:u32,serial:u64}
 struct CrtLoadedModule {identity:String,generation:u64,certain:bool}
-struct CrtExport {function:CrtFunction,symbol:String}
+struct CrtExport {function:CrtFunction,symbol:String,target:CrtModule,callable:bool}
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+struct CrtProviderExport {record:CrtFunction}
+/// A native registry construction ticket, not a Windows DLL initialization proof.
+struct CrtProviderBuild {anchor:guest_memory::Capability,thread:u64,serial:u64,handle:u32}
+struct CrtNativeProvider {serial:u64,identity:String,root:Option<CrtModuleReference>,exports:Vec<u64>,limit:usize}
+
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 struct CrtHeap {anchor:guest_memory::Capability,exceptions:Option<bool>}
 /// An explicitly bound, stationary fiber context. This is not a guessed TLS
@@ -113,7 +119,7 @@ impl CrtUnobservedContext {
 struct CrtRegion {pointer:CrtPointer,heap:bool,file_owner:Option<u32>}
 struct CrtDescriptor {id:CrtDescriptorId,live:bool,record:Option<CrtPointer>,record_initialized:bool}
 struct CrtStreamRuntime {
- file_view:CrtPointer,main_image:Option<CrtProcessImage>,main_image_regions:Vec<CrtPointer>,loader_cells:std::collections::BTreeMap<u32,(CrtPointer,bool)>,modules:std::collections::BTreeMap<u32,CrtLoadedModule>,module_references:std::collections::BTreeMap<u64,CrtModuleReference>,exports:std::collections::BTreeMap<u64,CrtExport>,
+ file_view:CrtPointer,main_image:Option<CrtProcessImage>,main_image_regions:Vec<CrtPointer>,loader_cells:std::collections::BTreeMap<u32,(CrtPointer,bool)>,modules:std::collections::BTreeMap<u32,CrtLoadedModule>,module_references:std::collections::BTreeMap<u64,CrtModuleReference>,exports:std::collections::BTreeMap<u64,CrtExport>,providers:std::collections::BTreeMap<u32,CrtNativeProvider>,
  uncertain_allocations:Vec<CrtPointer>,completed_failed_frees:Vec<(guest_memory::Capability,u64)>,heap_ptds:Vec<CrtHeapPtdView>,fiber:Option<CrtFiber>,fls_indices:std::collections::BTreeMap<u32,CrtProcessFls>,fls:std::collections::BTreeMap<u32,(CrtFlsSlot,CrtValue)>,
  unobserved_contexts:Vec<(CrtPointer,std::rc::Rc<std::cell::Cell<bool>>)>,heap:Option<CrtHeap>,memory:guest_memory::Space,owner:u64,thread:u64,anchor:guest_memory::Capability,
  dispatchers:std::collections::BTreeMap<u64,CrtDispatcherContext>,regions:Vec<CrtRegion>,retired:Vec<CrtPointer>,tags:std::collections::BTreeMap<u32,CrtValue>,
@@ -135,7 +141,7 @@ impl CrtStreamRuntime {
  }
  fn from_file_storage(owner:u64,thread:u64,memory:guest_memory::Space,pointer:CrtPointer)->Result<Self,&'static str>{
   let anchor=pointer.cap;
-  Ok(Self{file_view:pointer,main_image:None,main_image_regions:vec![],loader_cells:std::collections::BTreeMap::new(),modules:std::collections::BTreeMap::new(),module_references:std::collections::BTreeMap::new(),exports:std::collections::BTreeMap::new(),uncertain_allocations:vec![],completed_failed_frees:vec![],heap_ptds:vec![],fiber:None,fls_indices:std::collections::BTreeMap::new(),fls:std::collections::BTreeMap::new(),unobserved_contexts:vec![],heap:None,memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],global_objects:std::collections::BTreeMap::new(),global_locks:vec![],record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,canonical_errno:false,errno_cell:None,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([pointer.base])})
+  Ok(Self{file_view:pointer,main_image:None,main_image_regions:vec![],loader_cells:std::collections::BTreeMap::new(),modules:std::collections::BTreeMap::new(),module_references:std::collections::BTreeMap::new(),exports:std::collections::BTreeMap::new(),providers:std::collections::BTreeMap::new(),uncertain_allocations:vec![],completed_failed_frees:vec![],heap_ptds:vec![],fiber:None,fls_indices:std::collections::BTreeMap::new(),fls:std::collections::BTreeMap::new(),unobserved_contexts:vec![],heap:None,memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],global_objects:std::collections::BTreeMap::new(),global_locks:vec![],record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,canonical_errno:false,errno_cell:None,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([pointer.base])})
  }
 
  /// Initial FILE storage is a bounded role view of the original writable
@@ -198,6 +204,7 @@ impl CrtStreamRuntime {
  /// This records reference effects only; it does not attest DllMain/TLS effects.
  fn module_acquire_result(&mut self,init:CrtInitialization,identity:&str,handle:u32)->Result<(CrtModule,CrtModuleReference),&'static str>{
   self.initialization(init)?;
+  if self.providers.get(&handle).is_some_and(|p|p.root.is_none()){return Err("CRT provider not published");}
   if self.closed||handle==0||handle==u32::MAX||identity.is_empty()||identity.len()>256||self.module_references.len()>=256{return Err("CRT module acquisition bounds");}
   let serial=self.serial.checked_add(1).ok_or("CRT module serial")?;
   let generation=if let Some(m)=self.modules.get(&handle){
@@ -217,6 +224,7 @@ impl CrtStreamRuntime {
  fn module_release_result(&mut self,init:CrtInitialization,reference:CrtModuleReference,success:bool)->Result<(),&'static str>{
   self.initialization(init)?;self.module_identity(reference.module)?;
   if self.module_references.get(&reference.serial)!=Some(&reference){return Err("CRT module reference replay/owner");}
+  if self.providers.values().any(|p|p.root==Some(reference)){return Err("CRT process provider root is not a load reference");}
   if !success{self.modules.get_mut(&reference.module.handle).unwrap().certain=false;return Err("CRT failed release effects unclosed");}
   self.module_references.remove(&reference.serial);
   if !self.module_references.values().any(|r|r.module==reference.module){self.modules.remove(&reference.module.handle);self.exports.retain(|_,e|e.function.module!=reference.module);}
@@ -226,13 +234,68 @@ impl CrtStreamRuntime {
  /// results, forwarded-owner assumptions, and host addresses are not calls.
  fn module_export_result(&mut self,init:CrtInitialization,module:CrtModule,symbol:&str,address:u32)->Result<CrtFunction,&'static str>{
   self.initialization(init)?;self.module_identity(module)?;
+  if self.providers.contains_key(&module.handle){return Err("CRT native provider requires checked publication");}
   if symbol.is_empty()||symbol.len()>256||!symbol.is_ascii()||symbol.as_bytes().contains(&0)||address==0||address==u32::MAX||self.exports.len()>=256{return Err("CRT export bounds/kind");}
   let serial=self.serial.checked_add(1).ok_or("CRT export serial")?;
-  let function=CrtFunction{module,address,serial};self.exports.insert(serial,CrtExport{function,symbol:symbol.into()});self.serial=serial;Ok(function)
+  let function=CrtFunction{module,address,serial};self.exports.insert(serial,CrtExport{function,symbol:symbol.into(),target:module,callable:true});self.serial=serial;Ok(function)
  }
  fn function_identity(&self,function:CrtFunction,symbol:Option<&str>)->Result<(),&'static str>{
-  self.module_identity(function.module)?;let e=self.exports.get(&function.serial).ok_or("CRT unknown export")?;
-  if e.function!=function||symbol.is_some_and(|s|s!=e.symbol){return Err("CRT export owner/symbol");}Ok(())
+  self.module_identity(function.module)?;let e=self.exports.get(&function.serial).ok_or("CRT unknown export")?;self.module_identity(e.target)?;
+  if e.function!=function||symbol.is_some_and(|s|s!=e.symbol){return Err("CRT export owner/symbol");}if !e.callable{return Err("CRT native provider export implementation unbound");}Ok(())
+ }
+ /// Allocate the native registry's real export-index storage before exposing a
+ /// module. No DLL code, TLS callback or externally supplied success is executed.
+ fn provider_begin(&mut self,init:CrtInitialization,identity:&str,handle:u32,limit:usize)->Result<CrtProviderBuild,&'static str>{
+  self.initialization(init)?;
+  if identity.is_empty()||identity.len()>256||!identity.is_ascii()||identity.as_bytes().contains(&0)||handle==0||handle==u32::MAX||limit==0||limit>64||self.providers.len()>=64||self.modules.contains_key(&handle)||self.providers.contains_key(&handle)
+   ||self.modules.values().any(|m|m.identity.eq_ignore_ascii_case(identity))||self.providers.values().any(|p|p.identity.eq_ignore_ascii_case(identity)){return Err("CRT provider identity/resource domain");}
+  let serial=self.serial.checked_add(1).ok_or("CRT provider serial")?;
+  let mut exports=Vec::new();exports.try_reserve_exact(limit).map_err(|_|"CRT provider export storage allocation")?;
+  self.providers.insert(handle,CrtNativeProvider{serial,identity:identity.into(),root:None,exports,limit});self.serial=serial;
+  Ok(CrtProviderBuild{anchor:self.anchor,thread:self.thread,serial,handle})
+ }
+ fn provider_build(&self,init:CrtInitialization,ticket:&CrtProviderBuild)->Result<(),&'static str>{
+  self.initialization(init)?;
+  if ticket.anchor!=self.anchor||ticket.thread!=self.thread||!self.providers.get(&ticket.handle).is_some_and(|p|p.serial==ticket.serial&&p.root.is_none()){return Err("CRT provider build owner/phase/lifetime");}Ok(())
+ }
+ fn provider_abort(&mut self,init:CrtInitialization,ticket:&CrtProviderBuild)->Result<(),&'static str>{self.provider_build(init,ticket)?;self.providers.remove(&ticket.handle);Ok(())}
+ /// Publish only the constructed native namespace and its process root. This
+ /// cannot certify Windows loader effects or make an export callable by itself.
+ fn provider_publish(&mut self,init:CrtInitialization,ticket:&CrtProviderBuild)->Result<CrtModule,&'static str>{
+  self.provider_build(init,ticket)?;
+  if self.modules.len()>=64||self.module_references.len()>=256||self.modules.contains_key(&ticket.handle){return Err("CRT provider publication resource/identity");}
+  let identity=self.providers.get(&ticket.handle).unwrap().identity.clone();
+  if self.modules.values().any(|m|m.identity.eq_ignore_ascii_case(&identity)){return Err("CRT provider publication identity collision");}
+  let serial=self.serial.checked_add(1).ok_or("CRT provider serial")?;
+  let module=CrtModule{anchor:self.anchor,handle:ticket.handle,generation:serial};let root=CrtModuleReference{module,serial};
+  self.modules.insert(module.handle,CrtLoadedModule{identity,generation:serial,certain:true});self.module_references.insert(serial,root);
+  self.providers.get_mut(&ticket.handle).unwrap().root=Some(root);self.serial=serial;Ok(module)
+ }
+ fn provider_ready(&self,module:CrtModule)->Result<&CrtNativeProvider,&'static str>{
+  self.module_identity(module)?;let p=self.providers.get(&module.handle).ok_or("CRT missing native provider")?;
+  if !p.root.is_some_and(|r|r.module==module&&self.module_references.get(&r.serial)==Some(&r)){return Err("CRT native provider root lifetime");}Ok(p)
+ }
+ /// A target lease borrows a separately live native provider. It is not a
+ /// Windows LoadLibrary reference, an executable host pointer or an API proof.
+ fn provider_export(&mut self,init:CrtInitialization,module:CrtModule,target:CrtModule,symbol:&str,address:u32)->Result<CrtProviderExport,&'static str>{
+  self.initialization(init)?;let provider=self.provider_ready(module)?;self.provider_ready(target)?;
+  if provider.exports.len()>=provider.limit||self.exports.len()>=256||symbol.is_empty()||symbol.len()>256||!symbol.is_ascii()||symbol.as_bytes().contains(&0)||address==0||address==u32::MAX
+   ||self.exports.values().any(|e|e.function.module==module&&e.symbol==symbol){return Err("CRT provider export bounds/duplicate");}
+  // Cyclic provider dependencies have no supported destruction ordering.
+  let mut pending=vec![target];let mut seen=std::collections::BTreeSet::new();
+  while let Some(at)=pending.pop(){if module!=target&&at==module{return Err("CRT provider dependency cycle");}if seen.insert(at.handle){for e in self.exports.values().filter(|e|e.function.module==at&&e.target!=at){self.provider_ready(e.target)?;pending.push(e.target);}}}
+  let serial=self.serial.checked_add(1).ok_or("CRT provider serial")?;let function=CrtFunction{module,address,serial};
+  self.exports.insert(serial,CrtExport{function,symbol:symbol.into(),target,callable:false});self.providers.get_mut(&module.handle).unwrap().exports.push(serial);self.serial=serial;Ok(CrtProviderExport{record:function})
+ }
+ fn provider_target(&self,export:CrtProviderExport)->Result<CrtModule,&'static str>{
+  let function=export.record;self.provider_ready(function.module)?;let e=self.exports.get(&function.serial).ok_or("CRT stale provider export")?;
+  if e.function!=function||e.callable{return Err("CRT provider descriptor identity/kind");}self.provider_ready(e.target)?;Ok(e.target)
+ }
+ fn provider_destroy(&mut self,init:CrtInitialization,module:CrtModule)->Result<(),&'static str>{
+  self.initialization(init)?;let p=self.provider_ready(module)?;let root=p.root.unwrap();
+  if self.module_references.values().any(|r|r.module==module&&*r!=root)||self.exports.values().any(|e|e.target==module&&e.function.module!=module){return Err("CRT provider still acquired/borrowed");}
+  // All rejection checks precede teardown; unrelated earlier effects survive.
+  self.exports.retain(|_,e|e.function.module!=module);self.providers.remove(&module.handle);self.module_references.remove(&root.serial);self.modules.remove(&module.handle);Ok(())
  }
  fn loader_value(&self,value:CrtValue)->Result<(),&'static str>{match value{
   CrtValue::Module(m)=>self.module_identity(m),CrtValue::Function(f)=>self.function_identity(f,None),
@@ -369,7 +432,7 @@ impl CrtStreamRuntime {
   self.memory.validate(self.anchor,self.file_view.owner).map_err(|_|"CRT initialization storage lifetime")?;
   if self.closed||token.anchor!=self.anchor||token.thread!=self.thread||self.initialization!=Some(token.serial){return Err("CRT initialization owner/lifetime");}Ok(())
  }
- fn end_initialization(&mut self,token:CrtInitialization)->Result<(),&'static str>{self.initialization(token)?;if !self.locks.is_empty()||!self.descriptor_locks.is_empty()||!self.record_locks.is_empty()||!self.global_locks.is_empty(){return Err("CRT initialization with live lock lease");}self.initialization=None;Ok(())}
+ fn end_initialization(&mut self,token:CrtInitialization)->Result<(),&'static str>{self.initialization(token)?;if self.providers.values().any(|p|p.root.is_none()){return Err("CRT initialization has pending provider");}if !self.locks.is_empty()||!self.descriptor_locks.is_empty()||!self.record_locks.is_empty()||!self.global_locks.is_empty(){return Err("CRT initialization with live lock lease");}self.initialization=None;Ok(())}
  /// The receipt attests only this component's caller/thread lifecycle. It
  /// cannot assert process-wide Windows shutdown or unrelated thread quiescence.
  fn begin_shutdown(&mut self,receipt:CrtShutdownReceipt)->Result<CrtShutdown,&'static str>{
