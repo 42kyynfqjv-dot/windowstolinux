@@ -1667,7 +1667,8 @@ fn ordered_search_cases(){for mode in 0..85{
       if mode==83{event.generation+=1;}
       let taken=cxx_take_selected_search(&mut search,&mut event,&objects,receipt,&rt,&c,e,&b,&ancestor,&af,&rec);
       assert_eq!(taken,if mode==83{Err("normal exception stale/foreign ownership")}else{Ok(1)});
-     }else{let expected=match mode{77=>"abort shared exit 0x406e69 status3 mode2 unbound",78=>"CRT unknown scalar bits observed",79=>"CRT fiber identity/lifetime",80=>"CRT pointer lifetime",81=>"selected errno failure after prior write",82=>"CRT stale/foreign pointer",84=>"abort shared exit 0x406e69 status3 mode2 unbound",_=>unreachable!()};assert_eq!(result.err(),Some(expected),"lazy pending case {mode}");assert_eq!(search.phase,3);assert_eq!(event.delivery,CrtNormalDelivery::Failed);}
+     }else{let expected=match mode{77=>"shared exit managed-runtime query 0x401d51 unbound",78=>"CRT unknown scalar bits observed",79=>"CRT fiber identity/lifetime",80=>"CRT pointer lifetime",81=>"selected errno failure after prior write",82=>"CRT stale/foreign pointer",84=>"shared exit managed-runtime query 0x401d51 unbound",_=>unreachable!()};assert_eq!(result.err(),Some(expected),"lazy pending case {mode}");assert_eq!(search.phase,3);assert_eq!(event.delivery,CrtNormalDelivery::Failed);}
+     if mode==77||mode==84{let exit=e.registry.cxx.iter().find(|f|f.handler==0x414af3&&f.linked).expect("actual inline shared-exit FS installation before rejection");let record=rt.resolve_absolute(exit.record,CrtRegionKind::Stack)?;assert_eq!(rt.load(rt.offset(record,4)?,32)?,CrtValue::scalar(0x414af3));assert_eq!(rt.load(rt.offset(record,8)?,32)?,CrtValue::scalar(u32::MAX));assert!(rt.tags.values().any(|&v|v==CrtValue::ProtectedReturn(exit.owner)));}
      if mode==84{assert_eq!(rt.fls_get(fiber,slot,3)?,CrtValue::scalar(0));assert!(rt.heap_ptds.is_empty());assert_eq!(rt.load(rt.resolve_absolute(0x7110,CrtRegionKind::ThreadData)?,32)?,CrtValue::scalar(12));assert_eq!(rt.errno,None);}
      if mode==77||mode==81{assert_eq!(rt.uncertain_allocations.len(),1);let p=rt.uncertain_allocations[0];assert!(rt.valid(p,0).is_err());assert!(rt.memory.validate(p.cap,p.owner).is_ok());let field=rt.resolve_absolute(0x7110,CrtRegionKind::ThreadData)?;assert_eq!(rt.load(field,32)?,CrtValue::scalar(if mode==77{13}else{74}));assert!(rt.completed_failed_frees.is_empty());}
      assert_eq!(c.r,saved);assert!(!objects.unobserved.as_ref().unwrap().live.get());checked=true;return Err("ordered rejection checked");
@@ -1714,7 +1715,7 @@ fn ordered_search_cases(){for mode in 0..85{
    assert_eq!(taken,Err(expected),"consume negative {mode}");assert_ne!(search.current,predecessor);
   }
   checked=true;Err::<(),_>("ordered rejection checked")
- });assert_eq!(result,Err(if mode==12||mode==69{"CRT scalar knowledge/type"}else if mode==74{"CRT unknown scalar bits observed"}else if mode==75{"C++ PTD lazy setter/allocation/free effect unbound"}else if matches!(mode,77..=82|84){match mode{77=>"abort shared exit 0x406e69 status3 mode2 unbound",78=>"CRT unknown scalar bits observed",79=>"CRT fiber identity/lifetime",80=>"CRT pointer lifetime",81=>"selected errno failure after prior write",82=>"CRT stale/foreign pointer",84=>"abort shared exit 0x406e69 status3 mode2 unbound",_=>unreachable!()}}else{"ordered rejection checked"}),"outer case {mode}");assert!(checked,"case {mode} did not reach its required assertion");
+ });assert_eq!(result,Err(if mode==12||mode==69{"CRT scalar knowledge/type"}else if mode==74{"CRT unknown scalar bits observed"}else if mode==75{"C++ PTD lazy setter/allocation/free effect unbound"}else if matches!(mode,77..=82|84){match mode{77=>"shared exit managed-runtime query 0x401d51 unbound",78=>"CRT unknown scalar bits observed",79=>"CRT fiber identity/lifetime",80=>"CRT pointer lifetime",81=>"selected errno failure after prior write",82=>"CRT stale/foreign pointer",84=>"shared exit managed-runtime query 0x401d51 unbound",_=>unreachable!()}}else{"ordered rejection checked"}),"outer case {mode}");assert!(checked,"case {mode} did not reach its required assertion");
  if mode==64{let lease=escaped_lease.unwrap();assert!(lease.live.get(),"event deliberately retained outside epoch");assert!(!lease.epoch_live.get());assert_eq!(lease.validate(&rt),Err("unobserved context expired/foreign lease"));drop(escaped_event);assert!(!lease.live.get());}
 }}
 fn live_return_cases(){
@@ -1831,6 +1832,68 @@ fn registered_errno_cases(){for mode in 0..16{
   else{let expected=match mode{1=>"CRT FLS owner/reused index",2=>"CRT fiber identity/lifetime",3=>"CRT stale/foreign pointer",4=>"CRT unbound FLS index",5=>"PTD lazy acquisition/recursive errno unbound",6=>"normal call stale epoch",7=>"PTD frame overlaps protected/typed storage",9=>"CRT FLS PTD root/extent",10=>"delivery child expired/foreign suspension authority",11=>"independent lazy failure after write",12=>"PTD live record/chain identity",15=>"C++ inherited owner/record lifetime",_=>unreachable!()};assert_eq!(result.err(),Some(expected),"registered errno case {mode}");assert_eq!(event.delivery,CrtNormalDelivery::Failed);if mode==11||mode==12{assert_eq!(rt.load(field,32)?,CrtValue::scalar(74));}}
   checked=true;Err::<(),_>("registered errno component complete; OS delivery remains unproved")
  });assert!(outcome.is_err());assert!(checked,"registered errno case {mode} skipped assertions");
+}}
+
+
+fn inline_exit_cases(){for mode in 0..20{
+ let(m,mut r,main,mut permit)=fixture_with_extra(&[(0x410000,0x420000)]);let mut rt=runtime(&r);let mut checked=false;
+ let result=r.with_normal_calls(&m,&mut permit,&main,|e|{
+  let mut c=cpu(&mut rt,0xe800,990);c.return_pop=0;let entry=c.entry;let previous=e.head()?;
+  for(i,v)in [3,2,u32::from(mode==2)].into_iter().enumerate(){rt.store(rt.offset(CrtCpu::pointer(c.r[4])?,4+i as i64*4)?,32,CrtValue::scalar(v))?;}
+  let mut f=CrtInlineExit::new(&rt,&c,e)?;
+  shared_exit_prolog(&mut rt,&mut c,e,&mut f).expect("original inline prolog must install");
+  assert_eq!(c.r[5],CrtValue::Pointer(rt.resolve_absolute(0xe7fc,CrtRegionKind::Stack)?));assert_eq!(c.r[4],CrtValue::Pointer(rt.resolve_absolute(0xe7d4,CrtRegionKind::Stack)?));
+  let id=f.id.expect("original FS write must register");assert_eq!(e.head()?,RegistryHead::Cxx(id));assert_eq!(e.registry.cxx.last().unwrap().handler,0x414af3);
+  assert_eq!(rt.load(rt.offset(f.bp,-12)?,32)?,CrtValue::ThreadHead(f.token));assert_eq!(rt.load(rt.offset(f.bp,-8)?,32)?,CrtValue::scalar(0x414af3));assert_eq!(rt.load(rt.offset(f.bp,-4)?,32)?,CrtValue::scalar(u32::MAX));assert_eq!(rt.load(f.low,32)?,CrtValue::scalar(0x12345678^0xe7fc));
+  let marker=rt.offset(f.bp,-20)?;rt.store(marker,32,CrtValue::scalar(77))?;
+  if matches!(mode,1|2){
+   let outcome=shared_exit_front(&mut rt,&mut c,e,&mut f);assert_eq!(outcome,Err(if mode==1{"shared exit managed-runtime query 0x401d51 unbound"}else{"shared exit lock/cleanup manager 0x406cfa unbound"}));assert!(!c.returned);assert_eq!(e.head()?,RegistryHead::Cxx(id));assert!(e.registry.cxx.last().unwrap().linked);
+   if mode==2{assert_eq!(rt.load(rt.offset(f.bp,-13)?,8)?,CrtValue::scalar(0));assert_eq!(rt.load(rt.offset(f.bp,-24)?,32)?,CrtValue::scalar(2));assert_eq!(rt.load(rt.offset(f.bp,-20)?,32)?,CrtValue::scalar(2));let sp=CrtCpu::pointer(c.r[4])?;assert_eq!(rt.load(sp,32)?,CrtValue::Pointer(rt.offset(f.bp,-24)?));}
+  }else if mode==9||mode==15{
+   let mut inner=cpu(&mut rt,0xe000,991);inner.return_pop=0;let mut nf=CrtInlineExit::new(&rt,&inner,e)?;shared_exit_prolog(&mut rt,&mut inner,e,&mut nf)?;
+   if mode==9{assert_eq!(shared_exit_return(&mut rt,&mut c,e,&mut f),Err("inline exit live/LIFO record"));assert!(!c.returned);assert_eq!(e.registry.cxx.len(),2);}
+   else{shared_exit_return(&mut rt,&mut inner,e,&mut nf).expect("nested original epilog must return");assert_eq!(e.head()?,RegistryHead::Cxx(id));shared_exit_return(&mut rt,&mut c,e,&mut f).expect("outer original epilog must return");assert_eq!(e.head()?,previous);assert!(e.registry.cxx.is_empty());}
+  }else{
+   if mode==3{rt.thread+=1;}if mode==4{rt.bind_fiber(rt.thread)?;}if mode==5{rt.owner+=1;}
+   if mode==6{assert_eq!(rt.store(CrtCpu::pointer(entry[4])?,32,CrtValue::scalar(0)),Err("CRT protected saved/return overwrite"));}
+   if mode==7{rt.store(rt.offset(f.bp,-8)?,32,CrtValue::scalar(0x414ad6))?;}
+   if mode==8{rt.store(rt.offset(f.bp,-4)?,32,CrtValue::Scalar{bits:0,known:0})?;}
+   if mode==10||mode==19{f.unlink(&rt,&c,e,CrtValue::ThreadHead(f.token))?;assert_eq!(e.head()?,previous);if mode==19{c.returned=true;c.r[4]=CrtValue::Pointer(rt.offset(CrtCpu::pointer(entry[4])?,4)?);c.r[5]=entry[5];}assert_eq!(f.retire(&mut rt,&c,e),Err("inline exit incomplete return"));assert_eq!(f.phase,2);assert_eq!(rt.load(marker,32)?,CrtValue::scalar(77));checked=true;return Err("independent failure after original unlink");}
+   if mode==11{assert_eq!(f.install(&rt,&c,e,CrtValue::Pointer(rt.offset(f.bp,-12)?)),Err("inline exit original installation/replay"));}
+   if mode==12{e.generation+=1;}
+   if mode==13{rt.memory.release(f.low.cap,f.low.owner).map_err(|_|"test storage release")?;}
+   if mode==14{assert_eq!(rt.store(f.bp,32,CrtValue::scalar(0)),Err("CRT protected saved/return overwrite"));}
+   if mode==16{rt.store(f.low,32,CrtValue::scalar(0))?;}// Original normal epilog discards guard; no invented check.
+   if mode==17{c.push(&mut rt,CrtValue::scalar(1))?;}
+   if mode==18{assert_eq!(f.retire(&mut rt,&c,e),Err("inline exit incomplete return"));}
+   let outcome=shared_exit_return(&mut rt,&mut c,e,&mut f);
+   if matches!(mode,0|6|11|14|16|18){outcome.expect("original inline epilog must return");assert!(c.returned);assert_eq!(e.head()?,previous);assert!(e.registry.cxx.is_empty());assert_eq!(f.phase,3);assert_eq!(c.r[5],entry[5]);assert_eq!(c.r[4],CrtValue::Pointer(rt.offset(CrtCpu::pointer(entry[4])?,4)?));assert_eq!(shared_exit_return(&mut rt,&mut c,e,&mut f),Err("CRT active caller lifetime/return authority"));assert!(rt.load(rt.offset(f.bp,-12)?,32)?.known_scalar().is_err());}
+   else{let expected=match mode{3|4|5=>"inline exit stale owner/event/fiber",7=>"C++ inherited owner/record lifetime",8=>"CRT scalar knowledge/type",12=>"normal call stale epoch",13=>"CRT pointer lifetime",17=>"inline exit return stack/saved frame",_=>unreachable!()};assert_eq!(outcome,Err(expected),"inline case {mode}");assert!(!c.returned);assert!(e.registry.cxx.iter().any(|n|n.id==id&&n.linked));}
+  }
+  checked=true;Err::<(),_>("inline frame component complete; exit effects unbound")
+ });assert!(result.is_err());assert!(checked,"inline exit case {mode} skipped assertions");
+}}
+
+
+fn inline_exit_delivery(){for mode in 0..4{
+ let(m,mut r,main,mut permit)=fixture_with_extra(&[(0x410000,0x420000)]);let mut rt=runtime(&r);let mut checked=false;
+ let outcome=r.with_normal_calls(&m,&mut permit,&main,|e|{
+  let mut interrupted=cpu(&mut rt,0xd000,994);let mut binding=CrtNormalBinding::bind(&rt,&interrupted,e,epilog_run_layout())?;start(&mut rt,&mut interrupted,e,&mut binding,995)?;
+  for arg in [0,0,0,0xe0420042]{interrupted.push(&mut rt,CrtValue::scalar(arg))?;}
+  let mut event=CrtNormalException::issue(&mut rt,&mut interrupted,e,&binding,raise_site())?;let saved=interrupted.r;
+  let mut dispatcher=cpu(&mut rt,0xc000,996);dispatcher.r[4]=CrtValue::Pointer(rt.resolve_absolute(0xbfc0,CrtRegionKind::Stack)?);
+  for i in 0..4{rt.store(rt.offset(CrtCpu::pointer(dispatcher.r[4])?,i*4)?,32,CrtValue::scalar(i as u32))?;}
+  let result=event.execute_child_handler(&mut rt,&interrupted,e,&binding,&mut dispatcher,0x401900,|rt,h,child|{
+   h.call_activation(rt,0x401905,0,|rt,c|{
+    let mut f=CrtInlineExit::new(rt,c,child)?;shared_exit_prolog(rt,c,child,&mut f)?;
+    if mode==1{f.lease=None;}if mode==2{child.delivery=None;}if mode==3{child.registry.normal_epoch.as_mut().unwrap().pending_exception=None;}
+    shared_exit_return(rt,c,child,&mut f)
+   })?;h.r[0]=CrtValue::scalar(1);h.finish(rt)
+  });assert_eq!(interrupted.r,saved);assert!(e.state().is_err());
+  if mode==0{let receipt=result.expect("owned delivery child original inline return");assert_eq!(event.take_handler_result(receipt,&rt,&interrupted,e,&binding)?,1);assert!(e.registry.cxx.is_empty());}
+  else{assert_eq!(result.err(),Some(match mode{1=>"inline exit stale owner/event/fiber",2=>"normal call suspended for owned exception",3=>"delivery child expired/foreign suspension authority",_=>unreachable!()}));assert_eq!(event.delivery,CrtNormalDelivery::Failed);assert!(e.registry.cxx.iter().any(|f|f.handler==0x414af3&&f.linked));}
+  checked=true;Err::<(),_>("inline exit delivery component; acquisition unproved")
+ });assert!(outcome.is_err());assert!(checked,"inline delivery {mode} skipped assertions");
 }}
 
 fn shared_chain_delivery(){for mode in 0..5{
@@ -1956,7 +2019,7 @@ fn chain_ownership_gap(){let delivery_mode=0;let mode=0;
   Err::<(),_>("two local FS views cannot establish actual handler selection")
  });assert!(result.is_err());
 }
-fn main(){match std::env::args().nth(1).unwrap().as_str(){"abort-locked"=>abort_locked_cases(),"registered-errno"=>registered_errno_cases(),"ordered-search"=>ordered_search_cases(),"live-return"=>live_return_cases(),"chain-effect-lifetime"=>chain_effect_lifetime(),"shared-chain"=>{shared_chain_cases();shared_chain_nested();shared_chain_delivery()},"chain-ownership-gap"=>chain_ownership_gap(),"bound-cxx-invocation"=>bound_invocation(),"prefix-delivery-unwind"=>dispatcher_delivery_unwind(true),"dispatcher-delivery-unwind"=>dispatcher_delivery_unwind(false),"delivery-cached-unwind"=>delivery_cached_unwind(),"delivery-children"=>delivery_children(),"cxx-cached-unwind"=>cxx_cached_unwind(),"cxx-unwind"=>cxx_registered_unwind(),"manager-inherited"=>inherited_registered_manager(),"manager"=>manager_registered(),"live-finally"=>live_finally_cases(),"owned-loop"=>owned_loop_cases(),"owned-local"=>owned_local_cases(),"owned"=>{main_initial_rejections();initial_raise_rejections();owned_main_cases()},"path-edges"=>path_edges(),"live"=>live_dispatch(),"objects"=>captured_objects(),"handler"=>pending_handler_activation(),"pending"=>pending_normal_exception(),"pending-reject"=>reject_normal_exception(),"file"=>file_scope_normal(),"file-failure"=>file_scope_failure(),"nested"=>nested_actual(),"mutations"=>mutations(),"consumed"=>consumed_mutation(),"failure"=>body_failure(),"certificate"=>wrong_certificate(),"observed"=>observed(),_=>panic!("case")}}
+fn main(){match std::env::args().nth(1).unwrap().as_str(){"inline-exit"=>{inline_exit_cases();inline_exit_delivery()},"abort-locked"=>abort_locked_cases(),"registered-errno"=>registered_errno_cases(),"ordered-search"=>ordered_search_cases(),"live-return"=>live_return_cases(),"chain-effect-lifetime"=>chain_effect_lifetime(),"shared-chain"=>{shared_chain_cases();shared_chain_nested();shared_chain_delivery()},"chain-ownership-gap"=>chain_ownership_gap(),"bound-cxx-invocation"=>bound_invocation(),"prefix-delivery-unwind"=>dispatcher_delivery_unwind(true),"dispatcher-delivery-unwind"=>dispatcher_delivery_unwind(false),"delivery-cached-unwind"=>delivery_cached_unwind(),"delivery-children"=>delivery_children(),"cxx-cached-unwind"=>cxx_cached_unwind(),"cxx-unwind"=>cxx_registered_unwind(),"manager-inherited"=>inherited_registered_manager(),"manager"=>manager_registered(),"live-finally"=>live_finally_cases(),"owned-loop"=>owned_loop_cases(),"owned-local"=>owned_local_cases(),"owned"=>{main_initial_rejections();initial_raise_rejections();owned_main_cases()},"path-edges"=>path_edges(),"live"=>live_dispatch(),"objects"=>captured_objects(),"handler"=>pending_handler_activation(),"pending"=>pending_normal_exception(),"pending-reject"=>reject_normal_exception(),"file"=>file_scope_normal(),"file-failure"=>file_scope_failure(),"nested"=>nested_actual(),"mutations"=>mutations(),"consumed"=>consumed_mutation(),"failure"=>body_failure(),"certificate"=>wrong_certificate(),"observed"=>observed(),_=>panic!("case")}}
 "#;
 
 fn run(case: &str) {
@@ -2336,6 +2399,7 @@ if fault==1{{cpu.condition(0)?;}}
         cxx_cached.push_str(&crate::crt_cxx_record::delivered_lazy_source().unwrap());
         cxx_cached.push_str(&crate::crt_cxx_ptd::lazy_extension_source().unwrap().replace("Err(\"C++ required PTD termination effect unbound\")", "allocation(rt,cpu,0x4077ff)"));
         cxx_cached.push_str(&crate::crt_abort::registered_entry_source().unwrap());
+        cxx_cached.push_str(&crate::crt_exit::source(&bytes_hex(crate::crt_exit::PREFIX),&bytes_hex(crate::crt_exit::FRONT),&bytes_hex(crate::crt_exit::RETURN)).unwrap());
         cxx_cached.push_str(&crate::crt_abort::locked_source(&super::tests::bytes()).unwrap());
         // errno_routed_call is already provided by the allocator composition.
         cxx_cached.push_str(&crate::crt_heap_free::fixture_source_without_errno());
@@ -2708,4 +2772,9 @@ fn original_ucrt_errno_registration_preserves_pending_delivery_ownership() {
 #[test]
 fn original_abort_locked_query_owns_frame_lock_and_failure_effects() {
     run("abort-locked");
+}
+
+#[test]
+fn original_inline_exit_record_preserves_registry_return_and_failure_lifetimes() {
+    run("inline-exit");
 }

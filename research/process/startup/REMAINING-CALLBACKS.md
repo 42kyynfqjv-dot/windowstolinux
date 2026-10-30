@@ -332,3 +332,11 @@ Abort407804 decisions and exit wrapper407004 now execute original instructions.
 Unbound boundaries are signal22 dispatch40cc14, feature23 query41501c and shared
 exit406e69 after actual3/2/0 pushes. No callback/API outcome or process exit is
 fabricated. Initial flags and full delivery/startup effects remain supplied.
+
+Shared exit `0x406e69` now executes its original inline FS installation in the
+connected pending path. Its next actual rejection is `0x401d51`: GetModuleHandleW
+and module-header inspection need checked image authority. The separately supplied
+return-mode front rejects at manager `0x406cfa`. Original epilog component tests
+establish unlink/return ownership but do not connect that body or model termination.
+Handler `0x414af3`, manager cleanup, managed exit, physical exit and signal dispatch
+remain unresolved; no successful callback or full-startup claim replaces them.

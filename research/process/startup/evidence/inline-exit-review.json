@@ -1,0 +1,84 @@
+{
+  "kind": "shared-exit inline registry component review; no new whole-PE translation",
+  "reviewed_parent": "1b13ebacdd7625e36263c89e4596b582445cfb0c",
+  "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "generated_rust_sha256": "32d616e30060ce581340fbe7dc8df53d92b47eb71a6e92f232bc8c4763c7006a",
+  "recorded_windows_comparisons": 5,
+  "fresh_windows_observations": 0,
+  "new_whole_pe_pairs": 0,
+  "native_inline_cases": 24,
+  "retained_ordered_cases": 85,
+  "crt_suite": {
+    "passed": 242,
+    "ignored": 1,
+    "ignored_scope": "vector-dependent comparison, separately passed in recorded replay"
+  },
+  "root_tests": 175,
+  "python_tests": 60,
+  "python_skipped": 1,
+  "clippy": "passed -D warnings",
+  "format_and_diff": "passed",
+  "bound_instruction_bytes": {
+    "0x406e69": 39,
+    "0x406e90": 79,
+    "0x406f09": 13
+  },
+  "changed_byte_rejections": 131,
+  "review_fixes": [
+    "Retirement rejects a forged completion flag while the actual protected return token remains live.",
+    "Shared exit continuation derives from decoded CALL site (0x407015), replacing a transient local literal.",
+    "Corrected test-only module gate and generated test variable; local failure logs retained."
+  ],
+  "adversarial_mutant": {
+    "removed_check": "live protected return token at retirement",
+    "observed": "premature Ok(()) instead of inline exit incomplete return",
+    "exit_success": false,
+    "source_sha256": "a35203f6c7b0ed65f2150532f39cb0a3e34efa98bc2ed631282addc4e70599f1",
+    "log_sha256": "de931d8fde1a952a431da35cf1dfcda503b0da7f625889c76fd63c4fa0712b92"
+  },
+  "logs": {
+    "crt-final.log": "498bf6ee84c382fbec6f32211520d2bd1014805ab2d5a8b69b1e582a22c19772",
+    "root.log": "6b8278a1be9318ba16a80fcf70128353b705af25af565307df4a098b474360f9",
+    "clippy-final.log": "efb43c83bbb6a1157f6763cfe6ad370eccdd3142c3067c272e3e0e7e69a559ca",
+    "python.log": "357b04fd79a98b77a5c0f1caa56a7e5b8e0ea11719c6fa0569c9538d2563eff6",
+    "managed-query-inventory.txt": "ab80a7de287478b76896d5b787fe83dd3091cbae1cf42f42a5ec6fc110e6c669",
+    "replay-final.log": "5505035b2f8262fa6ccbd89fc025ea6fffda8163f9f38db7869edf52aa194d60"
+  },
+  "reviewed_parent_ci": [
+    {
+      "id": 41008206058,
+      "conclusion": "success"
+    },
+    {
+      "id": 41008202279,
+      "conclusion": "success"
+    },
+    {
+      "id": 41008202171,
+      "conclusion": "success"
+    }
+  ],
+  "prior_db8d128_ci": [
+    {
+      "id": 41006636984,
+      "conclusion": "success"
+    },
+    {
+      "id": 41006631527,
+      "conclusion": "success"
+    },
+    {
+      "id": 41006631641,
+      "conclusion": "success"
+    }
+  ],
+  "new_head_ci": "Publication will trigger fresh CI; inspect exact head, no final-head success claimed here.",
+  "limitations": [
+    "Return fragment is component execution with an explicit body cut; no connected successful shared-exit body.",
+    "Connected pending abort reaches original inline FS installation and rejects managed-runtime query 0x401d51.",
+    "Supplied return mode reaches original manager argument construction then rejects 0x406cfa.",
+    "GetModuleHandleW/image view, handler414af3, manager cleanup, process termination, signal and actual Windows delivery effects remain open.",
+    "Historical original-Windows timeout causes remain unresolved."
+  ],
+  "next_gate": "Original GetModuleHandleW(NULL) producer and checked live PE header view before managed-runtime query; preserve unknown/bounds/owner failures."
+}

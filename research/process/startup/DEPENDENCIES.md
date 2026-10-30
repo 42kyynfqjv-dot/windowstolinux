@@ -436,3 +436,13 @@ unbound. Unknown conditions reject, no missing call supplies success, and owner/
 lifetime checks preserve prior effects. Next establish the original mode2 exit
 policy/FS frame and separate signal dispatch contracts.
 [Current branch/exit evidence](CAPTURE-ACQUISITION.md#original-abort-branches-and-exit-wrapper).
+
+## Inline shared exit now reached
+
+Abort's original exit wrapper → `0x406e69` now installs the distinct inline record
+under canonical thread/event ownership, then rejects at actual managed-runtime
+query `0x401d51` (GetModuleHandleW plus checked PE-header reads). A supplied return
+mode reaches manager `0x406cfa` and rejects. The original unlink/LEAVE/RET has
+separate native component coverage; body-to-return and process termination are
+not connected. Missing effects retain live frames, not successful cleanup.
+[Current lifetime boundary and next executable gate](CAPTURE-ACQUISITION.md#inline-shared-exit-record-and-return-lifetime).

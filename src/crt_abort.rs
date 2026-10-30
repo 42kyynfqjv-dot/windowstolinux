@@ -1,4 +1,4 @@
-//! Original abort entry and signal-query caller. The locked query is unbound.
+//! Original abort decisions and registered signal-query/exit prefixes.
 use crate::crt_stream_ir::{Graph, Target};
 pub(crate) const ENTRY: &str = "e8cb530000";
 pub(crate) const QUERY: &str =
@@ -237,11 +237,12 @@ pub(crate) fn registered_entry_source() -> Result<String, String> {
         .find("fn abort_entry_original")
         .ok_or("abort source entry boundary")?]
         .into();
-    s.push_str(&branch_source(
+    s.push_str(&branch_source_for(
         &crate::crt_ptd::raw(ABORT),
         &crate::crt_ptd::raw(EXIT),
+        true,
     )?);
-    s.push_str("fn abort_entry_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,epoch:&mut NormalCallEpoch<'_>)->RegistryResult<CrtValue>{abort_branch_original(rt,cpu,&mut|rt,c|abort_query_original(rt,c,&mut|rt,c|abort_locked_original(rt,c,epoch,&mut|_|Ok(()))))}");
+    s.push_str("fn abort_entry_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,epoch:&mut NormalCallEpoch<'_>)->RegistryResult<CrtValue>{abort_branch_original(rt,cpu,epoch)}");
     Ok(s)
 }
 
@@ -250,6 +251,9 @@ pub(crate) const ABORT:&str="e8cb53000085c074086a16e80554000059f60528c1410002742
 pub(crate) const EXIT: &str = "8bff558bec6a006a02ff7508e854feffff83c40c5dc3";
 
 pub(crate) fn branch_source(abort: &[u8], exit: &[u8]) -> Result<String, String> {
+    branch_source_for(abort, exit, false)
+}
+fn branch_source_for(abort: &[u8], exit: &[u8], registered: bool) -> Result<String, String> {
     if abort != crate::crt_ptd::raw(ABORT) || exit != crate::crt_ptd::raw(EXIT) {
         return Err("abort branch/exit code binding".into());
     }
@@ -283,10 +287,10 @@ pub(crate) fn branch_source(abort: &[u8], exit: &[u8]) -> Result<String, String>
         &graph,
         |pc, target| {
             Ok(match(pc,target){
-  (0x4077ff,Target::Direct(0x40cbcf))=>"cpu.call_activation(rt,0x407804,0,|rt,c|lookup(rt,c))?;".into(),
+  (0x4077ff,Target::Direct(0x40cbcf))=>if registered{"cpu.call_activation(rt,0x407804,0,|rt,c|abort_query_original(rt,c,&mut|rt,c|abort_locked_original(rt,c,epoch,&mut|_|Ok(()))))?;"}else{"cpu.call_activation(rt,0x407804,0,|rt,c|lookup(rt,c))?;"}.into(),
   (0x40780a,Target::Direct(0x40cc14))=>"if rt.load(CrtCpu::pointer(cpu.r[4])?,32)?!=CrtValue::scalar(22){return Err(\"abort signal argument\");}return Err(\"abort signal22 dispatch 0x40cc14 unbound\");".into(),
   (0x40781b,Target::Import(0x41501c))=>"if rt.load(CrtCpu::pointer(cpu.r[4])?,32)?!=CrtValue::scalar(23){return Err(\"abort feature argument\");}return Err(\"abort processor-feature/report/fast-fail effects unbound\");".into(),
-  (0x40783d,Target::Direct(0x407004))=>"cpu.call_activation(rt,0x407842,0,|rt,c|abort_exit_original(rt,c))?;return Err(\"abort exit unexpectedly returned\");".into(),
+  (0x40783d,Target::Direct(0x407004))=>format!("cpu.call_activation(rt,0x407842,0,|rt,c|abort_exit_original(rt,c{}))?;return Err(\"abort exit unexpectedly returned\");",if registered{",epoch"}else{""}),
   _=>return Err("abort branch call inventory".into())
  })
         },
@@ -300,16 +304,31 @@ pub(crate) fn branch_source(abort: &[u8], exit: &[u8]) -> Result<String, String>
     )?;
     let exit_body = crate::crt_stream_emit::emit_body(
         &Graph::decode(exit, 0x407004)?,
-        |_, target| {
+        |pc, target| {
             if target != Target::Direct(0x406e69) {
                 return Err("abort exit target".into());
             }
-            Ok("let sp=CrtCpu::pointer(cpu.r[4])?;for(i,value)in [3,2,0].into_iter().enumerate(){if rt.load(rt.offset(sp,i as i64*4)?,32)?!=CrtValue::scalar(value){return Err(\"abort shared exit argument domain\");}}return Err(\"abort shared exit 0x406e69 status3 mode2 unbound\");".into())
+            let effect = if registered {
+                format!("cpu.call_activation(rt,{},0,|rt,c|abort_shared_exit_original(rt,c,epoch))?;return Err(\"abort shared exit unexpectedly returned\");",pc+5)
+            } else {
+                "return Err(\"abort shared exit 0x406e69 status3 mode2 unbound\");".into()
+            };
+            Ok(format!("let sp=CrtCpu::pointer(cpu.r[4])?;for(i,value)in [3,2,0].into_iter().enumerate(){{if rt.load(rt.offset(sp,i as i64*4)?,32)?!=CrtValue::scalar(value){{return Err(\"abort shared exit argument domain\");}}}}{effect}"))
         },
         &Default::default(),
         32,
     )?;
-    Ok(format!("fn abort_exit_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->RegistryResult<CrtValue>{{cpu.validate_active(rt)?;{exit_body}}}fn abort_branch_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,lookup:&mut impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu)->RegistryResult<CrtValue>)->RegistryResult<CrtValue>{{cpu.validate_active(rt)?;let anchor=rt.anchor;let thread=rt.thread;let owner=rt.owner;{body}}}"))
+    let exit_parameter = if registered {
+        ",epoch:&mut NormalCallEpoch<'_>"
+    } else {
+        ""
+    };
+    let branch_parameter = if registered {
+        "epoch:&mut NormalCallEpoch<'_>"
+    } else {
+        "lookup:&mut impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu)->RegistryResult<CrtValue>"
+    };
+    Ok(format!("fn abort_exit_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu{exit_parameter})->RegistryResult<CrtValue>{{cpu.validate_active(rt)?;{exit_body}}}fn abort_branch_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,{branch_parameter})->RegistryResult<CrtValue>{{cpu.validate_active(rt)?;let anchor=rt.anchor;let thread=rt.thread;let owner=rt.owner;{body}}}"))
 }
 
 #[test]

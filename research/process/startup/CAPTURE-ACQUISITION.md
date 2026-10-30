@@ -896,3 +896,69 @@ registry: establish declarative inline-frame ownership, byte image, permitted
 return versus terminal lifetime and failure effects, using independent return,
 nonreturn and stale-owner cases. Mode2 policy and physical exit effects still
 need their own contracts; the inventory alone closes neither.
+
+## Inline shared-exit record and return lifetime
+
+The original abort exit wrapper now calls `0x406e69` under its live pending-event
+registry. Mechanical lowering executes the original inline prolog: saved EBP,
+level -1, handler `0x414af3`, canonical predecessor, 24 local bytes and the cookie
+word. The common 12-byte chain prefix is compatible with registry traversal;
+this does **not** identify its handler as `0x414ad6` or grant an EH4 handler proof.
+The record is at EBP-12 and the lowest live word at EBP-40, with no helper-style
+EBX/ESI/EDI slots. Function, thread, fiber, epoch and delivery-child ownership are
+checked at the original FS publication and subsequent effects.
+
+The connected status3/mode2/zero path now reaches the actual managed-runtime query
+call `0x401d51`. That call remains an explicit rejection. A separately supplied
+nonzero return-mode input executes the other original front branch, initializes
+its local pointer tuple and lock arguments, and rejects at manager `0x406cfa`.
+Neither missing call returns a fabricated success. Rejection retains the live
+registration, protected return and all earlier writes; it is not process exit or
+exception cleanup. Original signal22 and feature/reporting paths remain unbound.
+
+The unchanged epilog `0x406f09..0x406f16` is independently executed as a component:
+original FS unlink, cookie POP, LEAVE and RET. Retirement requires that RET has
+consumed its unique protected token, restored stack/callee state and retained the
+same event/owner; a Boolean completion flag is insufficient. Normal epilog does
+not check the popped cookie, and the implementation does not invent such a check.
+Its tests deliberately mutate that word and still require the original return.
+**The body-to-epilog path is not connected yet.** There is no termination receipt
+or supported host-exit mapping, and unproved handler/termination effects reject.
+
+Independent coverage contains 20 inline-frame cases and four delivery-child
+cases: actual byte layout, nested LIFO returns, original front arguments, unknown
+level, changed handler, stale storage/epoch, cross-thread/fiber/process access,
+wrong stack, premature/fabricated retirement, replay, and failure after unlink.
+The connected pending lazy-PTD cases additionally require the actual live
+`0x414af3` registration before their rejection, not merely an expected error string.
+All 131 one-byte mutations of the three bound instruction regions reject.
+The replay verifies these bytes against the unchanged PE and keeps the five
+recorded Windows comparisons separate from native component cases. No new
+Windows observation or whole-PE translation is claimed.
+
+Review corrected a transient local continuation literal by deriving the shared
+exit CALL's resume address (`0x407015`) from its decoded site. It also strengthened
+retirement against a forged `returned` flag with the original token still live.
+A generated-test variable typo and missing test-only module gate caused local
+compile failures; the retained logs identify them separately from Windows failures.
+
+### Next executable gate
+
+`0x401d51` calls the actual IAT `0x415008`, bound to
+`kernel32.dll!GetModuleHandleW`, with NULL. It then reads MZ, e_lfanew, PE signature,
+PE32 magic, NumberOfRvaAndSizes and the CLR directory RVA before deriving AL.
+The next bounded step needs the main-module handle's checked image-view authority,
+header bounds and lifetime, followed by original query execution. Do not substitute
+"this fixture is native" for these reads or fabricate an image pointer from a
+numeric module handle. Test absent/invalid/truncated headers and stale/foreign
+module authority independently. If AL is nonzero, `0x406f55` remains another
+loader/managed-termination contract. If zero, the next cut is manager `0x406cfa`.
+Actual manager cleanup, exit policy, process termination and handler `0x414af3`
+remain open. Sol can review this boundary and inventory the existing module view;
+Astra is only warranted if module acquisition/view authority needs a new contract.
+
+A generated-native adversarial mutant removing only the live-return-token check
+was compiled and run: the fabricated-return case incorrectly retired successfully
+(`Ok(())`) instead of rejecting `inline exit incomplete return`. The corrected
+implementation rejects it; the retained mutant log and source hashes are recorded
+in [the review evidence](evidence/inline-exit-review.json).

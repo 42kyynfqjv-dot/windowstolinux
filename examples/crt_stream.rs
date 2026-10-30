@@ -309,3 +309,6 @@ mod crt_heap_free;
 #[cfg(test)]
 #[path = "../src/crt_abort.rs"]
 mod crt_abort;
+#[cfg(test)]
+#[path = "../src/crt_exit.rs"]
+mod crt_exit;
