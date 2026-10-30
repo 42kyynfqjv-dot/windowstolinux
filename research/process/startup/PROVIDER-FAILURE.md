@@ -10,7 +10,7 @@ The next missing fact is failed provider initialization, independently of native
 bookkeeping capacity. The authored `provider_attach.c` is compiled twice with
 identical MSVC14.44 x86 /O2 /MT /LD configuration except ACCEPT_ATTACH=0/1. The
 loader observer uses absolute disposable output paths and flags0x900. The DLL
-exports a simple value7 control function with an explicit x86 C export alias;
+exports a simple value7 control function using its compiler-generated C export;
 its DllMain returns FALSE or TRUE at DLL_PROCESS_ATTACH. No third-party DLL or
 user executable is modified.
 
@@ -50,3 +50,16 @@ implemented exports. An uninitialized/failed provider must expose no acquisition
 or callable export. Binding the real startup call still requires those effects
 and its actual mapped object/index. Full startup/rcedit and historical timeout
 causes remain unresolved. PR45 stays draft.
+
+## Retained first build failure
+
+Commit6aa46e1 run41051575029/job124048652319 failed before executing the
+observer: the redundant explicit internal-name alias produced LNK2001 for
+_independent_value. Artifact12974104509 is retained; its downloaded ZIP SHA256
+17cd449e111b623c767d80f9587fe63adc829e489cc697f1c8ba04e9f0d14550
+matched the upload report. The actual x86 COFF object independently contains
+_independent_value and _DllMain@12. The correction removes the redundant alias
+and uses __declspec(dllexport)'s compiler-generated directive. Original C sources
+and semantic expectations are unchanged. Build failures now also print the saved
+compiler/linker diagnostics to the job log. This is a build correction, not an
+observed Windows initialization failure, retry success or timeout diagnosis.

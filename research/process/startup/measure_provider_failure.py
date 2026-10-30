@@ -12,11 +12,13 @@ def run(command,limit,name):
     except subprocess.TimeoutExpired as e:
         (out/name).write_bytes((e.stdout or b'')+(e.stderr or b''));raise
     (out/name).write_bytes(p.stdout+p.stderr)
-    if p.returncode:raise ValueError(f'{name}: exit {p.returncode}')
+    if p.returncode:
+        print((p.stdout+p.stderr).decode('utf-8',errors='replace'),flush=True)
+        raise ValueError(f'{name}: exit {p.returncode}')
     return p.stdout
 commands=[]
 for name,accepted in [('rejected',0),('accepted',1)]:
-    command=['cl','/nologo','/W4','/O2','/MT','/LD',f'/DACCEPT_ATTACH={accepted}',str(here/'provider_attach.c'),'/Fe'+str(out/(name+'.dll')),'/Fo'+str(out/(name+'.obj')),'/link','/EXPORT:independent_value=_independent_value','/IMPLIB:'+str(out/(name+'.lib'))]
+    command=['cl','/nologo','/W4','/O2','/MT','/LD',f'/DACCEPT_ATTACH={accepted}',str(here/'provider_attach.c'),'/Fe'+str(out/(name+'.dll')),'/Fo'+str(out/(name+'.obj')),'/link','/IMPLIB:'+str(out/(name+'.lib'))]
     commands.append(command);run(command,60,name+'-build.log')
 exe=out/'observer.exe';command=['cl','/nologo','/W4','/O2','/MT',str(here/'provider_load_probe.c'),'/Fe'+str(exe),'/Fo'+str(out/'observer.obj')];commands.append(command);run(command,60,'observer-build.log')
 for name in ('accepted.dll','rejected.dll','observer.exe'):
