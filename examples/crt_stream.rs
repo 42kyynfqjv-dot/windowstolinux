@@ -315,3 +315,7 @@ mod crt_exit;
 #[cfg(test)]
 #[path = "../src/crt_module_image.rs"]
 mod crt_module_image;
+
+#[allow(dead_code)]
+#[path = "../src/crt_cookie_init.rs"]
+mod crt_cookie_init;

@@ -1144,3 +1144,52 @@ original writes and lock/API effects instead of overlaying mapped bytes. The
 original manager `0x406cfa`, managed termination `0x406f55`, actual delivery and
 physical exit still need justified effects and connected execution. Full startup/
 rcedit remains unsupported. [Review evidence](evidence/image-file-anchor-review.json).
+
+## Cookie stores and original record initialization share mapped data
+
+The new cookie component lowers the original 75 bytes at `0x401b71` with the
+shared instruction emitter. Entry checks validate active return authority, the
+canonical process image and actual live code bytes. Existing nondefault cookies
+with a nonzero high word follow the original branch and write their complement
+to `0x41c040`, separately from the cookie at `0x41c000`. No adjacent-word assumption
+or copied cookie state is introduced. Unknown cookie bits reject; returned
+activations reject before executing the body again.
+
+The default-cookie and zero-high-word paths reach the actual direct call to
+`0x401b24` and reject as **cookie entropy producer unbound**. No entropy value or
+successful API result is substituted. The retained failure state includes the
+original pushes of ESI/EDI and leaves cookie/complement writes unapplied. This is
+an unresolved-call component boundary, not a supported original execution result.
+
+A connected recorded-input regression uses the unchanged authored PE, actual FILE
+array and canonical data section, then follows the original normal record helper
+and checked epilog against the same cookie cell. The successful path deliberately
+supplies an independently established cookie; it does not claim its entropy
+producer ran. Corrupt cookie/guard values and released storage reject with exact
+expected errors; normal retirement makes the record authority stale. Seventy-five
+single-byte code mutants reject at proof construction. Eight connected scenarios
+and eight independent input classes retain unknown/default rejection, complement
+writes, relevant arithmetic flags and replay protection. Two full-suite tests
+require recorded artifacts and run separately in replay; the ordinary suite does
+not silently count them as executed.
+
+The standard replay binds the cookie initializer bytes to the original PE and
+compares their hash across hosts. Five retained Windows comparisons remain wrapper
+component observations, not new Windows cookie/startup executions or whole-PE
+pairs. A successful current native baseline precedes a removed-entry-check mutant;
+that mutant fails at a late repeated-return error instead of the required entry
+rejection. [Review evidence and hashes](evidence/cookie-record-review.json).
+
+This advances actual storage composition: FILE, cookie, complement and original
+stack records now coexist with one mapped image rather than overlaying cookie
+maps. It does not connect all original process entry instructions. The next
+executable gate is the 77-byte entropy helper `0x401b24`: XORPS/MOVLPD zero the local
+FILETIME, then imports at `0x41502c` (GetSystemTimeAsFileTime), `0x415028`
+(GetCurrentThreadId), `0x415024` (GetCurrentProcessId), and `0x415020`
+(QueryPerformanceCounter) contribute actual outputs and a guest stack address.
+Close output-buffer initialization, return/error effects, logical guest versus
+host identity and nondeterministic acquisition contracts before binding that call.
+Do not replace them with recorded entropy. Original startup `0x40161f`, manager
+`0x406cfa`, managed termination and delivery/exit gates remain. A bounded Astra
+semantic pass is useful for those acquisition/identity contracts; routine review
+and CI can stay on Sol. Full startup/rcedit is still unsupported.

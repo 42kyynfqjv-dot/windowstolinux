@@ -367,3 +367,11 @@ mapping or default lock construction. Remaining supplied initialization includes
 cookie/record producers and their external effects. Move those producers to
 section-backed views before connecting the original manager and termination;
 FILE role binding alone does not certify complete formatting or startup.
+
+Cookie initialization is now original instruction execution for the already
+established-cookie branch. Cookie/complement and normal record initialization use
+canonical image bytes. The default-cookie producer remains entropy helper401b24:
+GetSystemTimeAsFileTime, GetCurrentThreadId, GetCurrentProcessId,
+QueryPerformanceCounter, local initialization and guest stack address effects.
+This is an actual unresolved call, not a success callback. Startup40161f and later
+initializer/manager/termination effects remain separate mandatory gates.

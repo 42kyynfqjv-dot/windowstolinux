@@ -493,3 +493,13 @@ same lock, opaque-byte and typed-field policy. No lock or CRT initialization is
 inferred from mapped bytes. This closes the separate FILE mapping gap in the
 preceding section. Next migrate cookie/startup-record producers to section views
 and connect the manager/termination effects. [Contract and rejection boundary](CAPTURE-ACQUISITION.md#file-anchor-adopts-canonical-image-storage).
+
+## Original cookie/record storage composition connected
+
+The original cookie initializer's existing-cookie path now writes the complement
+in canonical `.data`; the original record prolog and checked epilog use that same
+cookie, mapped FILE anchor and live stack. Successful cases supply an established
+cookie explicitly. Actual default input still rejects at entropy helper401b24,
+whose four OS acquisition effects and stack-local identity are not implemented.
+The next gate is that real producer, followed by startup40161f; no recorded entropy
+or initializer success is inferred. [Exact evidence and next contract](CAPTURE-ACQUISITION.md#cookie-stores-and-original-record-initialization-share-mapped-data).

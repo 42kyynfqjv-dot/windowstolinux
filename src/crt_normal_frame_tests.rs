@@ -2028,7 +2028,47 @@ fn chain_ownership_gap(){let delivery_mode=0;let mode=0;
   Err::<(),_>("two local FS views cannot establish actual handler selection")
  });assert!(result.is_err());
 }
-fn main(){match std::env::args().nth(1).unwrap().as_str(){"inline-exit"=>{inline_exit_cases();inline_exit_delivery();inline_exit_image()},"abort-locked"=>abort_locked_cases(),"registered-errno"=>registered_errno_cases(),"ordered-search"=>ordered_search_cases(),"live-return"=>live_return_cases(),"chain-effect-lifetime"=>chain_effect_lifetime(),"shared-chain"=>{shared_chain_cases();shared_chain_nested();shared_chain_delivery()},"chain-ownership-gap"=>chain_ownership_gap(),"bound-cxx-invocation"=>bound_invocation(),"prefix-delivery-unwind"=>dispatcher_delivery_unwind(true),"dispatcher-delivery-unwind"=>dispatcher_delivery_unwind(false),"delivery-cached-unwind"=>delivery_cached_unwind(),"delivery-children"=>delivery_children(),"cxx-cached-unwind"=>cxx_cached_unwind(),"cxx-unwind"=>cxx_registered_unwind(),"manager-inherited"=>inherited_registered_manager(),"manager"=>manager_registered(),"live-finally"=>live_finally_cases(),"owned-loop"=>owned_loop_cases(),"owned-local"=>owned_local_cases(),"owned"=>{main_initial_rejections();initial_raise_rejections();owned_main_cases()},"path-edges"=>path_edges(),"live"=>live_dispatch(),"objects"=>captured_objects(),"handler"=>pending_handler_activation(),"pending"=>pending_normal_exception(),"pending-reject"=>reject_normal_exception(),"file"=>file_scope_normal(),"file-failure"=>file_scope_failure(),"nested"=>nested_actual(),"mutations"=>mutations(),"consumed"=>consumed_mutation(),"failure"=>body_failure(),"certificate"=>wrong_certificate(),"observed"=>observed(),_=>panic!("case")}}
+fn canonical_startup_storage(){
+ let path=std::env::var("W2L_PE_MAPPING_INPUT").expect("unchanged authored input required");let file=std::fs::read(path).unwrap();
+ for mode in 0..8{
+  let(m,mut r,main,mut permit)=fixture_with_extra(&[(0x410000,0x420000)]);
+  let(mut rt,init)=CrtStreamRuntime::new_initializing_pe32(r.identity.owner,r.identity.instance,0x41c080,3,1048576,&file).unwrap();
+  rt.map_region(0x9000,0x6000,CrtRegionKind::Stack,None).unwrap();let image=rt.main_image.unwrap();
+  let cookie=rt.process_image_pointer(image,0x41c000,4).unwrap();let complement=rt.process_image_pointer(image,0x41c040,4).unwrap();
+  let prior_cookie=rt.load(cookie,32).unwrap();let prior_complement=rt.load(complement,32).unwrap();let head=r.head;
+  if mode==0||mode==1{
+   if mode==1{rt.store(cookie,32,CrtValue::Scalar{bits:0,known:0}).unwrap();}
+   let mut c=cpu(&mut rt,0xd000,901);c.return_pop=0;let got=original_cookie_init(&mut rt,&mut c);
+   assert_eq!(got,Err(if mode==0{"cookie entropy producer unbound"}else{"CRT unknown scalar bits observed"}));assert!(!c.returned);assert_eq!(CrtCpu::pointer(c.r[4]).unwrap().address(),0xd000-8);assert_eq!(rt.load(CrtCpu::pointer(c.r[4]).unwrap(),32).unwrap(),c.entry[7]);assert_eq!(rt.load(rt.offset(CrtCpu::pointer(c.r[4]).unwrap(),4).unwrap(),32).unwrap(),c.entry[6]);assert_eq!(rt.load(complement,32).unwrap(),prior_complement);if mode==0{assert_eq!(rt.load(cookie,32).unwrap(),prior_cookie);}assert_eq!(r.head,head);continue;
+  }
+  // Explicit independently established-cookie input: this does not model the
+  // unresolved entropy call. The original instructions write its complement.
+  rt.store(cookie,32,CrtValue::scalar(0x12345678)).unwrap();
+  let mut c=cpu(&mut rt,0xd000,902);c.return_pop=0;original_cookie_init(&mut rt,&mut c).expect("existing-cookie original initialization");assert!(c.returned);assert_eq!(rt.load(complement,32).unwrap(),CrtValue::scalar(!0x12345678));
+  assert!(rt.map_region(0x41c000,4,CrtRegionKind::Module,None).is_err());
+  if mode==6{let code=rt.process_image_pointer(image,0x401b71,75).unwrap();assert!(rt.store(code,8,CrtValue::scalar(0)).is_err());}
+  rt.end_initialization(init).unwrap();
+  let got=r.with_normal_calls(&m,&mut permit,&main,|epoch|{
+   let mut c=cpu(&mut rt,0xe000,71);let mut binding=CrtNormalBinding::bind(&rt,&c,epoch,epilog_run_layout())?;
+   if mode==7{rt.memory.release(cookie.cap,cookie.owner).unwrap();return start(&mut rt,&mut c,epoch,&mut binding,99);}
+   start(&mut rt,&mut c,epoch,&mut binding,99)?;
+   assert_eq!(rt.load(rt.resolve_absolute(0x41c000,CrtRegionKind::Module)?,32)?,CrtValue::scalar(0x12345678));assert!(binding.id.is_some());
+   if mode==3{rt.store(cookie,32,CrtValue::scalar(0x12345679))?;}
+   if mode==4{rt.store(binding.at(&rt,binding.layout.guard)?,32,CrtValue::scalar(0))?;}
+   if mode==5{rt.memory.release(cookie.cap,cookie.owner).unwrap();}
+   c.r[0]=CrtValue::scalar(63);let value=epilog_run(&mut rt,&mut c,epoch,&mut binding)?;assert_eq!(value,CrtValue::scalar(63));assert!(binding.authority(&rt,epoch).is_err());Ok(())
+  });
+  if matches!(mode,3|4|5|7){assert_eq!(got,Err(match mode{3=>"CRT normal actual record/cookie/return changed",4=>"CRT normal saved known-mask/type/guard changed",5|7=>"CRT pointer lifetime",_=>unreachable!()}),"unsafe record mode {mode}");}else{got.expect("mapped cookie and original record prolog/epilog");assert_eq!(r.head,head);assert_eq!(rt.load(cookie,32).unwrap(),CrtValue::scalar(0x12345678));}
+ }
+ // Independent classes of existing cookie bits, not observed process results.
+ for bits in [0u32,1,65535,65536,0x80000000,u32::MAX,0x12345678,0xbb40e64e]{
+  let(mut rt,init)=CrtStreamRuntime::new_initializing_pe32(7,9,0x41c080,3,1048576,&file).unwrap();let token=rt.main_image.unwrap();let p=rt.process_image_pointer(token,0x41c000,4).unwrap();let q=rt.process_image_pointer(token,0x41c040,4).unwrap();rt.store(p,32,CrtValue::scalar(bits)).unwrap();let before=rt.load(q,32).unwrap();rt.map_region(0x9000,0x6000,CrtRegionKind::Stack,None).unwrap();let mut c=cpu(&mut rt,0xe000,81);c.return_pop=0;let got=original_cookie_init(&mut rt,&mut c);
+  if bits==0xbb40e64e||bits&0xffff0000==0{assert_eq!(got,Err("cookie entropy producer unbound"));assert_eq!(rt.load(q,32).unwrap(),before);assert!(!c.returned);}else{got.expect("independent established cookie path");assert_eq!(rt.load(q,32).unwrap(),CrtValue::scalar(!bits));assert!(c.returned);assert_eq!((c.flags.cf,c.flags.of,c.flags.zf,c.flags.sf),(Some(false),Some(false),Some(false),Some(bits&0x80000000!=0)));rt.store(q,32,CrtValue::scalar(0xa55a1234)).unwrap();assert_eq!(original_cookie_init(&mut rt,&mut c),Err("CRT active caller lifetime/return authority"));assert_eq!(rt.load(q,32).unwrap(),CrtValue::scalar(0xa55a1234));}
+  assert_eq!(rt.load(p,32).unwrap(),CrtValue::scalar(bits));rt.end_initialization(init).unwrap();
+ }
+
+}
+fn main(){match std::env::args().nth(1).unwrap().as_str(){"canonical-startup"=>canonical_startup_storage(),"inline-exit"=>{inline_exit_cases();inline_exit_delivery();inline_exit_image()},"abort-locked"=>abort_locked_cases(),"registered-errno"=>registered_errno_cases(),"ordered-search"=>ordered_search_cases(),"live-return"=>live_return_cases(),"chain-effect-lifetime"=>chain_effect_lifetime(),"shared-chain"=>{shared_chain_cases();shared_chain_nested();shared_chain_delivery()},"chain-ownership-gap"=>chain_ownership_gap(),"bound-cxx-invocation"=>bound_invocation(),"prefix-delivery-unwind"=>dispatcher_delivery_unwind(true),"dispatcher-delivery-unwind"=>dispatcher_delivery_unwind(false),"delivery-cached-unwind"=>delivery_cached_unwind(),"delivery-children"=>delivery_children(),"cxx-cached-unwind"=>cxx_cached_unwind(),"cxx-unwind"=>cxx_registered_unwind(),"manager-inherited"=>inherited_registered_manager(),"manager"=>manager_registered(),"live-finally"=>live_finally_cases(),"owned-loop"=>owned_loop_cases(),"owned-local"=>owned_local_cases(),"owned"=>{main_initial_rejections();initial_raise_rejections();owned_main_cases()},"path-edges"=>path_edges(),"live"=>live_dispatch(),"objects"=>captured_objects(),"handler"=>pending_handler_activation(),"pending"=>pending_normal_exception(),"pending-reject"=>reject_normal_exception(),"file"=>file_scope_normal(),"file-failure"=>file_scope_failure(),"nested"=>nested_actual(),"mutations"=>mutations(),"consumed"=>consumed_mutation(),"failure"=>body_failure(),"certificate"=>wrong_certificate(),"observed"=>observed(),_=>panic!("case")}}
 "#;
 
 fn run(case: &str) {
@@ -2421,12 +2461,14 @@ if fault==1{{cpu.condition(0)?;}}
         cxx_owner.push_str(&crate::crt_ptd::registered_source(&bytes_hex(crate::crt_ptd::GETTER)).unwrap());
         if let Ok(path)=std::env::var("W2L_EH4_EVIDENCE"){std::fs::write(std::path::Path::new(&path).join("cxx-unwind-connected.rs"),format!("{cxx_unwind}\n{cxx_cached}\n{cxx_action}")).unwrap();}
         let cxx_data=format!("fn abort_scope_bytes()->Vec<u8>{{vec!{:?}}}fn cxx_meta_bytes()->Vec<u8>{{vec!{:?}}}fn cxx_map_bytes()->Vec<u8>{{vec!{:?}}}fn cxx_scope_bytes()->Vec<u8>{{vec!{:?}}}",bytes_hex(crate::crt_abort::SCOPE),bytes_hex(crate::crt_cxx_record::METADATA),bytes_hex(crate::crt_cxx_record::UNWIND_MAP),bytes_hex(crate::crt_cxx_unwind::SCOPE));
+        let cookie_code=handler_bytes("cookie-initializer.bin",crate::crt_cookie_init::CODE);
+        let cookie_source=crate::crt_cookie_init::source(&cookie_code).unwrap();
         let source = format!("#![allow(dead_code)]\nmod guest_memory{{{memory}}}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{fixture}\n{printf_native}\n{printf_entry_native}\n{printf_native_map}\n{completion_live}\n{main_initial_live}\n{main_initial_map}\n{initial_raise_types}\n{initial_raise_init}\n{initial_raise}\n{initial_raise_map}\n{file_scope}\n{context_types}\n{context_check}\n{scope_store}\n{permuted_store}\n{install}\n{handler_prolog}\n{filter_source}\n{false_filter_source}\n{normalizer_source}\n{guard_source}\n{header_source}\n{prefix_normalizer}\n{prefix_front}\n{guard_prefix}\n{prefix_caller}\n{bridge_native}\n{local_types}\n{owned_types}\n{local_source}\n{callback_source}\n{finally_source}\n{finally_cases}\n{original_local_store}\n{main_init}\n{inner_init}\n{owned_filter}\n{owned_bridge}\n{main_filter_bytes}\n{activation}\n{owned_prolog}\n{owned_prefix}\n{delivery_prefix}
 {inner_data}
 {unwind_caller}
 {stack_source}
 {native_loop}\n{owned_header}\n{owned_scope_store}\n{owned_permuted_store}\n{global_source}\n{delivery_source}\n{tail_source}\n{owned_search}
-{live_return}\n{live_return_map}\n{post_global}\n{code_data}\n{path_edges}\n{prefix_metadata}\nfn raise_site()->CrtNormalRaiseSite{{{{{raise}}}}}\n{allocator_native}\n{manager_native}\n{inherited_registered}\n{cxx_unwind}\n{cxx_cached}\n{cxx_action}\n{cxx_state}\n{cxx_record}\n{cxx_owner}\n{cxx_data}\n{CASES}",
+{live_return}\n{live_return_map}\n{post_global}\n{code_data}\n{path_edges}\n{prefix_metadata}\nfn raise_site()->CrtNormalRaiseSite{{{{{raise}}}}}\n{allocator_native}\n{manager_native}\n{inherited_registered}\n{cxx_unwind}\n{cxx_cached}\n{cxx_action}\n{cxx_state}\n{cxx_record}\n{cxx_owner}\n{cxx_data}\n{cookie_source}\n{CASES}",
             include_str!("linker/unwind_runtime.rs").replace("//!", "//"),
             emitted_literal(include_str!("frame_proof.rs")),emitted_literal(include_str!("thread_registry.rs")),
             crate::crt_stream_runtime::EMITTED_TYPES,crate::crt_stream_cpu::EMITTED_TYPES,
@@ -2786,4 +2828,10 @@ fn original_abort_locked_query_owns_frame_lock_and_failure_effects() {
 #[test]
 fn original_inline_exit_record_preserves_registry_return_and_failure_lifetimes() {
     run("inline-exit");
+}
+
+#[test]
+#[ignore = "requires unchanged authored PE; passed in recorded-input replay"]
+fn canonical_image_cookie_and_original_record_initialization_compose() {
+    run("canonical-startup");
 }

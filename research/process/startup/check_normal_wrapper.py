@@ -68,6 +68,7 @@ def check(original, observation, out, compare=None):
     vector_bytes = ('\n'.join(' '.join(str(n) for n in row) for row in vectors)+'\n').encode()
     if (observation/'normal-wrapper-vectors.txt').read_bytes() != vector_bytes:
         raise ValueError('wrapper vectors do not match original observations')
+    (out/'cookie-initializer.bin').write_bytes(mapped(image, 0x401b71, 75, executable=True))
     helper = mapped(image, 0x401e60, 69, executable=True)
     epilog = mapped(image, 0x404696, 18, executable=True)
     (out/'helper.bin').write_bytes(helper)
@@ -386,6 +387,15 @@ def check(original, observation, out, compare=None):
         b'crt_module_image::image_file_anchor_keeps_section_identity_and_rejects_alias_and_partial_init',
     ])
 
+    cookie_run = subprocess.run(['cargo', 'test', '--locked', '--example', 'crt_stream',
+                                 'canonical_image_cookie_and_original_record_initialization_compose',
+                                 '--', '--ignored'], env=mapping_env, capture_output=True, timeout=180)
+    (out/'cookie-record.stdout').write_bytes(cookie_run.stdout)
+    (out/'cookie-record.stderr').write_bytes(cookie_run.stderr)
+    require_test_completions(cookie_run, [
+        b'crt_exception_wrapper::normal_tests::canonical_image_cookie_and_original_record_initialization_compose',
+    ])
+
     command = ['cargo', 'test', '--locked', '--example', 'crt_stream',
                'original_windows_wrapper_state_matches_native_normal_lifecycle', '--', '--ignored']
     run = subprocess.run(command, env=env, capture_output=True, timeout=180)
@@ -475,7 +485,7 @@ def check(original, observation, out, compare=None):
                   main_scope_header_sha256=sha((out/'Main-scope-header.bin').read_bytes()),
                   locale_state_evidence=locale_state_evidence(image),
                   unwind_binding_source_sha256=sha((out/'cxx-unwind-connected.rs').read_bytes()),
-                  pe_mapping_native_cases=31, pe_mapping_recorded_input_queries=1, image_file_anchor_native_cases=20, image_file_anchor_recorded_input_queries=1, pe_mapping_new_windows_pairs=0, inline_exit_native_cases=26, inline_exit_new_windows_pairs=0, abort_branch_native_cases=13, abort_branch_new_windows_pairs=0, abort_locked_native_cases=12, abort_locked_new_windows_pairs=0, rotate_truth_table_cases=35, abort_query_native_cases=8, abort_query_new_windows_pairs=0, registered_errno_native_cases=16, registered_errno_new_windows_pairs=0, heap_free_native_cases=28, heap_free_new_windows_pairs=0, pending_lazy_native_cases=9, pending_lazy_new_windows_pairs=0, lazy_common_handler_native_cases=24, lazy_common_handler_new_windows_pairs=0, heap_ptd_view_native_cases=17, lazy_ptd_native_cases=20, lazy_ptd_new_windows_pairs=0, ordered_search_native_cases=85, unobserved_context_native_cases=27, unobserved_context_new_windows_pairs=0, original_empty_search_native_cases=1, ordered_search_new_windows_pairs=0, shared_chain_native_cases=24, shared_chain_effect_lifetime_cases=4, shared_chain_new_windows_pairs=0, chain_ownership_diagnostic_experiments=1, chain_ownership_new_windows_pairs=0, bound_cxx_invocation_native_cases=34, bound_cxx_invocation_new_windows_pairs=0, prefix_delivery_unwind_native_cases=14, prefix_delivery_new_windows_pairs=0, dispatcher_delivery_unwind_native_cases=8, dispatcher_delivery_new_windows_pairs=0, delivery_child_native_cases=14, delivery_cached_unwind_native_cases=4, delivery_new_windows_pairs=0,
+                  cookie_record_native_cases=8, cookie_input_class_cases=8, cookie_record_new_windows_pairs=0, cookie_initializer_sha256=sha((out/'cookie-initializer.bin').read_bytes()), pe_mapping_native_cases=31, pe_mapping_recorded_input_queries=1, image_file_anchor_native_cases=20, image_file_anchor_recorded_input_queries=1, pe_mapping_new_windows_pairs=0, inline_exit_native_cases=26, inline_exit_new_windows_pairs=0, abort_branch_native_cases=13, abort_branch_new_windows_pairs=0, abort_locked_native_cases=12, abort_locked_new_windows_pairs=0, rotate_truth_table_cases=35, abort_query_native_cases=8, abort_query_new_windows_pairs=0, registered_errno_native_cases=16, registered_errno_new_windows_pairs=0, heap_free_native_cases=28, heap_free_new_windows_pairs=0, pending_lazy_native_cases=9, pending_lazy_new_windows_pairs=0, lazy_common_handler_native_cases=24, lazy_common_handler_new_windows_pairs=0, heap_ptd_view_native_cases=17, lazy_ptd_native_cases=20, lazy_ptd_new_windows_pairs=0, ordered_search_native_cases=85, unobserved_context_native_cases=27, unobserved_context_new_windows_pairs=0, original_empty_search_native_cases=1, ordered_search_new_windows_pairs=0, shared_chain_native_cases=24, shared_chain_effect_lifetime_cases=4, shared_chain_new_windows_pairs=0, chain_ownership_diagnostic_experiments=1, chain_ownership_new_windows_pairs=0, bound_cxx_invocation_native_cases=34, bound_cxx_invocation_new_windows_pairs=0, prefix_delivery_unwind_native_cases=14, prefix_delivery_new_windows_pairs=0, dispatcher_delivery_unwind_native_cases=8, dispatcher_delivery_new_windows_pairs=0, delivery_child_native_cases=14, delivery_cached_unwind_native_cases=4, delivery_new_windows_pairs=0,
                   unwind_native_cases=24, cached_unwind_native_cases=14, cached_unwind_new_windows_pairs=0, unwind_new_windows_pairs=0, unwind_binding_rust_tests=1,
                   unwind_state_source_sha256=sha((out/'unwind-state-live.rs').read_bytes()),
                   unwind_state_native_cases=12, unwind_state_new_windows_pairs=0,
@@ -519,7 +529,7 @@ def check(original, observation, out, compare=None):
         previous = json.loads(compare.read_text())
         if previous['locale_state_evidence'] != result['locale_state_evidence']:
             raise ValueError('wrapper cross-host locale evidence differs')
-        for key in ['unwind_binding_source_sha256', 'unwind_state_source_sha256', 'cached_common_source_sha256', 'dispatcher_dynamic_source_sha256', 'dynamic_fls_source_sha256', 'cold_resolver_source_sha256', 'live_finally_hashes', 'original_notification_sha256', 'original_cleanup_hashes', 'owned_local_body_sha256', 'local_level_store_sha256', 'pe_sha256', 'helper_sha256', 'epilog_sha256', 'handler_scope_store_sha256', 'handler_prolog_sha256', 'handler_installer_sha256', 'event_normalizer_sha256', 'guard_validator_sha256', 'security_check_sha256', 'scope_header_sha256', 'prefix_sha256', 'context_helper_sha256', 'filter_bridge_sha256', 'main_filter_sha256', 'main_prolog_sha256', 'inner_prolog_sha256', 'main_activation_sha256', 'main_scope_header_sha256', 'main_scope_table_sha256', 'complete_handler_sha256', 'global_wrapper_sha256', 'observation_sha256', 'vectors_sha256', 'rust_sha256', 'file_scope_code_sha256', 'file_scope_imports']:
+        for key in ['cookie_initializer_sha256', 'unwind_binding_source_sha256', 'unwind_state_source_sha256', 'cached_common_source_sha256', 'dispatcher_dynamic_source_sha256', 'dynamic_fls_source_sha256', 'cold_resolver_source_sha256', 'live_finally_hashes', 'original_notification_sha256', 'original_cleanup_hashes', 'owned_local_body_sha256', 'local_level_store_sha256', 'pe_sha256', 'helper_sha256', 'epilog_sha256', 'handler_scope_store_sha256', 'handler_prolog_sha256', 'handler_installer_sha256', 'event_normalizer_sha256', 'guard_validator_sha256', 'security_check_sha256', 'scope_header_sha256', 'prefix_sha256', 'context_helper_sha256', 'filter_bridge_sha256', 'main_filter_sha256', 'main_prolog_sha256', 'inner_prolog_sha256', 'main_activation_sha256', 'main_scope_header_sha256', 'main_scope_table_sha256', 'complete_handler_sha256', 'global_wrapper_sha256', 'observation_sha256', 'vectors_sha256', 'rust_sha256', 'file_scope_code_sha256', 'file_scope_imports']:
             if previous[key] != result[key]:
                 raise ValueError('wrapper cross-host provenance differs: '+key)
         result['matching_windows_native_report'] = str(compare)
