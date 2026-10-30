@@ -463,3 +463,12 @@ retire the process identity. Adversarial acceptance should cover duplicate issue
 foreign/replaced mappings, process teardown, fake main-role assignment and concurrent
 owned references to the same module. This is the concrete next ownership contract;
 current supplied image inputs do not establish it.
+
+## Canonical process-image ownership implemented
+
+Bootstrap now owns the main-image mapping once per runtime, independently of
+acquired-module references. The exit front retrieves that canonical authority;
+thread/fiber/event transitions retain it and process closure expires it. The next
+input cut is composition of the validated original PE mapping with existing CRT
+module/record maps before bootstrap emission, followed by manager406cfa and the
+remaining termination effects. [Contract and evidence limits](CAPTURE-ACQUISITION.md#canonical-process-owned-main-image).

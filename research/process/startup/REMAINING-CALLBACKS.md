@@ -346,3 +346,9 @@ view and modeled GetModuleHandleW(NULL) outcome. The startup main-module role,
 image mapping producer and loader effects remain an input cut; the default
 pending path rejects it. Native/managed query branches now reach their actual
 unbound manager406cfa/managed-termination406f55 calls with supplied image authority.
+
+The default exit front now uses canonical process-image authority created by
+bootstrap, with no temporary module-reference owner. Bootstrap still takes the
+mapped input image under initialization: integrating the original PE mapping with
+existing CRT region ownership remains an entry-emission gate. Missing bootstrap,
+manager/managed termination and original delivery effects still reject.

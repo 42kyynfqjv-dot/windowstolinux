@@ -1,5 +1,6 @@
-//! Checked image views and original managed-image query. Main-module selection
-//! and the API outcome remain explicit component inputs, not loader proof.
+//! Checked image views and original managed-image query. Canonical process
+//! ownership is distinct from acquired references; mapped-image production is
+//! still a bootstrap input, not proof of complete loader effects.
 use crate::crt_stream_ir::{Graph, Target};
 pub(crate) const QUERY:&str="6a00ff150850410085c07433b94d5a000066390875298b483c03c8813950450000751cb80b0100006639411875118379740e760b83b9e8000000000f95c0c332c0c3";
 pub(crate) fn source(bytes: &[u8]) -> Result<String, String> {
@@ -31,16 +32,18 @@ pub(crate) fn source(bytes: &[u8]) -> Result<String, String> {
     Ok(format!("{TYPES}\nfn managed_image_query(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,image:Option<&CrtModuleImage>)->Result<CrtValue,&'static str>{{cpu.validate_active(rt)?;{body}}}"))
 }
 const TYPES: &str = r#"
-struct CrtModuleImage{module:CrtModule,root:CrtPointer}
+enum CrtImageOwner{Acquired(CrtModule),Process(CrtProcessImage)}
+struct CrtModuleImage{owner:CrtImageOwner,root:CrtPointer}
 impl CrtModuleImage{
  // An initialization contract supplies the mapped image and executable-module
  // acquisition; matching numbers alone cannot create either capability.
  fn bind(rt:&CrtStreamRuntime,init:CrtInitialization,module:CrtModule,root:CrtPointer)->Result<Self,&'static str>{
   rt.initialization(init)?;rt.module_identity(module)?;
   if root.kind!=CrtRegionKind::Module||root.address()!=module.handle||root.base!=root.address()||root.owner!=guest_memory::Owner::Module(rt.owner)||!rt.regions.iter().any(|r|r.pointer==root){return Err("module image root/owner/extent");}
-  rt.valid(root,root.size)?;Ok(Self{module,root})
+  rt.valid(root,root.size)?;Ok(Self{owner:CrtImageOwner::Acquired(module),root})
  }
- fn validate(&self,rt:&CrtStreamRuntime)->Result<(),&'static str>{rt.module_identity(self.module)?;rt.valid(self.root,self.root.size)?;Ok(())}
+ fn main(rt:&CrtStreamRuntime)->Result<Self,&'static str>{let token=rt.main_image.ok_or("main image bootstrap authority missing")?;let root=rt.process_image(token)?;Ok(Self{owner:CrtImageOwner::Process(token),root})}
+ fn validate(&self,rt:&CrtStreamRuntime)->Result<(),&'static str>{match self.owner{CrtImageOwner::Acquired(module)=>rt.module_identity(module)?,CrtImageOwner::Process(token)=>{if rt.process_image(token)?!=self.root{return Err("main image view alias");}}}rt.valid(self.root,self.root.size)?;Ok(())}
 }
 "#;
 #[test]
@@ -96,5 +99,30 @@ for(reg,run)in [(0,cmp_0 as fn(&mut CrtStreamRuntime,&mut CrtCpu)->Result<CrtVal
 }}
 "#,
         "word-compare",
+    );
+}
+#[test]
+fn process_image_owns_mapping_once_across_threads_and_module_releases() {
+    let extra = source(&crate::crt_ptd::raw(QUERY)).unwrap();
+    crate::crt_stream_callees_tests::native(
+        &extra,
+        r#"
+for mode in 0..12{
+ let(mut rt,init)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();let mut bytes=vec![0u8;512];bytes[..2].copy_from_slice(b"MZ");bytes[0x3c..0x40].copy_from_slice(&0x80u32.to_le_bytes());bytes[0x80..0x84].copy_from_slice(b"PE\0\0");bytes[0x98..0x9a].copy_from_slice(&0x10bu16.to_le_bytes());bytes[0xf4]=15;
+ if mode==10{assert!(rt.bootstrap_main_image(init,0x8000,&bytes).is_err());assert!(rt.main_image.is_none());}
+ let token=rt.bootstrap_main_image(init,0x500000,&bytes).unwrap();let mut view=CrtModuleImage::main(&rt).unwrap();assert!(rt.modules.is_empty());assert!(rt.module_references.is_empty());
+ assert_eq!(rt.bootstrap_main_image(init,0x600000,&bytes),Err("CRT process image already issued/closed"));assert_eq!(rt.main_image,Some(token));
+ if mode==1{rt.thread+=1;}if mode==2{rt.bind_fiber(rt.thread).unwrap();}
+ if mode==3{let(_,r)=rt.module_acquire_result(init,"owned reference to same base",0x500000).unwrap();rt.module_release_result(init,r,true).unwrap();assert!(rt.modules.is_empty());}
+ if mode==4{rt.closed=true;}if mode==5{rt.owner+=1;}if mode==6{rt.memory.release(token.root.cap,token.root.owner).unwrap();}
+ if mode==7{view.root=rt.subrange(token.root,64).unwrap();}
+ if mode==8{let(other,_)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();assert_eq!(other.process_image(token),Err("CRT process image owner/lifetime"));}
+ if mode==9{assert_eq!(rt.store(rt.offset(token.root,0x168).unwrap(),32,CrtValue::scalar(1)),Err("CRT storage write"));assert_eq!(rt.load(rt.offset(token.root,0x168).unwrap(),32).unwrap(),CrtValue::scalar(0));}
+ if mode==11{let bad=CrtProcessImage{generation:token.generation+1,..token};assert_eq!(rt.process_image(bad),Err("CRT process image owner/lifetime"));}
+ if matches!(mode,4|5|6|7){assert_eq!(view.validate(&rt),Err(match mode{4|5=>"CRT process image owner/lifetime",6=>"CRT pointer lifetime",7=>"main image view alias",_=>unreachable!()}));continue;}
+ view.validate(&rt).unwrap();let stack=rt.map_region(0x9000,512,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,400).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(1)).unwrap();let mut c=CrtCpu::new(sp,1).unwrap();let v=managed_image_query(&mut rt,&mut c,Some(&view)).unwrap();assert_eq!(CrtCpu::bits(v).unwrap().0&255,0);assert!(c.returned);assert_eq!(rt.main_image,Some(token));assert!(rt.module_references.is_empty());
+}
+"#,
+        "process-image",
     );
 }

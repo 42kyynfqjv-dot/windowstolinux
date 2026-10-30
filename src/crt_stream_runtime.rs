@@ -18,6 +18,8 @@ struct CrtModule {anchor:guest_memory::Capability,handle:u32,generation:u64}
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 struct CrtModuleReference {module:CrtModule,serial:u64}
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
+struct CrtProcessImage {anchor:guest_memory::Capability,owner:u64,generation:u64,root:CrtPointer}
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
 struct CrtFunction {module:CrtModule,address:u32,serial:u64}
 struct CrtLoadedModule {identity:String,generation:u64,certain:bool}
 struct CrtExport {function:CrtFunction,symbol:String}
@@ -107,7 +109,7 @@ impl CrtUnobservedContext {
 struct CrtRegion {pointer:CrtPointer,heap:bool,file_owner:Option<u32>}
 struct CrtDescriptor {id:CrtDescriptorId,live:bool,record:Option<CrtPointer>,record_initialized:bool}
 struct CrtStreamRuntime {
- loader_cells:std::collections::BTreeMap<u32,(CrtPointer,bool)>,modules:std::collections::BTreeMap<u32,CrtLoadedModule>,module_references:std::collections::BTreeMap<u64,CrtModuleReference>,exports:std::collections::BTreeMap<u64,CrtExport>,
+ main_image:Option<CrtProcessImage>,loader_cells:std::collections::BTreeMap<u32,(CrtPointer,bool)>,modules:std::collections::BTreeMap<u32,CrtLoadedModule>,module_references:std::collections::BTreeMap<u64,CrtModuleReference>,exports:std::collections::BTreeMap<u64,CrtExport>,
  uncertain_allocations:Vec<CrtPointer>,completed_failed_frees:Vec<(guest_memory::Capability,u64)>,heap_ptds:Vec<CrtHeapPtdView>,fiber:Option<CrtFiber>,fls:std::collections::BTreeMap<u32,(CrtFlsSlot,CrtValue)>,
  unobserved_contexts:Vec<(CrtPointer,std::rc::Rc<std::cell::Cell<bool>>)>,heap:Option<CrtHeap>,memory:guest_memory::Space,owner:u64,thread:u64,anchor:guest_memory::Capability,
  dispatchers:std::collections::BTreeMap<u64,CrtDispatcherContext>,regions:Vec<CrtRegion>,retired:Vec<CrtPointer>,tags:std::collections::BTreeMap<u32,CrtValue>,
@@ -125,7 +127,28 @@ impl CrtStreamRuntime {
   let mut memory=guest_memory::Space::new(byte_limit,64).map_err(|_|"CRT memory budget")?;
   let anchor=memory.map(file_address,size,guest_memory::Owner::Module(owner),guest_memory::Permissions::READ_WRITE,false).map_err(|_|"CRT FILE mapping")?;
   let pointer=CrtPointer{cap:anchor,owner:guest_memory::Owner::Module(owner),base:file_address,size,address:file_address,kind:CrtRegionKind::File};
-  Ok(Self{loader_cells:std::collections::BTreeMap::new(),modules:std::collections::BTreeMap::new(),module_references:std::collections::BTreeMap::new(),exports:std::collections::BTreeMap::new(),uncertain_allocations:vec![],completed_failed_frees:vec![],heap_ptds:vec![],fiber:None,fls:std::collections::BTreeMap::new(),unobserved_contexts:vec![],heap:None,memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],global_objects:std::collections::BTreeMap::new(),global_locks:vec![],record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,canonical_errno:false,errno_cell:None,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([file_address])})
+  Ok(Self{main_image:None,loader_cells:std::collections::BTreeMap::new(),modules:std::collections::BTreeMap::new(),module_references:std::collections::BTreeMap::new(),exports:std::collections::BTreeMap::new(),uncertain_allocations:vec![],completed_failed_frees:vec![],heap_ptds:vec![],fiber:None,fls:std::collections::BTreeMap::new(),unobserved_contexts:vec![],heap:None,memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],global_objects:std::collections::BTreeMap::new(),global_locks:vec![],record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,canonical_errno:false,errno_cell:None,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([file_address])})
+ }
+
+ /// Bootstrap installs the mapped input image once. This is process ownership,
+ /// not a LoadLibrary reference and not proof of loader/CRT side effects.
+ fn bootstrap_main_image(&mut self,init:CrtInitialization,base:u32,image:&[u8])->Result<CrtProcessImage,&'static str>{
+  self.initialization(init)?;
+  if self.closed||self.main_image.is_some(){return Err("CRT process image already issued/closed");}
+  let size=u32::try_from(image.len()).map_err(|_|"CRT process image size")?;
+  if base==0||size==0||base.checked_add(size).is_none(){return Err("CRT process image extent");}
+  let generation=self.serial.checked_add(1).ok_or("CRT process image generation")?;
+  // Mapping validates overlap/budget before publication. No second image copy
+  // or borrowed module token is used as the authoritative object.
+  let cap=self.memory.map_image(base,size,self.owner,guest_memory::Permissions::READ,image).map_err(|_|"CRT process image bounds/alias/budget")?;
+  let root=CrtPointer{cap,owner:guest_memory::Owner::Module(self.owner),base,size,address:base,kind:CrtRegionKind::Module};
+  self.regions.push(CrtRegion{pointer:root,heap:false,file_owner:None});
+  let token=CrtProcessImage{anchor:self.anchor,owner:self.owner,generation,root};
+  self.serial=generation;self.main_image=Some(token);Ok(token)
+ }
+ fn process_image(&self,token:CrtProcessImage)->Result<CrtPointer,&'static str>{
+  if self.closed||token.anchor!=self.anchor||token.owner!=self.owner||self.main_image!=Some(token){return Err("CRT process image owner/lifetime");}
+  self.valid(token.root,token.root.size)?;Ok(token.root)
  }
  /// Apply an independently established successful executable-module load.
  /// This records reference effects only; it does not attest DllMain/TLS effects.

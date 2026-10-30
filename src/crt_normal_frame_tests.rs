@@ -1878,14 +1878,14 @@ fn inline_exit_cases(){for mode in 0..20{
 
 fn inline_exit_image(){for managed in [false,true]{
  let(m,mut r,main,mut permit)=fixture_with_extra(&[(0x410000,0x420000)]);let(mut rt,init)=CrtStreamRuntime::new_initializing(r.identity.owner,r.identity.instance,0x8000,65536).unwrap();rt.map_region(0x9000,0x6000,CrtRegionKind::Stack,None).unwrap();rt.map_region(0x41c000,4,CrtRegionKind::Module,Some(&0x12345678u32.to_le_bytes())).unwrap();
- let(module,_)=rt.module_acquire_result(init,"independent exit main-image input",0x500000).unwrap();let mut bytes=vec![0;512];bytes[..2].copy_from_slice(b"MZ");bytes[0x3c..0x40].copy_from_slice(&0x80u32.to_le_bytes());bytes[0x80..0x84].copy_from_slice(b"PE\0\0");bytes[0x98..0x9a].copy_from_slice(&0x10bu16.to_le_bytes());bytes[0xf4]=15;bytes[0x168]=u8::from(managed);let p=rt.map_region(0x500000,512,CrtRegionKind::Module,Some(&bytes)).unwrap();let image=CrtModuleImage::bind(&rt,init,module,p).unwrap();rt.end_initialization(init).unwrap();let mut checked=false;
+ let mut bytes=vec![0;512];bytes[..2].copy_from_slice(b"MZ");bytes[0x3c..0x40].copy_from_slice(&0x80u32.to_le_bytes());bytes[0x80..0x84].copy_from_slice(b"PE\0\0");bytes[0x98..0x9a].copy_from_slice(&0x10bu16.to_le_bytes());bytes[0xf4]=15;bytes[0x168]=u8::from(managed);rt.bootstrap_main_image(init,0x500000,&bytes).unwrap();rt.end_initialization(init).unwrap();let mut checked=false;
  let result=r.with_normal_calls(&m,&mut permit,&main,|e|{
   let mut c=cpu(&mut rt,0xe800,998);c.return_pop=0;rt.store(rt.offset(CrtCpu::pointer(c.r[4])?,12)?,32,CrtValue::scalar(0))?;let mut f=CrtInlineExit::new(&rt,&c,e)?;shared_exit_prolog(&mut rt,&mut c,e,&mut f)?;
-  let got=shared_exit_front_image(&mut rt,&mut c,e,&mut f,Some(&image));assert_eq!(got,Err(if managed{"shared exit managed termination 0x406f55 unbound"}else{"shared exit lock/cleanup manager 0x406cfa unbound"}));assert!(!c.returned);assert_eq!(e.head()?,RegistryHead::Cxx(f.id.unwrap()));assert!(e.registry.cxx.last().unwrap().linked);checked=true;Err::<(),_>("exit image input component; main-image producer remains unproved")
+  let got=shared_exit_front(&mut rt,&mut c,e,&mut f);assert_eq!(got,Err(if managed{"shared exit managed termination 0x406f55 unbound"}else{"shared exit lock/cleanup manager 0x406cfa unbound"}));assert!(!c.returned);assert_eq!(e.head()?,RegistryHead::Cxx(f.id.unwrap()));assert!(e.registry.cxx.last().unwrap().linked);checked=true;Err::<(),_>("exit image input component; main-image producer remains unproved")
  });assert!(result.is_err());assert!(checked);
 }}
 fn inline_exit_delivery(){for mode in 0..4{
- let(m,mut r,main,mut permit)=fixture_with_extra(&[(0x410000,0x420000)]);let mut rt=runtime(&r);let mut checked=false;
+ let(m,mut r,main,mut permit)=fixture_with_extra(&[(0x410000,0x420000)]);let(mut rt,init)=CrtStreamRuntime::new_initializing(r.identity.owner,r.identity.instance,0x8000,65536).unwrap();rt.map_region(0x9000,0x6000,CrtRegionKind::Stack,None).unwrap();rt.map_region(0x41c000,4,CrtRegionKind::Module,Some(&0x12345678u32.to_le_bytes())).unwrap();rt.bootstrap_main_image(init,0x500000,&[0;512]).unwrap();rt.end_initialization(init).unwrap();let mut checked=false;
  let outcome=r.with_normal_calls(&m,&mut permit,&main,|e|{
   let mut interrupted=cpu(&mut rt,0xd000,994);let mut binding=CrtNormalBinding::bind(&rt,&interrupted,e,epilog_run_layout())?;start(&mut rt,&mut interrupted,e,&mut binding,995)?;
   for arg in [0,0,0,0xe0420042]{interrupted.push(&mut rt,CrtValue::scalar(arg))?;}
@@ -1894,11 +1894,11 @@ fn inline_exit_delivery(){for mode in 0..4{
   for i in 0..4{rt.store(rt.offset(CrtCpu::pointer(dispatcher.r[4])?,i*4)?,32,CrtValue::scalar(i as u32))?;}
   let result=event.execute_child_handler(&mut rt,&interrupted,e,&binding,&mut dispatcher,0x401900,|rt,h,child|{
    h.call_activation(rt,0x401905,0,|rt,c|{
-    let mut f=CrtInlineExit::new(rt,c,child)?;shared_exit_prolog(rt,c,child,&mut f)?;
+    CrtModuleImage::main(rt)?.validate(rt)?;let mut f=CrtInlineExit::new(rt,c,child)?;shared_exit_prolog(rt,c,child,&mut f)?;
     if mode==1{f.lease=None;}if mode==2{child.delivery=None;}if mode==3{child.registry.normal_epoch.as_mut().unwrap().pending_exception=None;}
     shared_exit_return(rt,c,child,&mut f)
    })?;h.r[0]=CrtValue::scalar(1);h.finish(rt)
-  });assert_eq!(interrupted.r,saved);assert!(e.state().is_err());
+  });assert_eq!(interrupted.r,saved);assert!(e.state().is_err());CrtModuleImage::main(&rt)?.validate(&rt)?;
   if mode==0{let receipt=result.expect("owned delivery child original inline return");assert_eq!(event.take_handler_result(receipt,&rt,&interrupted,e,&binding)?,1);assert!(e.registry.cxx.is_empty());}
   else{assert_eq!(result.err(),Some(match mode{1=>"inline exit stale owner/event/fiber",2=>"normal call suspended for owned exception",3=>"delivery child expired/foreign suspension authority",_=>unreachable!()}));assert_eq!(event.delivery,CrtNormalDelivery::Failed);assert!(e.registry.cxx.iter().any(|f|f.handler==0x414af3&&f.linked));}
   checked=true;Err::<(),_>("inline exit delivery component; acquisition unproved")

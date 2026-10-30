@@ -1015,3 +1015,40 @@ The current runtime module model represents owned acquisitions. Actual bootstrap
 therefore still needs a distinct process-owned main-module lifetime and mapped
 image authority, rather than a fabricated LoadLibrary acquisition. That ownership
 extension is a concrete bounded Astra question after Sol reviews this component.
+
+## Canonical process-owned main image
+
+Runtime bootstrap now creates one canonical process-image mapping and capability.
+`bootstrap_main_image` requires live initialization authority, maps the supplied
+input-image bytes, and publishes the process identity only after mapping succeeds.
+Duplicate issuance, overlap, invalid extents and stale initialization reject.
+The canonical runtime field owns the mapping; image views retain its exact identity
+and bounds rather than copying bytes or borrowing an acquired-module reference.
+
+The main-image lifetime is process-wide. Thread/fiber changes and nested delivery
+retain it; process closure, foreign owners, released storage, changed generations
+and altered view ranges reject. Ordinary acquired references at the same base have
+separate receipt lifetimes: releasing them cannot retire the process image. A
+GetModuleHandleW query borrows this authority without adding a reference. This bounded bootstrap maps an immutable readable image: writes reject; writable
+PE sections still require separate ownership composition. The existing LastError
+knowledge/failure-order contract is preserved.
+
+The default shared-exit front now selects the canonical process image when bootstrap
+has installed it. Native and managed header cases reach their original manager and
+managed-termination boundaries without a separately supplied image-view argument.
+The four pending-delivery lifetime cases also retain process authority across child
+completion or failed event ownership, while stale child authority still rejects.
+Twelve new native cases exercise issuance, overlap failure, duplicate publication,
+thread/fiber changes, acquired-reference release, closure, foreign owners, released
+storage, aliasing, changed headers and generation replay. This is component evidence;
+the bootstrap input is a mapped image supplied by initialization, not proof of a
+complete Windows loader or actual entry-to-exit execution.
+
+The remaining executable integration is to feed the validated original PE mapping
+into bootstrap before existing CRT module/record mappings, without overlapping or
+replacing their capabilities. Current generic pending fixtures without that startup
+producer still reject missing main-image authority. Original manager406cfa,
+managed-termination406f55, handler414af3, signal and physical exit effects remain
+unbound. Sol can review the canonical lifetime and tests, then inventory the mapping
+composition before changing startup emission. Historical Windows timeout causes and
+full startup/rcedit support remain unresolved.
