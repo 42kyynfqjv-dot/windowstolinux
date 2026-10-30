@@ -381,6 +381,21 @@ impl Space {
         }
         Ok(())
     }
+    /// Check writable ownership without defining bytes or changing read epochs.
+    pub fn validate_writable(
+        &self,
+        cap: Capability,
+        owner: Owner,
+        address: u32,
+        size: u32,
+    ) -> Result<(), Fault> {
+        self.validate_range(cap, owner, address, size)?;
+        let (i, _) = self.locate(address, size)?;
+        if !self.regions[i].permissions.write {
+            return Err(Fault::Permission);
+        }
+        Ok(())
+    }
     pub fn release(&mut self, cap: Capability, owner: Owner) -> Result<(), Fault> {
         let i = self.token(cap, owner)?;
         self.bytes -= self.regions.remove(i).bytes.len();

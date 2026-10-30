@@ -360,3 +360,10 @@ actual delivery, or startup emission. In particular, the runtime FILE anchor mus
 become a checked view into mapped `.data` instead of a prior overlapping mapping;
 cookie/record initialization must use the same section capabilities. The original
 manager406cfa/managed-termination406f55 and physical-exit effects remain unresolved.
+
+The FILE-anchor mapping gap above is now closed by `new_initializing_pe32`:
+original FILE storage shares the canonical data-section capability, with no extra
+mapping or default lock construction. Remaining supplied initialization includes
+cookie/record producers and their external effects. Move those producers to
+section-backed views before connecting the original manager and termination;
+FILE role binding alone does not certify complete formatting or startup.

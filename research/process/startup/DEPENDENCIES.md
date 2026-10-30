@@ -483,3 +483,13 @@ or converter admission are granted. Next replace the separately mapped FILE-arra
 anchor with a view into the existing writable image section, then migrate cookie/
 record views before connecting the remaining manager/termination effects.
 [Contract, executable boundary and reproduction](CAPTURE-ACQUISITION.md#section-backed-pe32-bootstrap).
+
+## FILE anchor now shares mapped data identity
+
+The raw-PE constructor now adopts a bounded FILE view inside the existing writable
+section; the section capability is also the runtime anchor. The original header
+query executes after initialization ends, while FILE/module aliases retain the
+same lock, opaque-byte and typed-field policy. No lock or CRT initialization is
+inferred from mapped bytes. This closes the separate FILE mapping gap in the
+preceding section. Next migrate cookie/startup-record producers to section views
+and connect the manager/termination effects. [Contract and rejection boundary](CAPTURE-ACQUISITION.md#file-anchor-adopts-canonical-image-storage).

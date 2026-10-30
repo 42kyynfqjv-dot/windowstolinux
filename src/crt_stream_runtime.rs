@@ -109,7 +109,7 @@ impl CrtUnobservedContext {
 struct CrtRegion {pointer:CrtPointer,heap:bool,file_owner:Option<u32>}
 struct CrtDescriptor {id:CrtDescriptorId,live:bool,record:Option<CrtPointer>,record_initialized:bool}
 struct CrtStreamRuntime {
- main_image:Option<CrtProcessImage>,main_image_regions:Vec<CrtPointer>,loader_cells:std::collections::BTreeMap<u32,(CrtPointer,bool)>,modules:std::collections::BTreeMap<u32,CrtLoadedModule>,module_references:std::collections::BTreeMap<u64,CrtModuleReference>,exports:std::collections::BTreeMap<u64,CrtExport>,
+ file_view:CrtPointer,main_image:Option<CrtProcessImage>,main_image_regions:Vec<CrtPointer>,loader_cells:std::collections::BTreeMap<u32,(CrtPointer,bool)>,modules:std::collections::BTreeMap<u32,CrtLoadedModule>,module_references:std::collections::BTreeMap<u64,CrtModuleReference>,exports:std::collections::BTreeMap<u64,CrtExport>,
  uncertain_allocations:Vec<CrtPointer>,completed_failed_frees:Vec<(guest_memory::Capability,u64)>,heap_ptds:Vec<CrtHeapPtdView>,fiber:Option<CrtFiber>,fls:std::collections::BTreeMap<u32,(CrtFlsSlot,CrtValue)>,
  unobserved_contexts:Vec<(CrtPointer,std::rc::Rc<std::cell::Cell<bool>>)>,heap:Option<CrtHeap>,memory:guest_memory::Space,owner:u64,thread:u64,anchor:guest_memory::Capability,
  dispatchers:std::collections::BTreeMap<u64,CrtDispatcherContext>,regions:Vec<CrtRegion>,retired:Vec<CrtPointer>,tags:std::collections::BTreeMap<u32,CrtValue>,
@@ -127,9 +127,30 @@ impl CrtStreamRuntime {
   let mut memory=guest_memory::Space::new(byte_limit,64).map_err(|_|"CRT memory budget")?;
   let anchor=memory.map(file_address,size,guest_memory::Owner::Module(owner),guest_memory::Permissions::READ_WRITE,false).map_err(|_|"CRT FILE mapping")?;
   let pointer=CrtPointer{cap:anchor,owner:guest_memory::Owner::Module(owner),base:file_address,size,address:file_address,kind:CrtRegionKind::File};
-  Ok(Self{main_image:None,main_image_regions:vec![],loader_cells:std::collections::BTreeMap::new(),modules:std::collections::BTreeMap::new(),module_references:std::collections::BTreeMap::new(),exports:std::collections::BTreeMap::new(),uncertain_allocations:vec![],completed_failed_frees:vec![],heap_ptds:vec![],fiber:None,fls:std::collections::BTreeMap::new(),unobserved_contexts:vec![],heap:None,memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],global_objects:std::collections::BTreeMap::new(),global_locks:vec![],record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,canonical_errno:false,errno_cell:None,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([file_address])})
+  Self::from_file_storage(owner,thread,memory,pointer)
+ }
+ fn from_file_storage(owner:u64,thread:u64,memory:guest_memory::Space,pointer:CrtPointer)->Result<Self,&'static str>{
+  let anchor=pointer.cap;
+  Ok(Self{file_view:pointer,main_image:None,main_image_regions:vec![],loader_cells:std::collections::BTreeMap::new(),modules:std::collections::BTreeMap::new(),module_references:std::collections::BTreeMap::new(),exports:std::collections::BTreeMap::new(),uncertain_allocations:vec![],completed_failed_frees:vec![],heap_ptds:vec![],fiber:None,fls:std::collections::BTreeMap::new(),unobserved_contexts:vec![],heap:None,memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],global_objects:std::collections::BTreeMap::new(),global_locks:vec![],record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,canonical_errno:false,errno_cell:None,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([pointer.base])})
  }
 
+ /// Initial FILE storage is a bounded role view of the original writable
+ /// section. No mapping, copy, lock construction or CRT success is invented.
+ fn new_initializing_pe32(owner:u64,thread:u64,file_address:u32,file_count:u32,byte_limit:usize,file:&[u8])->Result<(Self,CrtInitialization),&'static str>{
+  if owner==0||thread==0||file_address==0||file_address%4!=0||!(1..=16).contains(&file_count){return Err("CRT runtime owner/thread/FILE array");}
+  let size=file_count*56;
+  let mut memory=guest_memory::Space::new(byte_limit,64).map_err(|_|"CRT memory budget")?;
+  let maps=memory.map_pe32(owner,file).map_err(|_|"CRT PE32 mapping contract")?;
+  let regions:Vec<_>=maps.into_iter().map(|(cap,base,size)|CrtPointer{cap,owner:guest_memory::Owner::Module(owner),base,size,address:base,kind:CrtRegionKind::Module}).collect();
+  let section=regions.iter().find(|p|file_address>=p.base&&file_address.checked_add(size).is_some_and(|end|u64::from(end)<=u64::from(p.base)+u64::from(p.size))).ok_or("CRT image FILE complete section range")?;
+  memory.validate_writable(section.cap,section.owner,file_address,size).map_err(|_|"CRT image FILE writable storage")?;
+  let pointer=CrtPointer{base:file_address,address:file_address,size,kind:CrtRegionKind::File,..*section};
+  let mut rt=Self::from_file_storage(owner,thread,memory,pointer)?;
+  rt.regions=regions.iter().map(|&pointer|CrtRegion{pointer,heap:false,file_owner:None}).collect();
+  let image=CrtProcessImage{anchor:rt.anchor,owner,generation:1,root:regions[0]};
+  rt.main_image_regions=regions;rt.main_image=Some(image);rt.serial=1;rt.lock_objects.clear();rt.initialization=Some(1);
+  let init=CrtInitialization{anchor:rt.anchor,thread,serial:1};Ok((rt,init))
+ }
  /// Bootstrap installs the mapped input image once. This is process ownership,
  /// not a LoadLibrary reference and not proof of loader/CRT side effects.
  fn bootstrap_main_image(&mut self,init:CrtInitialization,base:u32,image:&[u8])->Result<CrtProcessImage,&'static str>{
@@ -164,7 +185,7 @@ impl CrtStreamRuntime {
  }
  fn process_image(&self,token:CrtProcessImage)->Result<CrtPointer,&'static str>{
   if self.closed||token.anchor!=self.anchor||token.owner!=self.owner||self.main_image!=Some(token){return Err("CRT process image owner/lifetime");}
-  for p in &self.main_image_regions{self.valid(*p,p.size)?;}self.valid(token.root,token.root.size)?;Ok(token.root)
+  for p in &self.main_image_regions{self.identity_range(*p,p.size)?;}self.identity_range(token.root,token.root.size)?;Ok(token.root)
  }
  /// Apply an independently established successful executable-module load.
  /// This records reference effects only; it does not attest DllMain/TLS effects.
@@ -296,7 +317,8 @@ impl CrtStreamRuntime {
   let token=CrtInitialization{anchor:runtime.anchor,thread,serial:1};Ok((runtime,token))
  }
  fn initialization(&self,token:CrtInitialization)->Result<(),&'static str>{
-  if token.anchor!=self.anchor||token.thread!=self.thread||self.initialization!=Some(token.serial){return Err("CRT initialization owner/lifetime");}Ok(())
+  self.memory.validate(self.anchor,self.file_view.owner).map_err(|_|"CRT initialization storage lifetime")?;
+  if self.closed||token.anchor!=self.anchor||token.thread!=self.thread||self.initialization!=Some(token.serial){return Err("CRT initialization owner/lifetime");}Ok(())
  }
  fn end_initialization(&mut self,token:CrtInitialization)->Result<(),&'static str>{self.initialization(token)?;if !self.locks.is_empty()||!self.descriptor_locks.is_empty()||!self.record_locks.is_empty()||!self.global_locks.is_empty(){return Err("CRT initialization with live lock lease");}self.initialization=None;Ok(())}
  /// The receipt attests only this component's caller/thread lifecycle. It
@@ -349,20 +371,23 @@ impl CrtStreamRuntime {
  fn destroy_global_lock(&mut self,token:CrtInitialization,index:u32)->Result<(),&'static str>{
   self.initialization(token)?;if self.global_locks.iter().any(|l|l.index==index){return Err("CRT live global lock destruction");}let p=*self.global_objects.get(&index).ok_or("CRT missing global lock")?;self.identity_range(p,24)?;self.global_objects.remove(&index);Ok(())
  }
+ fn file_storage(&self,cap:guest_memory::Capability)->Option<CrtPointer>{std::iter::once(self.file_view).chain(self.regions.iter().map(|r|r.pointer).filter(|p|p.kind==CrtRegionKind::File)).find(|p|p.cap==cap)}
+ fn file_overlap(&self,p:CrtPointer,size:u32)->bool{self.file_storage(p.cap).is_some_and(|f|u64::from(p.address)<u64::from(f.base)+u64::from(f.size)&&u64::from(f.base)<u64::from(p.address)+u64::from(size.max(1)))}
  fn ordinary_file_bytes(&self,p:CrtPointer,size:u32)->Result<(),&'static str>{
   if self.global_objects.values().any(|q|q.cap==p.cap&&u64::from(p.address)<u64::from(q.address)+24&&u64::from(q.address)<u64::from(p.address)+u64::from(size)){return Err("CRT opaque global lock bytes");}
   if self.record_objects.iter().any(|r|r.cap==p.cap&&u64::from(p.address)<u64::from(r.address)+24&&u64::from(r.address)<u64::from(p.address)+u64::from(size)){return Err("CRT opaque descriptor lock bytes");}
-  if p.kind==CrtRegionKind::File&&self.lock_objects.iter().any(|&at|u64::from(p.address)<u64::from(at)+56&&u64::from(at)+32<u64::from(p.address)+u64::from(size)){return Err("CRT opaque critical section bytes");}Ok(())
+  if self.file_storage(p.cap).is_some()&&self.lock_objects.iter().any(|&at|u64::from(p.address)<u64::from(at)+56&&u64::from(at)+32<u64::from(p.address)+u64::from(size)){return Err("CRT opaque critical section bytes");}Ok(())
  }
  fn destroy_lock(&mut self,token:CrtInitialization,file:CrtPointer)->Result<(),&'static str>{
   self.initialization(token)?;self.file_record(file)?;if self.locks.iter().any(|l|l.record==file.address)||!self.lock_objects.remove(&file.address){return Err("CRT missing/live lock destruction");}Ok(())
  }
  fn file_record(&self,file:CrtPointer)->Result<(),&'static str>{
-  let region=self.regions.iter().find(|r|r.pointer.cap==file.cap).ok_or("CRT FILE owner")?;
-  if file.kind!=CrtRegionKind::File||region.pointer.kind!=CrtRegionKind::File||file.owner!=region.pointer.owner||file.address<region.pointer.base||(file.address-region.pointer.base)%56!=0||file.address.checked_add(56).is_none_or(|end|u64::from(end)>u64::from(region.pointer.base)+u64::from(region.pointer.size)){return Err("CRT FILE record bounds");}
-  self.memory.validate(file.cap,file.owner).map_err(|_|"CRT FILE lifetime")
+  let root=self.file_storage(file.cap).ok_or("CRT FILE owner")?;
+  if file.kind!=CrtRegionKind::File||file.cap!=root.cap||file.owner!=root.owner||file.address<root.base||(file.address-root.base)%56!=0||file.address.checked_add(56).is_none_or(|end|u64::from(end)>u64::from(root.base)+u64::from(root.size)){return Err("CRT FILE record bounds");}
+  self.identity_range(file,56)
  }
- fn file(&self)->CrtPointer{self.regions[0].pointer}
+
+ fn file(&self)->CrtPointer{self.file_view}
  /// Copying already-issued pointer bits does not dereference the pointee or
  /// renew its lifetime. Retired roots remain only as bounded provenance, never
  /// as mappings. Foreign and fabricated tokens cannot enter typed storage.
@@ -384,13 +409,13 @@ impl CrtStreamRuntime {
  }
  fn end_dispatcher(&mut self,token:CrtDispatcherContext)->Result<(),&'static str>{self.dispatcher(token)?;self.dispatchers.remove(&token.serial);Ok(())}
  fn pointer_transport(&self,p:CrtPointer)->Result<(),&'static str>{
-  let root=self.regions.iter().map(|r|r.pointer).chain(self.retired.iter().copied()).chain(self.uncertain_allocations.iter().copied()).find(|r|r.cap==p.cap).ok_or("CRT foreign/unissued pointer value")?;
+  let root=std::iter::once(self.file_view).chain(self.regions.iter().map(|r|r.pointer)).chain(self.retired.iter().copied()).chain(self.uncertain_allocations.iter().copied()).find(|r|r.cap==p.cap&&r.kind==p.kind).ok_or("CRT foreign/unissued pointer value")?;
   if p.owner!=root.owner||p.kind!=root.kind||p.base<root.base||u64::from(p.base)+u64::from(p.size)>u64::from(root.base)+u64::from(root.size)||p.address<p.base||u64::from(p.address)>u64::from(p.base)+u64::from(p.size){return Err("CRT pointer value provenance");}Ok(())
  }
  fn reserve_retirement(&mut self)->Result<(),&'static str>{if self.retired.len()>=4096{return Err("CRT retired provenance budget");}self.retired.try_reserve(1).map_err(|_|"CRT retired provenance storage")}
  fn identity_range(&self,p:CrtPointer,size:u32)->Result<(),&'static str>{
-  let region=self.regions.iter().find(|r|r.pointer.cap==p.cap).ok_or("CRT stale/foreign pointer")?;
-  if region.pointer.owner!=p.owner||region.pointer.kind!=p.kind||p.base<region.pointer.base||u64::from(p.base)+u64::from(p.size)>u64::from(region.pointer.base)+u64::from(region.pointer.size)
+  let root=if p.kind==CrtRegionKind::File{self.file_storage(p.cap).ok_or("CRT stale/foreign FILE")?}else{self.regions.iter().find(|r|r.pointer.cap==p.cap).ok_or("CRT stale/foreign pointer")?.pointer};
+  if root.cap!=p.cap||root.owner!=p.owner||root.kind!=p.kind||p.base<root.base||u64::from(p.base)+u64::from(p.size)>u64::from(root.base)+u64::from(root.size)
    ||p.address<p.base||p.address.checked_add(size).is_none_or(|end|u64::from(end)>u64::from(p.base)+u64::from(p.size)){
    return Err("CRT pointer complete range/identity");
   }
@@ -399,10 +424,10 @@ impl CrtStreamRuntime {
   Ok(())
  }
  fn valid(&self,p:CrtPointer,size:u32)->Result<(),&'static str>{
-  self.identity_range(p,size)?;let region=self.regions.iter().find(|r|r.pointer.cap==p.cap).ok_or("CRT pointer identity")?;
+  self.identity_range(p,size)?;
   if self.closed{return Err("CRT retired stream lifecycle");}
+  if self.file_overlap(p,size){let file=self.file_storage(p.cap).ok_or("CRT FILE identity")?;let base=file.base;if p.address<base||u64::from(p.address)+u64::from(size)>u64::from(base)+u64::from(file.size){return Err("CRT access crosses FILE view");}let record=base+(p.address-base)/56*56;if size!=0&&(size<=4||self.initialization.is_none()&&self.shutdown.is_none())&&(p.address-base)%56+size>56{return Err("CRT access crosses FILE records");}if self.initialization.is_none()&&self.shutdown.is_none()&&!self.locks.iter().any(|l|l.record==record){return Err("CRT unlocked FILE record access");}}
   if self.initialization.is_none()&&self.shutdown.is_none(){
-   if p.kind==CrtRegionKind::File{let record=region.pointer.base+(p.address-region.pointer.base)/56*56;if size!=0&&((p.address-region.pointer.base)%56)+size>56{return Err("CRT access crosses FILE records");}if !self.locks.iter().any(|l|l.record==record){return Err("CRT unlocked FILE record access");}}
    if p.kind==CrtRegionKind::Descriptor&&!self.record_locks.iter().any(|l|l.record.cap==p.cap&&p.address>=l.record.address&&u64::from(p.address)+u64::from(size)<=u64::from(l.record.address)+56){
     let owner=self.descriptors.iter().find(|d|d.live&&d.record.is_some_and(|r|r.cap==p.cap&&p.address>=r.address&&u64::from(p.address)+u64::from(size)<=u64::from(r.address)+56)).ok_or("CRT unbound descriptor record access")?;
     if !self.descriptor_locks.iter().any(|l|l.id==owner.id){return Err("CRT unlocked descriptor record access");}
@@ -437,7 +462,7 @@ impl CrtStreamRuntime {
   let p=CrtPointer{cap,owner,base,size,address:base,kind};self.regions.push(CrtRegion{pointer:p,heap:false,file_owner:None});self.generation=next;Ok(p)
  }
  fn resolve_absolute(&self,address:u32,kind:CrtRegionKind)->Result<CrtPointer,&'static str>{
-  let p=self.regions.iter().map(|r|r.pointer).find(|p|p.kind==kind&&address>=p.base&&u64::from(address)<u64::from(p.base)+u64::from(p.size)).ok_or("CRT undeclared absolute region/role")?;
+  let p=std::iter::once(self.file_view).chain(self.regions.iter().map(|r|r.pointer)).find(|p|p.kind==kind&&address>=p.base&&u64::from(address)<u64::from(p.base)+u64::from(p.size)).ok_or("CRT undeclared absolute region/role")?;
   let q=CrtPointer{address,..p};self.identity_range(q,1)?;Ok(q)
  }
  fn lock(&mut self,thread:u64)->Result<CrtLock,&'static str>{self.lock_file(thread,self.file())}
@@ -483,8 +508,8 @@ impl CrtStreamRuntime {
   let old=self.overlapping_tags(p.address,size);
   if old.iter().any(|(_,v)|matches!(v,CrtValue::OpaqueSaved(_)|CrtValue::ProtectedReturn(_)|CrtValue::ThreadHead(_))){return Err("CRT protected saved/return overwrite");}
   if !old.is_empty()&&(width!=32||old.len()!=1||old[0].0!=p.address){return Err("CRT partial pointer/handle overwrite");}
-  if p.kind==CrtRegionKind::File{
-   let base=self.regions.iter().find(|r|r.pointer.cap==p.cap).ok_or("CRT FILE identity")?.pointer.base;
+  if self.file_overlap(p,size){
+   let base=self.file_storage(p.cap).ok_or("CRT FILE identity")?.base;
    if (p.address-base)%56<8 {
     if width!=32||![0,4].contains(&((p.address-base)%56))||!matches!(value,CrtValue::Pointer(_)|CrtValue::Scalar{bits:0,known:u32::MAX}){return Err("CRT FILE pointer field type");}
    }
@@ -501,8 +526,8 @@ impl CrtStreamRuntime {
    CrtValue::OpaqueSaved(r)=>{if width!=32||p.kind!=CrtRegionKind::Stack||r>7{return Err("CRT saved-register slot");}0},
    CrtValue::ProtectedReturn(id)=>{if width!=32||p.kind!=CrtRegionKind::Stack||id==0{return Err("CRT protected return slot");}0},
   };
-  if p.kind==CrtRegionKind::File{if let CrtValue::Pointer(q)=value{
-   let base=self.regions.iter().find(|r|r.pointer.cap==p.cap).ok_or("CRT FILE identity")?.pointer.base;
+  if self.file_overlap(p,size){if let CrtValue::Pointer(q)=value{
+   let base=self.file_storage(p.cap).ok_or("CRT FILE identity")?.base;
    if (p.address-base)%56<8{self.claim_file_buffer(q,base+(p.address-base)/56*56)?;}
   }}
   self.memory.write(p.address,&bits.to_le_bytes()[..size as usize]).map_err(|_|"CRT storage write")?;

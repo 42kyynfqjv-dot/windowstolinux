@@ -127,19 +127,22 @@ for mode in 0..12{
     );
 }
 
-#[test]
-fn pe32_sections_initialize_original_query_without_temporary_module_owner() {
-    let extra = source(&crate::crt_ptd::raw(QUERY)).unwrap();
-    crate::crt_stream_callees_tests::native(
-        &extra,
-        r#"
-fn put(b:&mut[u8],at:usize,v:u32){b[at..at+4].copy_from_slice(&v.to_le_bytes());}
+#[cfg(test)]
+const PE32_FIXTURE: &str = r#"fn put(b:&mut[u8],at:usize,v:u32){b[at..at+4].copy_from_slice(&v.to_le_bytes());}
 fn image()->Vec<u8>{
  let mut b=vec![0u8;0x800];b[..2].copy_from_slice(b"MZ");put(&mut b,0x3c,0x80);b[0x80..0x84].copy_from_slice(b"PE\0\0");b[0x84..0x86].copy_from_slice(&0x14cu16.to_le_bytes());b[0x86]=3;b[0x94]=224;b[0x96]=2;b[0x98..0x9a].copy_from_slice(&0x10bu16.to_le_bytes());
  for(at,v)in [(0xa8,0x1000),(0xb4,0x500000),(0xb8,4096),(0xbc,512),(0xd0,0x4000),(0xd4,512),(0xf4,16)]{put(&mut b,at,v);}b[0xdc]=3;
  for(i,ch)in [0x60000020,0x40000040,0xc0000040].into_iter().enumerate(){let at=0x178+i*40;for(off,v)in [(8,0x300),(12,((i+1)*4096)as u32),(16,512),(20,((i+1)*512)as u32),(36,ch)]{put(&mut b,at+off,v);}}
  b[0x200]=0xc3;b[0x400]=91;b[0x600]=29;b
 }
+"#;
+
+#[test]
+fn pe32_sections_initialize_original_query_without_temporary_module_owner() {
+    let extra = source(&crate::crt_ptd::raw(QUERY)).unwrap() + PE32_FIXTURE;
+    crate::crt_stream_callees_tests::native(
+        &extra,
+        r#"
 for mode in 0..29{
  let(mut rt,init)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();let mut b=image();
  match mode{
@@ -184,5 +187,47 @@ let got=managed_image_query(&mut rt,&mut cpu,Some(&view)).expect("original input
             crate::crt_ptd::raw(QUERY)
         );
         crate::crt_stream_callees_tests::native(&extra, &body, "original-pe32-process-sections");
+        let body = format!(
+            r#"let file:&[u8]=&{file:?};
+let(mut rt,init)=CrtStreamRuntime::new_initializing_pe32(7,9,0x41c080,3,1048576,file).expect("original image FILE view");let token=rt.main_image.unwrap();let view=CrtModuleImage::main(&rt).unwrap();let f=rt.file();assert_eq!(f.cap,rt.process_image_pointer(token,0x41c080,168).unwrap().cap);assert!(rt.lock(9).is_err());let old=rt.load(rt.offset(f,16).unwrap(),32).unwrap();rt.store(rt.offset(f,16).unwrap(),32,CrtValue::scalar(39)).unwrap();assert_eq!(rt.load(rt.process_image_pointer(token,0x41c090,4).unwrap(),32).unwrap(),CrtValue::scalar(39));rt.store(rt.offset(f,16).unwrap(),32,old).unwrap();rt.end_initialization(init).unwrap();view.validate(&rt).unwrap();let stack=rt.map_region(0x9000,512,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,400).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(1)).unwrap();let mut cpu=CrtCpu::new(sp,1).unwrap();assert_eq!(CrtCpu::bits(managed_image_query(&mut rt,&mut cpu,Some(&view)).unwrap()).unwrap().0&255,0);assert!(cpu.returned);
+"#
+        );
+        crate::crt_stream_callees_tests::native(&extra, &body, "original-image-file-anchor");
     }
+}
+
+#[test]
+fn image_file_anchor_keeps_section_identity_and_rejects_alias_and_partial_init() {
+    let extra = source(&crate::crt_ptd::raw(QUERY)).unwrap() + PE32_FIXTURE;
+    crate::crt_stream_callees_tests::native(
+        &extra,
+        r#"
+for mode in 0..20{
+ let b=image();let address=match mode{1=>0x502040,2=>0x501040,3=>0x500040,4=>0x5032e0,5=>0x503041,6=>0xfffffff0,_=>0x503040};
+ let count=match mode{7=>0,8=>17,_=>3};
+ let got=CrtStreamRuntime::new_initializing_pe32(7,9,address,count,65536,&b);
+ if (1..=8).contains(&mode){assert!(got.is_err(),"invalid FILE view {mode}");continue;}
+ let(mut rt,init)=got.expect("writable section FILE view");let token=rt.main_image.unwrap();let f=rt.file();let raw=rt.process_image_pointer(token,f.address,f.size).unwrap();assert_eq!(f.cap,raw.cap);assert_eq!(f.owner,raw.owner);assert_eq!(rt.regions.len(),4);assert!(rt.lock_objects.is_empty());assert!(rt.module_references.is_empty());assert!(rt.lock(9).is_err());
+ let counter=rt.offset(f,16).unwrap();let alias=rt.offset(raw,16).unwrap();rt.store(counter,32,CrtValue::scalar(71)).unwrap();assert_eq!(rt.load(alias,32).unwrap(),CrtValue::scalar(71));rt.store(alias,32,CrtValue::scalar(83)).unwrap();assert_eq!(rt.load(counter,32).unwrap(),CrtValue::scalar(83));
+ assert!(rt.store(rt.offset(raw,-1).unwrap(),32,CrtValue::scalar(9)).is_err());assert!(rt.store(rt.offset(raw,54).unwrap(),32,CrtValue::scalar(9)).is_err());assert!(rt.store(raw,32,CrtValue::scalar(9)).is_err());assert_eq!(rt.load(raw,32).unwrap(),CrtValue::scalar(0));
+ if mode==9{rt.memory.release(f.cap,f.owner).unwrap();assert!(rt.initialization(init).is_err());assert!(rt.file_record(f).is_err());assert!(rt.process_image(token).is_err());continue;}
+ if mode==10{rt.memory.release(f.cap,f.owner).unwrap();rt.memory.map_image(raw.base,raw.size,7,guest_memory::Permissions::READ_WRITE,&[]).unwrap();assert!(rt.file_record(f).is_err());assert!(rt.load(counter,32).is_err());continue;}
+ if mode==11{let foreign=CrtStreamRuntime::new_initializing_pe32(7,9,address,3,65536,&b).unwrap().0;assert!(foreign.file_record(f).is_err());assert!(foreign.load(counter,32).is_err());continue;}
+ if mode==12{rt.thread+=1;assert!(rt.initialization(init).is_err());assert!(rt.process_image(token).is_ok());continue;}
+ if mode==13{rt.closed=true;assert!(rt.initialization(init).is_err());assert!(rt.load(counter,32).is_err());continue;}
+ if mode==14{let bad=CrtPointer{base:f.base-4,address:f.base-4,..f};assert!(rt.file_record(bad).is_err());continue;}
+ if mode==18{assert!(rt.file_record(rt.subrange(f,55).unwrap()).is_err());continue;}
+ if mode==19{assert!(rt.file_record(rt.offset(f,168).unwrap()).is_err());continue;}
+ if mode==15{let lock=rt.offset(f,32).unwrap();assert!(!rt.construct_lock_result(init,lock,0,0).unwrap());assert!(rt.lock(9).is_err());assert_eq!(rt.load(counter,32).unwrap(),CrtValue::scalar(83));assert!(rt.load(rt.offset(raw,32).unwrap(),32).unwrap().known_scalar().is_err());continue;}
+ assert!(rt.construct_lock_result(init,rt.offset(f,32).unwrap(),0,1).unwrap());
+ if mode==16{let second=rt.offset(f,56).unwrap();assert!(!rt.construct_lock_result(init,rt.offset(second,32).unwrap(),0,0).unwrap());assert!(rt.lock_file(9,second).is_err());}
+ assert_eq!(rt.load(rt.offset(raw,32).unwrap(),32),Err("CRT opaque critical section bytes"));assert_eq!(rt.store(rt.offset(raw,32).unwrap(),32,CrtValue::scalar(0)),Err("CRT opaque critical section bytes"));
+ rt.end_initialization(init).unwrap();assert_eq!(rt.load(alias,32),Err("CRT unlocked FILE record access"));assert!(rt.store(alias,32,CrtValue::scalar(0)).is_err());assert!(rt.load(rt.offset(raw,-4).unwrap(),32).is_ok());
+ let lease=rt.lock(9).unwrap();assert_eq!(rt.load(counter,32).unwrap(),CrtValue::scalar(83));assert_eq!(rt.load(alias,32).unwrap(),CrtValue::scalar(83));rt.store(alias,32,CrtValue::scalar(97)).unwrap();assert_eq!(rt.load(counter,32).unwrap(),CrtValue::scalar(97));assert!(rt.load(rt.offset(raw,54).unwrap(),32).is_err());
+ if mode==17{assert!(rt.unlock(CrtLock{serial:lease.serial+1,..lease}).is_err());assert_eq!(rt.load(counter,32).unwrap(),CrtValue::scalar(97));}
+ rt.unlock(lease).unwrap();assert!(rt.load(alias,32).is_err());assert!(rt.unlock(lease).is_err());assert!(rt.process_image(token).is_ok());
+}
+"#,
+        "image-file-anchor",
+    );
 }

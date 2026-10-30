@@ -1104,3 +1104,43 @@ mapping regression currently uses a separate test FILE address; it does not clos
 that startup boundary. Full startup/rcedit remains unsupported.
 
 [Review counts, hashes, mutant evidence and retained limitations](evidence/pe32-section-review.json).
+
+## FILE anchor adopts canonical image storage
+
+`new_initializing_pe32` now creates the checked image mapping before selecting the
+FILE array. Its FILE view is bounded to a single writable section, shares that
+section's capability and bytes, and becomes the runtime anchor without a second
+mapping or copied `.data`. The process-image root remains the original header
+mapping. No constructor grants lock construction, descriptor handles, locale
+initialization or successful CRT startup.
+
+The FILE role is checked separately from the underlying section role. Scalar
+reads/writes through either alias obey the same record bounds, lock requirements,
+opaque critical-section protection and typed pointer fields. Otherwise a module
+alias could bypass the FILE policy. Image identity/lifetime validation uses range
+identity rather than pretending to access all FILE bytes under a lock. Separate
+legacy FILE mappings retain their existing lifecycle; initialization may validate
+an array's extent without performing a cross-record scalar access.
+
+Twenty native scenarios exercise constructor failures for read-only/code/header
+storage, incomplete/unaligned/wrapping arrays, invalid counts, stale/replaced or
+foreign mappings, cross-thread initialization, closure, narrowed/one-past views,
+failed/partial lock construction, alias writes and lock lifetime. A successful
+unmodified baseline precedes alias-bypass and stale-initialization mutants, which
+must fail the corresponding assertions. The full suite caught two regressions in
+the first implementation (separate FILE maps and initialization extent checking);
+those failures are retained locally and the corrected full suite passes.
+
+The recorded authored PE now also uses its actual FILE address `0x41c080`, three
+records, and its existing writable section. A field write is visible through both
+roles and the original header query returns after initialization ends. This is a
+native component check, not original-Windows FILE/startup execution or a new whole
+PE translation. The standard replay invokes both the raw mapping test and FILE
+view regression with strict named completions.
+
+This closes the separately mapped FILE anchor input described above. Next migrate
+the cookie and startup record producers onto canonical section views, preserving
+original writes and lock/API effects instead of overlaying mapped bytes. The
+original manager `0x406cfa`, managed termination `0x406f55`, actual delivery and
+physical exit still need justified effects and connected execution. Full startup/
+rcedit remains unsupported. [Review evidence](evidence/image-file-anchor-review.json).
