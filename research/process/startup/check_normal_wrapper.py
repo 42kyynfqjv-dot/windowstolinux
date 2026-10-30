@@ -194,8 +194,8 @@ def check(original, observation, out, compare=None):
             raise ValueError('heap/allocator fixture differs from original PE')
         file_regions[name]=sha(raw)
     abort_source = (Path(__file__).resolve().parents[3]/'src/crt_abort.rs').read_text()
-    for name, start, length in [('ENTRY',0x4077ff,5),('QUERY',0x40cbcf,39)]:
-        raw = mapped(image,start,length,executable=True)
+    for name, start, length in [('ENTRY',0x4077ff,5),('QUERY',0x40cbcf,39),('LOCKED',0x40cafd,89),('UNLOCK',0x40cb59,12),('SCOPE',0x41b740,28)]:
+        raw = mapped(image,start,length,executable=name!='SCOPE')
         fixture = re.search(r'const\s+'+name+r'\s*:\s*&str\s*=\s*"([0-9a-f]+)"',abort_source)
         if fixture is None or bytes.fromhex(fixture[1]) != raw:
             raise ValueError('abort entry/query differs from original PE')
@@ -310,7 +310,7 @@ def check(original, observation, out, compare=None):
     abort_run = subprocess.run(['cargo','test','--locked','--example','crt_stream','crt_abort::'],env=env,capture_output=True,timeout=180)
     (out/'abort-components.stdout').write_bytes(abort_run.stdout)
     (out/'abort-components.stderr').write_bytes(abort_run.stderr)
-    require_test_completions(abort_run, [b'crt_abort::original_abort_query_caller_preserves_arguments_cleanup_and_prior_effects',b'crt_abort::original_abort_entry_and_query_mutations_reject'])
+    require_test_completions(abort_run, [b'crt_abort::original_abort_query_caller_preserves_arguments_cleanup_and_prior_effects',b'crt_abort::original_abort_entry_and_query_mutations_reject', b'crt_abort::rotate_cl_preserves_x86_bits_flags_and_rejects_unknown_count'])
     ptd_run = subprocess.run(['cargo', 'test', '--locked', '--example', 'crt_stream', 'crt_ptd::'],
                              env=env, capture_output=True, timeout=180)
     (out/'ptd-components.stdout').write_bytes(ptd_run.stdout)
@@ -418,6 +418,7 @@ def check(original, observation, out, compare=None):
         ('live-return', 'original_empty_search_executes_guard_and_protected_return'),
         ('ordered-search', 'original_return_receipt_advances_only_matching_live_registration'),
         ('registered-errno', 'original_ucrt_errno_registration_preserves_pending_delivery_ownership'),
+        ('abort-locked','original_abort_locked_query_owns_frame_lock_and_failure_effects'),
     ]:
         delivery = subprocess.run(['cargo','test','--locked','--example','crt_stream',test],env=env,capture_output=True,timeout=180)
         (out/(label+'.stdout')).write_bytes(delivery.stdout)
@@ -447,7 +448,7 @@ def check(original, observation, out, compare=None):
                   main_scope_header_sha256=sha((out/'Main-scope-header.bin').read_bytes()),
                   locale_state_evidence=locale_state_evidence(image),
                   unwind_binding_source_sha256=sha((out/'cxx-unwind-connected.rs').read_bytes()),
-                  abort_query_native_cases=8, abort_query_new_windows_pairs=0, registered_errno_native_cases=16, registered_errno_new_windows_pairs=0, heap_free_native_cases=28, heap_free_new_windows_pairs=0, pending_lazy_native_cases=9, pending_lazy_new_windows_pairs=0, lazy_common_handler_native_cases=24, lazy_common_handler_new_windows_pairs=0, heap_ptd_view_native_cases=17, lazy_ptd_native_cases=20, lazy_ptd_new_windows_pairs=0, ordered_search_native_cases=85, unobserved_context_native_cases=27, unobserved_context_new_windows_pairs=0, original_empty_search_native_cases=1, ordered_search_new_windows_pairs=0, shared_chain_native_cases=24, shared_chain_effect_lifetime_cases=4, shared_chain_new_windows_pairs=0, chain_ownership_diagnostic_experiments=1, chain_ownership_new_windows_pairs=0, bound_cxx_invocation_native_cases=34, bound_cxx_invocation_new_windows_pairs=0, prefix_delivery_unwind_native_cases=14, prefix_delivery_new_windows_pairs=0, dispatcher_delivery_unwind_native_cases=8, dispatcher_delivery_new_windows_pairs=0, delivery_child_native_cases=14, delivery_cached_unwind_native_cases=4, delivery_new_windows_pairs=0,
+                  abort_locked_native_cases=12, abort_locked_new_windows_pairs=0, rotate_truth_table_cases=35, abort_query_native_cases=8, abort_query_new_windows_pairs=0, registered_errno_native_cases=16, registered_errno_new_windows_pairs=0, heap_free_native_cases=28, heap_free_new_windows_pairs=0, pending_lazy_native_cases=9, pending_lazy_new_windows_pairs=0, lazy_common_handler_native_cases=24, lazy_common_handler_new_windows_pairs=0, heap_ptd_view_native_cases=17, lazy_ptd_native_cases=20, lazy_ptd_new_windows_pairs=0, ordered_search_native_cases=85, unobserved_context_native_cases=27, unobserved_context_new_windows_pairs=0, original_empty_search_native_cases=1, ordered_search_new_windows_pairs=0, shared_chain_native_cases=24, shared_chain_effect_lifetime_cases=4, shared_chain_new_windows_pairs=0, chain_ownership_diagnostic_experiments=1, chain_ownership_new_windows_pairs=0, bound_cxx_invocation_native_cases=34, bound_cxx_invocation_new_windows_pairs=0, prefix_delivery_unwind_native_cases=14, prefix_delivery_new_windows_pairs=0, dispatcher_delivery_unwind_native_cases=8, dispatcher_delivery_new_windows_pairs=0, delivery_child_native_cases=14, delivery_cached_unwind_native_cases=4, delivery_new_windows_pairs=0,
                   unwind_native_cases=24, cached_unwind_native_cases=14, cached_unwind_new_windows_pairs=0, unwind_new_windows_pairs=0, unwind_binding_rust_tests=1,
                   unwind_state_source_sha256=sha((out/'unwind-state-live.rs').read_bytes()),
                   unwind_state_native_cases=12, unwind_state_new_windows_pairs=0,

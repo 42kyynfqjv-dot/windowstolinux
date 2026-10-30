@@ -787,3 +787,53 @@ CF and count-one OF rules), with independent bit-pattern/count tests, alongside
 the helper's checked lock/EH4 lifetime. Decoded numeric bits alone must not grant
 function-pointer authority. This is a bounded Sol implementation question; it
 needs Astra only if a concrete ownership/exception composition uncertainty arises.
+
+### Connected locked signal query
+
+The pending required-PTD path now executes original helper `0x40cafd` through its
+EH4 prolog, indexed global lock 3, cookie/encoded signal-cell reads, ROR ESI,CL,
+original finally/unlock caller, registered epilog and RET 12. The original caller
+then returns to abort at `0x407804`. The abort TEST/branches, signal dispatch,
+reporting/fast-fail and exit remain an explicit rejection; this is not completed
+termination or whole-startup support. Initial module, lock and encoded-cell state
+remain independently supplied component inputs, not proven startup producers.
+
+Reusable ROR r32,CL lowering reads only the masked five-bit count, preserves
+flags for count zero, updates CF, defines OF only for count one, and preserves
+SF/ZF. Unknown result bits remain unknown. Numeric decoding creates no pointer or
+function capability. Thirty-five bit/count truth-table cases, partial knowledge
+and unknown-count rejection accompany the actual ESI use. ESP destinations remain
+rejected. Contract reference: Intel SDM volume 2, ROR instruction
+(https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html).
+
+Twelve independent registered-query cases cover null/nonzero/unknown decoded
+values, missing or aliased lock storage, unknown cookie, failure after a finally
+write, stale storage, changed scope bytes, nested lock order and a thread change
+during cleanup. Earlier writes remain visible; failed cleanup does not retire
+the frame or release an unowned lock. Scope bytes are rechecked across body calls.
+An unknown-data/proof rejection does not stand in for Windows exception delivery
+or automatically run a finally action that the original instructions have not
+reached. Those exceptional compositions remain admission gates.
+
+The new thread-change case reproduced a shared global-lock defect: the old
+release guard checked token/storage/order but omitted current runtime/thread
+identity. A mutant of the old guard released the lock before a later frame check
+rejected the context. The corrected guard rejects before release, retaining the
+prior write and held lock. The native mutant fails specifically with zero held
+locks where one must remain; the current case passes. This fix also covers the
+same shared validation used by existing global-lock consumers.
+
+The predecessor PR run `41004981995` has a separately retained original-Windows
+`untaken` fixture timeout at job `123897726848`. The log shows a 15-second
+`process.wait` timeout, not output/termination success. Imported-launch artifact
+`12955196422` has ZIP SHA256
+`a1911ff7c4d7c42a5f7fef5eeff78eaf83e88a6e52760f2f0c61610359876f31`.
+No root cause or timeout fix is claimed. No retry masks this failure.
+
+Next execute abort's original TEST and branch policy from `0x407804`, proving
+signal `0x16` dispatch (`0x40cc14`), encoded callback authority and lock/exception
+effects before extending feature/report/exit behavior. Keep nonreturning effects
+explicit. Sol review can verify this connected helper and attempt that scope;
+Astra is only needed for a demonstrated ownership/exception contract question.
+Full startup/rcedit and all historical timeout causes remain unresolved.
+See [locked-query evidence](evidence/abort-locked-review.json).

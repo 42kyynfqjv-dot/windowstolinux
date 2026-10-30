@@ -38,6 +38,7 @@ pub(crate) enum Op {
     FsWrite(Reg),
     FsPush,
     SignDividend,
+    RotateRightCl(Reg),
     AddCarry {
         destination: Operand,
         source: Operand,
@@ -261,6 +262,13 @@ fn extended(i: &Instruction, raw: &[u8], tables: &[JumpTable<'_>]) -> Result<Op,
         return Err("CRT IR: instruction prefix".into());
     }
     Ok(match i.mnemonic() {
+        Mnemonic::Ror if i.code() == Code::Ror_rm32_CL && i.op0_kind() == OpKind::Register => {
+            let dst = full(i.op0_register())?;
+            if dst.index == 4 {
+                return Err("CRT rotate stack register".into());
+            }
+            Op::RotateRightCl(dst)
+        }
         Mnemonic::Xchg
             if i.code() == Code::Xchg_rm32_r32
                 && i.op0_kind() == OpKind::Memory

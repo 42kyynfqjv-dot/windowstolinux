@@ -139,6 +139,15 @@ impl CrtCpu{
   Self::sum_bits(Self::sum_bits(a,b)?,CrtValue::scalar(displacement))
  }
  fn zero(&mut self)->CrtValue{self.flags=CrtFlags{cf:Some(false),zf:Some(true),sf:Some(false),of:Some(false)};CrtValue::scalar(0)}
+ /// ROR r32,CL: only five count bits are read; no pointer authority is created.
+ fn rotate_right32(&mut self,value:CrtValue,count:CrtValue)->Result<CrtValue,&'static str>{
+  let(c,k)=Self::bits(count)?;if k&31!=31{return Err("CRT unknown rotate count");}let n=c&31;
+  if n==0{return Ok(value);}
+  let(b,k)=Self::bits(value)?;let bits=b.rotate_right(n);let known=k.rotate_right(n);
+  self.flags.cf=if known&0x80000000!=0{Some(bits&0x80000000!=0)}else{None};
+  self.flags.of=if n==1&&known&0xc0000000==0xc0000000{Some(((bits>>31)^(bits>>30))&1!=0)}else{None};
+  Ok(CrtValue::Scalar{bits:bits&known,known})
+ }
  fn shift(&mut self,value:CrtValue,count:u8,kind:u8,width:u8)->Result<CrtValue,&'static str>{let mask=Self::mask(width)?;let x=Self::number(value)?&mask;let count=count&31;if count==0{return Ok(value);}let sign=1u32<<(width-1);let result=match kind{0=>x.wrapping_shl(u32::from(count))&mask,1=>x.wrapping_shr(u32::from(count)),2=>((((x<<(32-width))as i32)>>(32-width))>>count)as u32&mask,_=>return Err("CRT shift kind")};
   let cf=if kind==2&&count>=width{Some(x&sign!=0)}else if count<width{Some(if kind==0{x&(1<<(width-count))!=0}else{x&(1<<(count-1))!=0})}else{None};let of=if count==1{match kind{0=>cf.map(|c|(result&sign!=0)^c),1=>Some(x&sign!=0),2=>Some(false),_=>None}}else{None};self.flags=CrtFlags{cf,zf:Some(result==0),sf:Some(result&sign!=0),of};Ok(CrtValue::scalar(result))}
  fn multiply(&mut self,value:CrtValue,factor:u32)->Result<CrtValue,&'static str>{let x=Self::number(value)?;let product=i64::from(x as i32)*i64::from(factor as i32);let result=product as u32;let overflow=product!=i64::from(result as i32);self.flags=CrtFlags{cf:Some(overflow),of:Some(overflow),zf:None,sf:None};Ok(CrtValue::scalar(result))}

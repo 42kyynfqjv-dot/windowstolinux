@@ -416,3 +416,13 @@ separately labeled conformance tests. Next bind helper40cafd's actual EH4 frame,
 lock3, encoded signal cell/cookie and finally unlock before extending dispatch,
 fast-fail/reporting or exit. This is component progress, with no new whole-PE
 acceptance. [Evidence and exact next gate](CAPTURE-ACQUISITION.md#reviewed-registry-and-connected-abort-caller).
+
+## Locked query now executed
+
+Required-PTD → abort entry/query → helper40cafd now executes the actual registered
+EH4 frame, lock3, decoded signal-cell value and finally/unlock, retiring through
+original RET12. Current rejection moves to abort407804's TEST/dispatch/report/exit
+continuation. Initial encoded-cell/module/lock state is still supplied, and
+proof rejection does not simulate exceptional finally execution. Twelve negative/
+normal cases and an old-guard mutant protect ownership and prior effects.
+[Current contract and next gate](CAPTURE-ACQUISITION.md#connected-locked-signal-query).

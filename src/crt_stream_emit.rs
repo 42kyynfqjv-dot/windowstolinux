@@ -424,6 +424,7 @@ pub(crate) fn emit_body_with_indirect(
  Op::IndirectCall(operand)=>{out.push_str(&format!("let target={};",read(operand,roles)?));out.push_str(&indirect(pc,operand)?);},
  Op::FsRead(_)|Op::FsWrite(_)|Op::FsPush=>out.push_str(&thread(pc,&node.op)?),
  Op::ReturnPop(bytes)=>{out.push_str(&return_hook(pc,*bytes)?.unwrap_or_else(||format!("return cpu.finish_pop(rt,{bytes});")));controlled=true;},
+ Op::RotateRightCl(dst)=>{let o=register(*dst);out.push_str(&format!("let count=cpu.get(1,8,0)?;let v=cpu.rotate_right32({},count)?;{}",read(&o,roles)?,write(&o,"v",roles)?));},
  Op::SignDividend=>out.push_str("cpu.sign_dividend()?;"),
  Op::AddCarry{destination,source:operand}=>out.push_str(&format!("let a={};let b={};let v=cpu.add_carry(a,b)?;{}",read(destination,roles)?,read(operand,roles)?,write(destination,"v",roles)?)),
  Op::DivideUnsigned(operand)=>out.push_str(&format!("let divisor={};cpu.divide_unsigned(divisor)?;",read(operand,roles)?)),

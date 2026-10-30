@@ -321,3 +321,9 @@ original query caller40cbcf. Its locked callee40cafd remains the explicit runtim
 rejection in this component; standalone tests label supplied query outcomes.
 The next cut is EH4/lock3/cookie-decoded signal query plus finally unlock, followed
 by signal dispatch/fast-fail/report/exit. No normal return or shutdown is implied.
+
+The locked helper40cafd is now executed through normal registered return. Its
+component input includes initial live lock3 and module signal/cookie state;
+exception delivery remains a separate gate. The connected pending path rejects
+at abort's407804 continuation pending actual signal22 dispatch, encoded callback
+authority, reporting/fast-fail and exit. No terminate/abort success is claimed.

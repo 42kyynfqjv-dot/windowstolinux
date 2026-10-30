@@ -91,3 +91,148 @@ fn original_abort_entry_and_query_mutations_reject() {
         assert!(source(&e, &b).is_err());
     }
 }
+
+#[test]
+fn rotate_cl_preserves_x86_bits_flags_and_rejects_unknown_count() {
+    let mut extra = String::new();
+    for reg in [0u8, 2, 3, 5, 6, 7] {
+        let g = Graph::decode(&[0xd3, 0xc8 + reg, 0xc3], 0x430000).unwrap();
+        let body = crate::crt_stream_emit::emit_body(
+            &g,
+            |_, _| Err("no rotate calls".into()),
+            &Default::default(),
+            8,
+        )
+        .unwrap();
+        extra.push_str(&format!("fn rotate_{reg}(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->Result<CrtValue,&'static str>{{{body}}}"));
+    }
+    crate::crt_stream_callees_tests::native(
+        &extra,
+        r#"
+for bits in [0u32,1,0x80000000,0x12345678,u32::MAX]{for count in [0u32,1,2,31,32,33,255]{
+ let mut rt=CrtStreamRuntime::new(7,9,0x8000,8192).unwrap();let s=rt.map_region(0x9000,512,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(s,400).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(1)).unwrap();let mut c=CrtCpu::new(sp,1).unwrap();c.r[0]=CrtValue::scalar(bits);c.r[1]=CrtValue::scalar(count);c.flags=CrtFlags{cf:Some(true),of:Some(false),zf:Some(true),sf:Some(false)};
+ let n=count&31;let mut expected=0;for i in 0..32{if bits&(1<<i)!=0{expected|=1<<((i+32-n)%32);}}
+ rotate_0(&mut rt,&mut c).unwrap();assert_eq!(c.r[0],CrtValue::scalar(expected));assert_eq!(c.flags.zf,Some(true));assert_eq!(c.flags.sf,Some(false));assert_eq!(c.flags.cf,Some(if n==0{true}else{expected>>31!=0}));assert_eq!(c.flags.of,if n==0{Some(false)}else if n==1{Some(((expected>>31)^(expected>>30))&1!=0)}else{None});
+}}
+let mut rt=CrtStreamRuntime::new(7,9,0x8000,8192).unwrap();let p=rt.map_region(0x9000,512,CrtRegionKind::Stack,None).unwrap();let mut c=CrtCpu::new(p,1).unwrap();
+c.flags=CrtFlags{cf:Some(true),of:Some(true),sf:Some(false),zf:Some(true)};
+assert_eq!(c.rotate_right32(CrtValue::Scalar{bits:0x80000000,known:0x80000000},CrtValue::Scalar{bits:1,known:31}).unwrap(),CrtValue::Scalar{bits:0x40000000,known:0x40000000});assert_eq!(c.flags.cf,None);assert_eq!(c.flags.of,None);
+let flags=c.flags;assert_eq!(c.rotate_right32(CrtValue::scalar(1),CrtValue::Scalar{bits:0,known:30}),Err("CRT unknown rotate count"));assert_eq!((c.flags.cf,c.flags.of,c.flags.sf,c.flags.zf),(flags.cf,flags.of,flags.sf,flags.zf));
+"#,
+        "rotate-cl",
+    );
+    assert!(Graph::decode_instruction(&[0xd3, 0xcc], 0x430000).is_err());
+}
+pub(crate) const LOCKED:&str="6a0c6840b74100e85753ffff8365e4008b4508ff30e8b8f2ffff598365fc008b0d00c0410083e11f8b35d8d24100333500c04100d3ce8975e4c745fcfeffffffe8170000008bc68b4df064890d00000000595f5e5bc9c20c00";
+pub(crate) const UNLOCK: &str = "8b4d10ff31e8b4f2ffff59c3";
+pub(crate) const SCOPE: &str = "feffffff00000000d4ffffff00000000feffffff0000000056cb4000";
+pub(crate) fn locked_source(helper: &[u8]) -> Result<String, String> {
+    use crate::crt_exception_wrapper::{EpilogProof, PrologProof, Region};
+    let raw = crate::crt_ptd::raw;
+    let code = raw(LOCKED);
+    let scope = raw(SCOPE);
+    let prolog = PrologProof::prove(
+        Region {
+            bytes: helper,
+            origin: 0x401e60,
+        },
+        12,
+        0x41b740,
+        0x41c000,
+        0x402210,
+    )?;
+    let epilog = EpilogProof::prove(
+        Region {
+            bytes: &code[71..],
+            origin: 0x40cb44,
+        },
+        &prolog,
+    )?;
+    let p = prolog.emit("abort_locked_prolog")?;
+    let e = epilog.emit("abort_locked_epilog")?;
+    let prefix = crate::crt_stream_emit::emit_linear_fragment(
+        &Graph::decode_linear_fragment(&code[..7], 0x40cafd)?,
+        &Default::default(),
+    )?;
+    let mut nodes = std::collections::BTreeMap::new();
+    let mut decoder =
+        iced_x86::Decoder::with_ip(32, &code[12..71], 0x40cb09, iced_x86::DecoderOptions::NONE);
+    while decoder.can_decode() {
+        let i = decoder.decode();
+        let at = (i.ip32() - 0x40cafd) as usize;
+        nodes.insert(
+            i.ip32(),
+            Graph::decode_instruction(&code[at..at + i.len()], i.ip32())?,
+        );
+    }
+    let graph = Graph {
+        origin: 0x40cb09,
+        end: 0x40cb44,
+        nodes,
+    };
+    let roles = std::collections::BTreeMap::from([
+        (0x41c000, "CrtRegionKind::Module".into()),
+        (0x41d2d8, "CrtRegionKind::Module".into()),
+    ]);
+    let unlock = crate::crt_stream_emit::emit_body(
+        &Graph::decode(&raw(UNLOCK), 0x40cb59)?,
+        |_, target| {
+            if target != Target::Direct(0x40be17) {
+                return Err("abort finally unlock target".into());
+            }
+            Ok("cpu.call_activation(rt,0x40cb63,0,|rt,c|abort_global_leave(rt,c,|rt,index|{let lock=held.ok_or(\"abort unlock missing acquisition\")?;if index!=3{return Err(\"abort unlock index\");}cleanup(rt)?;rt.unlock_global(lock)?;*held=None;Ok(())}))?;".into())
+        },
+        &Default::default(),
+        32,
+    )?;
+    let body = crate::crt_stream_emit::emit_body_with_exit(
+        &graph,
+        |pc, target| {
+            Ok(match target{
+  Target::Direct(0x40bdcf)=>"cpu.call_activation(rt,0x40cb17,0,|rt,c|abort_global_enter(rt,c,|rt,index|{if index!=3||held.is_some(){return Err(\"abort acquire index/replay\");}held=Some(rt.lock_global(rt.thread,index)?);Ok(())}))?;".into(),
+  Target::Direct(0x40cb59)=>format!("cpu.call_activation(rt,{},0,|rt,c|abort_finally_original(rt,c,&mut held,cleanup))?;",pc+5),
+  _=>return Err("abort locked unknown call".into())
+ })
+        },
+        &roles,
+        256,
+        |_, _| Err("abort locked body FS".into()),
+        |_, _| {
+            Ok(format!(
+                "binding.image(rt,cpu,epoch)?;CrtCxxRecord::bytes(rt,s,&{scope:?})?;"
+            ))
+        },
+        |_, _| Err("abort body unexpected return".into()),
+        Some(0x40cb44),
+    )?;
+    let enter = raw("8bff558bec6b4508180550d1410050ff154c5041005dc3");
+    let leave = raw("8bff558bec6b4508180550d1410050ff15505041005dc3");
+    let locks = format!(
+        "{}{}",
+        crate::crt_global_lock::Proof::prove(&enter, 0x40bdcf, 0x41d150, 0x41504c)?
+            .emit("abort_global_enter")?,
+        crate::crt_global_lock::Proof::prove(&leave, 0x40be17, 0x41d150, 0x415050)?
+            .emit("abort_global_leave")?
+    );
+    Ok(format!(
+        r#"{p}{e}{locks}
+fn abort_finally_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,held:&mut Option<CrtGlobalLock>,cleanup:&mut impl FnMut(&mut CrtStreamRuntime)->RegistryResult<()>)->RegistryResult<CrtValue>{{{unlock}}}
+fn abort_locked_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,epoch:&mut NormalCallEpoch<'_>,cleanup:&mut impl FnMut(&mut CrtStreamRuntime)->RegistryResult<()>)->RegistryResult<CrtValue>{{
+ let result=(||{{let s=rt.resolve_absolute(0x41b740,CrtRegionKind::Module)?;CrtCxxRecord::bytes(rt,s,&{scope:?})?;
+ let mut binding=CrtNormalBinding::bind(rt,cpu,epoch,abort_locked_epilog_layout())?;
+ let _=(||->RegistryResult<CrtValue>{{{prefix}}})()?;
+ let generation=rt.generation.checked_add(1).filter(|n|*n<1u64<<63).ok_or("abort helper generation")?;let id=generation|(1u64<<63);rt.generation=generation;cpu.push(rt,CrtValue::ProtectedReturn(id))?;
+ abort_locked_prolog(rt,cpu,id,binding.token,|rt,c,p,t|binding.install(rt,c,epoch,p,t))?;
+ let mut held=None;let _=(||->RegistryResult<CrtValue>{{{body}}})()?;
+ if held.is_some(){{return Err("abort lock not released");}}abort_locked_epilog(rt,cpu,epoch,&mut binding)
+ }})();match result{{Ok(v)=>Ok(v),Err(e)=>epoch.fail(e)}}
+}}
+"#
+    ))
+}
+
+pub(crate) fn registered_entry_source() -> Result<String, String> {
+    Ok(source(&crate::crt_ptd::raw(ENTRY),&crate::crt_ptd::raw(QUERY))?
+ .replace("fn abort_entry_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)","fn abort_entry_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,epoch:&mut NormalCallEpoch<'_>)")
+ .replace("&mut|_,_|Err(\"abort locked signal query 0x40cafd unbound\")","&mut|rt,c|abort_locked_original(rt,c,epoch,&mut|_|Ok(()))"))
+}

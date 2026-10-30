@@ -304,7 +304,7 @@ impl CrtStreamRuntime {
   let token=CrtGlobalLock{anchor:self.anchor,thread,serial,depth:self.global_locks.len(),index,storage:p};self.global_locks.push(token);self.serial=serial;Ok(token)
  }
  fn check_global(&self,token:CrtGlobalLock)->Result<(),&'static str>{
-  if self.global_locks.last()!=Some(&token)||self.global_objects.get(&token.index)!=Some(&token.storage){return Err("CRT stale/foreign/unordered global lock");}self.identity_range(token.storage,24)
+  if self.closed||token.anchor!=self.anchor||token.thread!=self.thread||self.global_locks.last()!=Some(&token)||self.global_objects.get(&token.index)!=Some(&token.storage){return Err("CRT stale/foreign/unordered global lock");}self.identity_range(token.storage,24)
  }
  fn unlock_global(&mut self,token:CrtGlobalLock)->Result<(),&'static str>{self.check_global(token)?;self.global_locks.pop();Ok(())}
  fn destroy_global_lock(&mut self,token:CrtInitialization,index:u32)->Result<(),&'static str>{
