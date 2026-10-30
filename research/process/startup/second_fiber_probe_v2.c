@@ -28,7 +28,7 @@ int main(void) {
         printf("\",\"candidate\":%u,\"loaded\":%s,\"load_error\":%lu,\"found\":%s,\"lookup_error\":%lu,\"released\":%s}\n",
             i, module ? "true" : "false", load_error,
             function ? "true" : "false", lookup_error, released ? "true" : "false");
-        if (module && !FreeLibrary(module)) return 3;
+        if (module && !released) return 3;
     }
     return 0;
 }
