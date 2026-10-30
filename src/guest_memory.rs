@@ -187,6 +187,161 @@ impl Space {
         r.bytes[..image.len()].copy_from_slice(image);
         Ok(cap)
     }
+    /// Bounded preferred-base PE32 storage mapping, not loader execution or API
+    /// admission. Headers and disjoint sections retain separate capabilities.
+    /// Unsupported alignments/permissions reject; gaps remain unmapped. A failed
+    /// transaction removes only its own regions, never pre-existing mappings.
+    /// Discardable sections are initial storage only: this grants no claim that
+    /// a Windows loader retained them after initialization. No discard is modeled.
+    pub fn map_pe32(
+        &mut self,
+        module: u64,
+        file: &[u8],
+    ) -> Result<Vec<(Capability, u32, u32)>, Fault> {
+        let get = |at: usize, n: usize| {
+            file.get(at..at.checked_add(n).ok_or(Fault::Range)?)
+                .ok_or(Fault::Range)
+        };
+        let word =
+            |at| -> Result<u16, Fault> { Ok(u16::from_le_bytes(get(at, 2)?.try_into().unwrap())) };
+        let dword =
+            |at| -> Result<u32, Fault> { Ok(u32::from_le_bytes(get(at, 4)?.try_into().unwrap())) };
+        if file.len() > 4 * MAX_BYTES || get(0, 2)? != b"MZ" {
+            return Err(Fault::Range);
+        }
+        let pe = dword(0x3c)? as usize;
+        // The bounded file check prevents offset arithmetic overflow on all hosts.
+        get(pe, 24)?;
+        if get(pe, 4)? != b"PE\0\0" || word(pe + 4)? != 0x14c {
+            return Err(Fault::Range);
+        }
+        let count = word(pe + 6)? as usize;
+        let flags = word(pe + 22)?;
+        let opt = pe + 24;
+        if !(1..=16).contains(&count) || word(pe + 20)? != 224 || flags & 0x2002 != 2 {
+            return Err(Fault::Range);
+        }
+        get(opt, 224)?;
+        if word(opt)? != 0x10b
+            || !matches!(word(opt + 68)?, 2 | 3)
+            || dword(opt + 32)? != 4096
+            || dword(opt + 36)? != 512
+        {
+            return Err(Fault::Range);
+        }
+        let base = dword(opt + 28)?;
+        let size = dword(opt + 56)?;
+        let headers = dword(opt + 60)?;
+        if base == 0
+            || !base.is_multiple_of(65536)
+            || size == 0
+            || !size.is_multiple_of(4096)
+            || size as usize > MAX_BYTES
+            || base.checked_add(size).is_none()
+            || headers == 0
+            || !headers.is_multiple_of(512)
+            || headers > 4096
+            || headers > size
+            || (headers as usize) < opt + 224 + count * 40
+        {
+            return Err(Fault::Range);
+        }
+        get(0, headers as usize)?;
+        let mut plan = vec![(base, headers, Permissions::READ, 0usize, headers as usize)];
+        let mut raw_ranges = Vec::new();
+        let mut entry = false;
+        for i in 0..count {
+            let at = opt + 224 + i * 40;
+            get(at, 40)?;
+            let vs = dword(at + 8)?;
+            let rva = dword(at + 12)?;
+            let raw = dword(at + 16)?;
+            let offset = dword(at + 20)?;
+            let ch = dword(at + 36)?;
+            let permissions = match ch & 0xe0000000 {
+                0x40000000 => Permissions::READ,
+                0x60000000 => Permissions::READ_EXECUTE,
+                0xc0000000 => Permissions::READ_WRITE,
+                _ => return Err(Fault::Permission),
+            };
+            // Reject shared/not-cached/not-paged and COFF relocation
+            // metadata. Ordinary code/data content flags do not grant effects.
+            if ch & 0x1dffff1f != 0
+                || dword(at + 24)? != 0
+                || dword(at + 28)? != 0
+                || dword(at + 32)? != 0
+            {
+                return Err(Fault::Permission);
+            }
+            let extent = vs.max(raw);
+            let limit = rva.checked_add(extent).ok_or(Fault::Range)?;
+            if vs == 0
+                || rva < 4096
+                || !rva.is_multiple_of(4096)
+                || extent == 0
+                || limit > size
+                || !raw.is_multiple_of(512)
+                || (raw != 0 && (offset < headers || !offset.is_multiple_of(512)))
+            {
+                return Err(Fault::Range);
+            }
+            let source = if raw == 0 {
+                &file[0..0]
+            } else {
+                get(offset as usize, raw as usize)?
+            };
+            if raw != 0 {
+                let end = offset.checked_add(raw).ok_or(Fault::Range)?;
+                if raw_ranges.iter().any(|&(a, b)| offset < b && a < end) {
+                    return Err(Fault::Overlap);
+                }
+                raw_ranges.push((offset, end));
+            }
+            let address = base.checked_add(rva).ok_or(Fault::Range)?;
+            // Distinct sections may not share a page, even if byte ranges don't overlap.
+            let page_end = limit.checked_add(4095).ok_or(Fault::Range)? & !4095;
+            for &(old, len, _, _, _) in plan.iter().skip(1) {
+                let old_rva = old - base;
+                let old_end = (old_rva + len + 4095) & !4095;
+                if rva < old_end && old_rva < page_end {
+                    return Err(Fault::Overlap);
+                }
+            }
+            let ep = dword(opt + 16)?;
+            if ep >= rva && ep < limit && permissions.execute {
+                entry = true;
+            }
+            plan.push((
+                address,
+                extent,
+                permissions,
+                if raw == 0 { 0 } else { offset as usize },
+                source.len(),
+            ));
+        }
+        if !entry {
+            return Err(Fault::Permission);
+        }
+        let mut mapped = Vec::with_capacity(plan.len());
+        for (address, size, permissions, offset, len) in plan {
+            match self.map_image(
+                address,
+                size,
+                module,
+                permissions,
+                &file[offset..offset + len],
+            ) {
+                Ok(cap) => mapped.push((cap, address, size)),
+                Err(fault) => {
+                    for &(cap, _, _) in &mapped {
+                        self.release(cap, Owner::Module(module))?;
+                    }
+                    return Err(fault);
+                }
+            }
+        }
+        Ok(mapped)
+    }
     fn locate(&self, address: u32, size: u32) -> Result<(usize, std::ops::Range<usize>), Fault> {
         let limit = end(address, size)?;
         for (i, r) in self.regions.iter().enumerate() {

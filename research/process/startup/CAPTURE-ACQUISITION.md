@@ -1052,3 +1052,55 @@ managed-termination406f55, handler414af3, signal and physical exit effects remai
 unbound. Sol can review the canonical lifetime and tests, then inventory the mapping
 composition before changing startup emission. Historical Windows timeout causes and
 full startup/rcedit support remain unresolved.
+
+## Section-backed PE32 bootstrap
+
+The checked storage kernel now maps raw PE32 input at its declared preferred
+base, then the runtime publishes canonical process-image authority. Headers are
+read-only, code is read/execute, read-only data rejects writes, and writable data
+retains its own capability. Raw bytes and defined zero tails are installed once;
+gaps and accesses crossing capabilities reject. Every image region participates
+in lifetime validation, so releasing a section invalidates the image view.
+Temporary acquired references remain independent.
+
+This is a bounded **initial storage** contract, not a Windows loader or converter
+admission certificate. It accepts x86 executable images with standard 224-byte
+PE32 optional headers, GUI/console subsystem, 4 KiB section alignment, 512-byte
+file alignment, at most 16 sections and the existing 1 MiB storage budget. It
+rejects overlapping file ranges/pages, malformed/truncated extents, unsupported
+permissions, writable executable sections and COFF relocation metadata. Ordinary
+PE directories remain opaque: no import, TLS, relocation, load-config or startup
+effect is inferred. Discardable sections have initial backing; retention after a
+Windows loader discard is unproved. Padding outside declared mapped extents is
+not admitted. All new regions roll back if any mapping fails; prior mappings and
+canonical image authority remain unchanged.
+
+`bootstrap_pe32` integrates this map with the process-image issuer, while
+`process_image_pointer` resolves section-backed storage under that live identity.
+The original `0x401d51` header query executes against independently authored
+multi-section inputs. An optional recorded-input regression also maps the unchanged
+authored `unwind.exe`, verifies the query's actual 66 instruction bytes and executes
+those instructions against the mapped original headers. Its cookie cell is read
+and written through the actual writable section, with duplicate mapping rejected.
+These are native component executions; there is no new Windows observation or
+whole-binary translation.
+
+Reproduce recorded-input mapping with `W2L_PE_MAPPING_INPUT=/path/to/unwind.exe`
+and `cargo test --locked --example crt_stream pe32_sections`. Without that variable,
+the independent 29 mapping scenarios and two transaction resource failures still
+run. Tests cover partial mappings, permissions, unknown unsupported layouts,
+process/thread/fiber/reference lifetime, stale sections, foreign identities,
+source mutation after mapping, zero-filled data and preservation of prior writes.
+Rollback-removal and writable-code mutants must fail the independent assertions.
+
+The next composition gap is the runtime's FILE array anchor: it is currently
+created as a separate mapping before PE bootstrap. A FILE address inside the
+original `.data` section therefore correctly rejects overlap. Replace that input
+boundary with a checked FILE view of the canonical mapped section, retaining the
+same capability and owner; do not remap or copy `.data`. Then migrate cookie and
+record initializers to checked section views and execute manager `0x406cfa` and
+managed termination `0x406f55` only when their effects are justified. The recorded
+mapping regression currently uses a separate test FILE address; it does not close
+that startup boundary. Full startup/rcedit remains unsupported.
+
+[Review counts, hashes, mutant evidence and retained limitations](evidence/pe32-section-review.json).

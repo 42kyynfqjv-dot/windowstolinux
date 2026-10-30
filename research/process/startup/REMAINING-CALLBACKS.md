@@ -352,3 +352,11 @@ bootstrap, with no temporary module-reference owner. Bootstrap still takes the
 mapped input image under initialization: integrating the original PE mapping with
 existing CRT region ownership remains an entry-emission gate. Missing bootstrap,
 manager/managed termination and original delivery effects still reject.
+
+PE initial storage now has a bounded raw-file producer (`bootstrap_pe32`), separate
+header/section permissions and transactional publication. This removes the supplied
+flat image bytes from that component path. It does not close loader side effects,
+actual delivery, or startup emission. In particular, the runtime FILE anchor must
+become a checked view into mapped `.data` instead of a prior overlapping mapping;
+cookie/record initialization must use the same section capabilities. The original
+manager406cfa/managed-termination406f55 and physical-exit effects remain unresolved.

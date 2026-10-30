@@ -109,7 +109,7 @@ impl CrtUnobservedContext {
 struct CrtRegion {pointer:CrtPointer,heap:bool,file_owner:Option<u32>}
 struct CrtDescriptor {id:CrtDescriptorId,live:bool,record:Option<CrtPointer>,record_initialized:bool}
 struct CrtStreamRuntime {
- main_image:Option<CrtProcessImage>,loader_cells:std::collections::BTreeMap<u32,(CrtPointer,bool)>,modules:std::collections::BTreeMap<u32,CrtLoadedModule>,module_references:std::collections::BTreeMap<u64,CrtModuleReference>,exports:std::collections::BTreeMap<u64,CrtExport>,
+ main_image:Option<CrtProcessImage>,main_image_regions:Vec<CrtPointer>,loader_cells:std::collections::BTreeMap<u32,(CrtPointer,bool)>,modules:std::collections::BTreeMap<u32,CrtLoadedModule>,module_references:std::collections::BTreeMap<u64,CrtModuleReference>,exports:std::collections::BTreeMap<u64,CrtExport>,
  uncertain_allocations:Vec<CrtPointer>,completed_failed_frees:Vec<(guest_memory::Capability,u64)>,heap_ptds:Vec<CrtHeapPtdView>,fiber:Option<CrtFiber>,fls:std::collections::BTreeMap<u32,(CrtFlsSlot,CrtValue)>,
  unobserved_contexts:Vec<(CrtPointer,std::rc::Rc<std::cell::Cell<bool>>)>,heap:Option<CrtHeap>,memory:guest_memory::Space,owner:u64,thread:u64,anchor:guest_memory::Capability,
  dispatchers:std::collections::BTreeMap<u64,CrtDispatcherContext>,regions:Vec<CrtRegion>,retired:Vec<CrtPointer>,tags:std::collections::BTreeMap<u32,CrtValue>,
@@ -127,7 +127,7 @@ impl CrtStreamRuntime {
   let mut memory=guest_memory::Space::new(byte_limit,64).map_err(|_|"CRT memory budget")?;
   let anchor=memory.map(file_address,size,guest_memory::Owner::Module(owner),guest_memory::Permissions::READ_WRITE,false).map_err(|_|"CRT FILE mapping")?;
   let pointer=CrtPointer{cap:anchor,owner:guest_memory::Owner::Module(owner),base:file_address,size,address:file_address,kind:CrtRegionKind::File};
-  Ok(Self{main_image:None,loader_cells:std::collections::BTreeMap::new(),modules:std::collections::BTreeMap::new(),module_references:std::collections::BTreeMap::new(),exports:std::collections::BTreeMap::new(),uncertain_allocations:vec![],completed_failed_frees:vec![],heap_ptds:vec![],fiber:None,fls:std::collections::BTreeMap::new(),unobserved_contexts:vec![],heap:None,memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],global_objects:std::collections::BTreeMap::new(),global_locks:vec![],record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,canonical_errno:false,errno_cell:None,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([file_address])})
+  Ok(Self{main_image:None,main_image_regions:vec![],loader_cells:std::collections::BTreeMap::new(),modules:std::collections::BTreeMap::new(),module_references:std::collections::BTreeMap::new(),exports:std::collections::BTreeMap::new(),uncertain_allocations:vec![],completed_failed_frees:vec![],heap_ptds:vec![],fiber:None,fls:std::collections::BTreeMap::new(),unobserved_contexts:vec![],heap:None,memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],global_objects:std::collections::BTreeMap::new(),global_locks:vec![],record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,canonical_errno:false,errno_cell:None,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([file_address])})
  }
 
  /// Bootstrap installs the mapped input image once. This is process ownership,
@@ -144,11 +144,27 @@ impl CrtStreamRuntime {
   let root=CrtPointer{cap,owner:guest_memory::Owner::Module(self.owner),base,size,address:base,kind:CrtRegionKind::Module};
   self.regions.push(CrtRegion{pointer:root,heap:false,file_owner:None});
   let token=CrtProcessImage{anchor:self.anchor,owner:self.owner,generation,root};
-  self.serial=generation;self.main_image=Some(token);Ok(token)
+  self.main_image_regions=vec![root];self.serial=generation;self.main_image=Some(token);Ok(token)
+ }
+ /// Map a validated preferred-base PE32 input before creating dependent CRT
+ /// cells. Publication is atomic; imports/TLS/entry execution remain unproved.
+ fn bootstrap_pe32(&mut self,init:CrtInitialization,file:&[u8])->Result<CrtProcessImage,&'static str>{
+  self.initialization(init)?;if self.closed||self.main_image.is_some(){return Err("CRT process image already issued/closed");}
+  let generation=self.serial.checked_add(1).ok_or("CRT process image generation")?;
+  self.regions.try_reserve(17).map_err(|_|"CRT process image region budget")?;
+  let maps=self.memory.map_pe32(self.owner,file).map_err(|_|"CRT PE32 mapping contract")?;
+  let regions:Vec<_>=maps.into_iter().map(|(cap,base,size)|CrtPointer{cap,owner:guest_memory::Owner::Module(self.owner),base,size,address:base,kind:CrtRegionKind::Module}).collect();
+  let root=regions[0];let token=CrtProcessImage{anchor:self.anchor,owner:self.owner,generation,root};
+  self.regions.extend(regions.iter().map(|&pointer|CrtRegion{pointer,heap:false,file_owner:None}));
+  self.main_image_regions=regions;self.main_image=Some(token);self.serial=generation;Ok(token)
+ }
+ fn process_image_pointer(&self,token:CrtProcessImage,address:u32,size:u32)->Result<CrtPointer,&'static str>{
+  self.process_image(token)?;let p=self.main_image_regions.iter().find(|p|address>=p.base&&address.checked_add(size).is_some_and(|end|end<=p.base+p.size)).ok_or("CRT process image section range")?;
+  if size==0{return Err("CRT process image empty range");}Ok(CrtPointer{address,..*p})
  }
  fn process_image(&self,token:CrtProcessImage)->Result<CrtPointer,&'static str>{
   if self.closed||token.anchor!=self.anchor||token.owner!=self.owner||self.main_image!=Some(token){return Err("CRT process image owner/lifetime");}
-  self.valid(token.root,token.root.size)?;Ok(token.root)
+  for p in &self.main_image_regions{self.valid(*p,p.size)?;}self.valid(token.root,token.root.size)?;Ok(token.root)
  }
  /// Apply an independently established successful executable-module load.
  /// This records reference effects only; it does not attest DllMain/TLS effects.

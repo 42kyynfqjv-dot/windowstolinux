@@ -375,6 +375,16 @@ def check(original, observation, out, compare=None):
         if result.returncode or b'1 passed' not in result.stdout:
             raise ValueError('registered manager component failed: '+test)
 
+    mapping_env = dict(env, W2L_PE_MAPPING_INPUT=str((original/'unwind.exe').resolve()))
+    mapping_run = subprocess.run(['cargo', 'test', '--locked', '--example', 'crt_stream',
+                                 'pe32_sections_initialize_original_query_without_temporary_module_owner'],
+                                env=mapping_env, capture_output=True, timeout=180)
+    (out/'pe-mapping.stdout').write_bytes(mapping_run.stdout)
+    (out/'pe-mapping.stderr').write_bytes(mapping_run.stderr)
+    require_test_completions(mapping_run, [
+        b'crt_module_image::pe32_sections_initialize_original_query_without_temporary_module_owner',
+    ])
+
     command = ['cargo', 'test', '--locked', '--example', 'crt_stream',
                'original_windows_wrapper_state_matches_native_normal_lifecycle', '--', '--ignored']
     run = subprocess.run(command, env=env, capture_output=True, timeout=180)
@@ -464,7 +474,7 @@ def check(original, observation, out, compare=None):
                   main_scope_header_sha256=sha((out/'Main-scope-header.bin').read_bytes()),
                   locale_state_evidence=locale_state_evidence(image),
                   unwind_binding_source_sha256=sha((out/'cxx-unwind-connected.rs').read_bytes()),
-                  inline_exit_native_cases=26, inline_exit_new_windows_pairs=0, abort_branch_native_cases=13, abort_branch_new_windows_pairs=0, abort_locked_native_cases=12, abort_locked_new_windows_pairs=0, rotate_truth_table_cases=35, abort_query_native_cases=8, abort_query_new_windows_pairs=0, registered_errno_native_cases=16, registered_errno_new_windows_pairs=0, heap_free_native_cases=28, heap_free_new_windows_pairs=0, pending_lazy_native_cases=9, pending_lazy_new_windows_pairs=0, lazy_common_handler_native_cases=24, lazy_common_handler_new_windows_pairs=0, heap_ptd_view_native_cases=17, lazy_ptd_native_cases=20, lazy_ptd_new_windows_pairs=0, ordered_search_native_cases=85, unobserved_context_native_cases=27, unobserved_context_new_windows_pairs=0, original_empty_search_native_cases=1, ordered_search_new_windows_pairs=0, shared_chain_native_cases=24, shared_chain_effect_lifetime_cases=4, shared_chain_new_windows_pairs=0, chain_ownership_diagnostic_experiments=1, chain_ownership_new_windows_pairs=0, bound_cxx_invocation_native_cases=34, bound_cxx_invocation_new_windows_pairs=0, prefix_delivery_unwind_native_cases=14, prefix_delivery_new_windows_pairs=0, dispatcher_delivery_unwind_native_cases=8, dispatcher_delivery_new_windows_pairs=0, delivery_child_native_cases=14, delivery_cached_unwind_native_cases=4, delivery_new_windows_pairs=0,
+                  pe_mapping_native_cases=31, pe_mapping_recorded_input_queries=1, pe_mapping_new_windows_pairs=0, inline_exit_native_cases=26, inline_exit_new_windows_pairs=0, abort_branch_native_cases=13, abort_branch_new_windows_pairs=0, abort_locked_native_cases=12, abort_locked_new_windows_pairs=0, rotate_truth_table_cases=35, abort_query_native_cases=8, abort_query_new_windows_pairs=0, registered_errno_native_cases=16, registered_errno_new_windows_pairs=0, heap_free_native_cases=28, heap_free_new_windows_pairs=0, pending_lazy_native_cases=9, pending_lazy_new_windows_pairs=0, lazy_common_handler_native_cases=24, lazy_common_handler_new_windows_pairs=0, heap_ptd_view_native_cases=17, lazy_ptd_native_cases=20, lazy_ptd_new_windows_pairs=0, ordered_search_native_cases=85, unobserved_context_native_cases=27, unobserved_context_new_windows_pairs=0, original_empty_search_native_cases=1, ordered_search_new_windows_pairs=0, shared_chain_native_cases=24, shared_chain_effect_lifetime_cases=4, shared_chain_new_windows_pairs=0, chain_ownership_diagnostic_experiments=1, chain_ownership_new_windows_pairs=0, bound_cxx_invocation_native_cases=34, bound_cxx_invocation_new_windows_pairs=0, prefix_delivery_unwind_native_cases=14, prefix_delivery_new_windows_pairs=0, dispatcher_delivery_unwind_native_cases=8, dispatcher_delivery_new_windows_pairs=0, delivery_child_native_cases=14, delivery_cached_unwind_native_cases=4, delivery_new_windows_pairs=0,
                   unwind_native_cases=24, cached_unwind_native_cases=14, cached_unwind_new_windows_pairs=0, unwind_new_windows_pairs=0, unwind_binding_rust_tests=1,
                   unwind_state_source_sha256=sha((out/'unwind-state-live.rs').read_bytes()),
                   unwind_state_native_cases=12, unwind_state_new_windows_pairs=0,

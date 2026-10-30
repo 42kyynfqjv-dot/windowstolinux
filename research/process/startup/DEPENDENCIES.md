@@ -472,3 +472,14 @@ thread/fiber/event transitions retain it and process closure expires it. The nex
 input cut is composition of the validated original PE mapping with existing CRT
 module/record maps before bootstrap emission, followed by manager406cfa and the
 remaining termination effects. [Contract and evidence limits](CAPTURE-ACQUISITION.md#canonical-process-owned-main-image).
+
+## Raw PE sections now compose with process-image authority
+
+`bootstrap_pe32` installs validated initial headers/sections, preserves their
+permissions and publishes the canonical process image only after the mapping
+transaction succeeds. The original managed query executes against those headers;
+recorded authored input also maps without rewriting its bytes. No loader effects
+or converter admission are granted. Next replace the separately mapped FILE-array
+anchor with a view into the existing writable image section, then migrate cookie/
+record views before connecting the remaining manager/termination effects.
+[Contract, executable boundary and reproduction](CAPTURE-ACQUISITION.md#section-backed-pe32-bootstrap).

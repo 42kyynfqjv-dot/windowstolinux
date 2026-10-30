@@ -126,3 +126,63 @@ for mode in 0..12{
         "process-image",
     );
 }
+
+#[test]
+fn pe32_sections_initialize_original_query_without_temporary_module_owner() {
+    let extra = source(&crate::crt_ptd::raw(QUERY)).unwrap();
+    crate::crt_stream_callees_tests::native(
+        &extra,
+        r#"
+fn put(b:&mut[u8],at:usize,v:u32){b[at..at+4].copy_from_slice(&v.to_le_bytes());}
+fn image()->Vec<u8>{
+ let mut b=vec![0u8;0x800];b[..2].copy_from_slice(b"MZ");put(&mut b,0x3c,0x80);b[0x80..0x84].copy_from_slice(b"PE\0\0");b[0x84..0x86].copy_from_slice(&0x14cu16.to_le_bytes());b[0x86]=3;b[0x94]=224;b[0x96]=2;b[0x98..0x9a].copy_from_slice(&0x10bu16.to_le_bytes());
+ for(at,v)in [(0xa8,0x1000),(0xb4,0x500000),(0xb8,4096),(0xbc,512),(0xd0,0x4000),(0xd4,512),(0xf4,16)]{put(&mut b,at,v);}b[0xdc]=3;
+ for(i,ch)in [0x60000020,0x40000040,0xc0000040].into_iter().enumerate(){let at=0x178+i*40;for(off,v)in [(8,0x300),(12,((i+1)*4096)as u32),(16,512),(20,((i+1)*512)as u32),(36,ch)]{put(&mut b,at+off,v);}}
+ b[0x200]=0xc3;b[0x400]=91;b[0x600]=29;b
+}
+for mode in 0..29{
+ let(mut rt,init)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();let mut b=image();
+ match mode{
+  1=>b.truncate(511),2=>b.truncate(0x700),3=>put(&mut b,0x178+12,0x2000),4=>put(&mut b,0x178+36,0xe0000020),5=>put(&mut b,0x178+20,0x400),6=>put(&mut b,0xd0,0x2000),7=>{put(&mut b,0xb4,0xffff0000);put(&mut b,0xd0,0x20000);},8=>put(&mut b,0x178+8,u32::MAX),9=>put(&mut b,0x178+40+12,0x1000),10=>b[0xdc]=1,11=>put(&mut b,0xa8,0x3000),12=>put(&mut b,0x3c,u32::MAX),13=>put(&mut b,0xd4,0x2000),14=>put(&mut b,0x178+36,0x64000020),15=>{rt.map_region(0x503000,512,CrtRegionKind::Module,Some(&vec![99;512])).unwrap();},16=>put(&mut b,0x178+40+12,0x1001),17=>put(&mut b,0x178+24,1),18=>put(&mut b,0x178+16,513),26=>put(&mut b,0x168,1),27=>{put(&mut b,0x178+80+16,0);put(&mut b,0x178+80+20,0);},28=>put(&mut b,0x178+40+36,0x42000040),_=>{}}
+ if (1..=18).contains(&mode){let before=rt.regions.len();let serial=rt.serial;assert_eq!(rt.bootstrap_pe32(init,&b),Err("CRT PE32 mapping contract"),"mode {mode}");assert!(rt.main_image.is_none());assert!(rt.main_image_regions.is_empty());assert_eq!(rt.regions.len(),before);assert_eq!(rt.serial,serial);assert!(rt.memory.read(0x500000,1).is_err());if mode==15{assert_eq!(rt.memory.read(0x503000,1).unwrap(),[99]);}continue;}
+ let token=rt.bootstrap_pe32(init,&b).expect("valid preferred-base PE mapping");let view=CrtModuleImage::main(&rt).unwrap();assert_eq!(rt.main_image_regions.len(),4);assert!(rt.module_references.is_empty());
+ let text=rt.process_image_pointer(token,0x501000,1).unwrap();let ro=rt.process_image_pointer(token,0x502000,1).unwrap();let data=rt.process_image_pointer(token,0x503000,1).unwrap();
+ assert_eq!(rt.load(ro,8).unwrap(),CrtValue::scalar(91));assert_eq!(rt.load(rt.offset(data,512).unwrap(),8).unwrap(),CrtValue::scalar(0));assert_eq!(rt.store(text,8,CrtValue::scalar(0)),Err("CRT storage write"));assert_eq!(rt.store(ro,8,CrtValue::scalar(0)),Err("CRT storage write"));rt.store(data,8,CrtValue::scalar(77)).unwrap();assert_eq!(rt.load(data,8).unwrap(),CrtValue::scalar(77));assert_eq!(rt.store(view.root,8,CrtValue::scalar(0)),Err("CRT storage write"));assert_eq!(rt.load(data,8).unwrap(),CrtValue::scalar(77));assert!(rt.process_image_pointer(token,0x500200,1).is_err());assert!(rt.process_image_pointer(token,0x5012ff,2).is_err());
+ if mode==19{rt.thread+=1;rt.bind_fiber(rt.thread).unwrap();}if mode==20{let(_,reference)=rt.module_acquire_result(init,"separate acquired ref",0x500000).unwrap();rt.module_release_result(init,reference,true).unwrap();}
+ if mode==21{rt.memory.release(data.cap,data.owner).unwrap();assert!(view.validate(&rt).is_err());continue;}
+ if mode==22{let(other,_)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();assert!(other.process_image(token).is_err());continue;}
+ if mode==23{rt.closed=true;assert!(view.validate(&rt).is_err());continue;}
+ if mode==24{let old=rt.load(ro,8).unwrap();assert!(rt.map_region(ro.base,ro.size,CrtRegionKind::Module,None).is_err());assert_eq!(rt.load(ro,8).unwrap(),old);}
+ if mode==25{b[0x400]=0;assert_eq!(rt.load(ro,8).unwrap(),CrtValue::scalar(91));}
+ let stack=rt.map_region(0x9000,512,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,400).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(1)).unwrap();let mut cpu=CrtCpu::new(sp,1).unwrap();let v=managed_image_query(&mut rt,&mut cpu,Some(&view)).expect("original query on mapped PE headers");assert_eq!(CrtCpu::bits(v).unwrap().0&255,u32::from(mode==26));assert!(cpu.returned);assert!(rt.bootstrap_pe32(init,&b).is_err());
+}
+// Exhaustion after mapping the header must roll back only the new image.
+for budget in [true,false]{
+ let(mut rt,init)=CrtStreamRuntime::new_initializing(7,9,0x8000,if budget{768}else{65536}).unwrap();
+ if !budget{for i in 0..62{rt.map_region(0x700000+i*4096,4,CrtRegionKind::Module,Some(&[41;4])).unwrap();}}
+ let before=rt.regions.len();assert_eq!(rt.bootstrap_pe32(init,&image()),Err("CRT PE32 mapping contract"));assert!(rt.main_image.is_none());assert_eq!(rt.regions.len(),before);assert!(rt.memory.read(0x500000,1).is_err());if !budget{assert_eq!(rt.memory.read(0x700000,1).unwrap(),[41]);}
+}
+
+"#,
+        "pe32-process-sections",
+    );
+    // Optional recorded original input. Reported separately from the authored
+    // mapping tests; no fresh Windows result or whole-PE execution is inferred.
+    if let Ok(path) = std::env::var("W2L_PE_MAPPING_INPUT") {
+        let file = std::fs::read(path).expect("recorded PE mapping input");
+        let body = format!(
+            r#"let file:&[u8]=&{file:?};
+let(mut rt,init)=CrtStreamRuntime::new_initializing(7,9,0x8000,1048576).unwrap();
+let token=rt.bootstrap_pe32(init,file).expect("original PE initial mapping");
+let view=CrtModuleImage::main(&rt).unwrap();
+let code=rt.process_image_pointer(token,0x401d51,66).unwrap();
+let cookie=rt.process_image_pointer(token,0x41c000,4).unwrap();let old=rt.load(cookie,32).unwrap();rt.store(cookie,32,CrtValue::scalar(73)).unwrap();assert_eq!(rt.load(cookie,32).unwrap(),CrtValue::scalar(73));rt.store(cookie,32,old).unwrap();assert!(rt.map_region(0x41c000,4,CrtRegionKind::Module,Some(&[0;4])).is_err());
+assert_eq!(rt.memory.read(code.address(),66).unwrap(),&{:?});
+let stack=rt.map_region(0x9000,512,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,400).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(1)).unwrap();let mut cpu=CrtCpu::new(sp,1).unwrap();
+let got=managed_image_query(&mut rt,&mut cpu,Some(&view)).expect("original input header query");assert_eq!(CrtCpu::bits(got).unwrap().0&255,0);assert!(cpu.returned);
+"#,
+            crate::crt_ptd::raw(QUERY)
+        );
+        crate::crt_stream_callees_tests::native(&extra, &body, "original-pe32-process-sections");
+    }
+}

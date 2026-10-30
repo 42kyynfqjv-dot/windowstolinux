@@ -1,0 +1,74 @@
+{
+  "kind": "raw PE32 section mapping and process-owned image component review",
+  "parent": "402854f709336f0c73c506bff9f3b8bf11327796",
+  "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "generated_rust_sha256": "f6be26d6d8c309b0fa610f77f5d1786656d3caa2c3f10f13b7448d83bfccd81b",
+  "crt_tests": 246,
+  "crt_ignored": 1,
+  "converter_tests": 175,
+  "python_tests": 60,
+  "python_skips": 1,
+  "independent_mapping_cases": 29,
+  "transaction_resource_failures": 2,
+  "recorded_input_queries": 1,
+  "recorded_windows_comparisons": 5,
+  "new_windows_observations": 0,
+  "whole_pe_pairs": 0,
+  "retained_ordered_cases": 85,
+  "retained_inline_cases": 26,
+  "clippy": "passed --all-targets --locked -- -D warnings",
+  "scope": "Preferred-base PE32 initial storage only; actual original 66-byte query reads mapped headers. Recorded input uses separate test FILE address, not whole startup.",
+  "review": [
+    "Retained canonical process identity independently of acquired module references; every mapped image region is lifetime validated.",
+    "Headers/read-only/code writes reject; data writes and defined zero tails remain visible through section capabilities.",
+    "Malformed/truncated/overlapping/WX/unsupported mappings reject; rollback preserves pre-existing mappings, serial and unpublished authority.",
+    "Discardable sections are initial storage, not proof of retention after Windows loader effects.",
+    "Initial overflow test was corrected because ffff0000+4000 does not overflow; current case uses image size20000.",
+    "Initial mutant candidates were stale failed test artifacts and excluded. Final mutation evidence first runs the complete current unmodified source successfully, then requires mutants to fail at rollback or write-permission assertions."
+  ],
+  "mutants": [
+    {
+      "mutant": "rollback",
+      "rejected": true,
+      "source_sha256": "fd391c5bd9962ec90d4045c049779db47c7d37fe714cd0e7f0157322f52be05b",
+      "log_sha256": "081a85008fe1689e7837030fb4302c55eea6e988c16b9ca7ed42d504bb5197a3"
+    },
+    {
+      "mutant": "readonly",
+      "rejected": true,
+      "source_sha256": "d4f483854d0a18fb8c50aaee1a2aaab952d50ac37ec21e91beadf229b637a49f",
+      "log_sha256": "80d6b6e96f9d8de470d9e73ce2a2e1ed4cfe5bf617cbb0c48a06ca409049810c"
+    }
+  ],
+  "parent_ci": [
+    {
+      "id": 41014156507,
+      "conclusion": "success"
+    },
+    {
+      "id": 41014148956,
+      "conclusion": "success"
+    },
+    {
+      "id": 41014148971,
+      "conclusion": "success"
+    }
+  ],
+  "remaining": "Replace separately mapped FILE anchor with checked view into canonical image data; migrate cookie/record views without copying or replacing live capabilities. Manager406cfa, managed termination406f55, delivery/loader/physical exit and full startup/rcedit remain unproved.",
+  "historical_timeouts": "Unresolved; passing runs do not establish cause.",
+  "reproduction": [
+    "W2L_PE_MAPPING_INPUT=/path/to/unchanged/authored/unwind.exe cargo test --locked --example crt_stream pe32_sections",
+    "python3 research/process/startup/check_normal_wrapper.py ORIGINAL OBSERVED NEW_OUTPUT"
+  ],
+  "logs": {
+    "crt-final.log": "19e16139c6ac46f9b722542738bfc0a7595e0b16bd627e786d860f7dbc7dc666",
+    "root.log": "1166d7720f2e9dfda769b65369f1c48a24c2c81cecd5ddbec8f04405cd8d10e7",
+    "clippy-final.log": "a5f4c585ee974ca44916ac30a98bbc189e067a7e0a6bc6d2e8d6bc525be724af",
+    "python-final.log": "5c87994f9154dcfcebd7968b7e11b164e825736f532037e9ddc765e6c9910cd5",
+    "original-map.log": "39fe02bd627fbce5cbc077daae73346eb8bff3e4e7c9556d92c4392eb9483121",
+    "rollback-mutant.log": "081a85008fe1689e7837030fb4302c55eea6e988c16b9ca7ed42d504bb5197a3",
+    "readonly-mutant.log": "80d6b6e96f9d8de470d9e73ce2a2e1ed4cfe5bf617cbb0c48a06ca409049810c",
+    "replay-final.log": "cf741e1d2a8ba00a2c4bd7acd67bace1a83d0c5191d06d3fcd17ae59e4ea84de"
+  },
+  "final_replay": "passed"
+}
