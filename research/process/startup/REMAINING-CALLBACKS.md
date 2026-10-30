@@ -411,3 +411,10 @@ SIMD or whole-program admission. The next call40195a→4024ca is still rejected;
 4029b4 lock construction and402963 FLS publication must supply their actual
 ownership/effects. Earlier no-contract401ebe rejection remains covered. See
 [CPU-FEATURES.md](CPU-FEATURES.md) for native versus synthetic evidence and limits.
+
+Startup module update: original4024ca/4029b4 and constructor402c2d prefix execute
+from the entry component, reaching unbound resolver402a53 at402c42. Lock/FLS
+control cases retain explicitly supplied allocation/destruction observations;
+these are not actual API producers. Module-backed bootstrap object41ccc4 and
+its FLS callback lifecycle remain unsupported. It is distinct from the recursive
+FFFFFFFF marker; no heap PTD identity is granted. See STARTUP-MODULES.md.

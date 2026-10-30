@@ -96,7 +96,7 @@ pub(crate) fn source(regions: &[Vec<u8>], helper: &[u8]) -> Result<String, Strin
    (0x40162d,Target::Direct(0x401945))=>"cpu.call_activation(rt,0x401632,0,|rt,c|startup_initializer(rt,c,inputs,backend,features))?;".into(),
    (0x401955,Target::Direct(0x401ea5))=>"cpu.call_activation(rt,0x40195a,0,|rt,c|startup_cpu_prefix(rt,c,inputs,backend,features))?;".into(),
    (0x401ebe,Target::Import(0x41501c))=>r#"cpu.call_activation(rt,0x401ec4,4,|rt,c|features.ok_or("startup processor feature contract unbound at 0x401ebe")?.api(rt,c))?;return startup_cpu_tail(rt,cpu,inputs,features.ok_or("startup feature scope missing")?);"#.into(),
-   (0x40195a,Target::Direct(0x4024ca))=>"cpu.call_activation(rt,0x40195f,0,|_,_|Err(\"startup next initializer unbound at 0x40195a\"))?;".into(),
+   (0x40195a,Target::Direct(0x4024ca))=>"cpu.call_activation(rt,0x40195f,0,|rt,c|startup_modules_default(rt,c,inputs))?;".into(),
    _=>return Err("startup slice call binding".into())
   })
             },

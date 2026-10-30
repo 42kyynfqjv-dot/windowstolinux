@@ -567,3 +567,14 @@ blocked by later initializer, loader, delivery and exit gates.
 - Still supplied/unproved: root activation/incoming chain, OS delivery and
   containment, later locale/FILE initialization, full formatting and physical
   exit. No full startup/rcedit claim. See [CPU-FEATURES.md](CPU-FEATURES.md).
+
+### Startup module dispatcher and lock resolver prefix
+
+Original entry now reaches402c42→402a53 through4024ca/4029b4/402c2d, retaining
+prior cookie/classifier writes and active original frames. No lock constructor
+or FLS allocation outcome is supplied on that connected entry path. Separate
+component cases execute module/lock/FLS control with explicit observations and
+stop before unsupported publication authority. Next: shared dynamic constructor
+and FlsAlloc resolver bindings, followed by module-backed bootstrap object41ccc4
+and callback4028a7 lifecycle. This object must be distinguished from the recursive
+FFFFFFFF marker. See [STARTUP-MODULES.md](STARTUP-MODULES.md).

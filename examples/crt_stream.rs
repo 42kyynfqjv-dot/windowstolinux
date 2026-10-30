@@ -330,3 +330,7 @@ mod crt_cpu_features;
 #[allow(dead_code)]
 #[path = "../src/crt_startup_entry.rs"]
 mod crt_startup_entry;
+
+#[allow(dead_code)]
+#[path = "../src/crt_startup_modules.rs"]
+mod crt_startup_modules;
