@@ -1,0 +1,16 @@
+{
+  "kind": "Original Windows second-FLS candidate availability; zero translations",
+  "source_sha256": "e1a7a57cca3820fb7f9a94a58a888106d7853b1cfca97ed9e5cb7ef15cfebef0",
+  "flags": [
+    "/nologo",
+    "/W4",
+    "/O2",
+    "/GS"
+  ],
+  "candidates": [
+    "api-ms-win-core-fibers-l1-1-2",
+    "kernelbase"
+  ],
+  "symbol": "FlsGetValue2",
+  "availability": "unmeasured; do not assume loaded/missing/supported"
+}

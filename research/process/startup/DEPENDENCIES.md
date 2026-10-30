@@ -1,5 +1,14 @@
 # Remaining entry-to-exit dependencies
 
+Current checkpoint: original callback `0x40a407`, selector and second resolver
+execute to `LoadLibraryExW` at `0x407f1d`, first candidate
+`api-ms-win-core-fibers-l1-1-2` while resolving `FlsGetValue2`. The explicit native
+profile rejects that unproved mapping. Unchanged entry has not allocated its
+second FLS index. Seeded cache conformance cases reach actual native allocation
+and then reject the registered PTD context boundary.
+[Original execution, independent tests and remaining integrated gate](SECOND-FLS-INITIALIZER.md).
+Default admission/full startup/rcedit remain unproved.
+
 Current checkpoint: original process-heap callback `0x40c8f0` publishes the same
 canonical Space-owned heap proof to `0x41d2c8` and returns AL1. Its original
 cleanup clears that cell without destroying the heap. Entry next selects index7

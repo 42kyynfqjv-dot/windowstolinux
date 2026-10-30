@@ -328,6 +328,9 @@ mod crt_cookie_native;
 #[path = "../src/crt_cpu_features.rs"]
 mod crt_cpu_features;
 #[allow(dead_code)]
+#[path = "../src/crt_startup_fiber.rs"]
+mod crt_startup_fiber;
+#[allow(dead_code)]
 #[path = "../src/crt_startup_heap.rs"]
 mod crt_startup_heap;
 #[allow(dead_code)]
