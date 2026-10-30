@@ -118,6 +118,11 @@ pub(crate) fn source(regions: &[Vec<u8>], helper: &[u8]) -> Result<String, Strin
             }),
             |_, _, _| Ok(None),
         )?;
+        let body = if i == 2 {
+            format!("let value=(||->Result<CrtValue,&'static str>{{{body}}})()?;if !cpu.returned{{return Err(\"startup initializer continuation unbound at 0x40195f\");}}Ok(value)")
+        } else {
+            body
+        };
         let (name, params) = match i {
             0 => ("startup_shim", ""),
             1 => (

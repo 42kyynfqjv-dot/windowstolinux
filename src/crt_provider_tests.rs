@@ -218,6 +218,7 @@ let result=(||->Result<(),&'static str>{
  assert_eq!(r.serial,saved);assert_eq!(r.last_os_error,Some(87));assert_eq!(r.fls_indices.len(),64);assert!(r.fls.is_empty());
  let old=r.fls_indices.get(&11).unwrap().id;r.fls_free_index_result(i,old,true)?;
  let next=r.native_fls_allocate(i,None)?;assert_eq!(next.index,11);assert_ne!(old,next);assert!(r.fls_index(old).is_err());
+ let fiber=r.bind_fiber(r.thread)?;assert!(r.native_fls_set(i,fiber,next.index,CrtValue::scalar(0x12345678))?);let slot=r.fls.get(&next.index).unwrap().0;assert_eq!(r.fls_get(fiber,slot,next.index)?,CrtValue::scalar(0x12345678));
  // A typed-alias rejection must also avoid allocating an overlap vector.
  assert_eq!(r.native_sync_initialize(i,f,0,alias,0,0),Err("CRT synchronization flags/object domain"));
  assert_eq!(r.load(alias,8),Err("CRT partial typed-word read"));assert_eq!(r.load(r.offset(alias,1)?,32),Err("CRT partial typed-word read"));assert_eq!(r.load(collision,32),Err("CRT partial typed-word read"));
@@ -358,5 +359,26 @@ for mode in 0..12{
 }
 "#,
         "native-named-export",
+    );
+}
+
+#[test]
+fn native_fls_setter_owns_values_and_preserves_failures_and_abi() {
+    native(
+        "",
+        r#"
+for mode in 0..13{
+ let(mut r,i)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();let fiber=r.bind_fiber(9).unwrap();let id=r.native_fls_allocate(i,None).unwrap();let slot=r.bind_fls_fiber(fiber,id).unwrap();assert_eq!(r.fls_get(fiber,slot,id.index),Ok(CrtValue::scalar(0)));
+ let sp=r.map_region(0x9000,64,CrtRegionKind::Stack,None).unwrap();r.store(sp,32,CrtValue::ProtectedReturn(77)).unwrap();r.store(r.offset(sp,4).unwrap(),32,CrtValue::scalar(id.index)).unwrap();r.store(r.offset(sp,8).unwrap(),32,CrtValue::scalar(0xfeedface)).unwrap();let mut c=CrtCpu::new(sp,77).unwrap();c.return_pop=8;
+ let mut f=fiber;
+ match mode{12=>{r.store(r.offset(sp,4).unwrap(),32,CrtValue::scalar(u32::MAX)).unwrap();r.store(r.offset(sp,8).unwrap(),32,CrtValue::OpaqueSaved(5)).unwrap();},1=>{r.store(r.offset(sp,4).unwrap(),32,CrtValue::scalar(u32::MAX)).unwrap();},2=>{f.serial+=1;},3=>{c.r[6]=CrtValue::scalar(17);},4=>{c.return_pop=4;},5=>{c.return_id+=1;},6=>{r.store(r.offset(sp,8).unwrap(),32,CrtValue::Scalar{bits:0,known:0}).unwrap();},7=>{r.store(r.offset(sp,8).unwrap(),32,CrtValue::Pointer(r.file())).unwrap();},8=>{r.detach_empty_fls_fiber(fiber,slot).unwrap();r.fls_free_index_result(i,id,true).unwrap();},9=>{r.fls_indices.get_mut(&id.index).unwrap().native=false;},10=>{r.thread+=1;},11=>{r.fls_indices.get_mut(&id.index).unwrap().certain=false;},_=>{}}
+ r.last_os_error=Some(1114);let serial=r.serial;let before=r.fls.get(&id.index).copied();let result=c.native_fls_set_call(&mut r,i,f);
+ if mode==0{assert_eq!(result,Ok(CrtValue::scalar(1)));assert!(c.returned);assert_eq!(CrtCpu::pointer(c.r[4]).unwrap().address(),0x900c);assert_eq!(r.fls_get(fiber,slot,id.index),Ok(CrtValue::scalar(0xfeedface)));assert!(CrtCpu::pointer(r.fls_get(fiber,slot,id.index).unwrap()).is_err());assert!(c.native_fls_set_call(&mut r,i,f).is_err());
+  r.native_fls_set(i,fiber,id.index,CrtValue::scalar(0)).unwrap();r.detach_empty_fls_fiber(fiber,slot).unwrap();r.fls_free_index_result(i,id,true).unwrap();let next=r.native_fls_allocate(i,None).unwrap();assert_eq!(next.index,id.index);assert_ne!(next,id);r.retire_fiber(fiber).unwrap();let current=r.bind_fiber(9).unwrap();assert_ne!(current,fiber);r.native_fls_set(i,current,next.index,CrtValue::scalar(53)).unwrap();assert!(r.fls_get(fiber,slot,next.index).is_err());let new_slot=r.fls.get(&next.index).unwrap().0;assert_eq!(r.fls_get(current,new_slot,next.index),Ok(CrtValue::scalar(53)));
+ }else if mode==1{assert_eq!(result,Ok(CrtValue::scalar(0)));assert!(c.returned);assert_eq!(r.last_os_error,Some(87));assert_eq!(r.fls.get(&id.index).copied(),before);assert_eq!(r.serial,serial);}
+ else{assert!(result.is_err(),"setter mode {mode} unexpectedly passed");assert!(!c.returned);assert_eq!(r.fls.get(&id.index).copied(),before);assert_eq!(r.serial,serial);assert_eq!(r.last_os_error,Some(1114));if mode==3||mode==4{assert_eq!(result,Err("CRT FLS setter stdcall frame"));}if mode==8{assert_eq!(result,Err("CRT native FLS setter stale index"));}}
+}
+"#,
+        "native-fls-setter",
     );
 }

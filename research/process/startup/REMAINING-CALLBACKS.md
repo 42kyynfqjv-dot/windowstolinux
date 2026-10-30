@@ -1,5 +1,13 @@
 # Remaining native startup/formatter boundaries
 
+Current checkpoint: original FLS setter/resolver/guard/indirect stdcall8 executes.
+The explicit native FLS service publishes opaque41ccc4 for the current stationary
+fiber and retains its real process-index/callback identity. Retrieving the value
+grants no pointer/PTD authority. Original module initialization returns; the next
+explicit boundary is startup initializer continuation40195f, with next inventoried
+CALL401967 ->407653. Default admission is unchanged. See
+[setter contract, recovery and regression evidence](FLS-SETTER.md).
+
 Current executable checkpoint: with an explicitly enabled native FLS service,
 original allocation wrapper/resolver/guard/indirect call and index store execute.
 Entry allocates a process index and retains callback ownership, then rejects at

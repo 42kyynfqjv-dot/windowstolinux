@@ -27,6 +27,12 @@ impl CrtCpu{
   let callback=match value{CrtValue::Scalar{bits:0,known:u32::MAX}=>None,CrtValue::Scalar{bits,known:u32::MAX}=>Some((image,rt.process_image_code(image,bits,1)?)),CrtValue::Pointer(p)=>{if rt.process_image_code(image,p.address(),1)?!=p{return Err("CRT FLS callback image/alias");}Some((image,p))},_=>return Err("CRT FLS callback provenance")};
   let id=rt.native_fls_allocate(init,callback)?;self.clobber(CrtValue::scalar(id.index));self.finish_pop(rt,4)
  }
+ fn native_fls_set_call(&mut self,rt:&mut CrtStreamRuntime,init:CrtInitialization,fiber:CrtFiber)->Result<CrtValue,&'static str>{
+  self.validate_active(rt)?;if self.return_pop!=8||self.r[4]!=self.entry[4]||[3,5,6,7].iter().any(|&i|self.r[i]!=self.entry[i]){return Err("CRT FLS setter stdcall frame");}
+  let sp=Self::pointer(self.r[4])?;let index=rt.load(rt.offset(sp,4)?,32)?.known_scalar()?;let value=rt.load(rt.offset(sp,8)?,32)?;
+  if matches!(value,CrtValue::OpaqueSaved(_)|CrtValue::ProtectedReturn(_)|CrtValue::ThreadHead(_)){return Err("CRT FLS setter protected argument");}
+  let ok=rt.native_fls_set(init,fiber,index,value)?;self.clobber(CrtValue::scalar(u32::from(ok)));self.finish_pop(rt,8)
+ }
  fn tick(&mut self,budget:u32)->Result<(),&'static str>{self.steps=self.steps.checked_add(1).ok_or("CRT instruction counter overflow")?;if self.steps>budget{return Err("CRT certified instruction bound exceeded");}Ok(())}
  fn bits(v:CrtValue)->Result<(u32,u32),&'static str>{match v{CrtValue::Module(m)=>Ok((m.handle,u32::MAX)),CrtValue::Function(f)=>Ok((f.address,u32::MAX)),CrtValue::Scalar{bits,known}=>Ok((bits,known)),CrtValue::Pointer(p)=>Ok((p.address(),u32::MAX)),CrtValue::Handle(h)=>Ok((h.handle,u32::MAX)),CrtValue::OpaqueSaved(_)=>Ok((0,0)),CrtValue::Heap(_)|CrtValue::Dispatcher(_)|CrtValue::ProtectedReturn(_)|CrtValue::ThreadHead(_)=>Err("CRT protected control bits")}}
  fn number(v:CrtValue)->Result<u32,&'static str>{let(b,k)=Self::bits(v)?;if k!=u32::MAX{return Err("CRT unknown scalar bits observed");}Ok(b)}

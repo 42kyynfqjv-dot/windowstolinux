@@ -35,7 +35,7 @@ impl CrtResidentLoader {
 /// Explicit native replacement environment, not an inferred Windows loader state.
 /// Mapping revision 1 is grounded in the x86 Windows 10.0.20348 observation.
 /// Only this named domain is supported; no generic Windows version claim follows.
-struct CrtNativePlatform {anchor:guest_memory::Capability,function:CrtFunction,fls:Option<CrtFunction>}
+struct CrtNativePlatform {anchor:guest_memory::Capability,function:CrtFunction,fls:Option<CrtFunction>,fls_set:Option<CrtFunction>}
 impl CrtNativePlatform {
  const PROFILE:&'static str="w2l-native-sync-20348-v1";
  const CONTRACT:&'static str="api-ms-win-core-synch-l1-2-0";
@@ -45,17 +45,20 @@ impl CrtNativePlatform {
   // guest LoadLibrary result, fabricated LastError or DLL initialization receipt.
   let ticket=rt.provider_begin(init,"kernelbase.dll",handle,1)?;
   let(_,function)=rt.provider_initialize_sync(init,&ticket,address)?;
-  Ok(Self{anchor:rt.anchor,function,fls:None})
+  Ok(Self{anchor:rt.anchor,function,fls:None,fls_set:None})
  }
  /// Explicit optional native kernel32/FLS service, prepared before entry.
  fn enable_fls(&mut self,rt:&mut CrtStreamRuntime,init:CrtInitialization,handle:u32,address:u32)->Result<(),&'static str>{
   self.validate(rt,init)?;if self.fls.is_some(){return Err("native FLS provider already enabled");}
-  let ticket=rt.provider_begin(init,"kernel32.dll",handle,1)?;let mut published=None;
-  let result=(||{let m=rt.provider_publish(init,&ticket)?;published=Some(m);let d=rt.provider_export(init,m,m,"FlsAlloc",address)?;rt.bind_native_fls(init,d)})();
-  match result{Ok(f)=>{self.fls=Some(f);Ok(())},Err(e)=>{if let Some(m)=published{rt.provider_destroy(init,m)?;}else{rt.provider_abort(init,&ticket)?;}Err(e)}}
+  let setter_address=address.checked_add(4).filter(|n|*n!=u32::MAX).ok_or("native FLS setter address")?;let ticket=rt.provider_begin(init,"kernel32.dll",handle,2)?;let mut published=None;
+  let result=(||{let m=rt.provider_publish(init,&ticket)?;published=Some(m);let d=rt.provider_export(init,m,m,"FlsAlloc",address)?;let alloc=rt.bind_native_fls(init,d)?;let d=rt.provider_export(init,m,m,"FlsSetValue",setter_address)?;let setter=rt.bind_native_fls_set(init,d)?;if let Some(f)=rt.fiber{rt.check_fiber(f)?;}else{rt.bind_fiber(rt.thread)?;}Ok((alloc,setter))})();
+  match result{Ok((f,setter))=>{self.fls=Some(f);self.fls_set=Some(setter);Ok(())},Err(e)=>{if let Some(m)=published{rt.provider_destroy(init,m)?;}else{rt.provider_abort(init,&ticket)?;}Err(e)}}
  }
  fn fls_call(&self,rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,init:CrtInitialization,image:CrtProcessImage,f:CrtFunction)->Result<CrtValue,&'static str>{
   self.validate(rt,init)?;if self.fls!=Some(f)||rt.native_named_export(init,f.module,"FlsAlloc")?!=f{return Err("native FLS callable target");}rt.native_api_identity(f)?;cpu.native_fls_alloc_call(rt,init,image)
+ }
+ fn fls_set_call(&self,rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,init:CrtInitialization,f:CrtFunction)->Result<CrtValue,&'static str>{
+  self.validate(rt,init)?;if self.fls_set!=Some(f)||rt.native_named_export(init,f.module,"FlsSetValue")?!=f{return Err("native FLS setter callable target");}rt.native_api_identity(f)?;let fiber=rt.fiber.ok_or("native FLS current fiber unbound")?;rt.check_fiber(fiber)?;cpu.native_fls_set_call(rt,init,fiber)
  }
  fn validate(&self,rt:&CrtStreamRuntime,init:CrtInitialization)->Result<(),&'static str>{
   rt.initialization(init)?;if self.anchor!=rt.anchor{return Err("native platform process identity");}
