@@ -54,3 +54,40 @@ and guest-observable loader effects, bind the actual original call certificate a
 mapped lock object/index, and retain rejection of unknown callbacks/exports. Native
 registry readiness alone cannot close those obligations. Full startup/rcedit,
 XP/7 support and historical Windows timeout causes remain unresolved.
+
+Primary-source review also found version-specific stronger guarantees for the
+separate [InitializeCriticalSection](https://learn.microsoft.com/en-us/windows/win32/api/synchapi/nf-synchapi-initializecriticalsection)
+and [InitializeCriticalSectionAndSpinCount](https://learn.microsoft.com/en-us/windows/win32/api/synchapi/nf-synchapi-initializecriticalsectionandspincount)
+functions: their documentation says they succeed even with low memory starting
+with Vista, unlike the documented XP behavior. These statements must not silently
+be transferred to InitializeCriticalSectionEx, whose own return contract retains
+a failure branch. Neither a modern success observation nor these sibling APIs
+justify eliminating that branch for every supported Windows version.
+
+## Recorded result
+
+[Windows job124037455190](https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41048206319/job/124037455190)
+passed both spin configurations at commitf395c4e on build10.0.20348 with x86
+MSVC14.44.35207. [Recorded stdout and provenance](evidence/sync-observed.json)
+retain the original PE/compiler/source hashes. Local native operations matched
+both rows; [comparison evidence](evidence/sync-conformance-review.json) explicitly
+labels them component pairs and distinguishes recorded stdout from artifact
+verification. LastError retained sentinel0x1234 in these two success observations;
+this is not promoted into a preservation guarantee or allocation-failure evidence.
+The dependent Linux job additionally checks the actual observer artifact hash.
+
+A concrete bounded next alternative is to replace per-call native synchronization
+bookkeeping allocation with preallocated slots for the already admitted maximum
+of32 global objects. The current global_objects BTreeMap and native_sync Vec both
+need accounting: reserving only the Vec would not close map allocation. This can
+remove native initialization allocation as an unclosed operation within an
+explicit bounded-resource contract. It still needs proof of admissible indices,
+object ownership, phase/lifetime and guest-visible loader state, and does not
+establish all Windows low-memory behavior. Decide that resource abstraction before
+more successful-call probes; do not map native exhaustion to a guessed Win32 code.
+
+The dependent [Linux job124037739207](https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41048206319/job/124037739207)
+also passed: it downloaded and hash-checked the Windows observer executable,
+executed the native component and matched both traces. These two cross-host
+component pairs still represent zero converted-PE executions. Full regression
+workflows remained in progress at this checkpoint.

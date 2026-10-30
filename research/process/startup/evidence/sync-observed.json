@@ -1,0 +1,67 @@
+{
+  "kind": "Original Windows successful critical-section observations; zero PE translations",
+  "commit": "f395c4ec2850d8f68f4adea89b76a44ce9a31275",
+  "run": 41048206319,
+  "job": 124037455190,
+  "artifact": "12972174994",
+  "artifact_zip_sha256": "f69eb1f2d0ad208502fcc8f9744e330ad39a8e4a96465654de10619bf940544f",
+  "provenance": "Mechanically extracted from successful job JSON stdout. Artifact zip digest is upload-reported, not independently downloaded here.",
+  "report": {
+    "kind": "authored Windows synchronization observations; no translations",
+    "windows_version": "10.0.20348",
+    "source_sha256": "65d78f954866e96bf1db08f5f4eaa206d3bb96b28448d69b2138017490bb69e1",
+    "pe_sha256": "a98b7df84136da0f6162f42b8ef69e15092d810f645b679e96e3547e9c132117",
+    "compiler_path": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX86\\x86\\cl.EXE",
+    "compiler_sha256": "fc26dcba228dd91cd09429670f298f4608833c84841a4ceca8c4955b4d495a7b",
+    "command": [
+      "cl",
+      "/nologo",
+      "/W4",
+      "/O2",
+      "/GS",
+      "D:\\a\\windowstolinux\\windowstolinux\\research\\process\\startup\\sync_probe.c",
+      "/FeD:\\a\\_temp\\sync-observation\\sync.exe",
+      "/FoD:\\a\\_temp\\sync-observation\\sync.obj"
+    ],
+    "rows": [
+      {
+        "initialized": true,
+        "success_last_error": 4660,
+        "events": [
+          1,
+          2,
+          2,
+          3,
+          4,
+          4,
+          4,
+          5,
+          1,
+          5
+        ],
+        "reinitialized": true,
+        "canaries": true,
+        "spin": 0
+      },
+      {
+        "initialized": true,
+        "success_last_error": 4660,
+        "events": [
+          1,
+          2,
+          2,
+          3,
+          4,
+          4,
+          4,
+          5,
+          1,
+          5
+        ],
+        "reinitialized": true,
+        "canaries": true,
+        "spin": 4000
+      }
+    ]
+  }
+}
