@@ -323,3 +323,7 @@ mod crt_cookie_init;
 #[allow(dead_code)]
 #[path = "../src/crt_cookie_native.rs"]
 mod crt_cookie_native;
+
+#[allow(dead_code)]
+#[path = "../src/crt_startup_entry.rs"]
+mod crt_startup_entry;

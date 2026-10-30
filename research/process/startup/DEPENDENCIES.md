@@ -538,3 +538,16 @@ failure edge40178e; do not jump directly to Main. Root activation, incoming
 thread state and remaining initializer effects stay proof prerequisites. This
 is a concrete Sol implementation/review scope; escalate a reproduced ownership
 or external-effect uncertainty, not routine CI work.
+
+### Entry4017a4 now reaches the original processor-feature call
+
+A connected bounded native path runs the original entry CALL/JMP, cookie producer,
+startup EH4 prolog, initializer401945 and CPU-prefix writes. Its first unsupported
+operation is the actual IsProcessorFeaturePresent(10) call at401ebe/IAT41501c.
+No injected success passes that boundary. Canonical41c058 bit0 and41ccb8=0 writes
+survive the rejection. Root activation/incoming chain remain component inputs;
+there is no full unchanged-binary entry-to-exit result. Nine cases and81 byte
+mutants protect binding/lifetime/failure behavior. Next unify CPUID (five sites),
+XGETBV (one site), enabled OS/SIMD state and scalar feature-cache semantics for
+401ea5..4021be before binding feature-query results. Full utility support remains
+blocked by later initializer, loader, delivery and exit gates.

@@ -1324,3 +1324,59 @@ those counts are not compared as Windows/ELF pairs. The generated Rust remains
 deterministic even though its runtime observations vary. Next connect the actual
 startup40161f call sequence to the acquired producer and existing canonical
 manager/locale/FILE state; loader, actual delivery and physical exit remain open.
+
+## Original entry through startup processor query
+
+The ten original entry bytes at4017a4 now execute CALL401b71 and JMP40161f through
+shared emitted control flow. `startup_connected` verifies the mapped PE's actual
+entry RVA, executes the connected cookie producer, and binds startup's original
+20-byte EH4 allocation and scope41b238. Its actual PUSH/PUSH/CALL sequence runs
+original helper401e60 and publishes the record in the canonical live registry.
+It then executes PUSH1/CALL401945, that initializer's own saved-EBP/argument
+branch, and CALL401ea5 with separate protected activations.
+
+The executed CPU-initializer prefix ORs bit0 of canonical41c058 and writes0 to
+41ccb8, then PUSHes10 and reaches the actual indirect API call at401ebe. Import
+41501c is independently bound from the PE to KERNEL32!IsProcessorFeaturePresent.
+This call remains explicitly unbound and returns an error with the original call
+slot/arguments, installed startup record and earlier writes retained. No API
+result, CPUID register values or successful initializer return is supplied.
+
+The entry-shim return is a **component cut at40161f**, with the root CPU still
+active. It is not a program return. A separate connected case executes both
+regions without externally changing registers between them; Linux uses actual
+native entropy acquisition there, while Windows uses the explicitly scripted
+backend. Both stop at the same unbound query. The root activation/committed
+stack and incoming thread chain remain fixture premises. Full loader/startup,
+exception containment and unchanged-binary entry-to-exit are not established.
+
+All four emitted regions bind their original bytes at compile time and recheck
+live canonical code before execution. The prolog helper has its own live byte
+check at the original CALL, after earlier argument pushes. A changed helper in
+a separately mutated negative input rejects there. The validated image is never
+copied into a shadow cookie or frame region. Exact fragments have explicit end
+cuts; they are not passed off as closed function proofs. No decoder policy was
+weakened to make a fallthrough become a successful return.
+
+Nine cases cover retained original writes, acquisition failure, expired
+initialization, stale mapped storage, unknown cookie, actual connected entry,
+zero-argument initializer semantics and changed live helper bytes. All81 bytes
+of the four regions are independently mutated and rejected by source binding.
+Earlier initial test failures revealed an incorrectly constructed closed graph
+and two incorrect expected earliest-error classes; those were corrected without
+loosening the decoder or lifetime gates. Strict Clippy found a test-only raw-byte
+helper dependency in the non-test build; the production source now parses its
+own bound literal. Failure logs are retained.
+
+Next close a coherent guest CPU/OS-feature contract for the original401ea5 graph,
+not just a success response for the first API. Inventory shows five CPUID sites,
+one XGETBV site and multiple scalar feature-cache writes through4021be. Selecting
+feature paths must agree with enabled guest SIMD/OS state and supported emitted
+instructions. Sol can review this integration; a bounded Astra pass is useful
+if the feature model/OS-state relationship needs deeper reasoning. No full
+startup/rcedit claim; historical timeout causes remain unresolved.
+
+Primary ABI reference for the unbound boundary:
+[IsProcessorFeaturePresent](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-isprocessorfeaturepresent)
+accepts one DWORD and returns BOOL. This justifies argument transport/cleanup,
+not any supplied feature result or proof that the remaining CPU graph is closed.

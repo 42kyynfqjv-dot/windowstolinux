@@ -395,3 +395,12 @@ component input. Native binding revalidates runtime, initialization and host
 thread identity on every API call. This does not supply Windows loader effects,
 guest process creation or a general cross-process QPC contract. Actual startup
 caller40161f and remaining manager/locale/FILE composition are the next gate.
+
+### Entry-to-first-query path connected
+
+The entry shim and initializer401945 now execute their actual instructions and
+calls through startup's installed EH4 record. CPU-prefix writes are retained.
+First unbound call: IsProcessorFeaturePresent(10) at401ebe (IAT41501c), followed
+by currently unimplemented CPUID/XGETBV feature discovery if that call could
+return. No success callback supplies that result. Original incoming-chain/root
+activation, later initialization and full exit remain unresolved contracts.

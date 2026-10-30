@@ -1,0 +1,71 @@
+{
+  "kind": "original entry-to-first-unbound-query component execution; not complete startup",
+  "parent": "3cf770179ec15e1529c97737d0e47cf650617add",
+  "crt_tests": 253,
+  "crt_ignored": 2,
+  "converter_tests": 175,
+  "python_tests": 60,
+  "python_skips": 1,
+  "strict_clippy": "passed after removing cfg(test)-only parsing dependency",
+  "startup_cases": 9,
+  "changed_region_bytes_rejected": 81,
+  "first_unbound": {
+    "pc": "0x401ebe",
+    "iat": "0x41501c",
+    "dll": "kernel32.dll",
+    "symbol": "IsProcessorFeaturePresent",
+    "argument": 10
+  },
+  "prior_writes": [
+    "OR [0x41c058],1",
+    "MOV [0x41ccb8],0"
+  ],
+  "reached": [
+    "PE entry4017a4 CALL401b71",
+    "original cookie entropy and stores",
+    "JMP40161f",
+    "original startup20byte EH4 prolog and registry installation",
+    "CALL401945 argument1 branch",
+    "CALL401ea5 original prefix",
+    "PUSH10 and protected indirect call401ebe"
+  ],
+  "whole_pe_pairs": 0,
+  "new_windows_pairs": 0,
+  "retained_recorded_windows_pairs": 5,
+  "remaining": "Root activation and incoming thread chain remain supplied; feature query, five CPUID sites, one XGETBV site and feature-cache semantics are not bound. Later initializer/loader/delivery/exit remain unproven.",
+  "review": [
+    "No ownership defect found in 3cf7701 producer during independent source review; native/scripted boundaries retained.",
+    "Closed-function decoder correctly rejected fragments; fixed local explicit fragment construction and retained unbound terminal call. No shared decoder policy change.",
+    "Stale data mapping rejects at initialization lifetime before pointer access, and unknown cookie rejects scalar knowledge/type before CPU-init writes. Tests assert exact earliest errors.",
+    "Added live prolog-helper byte binding at actual CALL; a changed mapped helper input rejects without reaching CPU-init writes.",
+    "The shim returns only a component cut with CPU active; the connected case calls original prefix without external register edits and never claims program return.",
+    "Non-test build caught a cfg(test) parser dependency; local literal parser fixed it. Failure logs retained."
+  ],
+  "historical_windows_timeouts": "Unresolved; passing CI cannot establish cause.",
+  "logs": {
+    "replay-final.log": "f304fc8917c99609ebb75067c6e51ab6d9f78211b8505f29476121a4a5b64902",
+    "connected-final.log": "0475ebfe115ee364740cfefd8b3a778ff6bb7488696011079842e65e1d81f47b",
+    "replay.log": "c2a1f183c285fbb0fff566ef1b449bd19a448361bbebefc89e1ee779b0ee1d02",
+    "clippy-fixed.log": "11e5f5f3439e53dd9825b7aa0c9f21c9981f21741030e36c0bc2767c45791cc6",
+    "clippy.log": "4f09be000b7c83c6d4d0faeb295b293946c9f6a5e38ac20a5529594d1f9f8a44",
+    "connected-strict.log": "a3bb7580586739a459972440aab539f8d8f29253202d2a5fbf82e3d5102273d3",
+    "connected-native.log": "428a67d77e363e0cd912ea7cecab151cbf9d205f102d44042eb1a1810122d2ff",
+    "python.log": "fc3fb00ae51c76746d440444e3f84f18fabcf94f33d58cf53ad4d35d5a913a38",
+    "connected-fixed.log": "68d49121fdc73f5e83a00dd27f9c9ca6689734e44d78794aaea9504599428b21",
+    "connected.log": "83d144f527b7d5ea6cde5927f22a8485ccabd745df935179557a018f36d28e0a",
+    "root.log": "41881c04dee5516f5d7830cdbb790b8eef47b204f3a10552adff68d9057faa43",
+    "live-helper.log": "f535e6354e94e292f9d5a4ec8bba08df2bb51c7aadfcac604df027f418cc4832",
+    "crt.log": "9d8a48a8763fb56a43adf068d96616d85e33b88451aaf392196dfe7580dd9883"
+  },
+  "cpu_inventory_sha256": "fe11b76a52c0e864cbde759556fa0269ab5332ab8244ee2a0793e8e7bdb15e45",
+  "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "rust_sha256": "92cce037e3a378c03c2d56fac41985b34e257745d8b8992007c4699f5db5dc93",
+  "cookie_entropy_sha256": "275bc744d538e6dd726db6aa5929e04c162e00f93eb8a4a0c30ba5b0e351c245",
+  "replay": "passed; both ignored recorded-input tests ran separately; nine startup component cases include connected native Linux entry",
+  "region_sha256": {
+    "entry-shim": "58cd168cfe94495d0c68267a9de429c02dc7ad84adad8a08b826baee9babe64b",
+    "startup-prefix": "7b573d05a03e0ac33c660e1c428203d7fb92bea46b41974d98c689bbd880a439",
+    "startup-initializer": "a46c04d0182326021b76cade8ec2bec28437c448245cf7900b6a45a508bb397b",
+    "startup-cpu-prefix": "c50ed84e684faa7771993d04bff7200f92039533451b4ccda2ce1ad6beb76d0d"
+  }
+}
