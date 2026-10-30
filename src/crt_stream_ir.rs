@@ -72,6 +72,8 @@ pub(crate) enum Op {
         factor: u32,
     },
     IncrementMemory(Operand),
+    /// Requires a consumer-supplied exclusive ownership/atomic effect contract.
+    LockedIncrement(Operand),
     DecrementMemory(Operand),
     StoreString {
         width: u8,
@@ -183,6 +185,14 @@ fn extended(i: &Instruction, raw: &[u8], tables: &[JumpTable<'_>]) -> Result<Op,
             Code::Push_rm32 if raw == [0x64, 0xff, 0x35, 0, 0, 0, 0] => Op::FsPush,
             _ => return Err("CRT IR: FS head effect form".into()),
         });
+    }
+    if raw.starts_with(&[0xf0, 0xff])
+        && i.code() == Code::Inc_rm32
+        && i.has_lock_prefix()
+        && i.op0_kind() == OpKind::Memory
+        && i.segment_prefix() == Register::None
+    {
+        return Ok(Op::LockedIncrement(operand_from_move(i, 0)?));
     }
     if i.has_lock_prefix() {
         if raw.first() != Some(&0xf0)

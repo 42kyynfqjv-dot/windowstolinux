@@ -1,5 +1,8 @@
 # UCRT allocation and initializer prefix
 
+Later checkpoint: [first locale reference and normal EH4 cleanup](UCRT-LOCALE-REFERENCE.md) continues beyond this historical initializer boundary.
+
+
 This component continues the unchanged authored x86 entry under the explicit
 `w2l-native-second-fiber-20348-2398cc6a-v1` profile. It executes the original lazy
 body at `0x40a1ee`, sentinel setter, calloc body at `0x407cf0`, native checked heap

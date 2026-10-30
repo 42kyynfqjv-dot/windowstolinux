@@ -1,0 +1,72 @@
+{
+  "kind": "Original UCRT first multibyte reference and registered normal EH4 cleanup; explicit-profile component only",
+  "reviewed_parent": "7e90cb4e621121e8f8c92f7c209002696b406107",
+  "source_sha256": {
+    "examples/crt_stream.rs": "c1dbb82a7c3d1c3af353e2f4df5dd83b805046e8797971c4d48fbc3900fe1b78",
+    "research/process/startup/check_normal_wrapper.py": "cfc9daf05d5cca4812f8eb3aa5f0756c9c8f5b24b71b6d98d19ed03976457210",
+    "src/crt_normal_frame_tests.rs": "d3b38d7c6f7cd2998150242e7e37545969855a805a2aa9f01a944e0752a9427c",
+    "src/crt_ptd.rs": "5c2b90c9f55b48d5a2d8ed17a2401c4c9e9d4e5e00af45b92ca33553a2210047",
+    "src/crt_startup_fiber.rs": "3057299f1dbacec3a0a42c832ff1722e728eec846cf6dd49727f75bbc85ab933",
+    "src/crt_stream_cpu.rs": "c92386e3fbe05865dc2e683a2540b3a964dd6ca6b40f2772f801c0569c220a6e",
+    "src/crt_stream_emit.rs": "484d577f32a8ed65930eaf0f4c749097fe29d565218202c2a29c9cc387037ee1",
+    "src/crt_stream_ir.rs": "bf3db5391030531adb80c5225d782155f1421d1254c772f61db35512fdbdc1db",
+    "src/crt_stream_runtime.rs": "419436ed2330ff8158a8bcfad2ebc4bff48f9e2a722be89c4b3af400a85b7490",
+    "src/crt_ucrt_ptd.rs": "df022ba706b2f98498ba1c4ed7ea709517d0d71155d3cbd20992a436af55eebe",
+    "src/crt_ucrt_locale.rs": "339179edb2b1a3f8839fe5177173792d9dce422a7c66d4bcb3fd2df0411e2685"
+  },
+  "validation": {
+    "crt_passed": 290,
+    "ignored_in_full": 2,
+    "artifact_replay": "completed; both artifact-dependent tests passed",
+    "independent_reference_cases": 40,
+    "original_pe_mutations": 4,
+    "default_atomic_emission": "rejects without explicit consumer contract",
+    "python_run": 76,
+    "python_skip": 1,
+    "clippy": "passed",
+    "format": "passed",
+    "repeat_rust": "identical separate emissions"
+  },
+  "evidence": {
+    "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+    "rust_sha256": "af15d5510bce3b3bb1da071e11fd50cb573b14210a305a74bf374613684f22ec",
+    "report_sha256": "231fb5b3353d1d84133eae297271ebe6cf9b8488bfe25a6711d89fbf06f9c5ab",
+    "recorded_windows_wrapper_comparisons": 5,
+    "new_windows_elf_pairs": 0,
+    "whole_pe_pairs": 0
+  },
+  "component": {
+    "first_helper": "409efb: original prolog, indexed lock, original loads, checked LOCK INC, cleanup409f41, original epilog/RET12",
+    "state": "actual live startup epoch shared through native lazy PTD continuation",
+    "next_boundary": "CALL40a0f9 -> 40a00d: UCRT locale publication helper unbound",
+    "normal_completion": "first lease released, nested EH4 record retired; original getter C++ record remains",
+    "cleanup_rejection": "count retained, lease and normal record remain live; no fabricated release or return",
+    "reference_domain": "aligned known initialized writable canonical module word under live indexed lock; serialized startup only"
+  },
+  "retained_attempts": {
+    "pre-review-runtime-layer.log": "14 isolated runtime tests failed to compile because CPU dependency crossed the runtime boundary; corrected by separate runtime update and CPU flag adapter",
+    "replay": "superseded-source replay stopped and retained; not counted as final success",
+    "early_corrections": "prolog extent corrected to69 actual bytes; counter oracle now derives from original mapped data"
+  },
+  "remaining": [
+    "original lock4 EH4 publication40a00d and replacement40a296",
+    "child reference walker40c4ad and release/XADD",
+    "actual exceptional dispatch/containment within helpers",
+    "destructor40a100/40a121 and free/errno/resource-failure closure",
+    "full getter/startup return and unchanged-binary entry-to-exit"
+  ],
+  "historical_timeout": {
+    "run": 41107853543,
+    "case": 19,
+    "cause": "unresolved; artifact13002965454 retained; no threshold/retry changes"
+  },
+  "log_sha256": {
+    "replay-final.log": "6058563e959748c33f9fe28259fe9160763e8446c4c38c3ab2d27a7808f2cd0b",
+    "replay.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "full.log": "be6026b758690deff2c6f19a3cd26e2f4b078d8d0c4d30b66296b6b5f13a002d",
+    "entry.log": "a663d9a4c55051b0b67da6ba73e69eb3c0595eb3e98a8573a2600310d7aad365",
+    "clippy.log": "11e5f5f3439e53dd9825b7aa0c9f21c9981f21741030e36c0bc2767c45791cc6",
+    "pre-review-runtime-layer.log": "31bd689b221e6713c39ee825b359df3d6deff07dbd326be0b4b185f7a24aa375",
+    "python.log": "7693bd4f41d7c479e9a4fa764959d14a1a696cc9790bae841546b82b78444e9a"
+  }
+}

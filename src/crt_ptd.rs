@@ -174,6 +174,12 @@ fn getter_source(bytes: &[u8], registered: bool, native: bool) -> Result<String,
                 "rt.check_fiber(fiber)?;",
                 "inputs.validate(rt)?;platform.validate(rt,inputs.init)?;",
             );
+        source = source
+            .replace("lazy(rt,child)", "lazy(rt,child,epoch)")
+            .replace(
+                "FnMut(&mut CrtStreamRuntime,&mut CrtCpu)->",
+                "FnMut(&mut CrtStreamRuntime,&mut CrtCpu,&mut NormalCallEpoch<'_>)->",
+            );
         let guard=format!("let code=rt.process_image_code(inputs.image,0x40a332,{})?;if rt.memory.read(code.address(),{}).map_err(|_|\"PTD getter code read\")?!=&{:?}{{return Err(\"PTD getter code changed\");}}",bytes.len(),bytes.len(),bytes);
         let prolog = raw(PROLOG);
         let epilog = raw(EPILOG);

@@ -1,5 +1,20 @@
 # Remaining entry-to-exit dependencies
 
+## Current executable checkpoint: first locale reference and normal EH4 cleanup
+
+The explicit-profile original entry now executes helper `0x409efb`, including its
+live nested EH4 record, actual indexed acquisition, checked module-word LOCK INC,
+original cleanup release and proved original epilog/RET 12. The reference update
+survives later rejection. The first helper's record/lease retire on normal return.
+Execution now rejects at **CALL `0x40a0f9 -> 0x40a00d`**, before the second locale
+publication helper. The getter record and published UCRT allocation remain live.
+
+[Contract, failure ordering and next connected gate](UCRT-LOCALE-REFERENCE.md).
+The next gate is the original lock-4 EH4 publication/replacement and child-reference
+walk, followed by destructor/failure closure. Exceptions within the first helper,
+general concurrent atomics, XADD and full startup remain unsupported. No new
+Windows/ELF pair or default/rcedit admission. Earlier checkpoints are historical.
+
 ## Current executable checkpoint: owned UCRT allocation and initializer prefix
 
 Original entry under the explicit second-fiber profile now executes lazy sentinel

@@ -285,6 +285,9 @@ mod crt_global_lock;
 #[path = "../src/crt_ptd.rs"]
 mod crt_ptd;
 #[allow(dead_code)]
+#[path = "../src/crt_ucrt_locale.rs"]
+mod crt_ucrt_locale;
+#[allow(dead_code)]
 #[path = "../src/crt_ucrt_ptd.rs"]
 mod crt_ucrt_ptd;
 

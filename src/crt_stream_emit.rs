@@ -423,7 +423,7 @@ pub(crate) fn emit_body_with_indirect(
  Op::Exchange{address:a,register:r}=>{out.push_str(&format!("let p={};let incoming=cpu.get({},32,0)?;let old=rt.exchange_module_word(p,incoming)?;cpu.set({},32,0,old)?;",address(a,roles)?,r.index,r.index));},
  Op::Call(target)=>out.push_str(&call(pc,*target)?),
  Op::IndirectCall(operand)=>{out.push_str(&format!("let target={};",read(operand,roles)?));out.push_str(&indirect(pc,operand)?);},
- Op::FsRead(_)|Op::FsWrite(_)|Op::FsPush|Op::CpuId|Op::ReadXcr=>out.push_str(&thread(pc,&node.op)?),
+ Op::LockedIncrement(_)|Op::FsRead(_)|Op::FsWrite(_)|Op::FsPush|Op::CpuId|Op::ReadXcr=>out.push_str(&thread(pc,&node.op)?),
  Op::ReturnPop(bytes)=>{out.push_str(&return_hook(pc,*bytes)?.unwrap_or_else(||format!("return cpu.finish_pop(rt,{bytes});")));controlled=true;},
  Op::RotateRightCl(dst)=>{let o=register(*dst);out.push_str(&format!("let count=cpu.get(1,8,0)?;let v=cpu.rotate_right32({},count)?;{}",read(&o,roles)?,write(&o,"v",roles)?));},
  Op::SignDividend=>out.push_str("cpu.sign_dividend()?;"),

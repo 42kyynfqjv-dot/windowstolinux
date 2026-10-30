@@ -960,6 +960,15 @@ impl CrtStreamRuntime {
   if heap.exceptions!=Some(false)||flags!=8||size==0{return Err("CRT live allocation flags/exception/zero request");}
   let result=self.allocate(size,true,available)?;if result.is_some(){self.last_os_error=None;}Ok(result)
  }
+ /// Serialized startup-only module-word update under a live indexed lease.
+ /// No callback/interleaving occurs between the checked read and write.
+ fn increment_module_reference(&mut self,init:CrtInitialization,image:CrtProcessImage,lease:CrtGlobalLock,p:CrtPointer)->Result<u32,&'static str>{
+  self.initialization(init)?;self.check_global(lease)?;
+  if p.kind!=CrtRegionKind::Module||p.address%4!=0||self.process_image_pointer(image,p.address,4)?!=p{return Err("CRT module reference identity/alignment");}
+  self.memory.validate_writable(p.cap,p.owner,p.address,4).map_err(|_|"CRT module reference permission")?;
+  self.ordinary_file_bytes(p,4)?;let old=self.load(p,32)?.known_scalar()?;
+  self.store(p,32,CrtValue::scalar(old.wrapping_add(1)))?;Ok(old)
+ }
  /// Execute a bounded successful allocation in the explicit native domain.
  /// Budget/host allocation failure is rejection, never guest NULL or a guessed
  /// exception policy. The existing process heap and allocation identity survive.
