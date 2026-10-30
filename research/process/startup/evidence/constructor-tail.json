@@ -1,0 +1,72 @@
+{
+  "kind": "Original constructor tail through checked indirect API boundary; component only",
+  "reviewed_commit": "4ee74c7af29d5e070c03c00b5bfacb902b6489f8",
+  "source_sha256": {
+    "src/crt_startup_modules.rs": "32487b457cafcb4bd90e466860076e7b6cb93fa4f674b1c414ce8897abfdb212",
+    "src/crt_normal_frame_tests.rs": "65c6bbb89656d0e7f1cb98ca463322a065ae7dea92a7bc1add847daa2de101e6",
+    "research/process/startup/check_normal_wrapper.py": "5223279f8d7545a17232da95c66385a5fa2889a3e64d64321dfd28009bd61a44"
+  },
+  "validation": {
+    "crt_passed": 279,
+    "ignored_in_full": 2,
+    "artifact_tests": "both passed in replay",
+    "constructor_guard_cases": 10,
+    "python_run": 75,
+    "python_skip": 1,
+    "clippy": "passed",
+    "format": "passed"
+  },
+  "original_constructor": {
+    "start": "402c2d",
+    "size": 71,
+    "guard_call": "402c5b",
+    "guard_target": "401bf9",
+    "guard_code": "c20000",
+    "indirect_call": "402c61",
+    "prospective_indirect_stdcall_cleanup": 12,
+    "unbound_fallback_cleanup": 8
+  },
+  "boundaries": {
+    "default": "LoadLibraryExW402b00",
+    "explicit_profile": "InitializeCriticalSectionEx resource/failure contract at402c61",
+    "constructed_lock_count": 0,
+    "constructor_success": false
+  },
+  "replay": {
+    "kind": "original prolog/epilog component comparison with explicit unexecuted body boundary",
+    "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+    "rust_sha256": "3ad616347bb53d5e1dba0d64b2ae11fbbd898302f799806a5dd8a27d6e555760",
+    "comparisons": 5,
+    "scope": "Live registry fixture; body EAX/flags inputs; original stack/FS/saved-state restoration only"
+  },
+  "report_sha256": "60dba6e03bab911a52ff57b716227ac61402ac88e4f7a78508c68a31563f65f0",
+  "logs": {
+    "full-final.log": "07e81c7df90f7be099ccaaae3ae1129b1683534b105d0d29e68de65ee1322892",
+    "canonical-final.log": "0fa81486724e947b7672dc1816bd4fb4bd86a185de627787d92d23bf067853d2",
+    "clippy-final.log": "02db5a66fa0c60ca8618bd08aac556eac4f3ec863e8630a0d353dba6a0f6e126",
+    "python.log": "81460eb29cd36445f40802ceeeb86d2ec5ad20671d31bcfc198d09dd75e081f0"
+  },
+  "new_windows_observations": 0,
+  "new_whole_pe_pairs": 0,
+  "primary_contract": "https://learn.microsoft.com/en-us/windows/win32/api/synchapi/nf-synchapi-initializecriticalsectionex",
+  "primary_checked_date": "2026-10-30",
+  "retained_extraction_failure": {
+    "stdout_sha256": "9e82217cd1b4862cab0bbbcc4a7dca4386486b8a6b35ee4f46b941d6bbbdb036",
+    "reason": "old26-byte extraction versus unchanged71-byte complete constructor",
+    "guest_binary_modified": false
+  },
+  "predecessor_4a7ec01_ci": [
+    {
+      "run": 41056014512,
+      "conclusion": "success"
+    },
+    {
+      "run": 41056006557,
+      "conclusion": "success"
+    },
+    {
+      "run": 41056006622,
+      "conclusion": "success"
+    }
+  ]
+}

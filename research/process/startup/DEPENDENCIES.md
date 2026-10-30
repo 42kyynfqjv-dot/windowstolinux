@@ -695,3 +695,13 @@ invocation; default entry still rejects402b00. Lookup validates complete source
 publication and actual target lifetime without creating call authority. Next lift
 402c47..402c73 with actual arguments, guard, dynamic call and fallback semantics.
 See [NAMED-NATIVE-EXPORT.md](NAMED-NATIVE-EXPORT.md). No new whole-PE pairs.
+
+### Constructor tail reaches its checked indirect API call
+
+Explicit-profile entry now executes original402c47..402c61 including resolver
+argument cleanup, target preservation, guard stub and protected stdcall call
+setup. The live function/source/target and object argument are validated; no lock
+is constructed. The exact boundary is InitializeCriticalSectionEx failure/resource
+contract at402c61. Default admission still rejects402b00. Next resolve that API
+relation, then original constructor RET/count publication and FLS. See
+[CONSTRUCTOR-TAIL.md](CONSTRUCTOR-TAIL.md). No new whole-PE pairs.

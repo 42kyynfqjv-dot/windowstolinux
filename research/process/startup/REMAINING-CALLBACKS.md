@@ -492,3 +492,8 @@ original function-cache publication and resolver return. The next cut is origina
 constructor tail402c47; the guard, indirect synchronization invocation/failure
 semantics and fallback remain open. Default admission remains402b00. See
 [NAMED-NATIVE-EXPORT.md](NAMED-NATIVE-EXPORT.md).
+
+Constructor tail and original guard execute through the protected indirect CALL
+at402c61 under the explicit profile. API resource/failure semantics remain unbound;
+no constructor success or lock count is issued. Default admission remains402b00.
+[Exact next contract](CONSTRUCTOR-TAIL.md).
