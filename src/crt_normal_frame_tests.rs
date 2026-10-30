@@ -2127,15 +2127,15 @@ fn startup_entry_cases(){
   }
   if mode==2{rt.end_initialization(init).unwrap();}
   if mode==3{let p=rt.process_image_pointer(inputs.image,0x41c000,4).unwrap();rt.memory.release(p.cap,p.owner).unwrap();}
-  let shim=startup_shim(&mut rt,&mut c,&inputs,&mut backend,None);
+  let shim=startup_shim(&mut rt,&mut c,&inputs,&mut backend,None,None);
   if mode==1||mode==2||mode==3{assert_eq!(shim,Err(match mode{1=>"independent time acquisition failure",2=>"CRT initialization owner/lifetime",_=>"CRT initialization storage lifetime"}));assert!(!c.returned);continue;}
   shim.expect("entry CALL and JMP reach bounded startup");assert!(!c.returned);assert_eq!(c.r[4],c.entry[4]);
-  if mode==7{c.push(&mut rt,CrtValue::scalar(0)).unwrap();assert_eq!(c.call_activation(&mut rt,0x430000,0,|rt,c|startup_initializer(rt,c,&inputs,&mut backend,None)),Err("startup processor feature contract unbound at 0x401ebe"));assert_eq!(rt.load(rt.process_image_pointer(inputs.image,0x41cc84,1).unwrap(),8).unwrap(),CrtValue::scalar(1));continue;}
+  if mode==7{c.push(&mut rt,CrtValue::scalar(0)).unwrap();assert_eq!(c.call_activation(&mut rt,0x430000,0,|rt,c|startup_initializer(rt,c,&inputs,&mut backend,None,None)),Err("startup processor feature contract unbound at 0x401ebe"));assert_eq!(rt.load(rt.process_image_pointer(inputs.image,0x41cc84,1).unwrap(),8).unwrap(),CrtValue::scalar(1));continue;}
   let flag=rt.process_image_pointer(inputs.image,0x41c058,4).unwrap();let cpuword=rt.process_image_pointer(inputs.image,0x41ccb8,4).unwrap();let byte=rt.process_image_pointer(inputs.image,0x41cc84,1).unwrap();rt.store(flag,32,CrtValue::scalar(0x20)).unwrap();rt.store(cpuword,32,CrtValue::scalar(9)).unwrap();let prior=rt.load(byte,8).unwrap();
   if mode==4{rt.end_initialization(init).unwrap();}
   let got=registry.with_normal_calls(&m,&mut permit,&main,|epoch|{let mut binding=CrtNormalBinding::bind_initializing(&rt,&c,epoch,startup_layout(),init)?;
    if mode==5{rt.store(rt.process_image_pointer(inputs.image,0x41c000,4)?,32,CrtValue::Scalar{bits:0,known:0})?;}
-   startup_prefix(&mut rt,&mut c,&inputs,&mut backend,None,epoch,&mut binding)?;Err::<(),_>("unexpected startup prefix return")
+   startup_prefix(&mut rt,&mut c,&inputs,&mut backend,None,None,epoch,&mut binding)?;Err::<(),_>("unexpected startup prefix return")
   });
   assert_eq!(got,Err(match mode{4=>"CRT initialization owner/lifetime",5=>"CRT scalar knowledge/type",8=>"startup helper live code changed",_=>"startup processor feature contract unbound at 0x401ebe"}));assert!(!c.returned);assert_eq!(rt.load(byte,8).unwrap(),prior);
   assert_eq!(rt.load(flag,32).unwrap(),CrtValue::scalar(if mode>=4{0x20}else{0x21}));assert_eq!(rt.load(cpuword,32).unwrap(),CrtValue::scalar(if mode>=4{9}else{0}));
@@ -2144,9 +2144,10 @@ fn startup_entry_cases(){
 
 fn startup_feature_cases(){
  let file=std::fs::read(std::env::var("W2L_PE_MAPPING_INPUT").unwrap()).unwrap();
- for mode in 0..15{
+ for mode in 0..20{
   let(m,mut registry,main,mut permit)=fixture_with_extra(&[(0x410000,0x420000)]);
   let mut image_file=file.clone();if mode==9{let raw:Vec<_>=startup_cpu_code();let offsets:Vec<_>=image_file.windows(raw.len()).enumerate().filter(|(_,b)|*b==raw.as_slice()).map(|(i,_)|i).collect();assert_eq!(offsets.len(),1);image_file[offsets[0]]^=1;}
+  if mode==19{let raw=resident_load_helper_code();let offsets:Vec<_>=image_file.windows(raw.len()).enumerate().filter(|(_,b)|*b==raw.as_slice()).map(|(i,_)|i).collect();assert_eq!(offsets.len(),1);image_file[offsets[0]]^=1;}
   let(mut rt,init)=CrtStreamRuntime::new_initializing_pe32(registry.identity.owner,registry.identity.instance,0x41c080,3,1048576,&image_file).unwrap();rt.map_region(0x9000,0x6000,CrtRegionKind::Stack,None).unwrap();
   let inputs=CrtEntropyInputs::bind(&rt,init,17,19).unwrap();let mut backend=EntropyObservations{time:0x102030405060708,counter:0x8899aabbccddeeff,seen:vec![],fail:0};let mut c=cpu(&mut rt,0xd000,8100);c.return_pop=0;
   // Independent abstract CPU environments; not Windows observations or host claims.
@@ -2160,13 +2161,19 @@ fn startup_feature_cases(){
   if mode==8{let p=rt.process_image_pointer(inputs.image,0x41c058,4).unwrap();rt.memory.release(p.cap,p.owner).unwrap();}
   if mode==10{features.data.leaves.remove(&(1,0));}
   if mode==11{features.host=Some((std::process::id().wrapping_add(1),std::thread::current().id()));}
-  let got=if mode==12{
+  let platform=if mode>=15{Some(CrtNativePlatform::prepare(&mut rt,init,CrtNativePlatform::PROFILE,0x700000,0x701000).unwrap())}else{None};
+  if mode==16{rt.provider_destroy(init,platform.as_ref().unwrap().function.module).unwrap();}
+  if mode==17{let p=rt.process_image_pointer(inputs.image,0x415d7c,2).unwrap();/* immutable name storage must remain protected */assert!(rt.store(p,16,CrtValue::scalar(0)).is_err());}
+  if mode==18{let p=platform.as_ref().unwrap();for _ in 0..255{rt.native_provider_acquire(init,p.function).unwrap();}}
+  let got=if mode>=15{registry.with_normal_calls(&m,&mut permit,&main,|epoch|startup_connected_platform(&mut rt,&mut c,&inputs,&mut backend,Some(&features),platform.as_ref(),epoch))}else if mode==12{
    #[cfg(all(target_os="linux",target_arch="x86_64"))]{let(i,mut b)=CrtNativeEntropy::acquire(&rt,init).unwrap();registry.with_normal_calls(&m,&mut permit,&main,|epoch|startup_connected(&mut rt,&mut c,&i,&mut b,Some(&features),epoch))}
    #[cfg(not(all(target_os="linux",target_arch="x86_64")))]{registry.with_normal_calls(&m,&mut permit,&main,|epoch|startup_connected(&mut rt,&mut c,&inputs,&mut backend,Some(&features),epoch))}
   }else{registry.with_normal_calls(&m,&mut permit,&main,|epoch|startup_connected(&mut rt,&mut c,&inputs,&mut backend,Some(&features),epoch))};
-  let expected=match mode{5=>"CPU observation owner/lifetime",6|7=>"CRT initialization owner/lifetime",8=>"CRT initialization storage lifetime",9=>"CPU classifier live code changed",10=>"CPU query outside observed leaf domain",11=>"CPU observation host lifetime/thread",_=>"startup LoadLibraryExW effects unbound at 0x402b00"};
+  let expected=match mode{19=>"startup resolver live code changed",15|17=>"native platform export/release contract unbound",16=>"CRT unloaded module",18=>"CRT native provider reference budget",5=>"CPU observation owner/lifetime",6|7=>"CRT initialization owner/lifetime",8=>"CRT initialization storage lifetime",9=>"CPU classifier live code changed",10=>"CPU query outside observed leaf domain",11=>"CPU observation host lifetime/thread",_=>"startup LoadLibraryExW effects unbound at 0x402b00"};
   assert_eq!(got,Err(expected),"CPU startup mode {mode}");assert!(!c.returned);
-  if mode<=4||mode>=12{let tier=rt.load(rt.process_image_pointer(inputs.image,0x41ccb8,4).unwrap(),32).unwrap().known_scalar().unwrap();if mode<=3{assert_eq!(tier,[0,1,3,5][mode]);}if mode>=13{assert_eq!(tier,6);}let flags=rt.load(rt.process_image_pointer(inputs.image,0x41c058,4).unwrap(),32).unwrap().known_scalar().unwrap();assert_eq!(flags&1,1);if mode>=1{assert_ne!(flags&2,0);}}
+  if mode<=4||matches!(mode,12..=15|17|18){let tier=rt.load(rt.process_image_pointer(inputs.image,0x41ccb8,4).unwrap(),32).unwrap().known_scalar().unwrap();if mode<=3{assert_eq!(tier,[0,1,3,5][mode]);}if mode==13||mode==14{assert_eq!(tier,6);}let flags=rt.load(rt.process_image_pointer(inputs.image,0x41c058,4).unwrap(),32).unwrap().known_scalar().unwrap();assert_eq!(flags&1,1);if mode>=1{assert_ne!(flags&2,0);}}
+  if mode==19{assert_eq!(rt.module_references.len(),1);}
+  if mode==15||mode==17{assert_eq!(rt.module_references.len(),2);let cell=rt.process_image_pointer(inputs.image,0x41cd0c,4).unwrap();assert_eq!(rt.load(cell,32).unwrap(),CrtValue::Module(platform.as_ref().unwrap().function.module));assert!(rt.global_objects.is_empty());}
   if matches!(mode,5|7|9|10|11){assert_eq!(rt.load(rt.process_image_pointer(inputs.image,0x41ccb8,4).unwrap(),32).unwrap(),CrtValue::scalar(0));}
  }
 }

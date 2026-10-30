@@ -21,6 +21,23 @@ struct CrtModuleReference {module:CrtModule,serial:u64}
 struct CrtProcessImage {anchor:guest_memory::Capability,owner:u64,generation:u64,root:CrtPointer}
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 struct CrtFunction {module:CrtModule,address:u32,serial:u64}
+/// Fixed native reference budget; serial keys are monotonic, not array indices.
+#[derive(Clone)]
+struct CrtModuleReferences {slots:[Option<(u64,CrtModuleReference)>;256]}
+impl CrtModuleReferences {
+ fn new()->Self{Self{slots:[None;256]}}
+ fn iter(&self)->impl Iterator<Item=(&u64,&CrtModuleReference)>{self.slots.iter().filter_map(|x|x.as_ref().map(|(k,v)|(k,v)))}
+ fn values(&self)->impl Iterator<Item=&CrtModuleReference>{self.iter().map(|(_,v)|v)}
+ fn len(&self)->usize{self.values().count()}
+ fn is_empty(&self)->bool{self.len()==0}
+ fn get(&self,key:&u64)->Option<&CrtModuleReference>{self.iter().find(|(k,_)|*k==key).map(|(_,v)|v)}
+ fn contains_key(&self,key:&u64)->bool{self.get(key).is_some()}
+ fn insert(&mut self,key:u64,value:CrtModuleReference){
+  if let Some(slot)=self.slots.iter_mut().find(|x|x.as_ref().is_some_and(|(k,_)|*k==key)){*slot=Some((key,value));return;}
+  *self.slots.iter_mut().find(|x|x.is_none()).expect("checked module reference budget")=Some((key,value));
+ }
+ fn remove(&mut self,key:&u64)->Option<CrtModuleReference>{self.slots.iter_mut().find(|x|x.as_ref().is_some_and(|(k,_)|k==key)).and_then(Option::take).map(|(_,v)|v)}
+}
 struct CrtLoadedModule {identity:String,generation:u64,certain:bool}
 struct CrtExport {function:CrtFunction,symbol:String,target:CrtModule,callable:bool,api:Option<CrtNativeApi>}
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
@@ -147,7 +164,7 @@ impl CrtGlobalLeases {
  fn pop(&mut self)->Option<CrtGlobalLock>{if self.len==0{return None;}self.len-=1;self.slots[self.len].take()}
 }
 struct CrtStreamRuntime {
- file_view:CrtPointer,main_image:Option<CrtProcessImage>,main_image_regions:Vec<CrtPointer>,loader_cells:std::collections::BTreeMap<u32,(CrtPointer,bool)>,modules:std::collections::BTreeMap<u32,CrtLoadedModule>,module_references:std::collections::BTreeMap<u64,CrtModuleReference>,exports:std::collections::BTreeMap<u64,CrtExport>,providers:std::collections::BTreeMap<u32,CrtNativeProvider>,native_sync:CrtGlobalSlots<(CrtFunction,u32,CrtPointer)>,
+ file_view:CrtPointer,main_image:Option<CrtProcessImage>,main_image_regions:Vec<CrtPointer>,loader_cells:std::collections::BTreeMap<u32,(CrtPointer,bool)>,modules:std::collections::BTreeMap<u32,CrtLoadedModule>,module_references:CrtModuleReferences,exports:std::collections::BTreeMap<u64,CrtExport>,providers:std::collections::BTreeMap<u32,CrtNativeProvider>,native_sync:CrtGlobalSlots<(CrtFunction,u32,CrtPointer)>,
  uncertain_allocations:Vec<CrtPointer>,completed_failed_frees:Vec<(guest_memory::Capability,u64)>,heap_ptds:Vec<CrtHeapPtdView>,fiber:Option<CrtFiber>,fls_indices:std::collections::BTreeMap<u32,CrtProcessFls>,fls:std::collections::BTreeMap<u32,(CrtFlsSlot,CrtValue)>,
  unobserved_contexts:Vec<(CrtPointer,std::rc::Rc<std::cell::Cell<bool>>)>,heap:Option<CrtHeap>,memory:guest_memory::Space,owner:u64,thread:u64,anchor:guest_memory::Capability,
  dispatchers:std::collections::BTreeMap<u64,CrtDispatcherContext>,regions:Vec<CrtRegion>,retired:Vec<CrtPointer>,tags:std::collections::BTreeMap<u32,CrtValue>,
@@ -169,7 +186,7 @@ impl CrtStreamRuntime {
  }
  fn from_file_storage(owner:u64,thread:u64,memory:guest_memory::Space,pointer:CrtPointer)->Result<Self,&'static str>{
   let anchor=pointer.cap;
-  Ok(Self{file_view:pointer,main_image:None,main_image_regions:vec![],loader_cells:std::collections::BTreeMap::new(),modules:std::collections::BTreeMap::new(),module_references:std::collections::BTreeMap::new(),exports:std::collections::BTreeMap::new(),providers:std::collections::BTreeMap::new(),native_sync:CrtGlobalSlots::new(),uncertain_allocations:vec![],completed_failed_frees:vec![],heap_ptds:vec![],fiber:None,fls_indices:std::collections::BTreeMap::new(),fls:std::collections::BTreeMap::new(),unobserved_contexts:vec![],heap:None,memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],global_objects:CrtGlobalSlots::new(),global_locks:CrtGlobalLeases::new(),record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,canonical_errno:false,errno_cell:None,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([pointer.base])})
+  Ok(Self{file_view:pointer,main_image:None,main_image_regions:vec![],loader_cells:std::collections::BTreeMap::new(),modules:std::collections::BTreeMap::new(),module_references:CrtModuleReferences::new(),exports:std::collections::BTreeMap::new(),providers:std::collections::BTreeMap::new(),native_sync:CrtGlobalSlots::new(),uncertain_allocations:vec![],completed_failed_frees:vec![],heap_ptds:vec![],fiber:None,fls_indices:std::collections::BTreeMap::new(),fls:std::collections::BTreeMap::new(),unobserved_contexts:vec![],heap:None,memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],global_objects:CrtGlobalSlots::new(),global_locks:CrtGlobalLeases::new(),record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,canonical_errno:false,errno_cell:None,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([pointer.base])})
  }
 
  /// Initial FILE storage is a bounded role view of the original writable

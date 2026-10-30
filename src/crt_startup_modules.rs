@@ -115,10 +115,11 @@ fn startup_loader_cell(rt:&mut CrtStreamRuntime,inputs:&CrtEntropyInputs,p:CrtPo
  if let Some(&(bound,kind))=rt.loader_cells.get(&p.address()){if bound!=p||kind!=function{return Err("startup loader cell owner/kind");}rt.loader_cell_value(function,rt.load(p,32)?)?;Ok(())}
  else{rt.bind_loader_cell(inputs.init,p,function)}
 }
-fn startup_modules_default(rt:&mut CrtStreamRuntime,c:&mut CrtCpu,inputs:&CrtEntropyInputs)->Result<CrtValue,&'static str>{
+fn startup_modules_default(rt:&mut CrtStreamRuntime,c:&mut CrtCpu,inputs:&CrtEntropyInputs)->Result<CrtValue,&'static str>{startup_modules_platform(rt,c,inputs,None)}
+fn startup_modules_platform(rt:&mut CrtStreamRuntime,c:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:Option<&CrtNativePlatform>)->Result<CrtValue,&'static str>{
  startup_modules(rt,c,inputs,&mut |rt,c,pc,target|match(pc,target){
  (0x4024ca,0x4029b4)=>startup_locks(rt,c,inputs,&mut |rt,c,pc,target|match(pc,target){
- (0x4029c5,0x402c2d)=>startup_constructor_prefix(rt,c,inputs,&mut |rt,c,pc,target|{if(pc,target)!=(0x402c42,0x402a53){return Err("startup constructor resolver target");}startup_resolver(rt,c,inputs,&mut |_,_,iat|Err(match iat{0x415074=>"startup LoadLibraryExW effects unbound at 0x402b00",_=>"startup loader effects unbound"}))}),
+ (0x4029c5,0x402c2d)=>startup_constructor_prefix(rt,c,inputs,&mut |rt,c,pc,target|{if(pc,target)!=(0x402c42,0x402a53){return Err("startup constructor resolver target");}startup_resolver(rt,c,inputs,&mut |rt,c,iat|if let Some(p)=platform{p.call(rt,c,inputs.init,iat)}else{Err(match iat{0x415074=>"startup LoadLibraryExW effects unbound at 0x402b00",_=>"startup loader effects unbound"})})}),
  _=>Err("startup lock effect unbound")}),
  _=>Err("startup module effect unbound")})
 }

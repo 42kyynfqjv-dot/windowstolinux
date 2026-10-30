@@ -93,10 +93,10 @@ pub(crate) fn source(regions: &[Vec<u8>], helper: &[u8]) -> Result<String, Strin
                 Ok(match(pc,target){
    (0x4017a4,Target::Direct(0x401b71))=>"cpu.call_activation(rt,0x4017a9,0,|rt,c|original_cookie_init_connected(rt,c,inputs,backend))?;".into(),
    (0x401626,Target::Direct(0x401e60))=>r#"let n=rt.generation.checked_add(1).filter(|n|*n<1u64<<63).ok_or("startup helper identity exhausted")?;let id=n|(1u64<<63);if rt.tags.values().any(|v|*v==CrtValue::ProtectedReturn(id)){return Err("startup helper identity collision");}cpu.push(rt,CrtValue::ProtectedReturn(id))?;rt.generation=n;startup_helper(rt,cpu,id,binding.token,|rt,c,record,head|binding.install(rt,c,epoch,record,head))?;"#.into(),
-   (0x40162d,Target::Direct(0x401945))=>"cpu.call_activation(rt,0x401632,0,|rt,c|startup_initializer(rt,c,inputs,backend,features))?;".into(),
-   (0x401955,Target::Direct(0x401ea5))=>"cpu.call_activation(rt,0x40195a,0,|rt,c|startup_cpu_prefix(rt,c,inputs,backend,features))?;".into(),
+   (0x40162d,Target::Direct(0x401945))=>"cpu.call_activation(rt,0x401632,0,|rt,c|startup_initializer(rt,c,inputs,backend,features,platform))?;".into(),
+   (0x401955,Target::Direct(0x401ea5))=>"cpu.call_activation(rt,0x40195a,0,|rt,c|startup_cpu_prefix(rt,c,inputs,backend,features,platform))?;".into(),
    (0x401ebe,Target::Import(0x41501c))=>r#"cpu.call_activation(rt,0x401ec4,4,|rt,c|features.ok_or("startup processor feature contract unbound at 0x401ebe")?.api(rt,c))?;return startup_cpu_tail(rt,cpu,inputs,features.ok_or("startup feature scope missing")?);"#.into(),
-   (0x40195a,Target::Direct(0x4024ca))=>"cpu.call_activation(rt,0x40195f,0,|rt,c|startup_modules_default(rt,c,inputs))?;".into(),
+   (0x40195a,Target::Direct(0x4024ca))=>"cpu.call_activation(rt,0x40195f,0,|rt,c|startup_modules_platform(rt,c,inputs,platform))?;".into(),
    _=>return Err("startup slice call binding".into())
   })
             },
@@ -127,12 +127,16 @@ pub(crate) fn source(regions: &[Vec<u8>], helper: &[u8]) -> Result<String, Strin
             2 => ("startup_initializer", ""),
             _ => ("startup_cpu_prefix", ""),
         };
-        out.push_str(&format!("fn {name}(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,backend:&mut impl CrtEntropyBackend,features:Option<&CrtFeatureObservation>{params})->Result<CrtValue,&'static str>{{cpu.validate_active(rt)?;inputs.validate(rt)?;let p=rt.process_image_code(inputs.image,{origin},{})?;if rt.memory.read(p.address(),{}).map_err(|_|\"startup code read\")?!=&{bytes:?}{{return Err(\"startup live code changed\");}}{body}}}",bytes.len(),bytes.len()));
+        out.push_str(&format!("fn {name}(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,backend:&mut impl CrtEntropyBackend,features:Option<&CrtFeatureObservation>,platform:Option<&CrtNativePlatform>{params})->Result<CrtValue,&'static str>{{cpu.validate_active(rt)?;inputs.validate(rt)?;let p=rt.process_image_code(inputs.image,{origin},{})?;if rt.memory.read(p.address(),{}).map_err(|_|\"startup code read\")?!=&{bytes:?}{{return Err(\"startup live code changed\");}}{body}}}",bytes.len(),bytes.len()));
     }
     out.push_str(r#"fn startup_connected(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,backend:&mut impl CrtEntropyBackend,features:Option<&CrtFeatureObservation>,epoch:&mut NormalCallEpoch<'_>)->Result<CrtValue,&'static str>{
+ startup_connected_platform(rt,cpu,inputs,backend,features,None,epoch)
+}
+fn startup_connected_platform(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,backend:&mut impl CrtEntropyBackend,features:Option<&CrtFeatureObservation>,platform:Option<&CrtNativePlatform>,epoch:&mut NormalCallEpoch<'_>)->Result<CrtValue,&'static str>{
+ if let Some(p)=platform{p.validate(rt,inputs.init)?;}
  inputs.validate(rt)?;let root=rt.process_image(inputs.image)?;let nt=rt.load(rt.offset(root,0x3c)?,32)?.known_scalar()?;let rva=rt.load(rt.offset(root,i64::from(nt)+40)?,32)?.known_scalar()?;
  if root.address().checked_add(rva)!=Some(0x4017a4){return Err("startup original PE entry identity");}
- startup_shim(rt,cpu,inputs,backend,features)?;let mut binding=CrtNormalBinding::bind_initializing(rt,cpu,epoch,startup_layout(),inputs.init)?;startup_prefix(rt,cpu,inputs,backend,features,epoch,&mut binding)
+ startup_shim(rt,cpu,inputs,backend,features,platform)?;let mut binding=CrtNormalBinding::bind_initializing(rt,cpu,epoch,startup_layout(),inputs.init)?;startup_prefix(rt,cpu,inputs,backend,features,platform,epoch,&mut binding)
 }"#);
     Ok(out)
 }

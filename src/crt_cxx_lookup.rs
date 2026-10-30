@@ -298,33 +298,35 @@ fn cxx_loader_effect(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,access:CrtResolver
  let arg=rt.load(rt.offset(sp,4)?,32)?;
  let symbol=if iat==0x415070{
   let CrtValue::Module(module)=arg else{return Err("C++ GetProcAddress module authority");};rt.module_identity(module)?;
-  let p=CrtCpu::pointer(rt.load(rt.offset(sp,8)?,32)?)?;let mut bytes=Vec::new();let mut ended=false;
-  for i in 0..256{let b=rt.load(rt.offset(p,i)?,8)?.known_scalar()? as u8;if b==0{ended=true;break;}bytes.push(b);}
-  if !ended||bytes.is_empty()||!bytes.is_ascii(){return Err("C++ named export bounds/encoding");}Some((module,String::from_utf8(bytes).map_err(|_|"C++ export encoding")?))
+  let p=CrtCpu::pointer(rt.load(rt.offset(sp,8)?,32)?)?;let mut bytes=[0u8;256];let mut len=None;
+  for(i,byte)in bytes.iter_mut().enumerate(){let b=rt.load(rt.offset(p,i as i64)?,8)?.known_scalar()? as u8;if b==0{len=Some(i);break;}*byte=b;}
+  let len=len.filter(|n|*n>0).ok_or("C++ named export bounds/encoding")?;if !bytes[..len].is_ascii(){return Err("C++ named export bounds/encoding");}Some((module,bytes,len))
  }else{None};
  if iat==0x415074{
-  let p=CrtCpu::pointer(arg)?;let mut units=Vec::new();let mut ended=false;
-  for i in 0..260{let u=rt.load(rt.offset(p,i*2)?,16)?.known_scalar()? as u16;if u==0{ended=true;break;}units.push(u);}
-  if !ended||units.is_empty()||String::from_utf16(&units).is_err(){return Err("C++ module name bounds/encoding");}
+  let p=CrtCpu::pointer(arg)?;let mut units=[0u16;260];let mut len=None;
+  for(i,unit)in units.iter_mut().enumerate(){let u=rt.load(rt.offset(p,(i*2)as i64)?,16)?.known_scalar()? as u16;if u==0{len=Some(i);break;}*unit=u;}
+  let len=len.filter(|n|*n>0).ok_or("C++ module name bounds/encoding")?;if char::decode_utf16(units[..len].iter().copied()).any(|c|c.is_err()){return Err("C++ module name bounds/encoding");}
   if rt.load(rt.offset(sp,8)?,32)?.known_scalar()?!=0||!matches!(rt.load(rt.offset(sp,12)?,32)?.known_scalar()?,0|0x800){return Err("C++ executable loader flags/reserved argument");}
  }
  if iat==0x41506c{let CrtValue::Module(m)=arg else{return Err("C++ FreeLibrary module authority");};rt.module_identity(m)?;}
  let references=rt.module_references.clone();
  let result=api(rt,cpu,iat)?;rt.initialization(init)?;
- let added:Vec<_>=rt.module_references.iter().filter(|(id,_)|!references.contains_key(id)).map(|(_,r)|*r).collect();
- let removed:Vec<_>=references.iter().filter(|(id,_)|!rt.module_references.contains_key(id)).map(|(_,r)|*r).collect();
+ let mut added=rt.module_references.iter().filter(|(id,_)|!references.contains_key(id)).map(|(_,r)|*r);
+ let first_added=added.next();let more_added=added.next().is_some();
+ let mut removed=references.iter().filter(|(id,_)|!rt.module_references.contains_key(id)).map(|(_,r)|*r);
+ let first_removed=removed.next();let more_removed=removed.next().is_some();
  if iat==0x415074 {match result{
-  CrtValue::Module(m) if added.len()==1&&added[0].module==m&&removed.is_empty()=>{},
-  CrtValue::Scalar{bits:0,known:u32::MAX} if added.is_empty()&&removed.is_empty()=>{},
+  CrtValue::Module(m) if first_added.is_some_and(|r|r.module==m)&&!more_added&&first_removed.is_none()=>{},
+  CrtValue::Scalar{bits:0,known:u32::MAX} if first_added.is_none()&&first_removed.is_none()=>{},
   _=>return Err("C++ load acquisition receipt mismatch")
  }}else if iat==0x41506c{
   let CrtValue::Module(m)=arg else{unreachable!()};
   if result.known_scalar()?==0{return Err("C++ release failure effects unclosed");}
-  if !added.is_empty()||removed.len()!=1||removed[0].module!=m{return Err("C++ release receipt mismatch");}
- }else if !added.is_empty()||!removed.is_empty(){return Err("C++ export lookup changed references");}
+  if first_added.is_some()||!first_removed.is_some_and(|r|r.module==m)||more_removed{return Err("C++ release receipt mismatch");}
+ }else if first_added.is_some()||first_removed.is_some(){return Err("C++ export lookup changed references");}
  match iat{
   0x415074=>match result{CrtValue::Module(m)=>rt.module_identity(m)?,CrtValue::Scalar{bits:0,known:u32::MAX}=>{},_=>return Err("C++ loader result authority")},
-  0x415070=>{let(module,name)=symbol.unwrap();rt.module_identity(module)?;match result{CrtValue::Function(f) if f.module==module=>rt.function_identity(f,Some(&name))?,CrtValue::Scalar{bits:0,known:u32::MAX}=>{},_=>return Err("C++ export result authority")}},
+  0x415070=>{let(module,name,len)=symbol.unwrap();rt.module_identity(module)?;let name=std::str::from_utf8(&name[..len]).map_err(|_|"C++ export encoding")?;match result{CrtValue::Function(f) if f.module==module=>rt.function_identity(f,Some(name))?,CrtValue::Scalar{bits:0,known:u32::MAX}=>{},_=>return Err("C++ export result authority")}},
   0x41506c=>{result.known_scalar()?;},_=>return Err("C++ unknown loader import")
  }Ok(result)
 }
@@ -691,4 +693,41 @@ for scenario in 0..19{
             .is_err());
         }
     }
+}
+
+#[test]
+fn native_loader_checked_transport_survives_allocator_denial() {
+    let mut extra = cold_source(
+        &crate::crt_ptd::raw(COLD_FULL),
+        &crate::crt_ptd::raw(LOAD_HELPER),
+    )
+    .unwrap();
+    extra.push_str(crate::crt_resident_loader::TYPES);
+    extra.push_str(r#"struct Guard;static DENY:std::sync::atomic::AtomicBool=std::sync::atomic::AtomicBool::new(false);
+unsafe impl std::alloc::GlobalAlloc for Guard{
+ unsafe fn alloc(&self,l:std::alloc::Layout)->*mut u8{if DENY.load(std::sync::atomic::Ordering::SeqCst){std::ptr::null_mut()}else{std::alloc::System.alloc(l)}}
+ unsafe fn realloc(&self,p:*mut u8,l:std::alloc::Layout,n:usize)->*mut u8{if DENY.load(std::sync::atomic::Ordering::SeqCst){std::ptr::null_mut()}else{std::alloc::System.realloc(p,l,n)}}
+ unsafe fn dealloc(&self,p:*mut u8,l:std::alloc::Layout){std::alloc::System.dealloc(p,l)}
+}
+#[global_allocator]static ALLOC:Guard=Guard;
+"#);
+    crate::crt_stream_callees_tests::native(
+        &extra,
+        r#"
+for scenario in 0..8{
+ let(mut r,i)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();let p=CrtNativePlatform::prepare(&mut r,i,CrtNativePlatform::PROFILE,0x700000,0x701000).unwrap();
+ let mut text:Vec<u8>=CrtNativePlatform::CONTRACT.encode_utf16().chain([0]).flat_map(u16::to_le_bytes).collect();if scenario==2{text[0]=0; text[1]=0xd8;}if scenario==5{text=vec![65,0].repeat(260);}if scenario==7{text[0]=0x80;}
+ let name=r.map_region(0x9000,text.len() as u32,CrtRegionKind::Input,Some(&text)).unwrap();let sp=r.map_region(0xa000,64,CrtRegionKind::Stack,None).unwrap();
+ r.store(sp,32,CrtValue::ProtectedReturn(77)).unwrap();r.store(r.offset(sp,4).unwrap(),32,CrtValue::Pointer(name)).unwrap();r.store(r.offset(sp,8).unwrap(),32,CrtValue::scalar(0)).unwrap();r.store(r.offset(sp,12).unwrap(),32,CrtValue::scalar(if scenario==1{8}else{0x800})).unwrap();
+ let mut c=CrtCpu::new(sp,77).unwrap();c.return_pop=12;if scenario==4{c.return_id=78;}if scenario==3{r.provider_destroy(i,p.function.module).unwrap();}if scenario==6{for _ in 0..255{r.native_provider_acquire(i,p.function).unwrap();}}
+ let before=r.module_references.len();r.last_os_error=Some(1114);
+ DENY.store(true,std::sync::atomic::Ordering::SeqCst);
+ let got=cxx_loader_effect(&mut r,&mut c,CrtResolverAccess::Initializing(i),0x415074,&mut |r,c,iat|p.call(r,c,i,iat));
+ DENY.store(false,std::sync::atomic::Ordering::SeqCst);
+ if scenario==0{assert_eq!(got,Ok(CrtValue::Module(p.function.module)));assert_eq!(r.module_references.len(),before+1);assert_eq!(r.last_os_error,None);assert!(c.returned);assert_eq!(CrtCpu::pointer(c.r[4]).unwrap().address(),0xa010);}
+ else{assert_eq!(got,Err(match scenario{1=>"C++ executable loader flags/reserved argument",2|5=>"C++ module name bounds/encoding",3=>"CRT unloaded module",4=>"CRT active caller lifetime/return authority",6=>"CRT native provider reference budget",7=>"native platform API-set encoding",_=>unreachable!()}));assert_eq!(r.module_references.len(),before);assert_eq!(r.last_os_error,Some(1114));assert!(!c.returned);}
+}
+"#,
+        "native-loader-no-allocation",
+    );
 }

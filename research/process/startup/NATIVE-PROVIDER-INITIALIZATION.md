@@ -78,3 +78,12 @@ unchanged-PE replay, retaining five recorded Windows component comparisons.
 Fourteen focused provider tests,75 Python tests (one existing skip), Clippy and
 formatting passed. Exact hashes and scope are in
 [evidence/native-provider-initialization.json](evidence/native-provider-initialization.json).
+
+## Subsequent prerequisite review
+
+[NATIVE-PLATFORM-PROFILE.md](NATIVE-PLATFORM-PROFILE.md) separates the immediate
+load-call predicates from later InitializeCriticalSectionEx failure behavior.
+That later API contract is not an effect of LoadLibraryExW. An explicit native
+replacement profile now advances the component to GetProcAddress402ae0; the
+strict/default path and whole-program admission still reject. The original
+measurements and limitations above remain evidence for this earlier checkpoint.

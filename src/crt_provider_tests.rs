@@ -293,3 +293,32 @@ let t2=r.provider_begin(i,"OwnedNative",0x700000,1).unwrap();let(m2,f2)=r.provid
         "native-provider-references",
     );
 }
+
+#[test]
+fn native_reference_capacity_and_sparse_reuse_require_no_allocation() {
+    native(
+        r#"
+struct Guard;static DENY:std::sync::atomic::AtomicBool=std::sync::atomic::AtomicBool::new(false);
+unsafe impl std::alloc::GlobalAlloc for Guard{
+ unsafe fn alloc(&self,l:std::alloc::Layout)->*mut u8{if DENY.load(std::sync::atomic::Ordering::SeqCst){std::ptr::null_mut()}else{std::alloc::System.alloc(l)}}
+ unsafe fn realloc(&self,p:*mut u8,l:std::alloc::Layout,n:usize)->*mut u8{if DENY.load(std::sync::atomic::Ordering::SeqCst){std::ptr::null_mut()}else{std::alloc::System.realloc(p,l,n)}}
+ unsafe fn dealloc(&self,p:*mut u8,l:std::alloc::Layout){std::alloc::System.dealloc(p,l)}
+}
+#[global_allocator]static ALLOC:Guard=Guard;
+"#,
+        r#"
+let(mut r,i)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();let t=r.provider_begin(i,"ReferenceCapacity",0x700000,1).unwrap();let(m,f)=r.provider_initialize_sync(i,&t,0x701000).unwrap();let mut refs=[None;255];
+DENY.store(true,std::sync::atomic::Ordering::SeqCst);
+let result=(||->Result<(),&'static str>{
+ for x in &mut refs{*x=Some(r.native_provider_acquire(i,f)?);}
+ let serial=r.serial;assert_eq!(r.module_references.len(),256);assert_eq!(r.native_provider_acquire(i,f),Err("CRT native provider reference budget"));assert_eq!(r.serial,serial);
+ let before=r.module_references.clone();assert_eq!(before.len(),256);
+ for index in (0..255).step_by(2){r.native_provider_release(i,refs[index].unwrap())?;}
+ for index in (0..255).step_by(2){let old=refs[index].unwrap();refs[index]=Some(r.native_provider_acquire(i,f)?);assert!(r.native_provider_release(i,old).is_err());}
+ assert_eq!(r.module_references.len(),256);assert_eq!(before.iter().filter(|(k,_)|!r.module_references.contains_key(k)).count(),128);
+ for x in refs{r.native_provider_release(i,x.unwrap())?;}assert_eq!(r.module_references.len(),1);r.module_identity(m)?;Ok(())})();
+DENY.store(false,std::sync::atomic::Ordering::SeqCst);result.unwrap();r.provider_destroy(i,m).unwrap();assert!(r.module_references.is_empty());
+"#,
+        "native-reference-capacity",
+    );
+}

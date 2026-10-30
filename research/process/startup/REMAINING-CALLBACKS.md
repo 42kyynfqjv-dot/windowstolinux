@@ -477,3 +477,12 @@ load-success observations for their bounded component. API-set/version/flag
 binding and the Windows-to-native initial-state/resource contract still block
 original0x402b00. The new native initializer is not a Windows DllMain executor;
 see NATIVE-PROVIDER-INITIALIZATION.md. Actual FLS publication remains unproved.
+
+## Declared native profile boundary
+
+An explicit `w2l-native-sync-20348-v1` environment replaces the LoadLibrary callback
+with real bounded native reference acquisition, after actual native bootstrap.
+Original entry reaches GetProcAddress402ae0; its export result is still unbound.
+Default startup remains rejected at402b00. This is conditional component execution,
+not whole-PE conversion or Windows DLL initialization. The complete prerequisite
+classification and next binding are in [NATIVE-PLATFORM-PROFILE.md](NATIVE-PLATFORM-PROFILE.md).

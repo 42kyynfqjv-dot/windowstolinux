@@ -1,0 +1,85 @@
+{
+  "kind": "Declared native profile component; no whole-PE admission",
+  "reviewed_commit": "e3877ba4ebf49ce06a0d831e0d19abc442a220fc",
+  "reviewed_ci": [
+    {
+      "run": 41053509714,
+      "conclusion": "success"
+    },
+    {
+      "run": 41053502245,
+      "conclusion": "success"
+    },
+    {
+      "run": 41053502256,
+      "conclusion": "success"
+    }
+  ],
+  "profile": "w2l-native-sync-20348-v1",
+  "mapping_revision": 1,
+  "api_set": "api-ms-win-core-synch-l1-2-0[.dll]",
+  "load_provider": "kernelbase.dll",
+  "callable_export": "InitializeCriticalSectionEx only; not executed by the connected entry test",
+  "source_sha256": {
+    "crt_stream_runtime.rs": "7a487b484d174d285daf0a88c3c3bec3def3399ef19e5f19446d58ffb7996167",
+    "crt_provider_tests.rs": "a599258f469cf0a6ebc364f7a1e651a357007ad19d8447aed3ae355b6e49e7cc",
+    "crt_resident_loader.rs": "9f0f1f8bec1ad376dc63016735b39dc2ee9255459d9201f9efd12bab75219bfb",
+    "crt_cxx_lookup.rs": "3088a08c834f9980df118bebfdbc4fcdee8b503fbee0e463fb116cc09178a350",
+    "crt_startup_entry.rs": "a0682cb607a6d8d063939cf69791ffc47c758cc1706956f34a9d24a1fc08bad2",
+    "crt_startup_modules.rs": "d8b6ddbf3ded5b6a08dac03f6b6e29e395525fa64980a222cac1621e048ca1f9",
+    "crt_normal_frame_tests.rs": "ff00bf6059ad724e3cf694deff146f6397a2dc48e135aa420f79593de0c224d7"
+  },
+  "validation": {
+    "crt_passed": 278,
+    "artifact_ignored_in_full_run": 2,
+    "artifact_ignored_tests": "both passed in replay",
+    "focused_provider_passed": 15,
+    "profile_tests_passed": 2,
+    "allocation_denied_transport_scenarios": 8,
+    "connected_entry_added_scenarios": 5,
+    "clippy": "passed",
+    "format": "passed"
+  },
+  "replay": {
+    "kind": "original prolog/epilog component comparison with explicit unexecuted body boundary",
+    "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+    "rust_sha256": "0cb6059251fb7b9457ba248ef827a196550837f1ea382e59010dbe353cdb62a3",
+    "comparisons": 5,
+    "scope": "Live registry fixture; body EAX/flags inputs; original stack/FS/saved-state restoration only"
+  },
+  "entry": {
+    "default_boundary": "LoadLibraryExW 0x402b00 / IAT0x415074",
+    "declared_profile_boundary": "GetProcAddress 0x402ae0 / IAT0x415070",
+    "produced_effects": [
+      "one native acquired reference",
+      "original helper return",
+      "original module-cache XCHG to0x41cd0c"
+    ],
+    "lock_initialization": false,
+    "whole_pe_acceptance": false
+  },
+  "resources": {
+    "reference_capacity_including_roots": 256,
+    "reference_storage_and_effect_validation": "allocator denial passed",
+    "exhaustion": "component rejection; never guest null or error1114",
+    "bootstrap_host_oom_closed": false,
+    "whole_program_budget_proved": false
+  },
+  "new_windows_observations": 0,
+  "new_whole_pe_pairs": 0,
+  "retained_test_failure": {
+    "reason": "new test expected cache slot0; unchanged PE table contains index1",
+    "stdout_sha256": "5683df49b74f6c4a500539500ab928179ae779459511e3f76d8dc9d522d29951",
+    "corrected_assertion": "0x41cd0c",
+    "guest_bytes_modified": false
+  },
+  "logs": {
+    "focused.log": "3249a2e98e374c63d7bef0dc12c53c501d6bf8032a56e9afe371e2d15a6d46f4",
+    "profile.log": "f041f80270f5ebf6fa2d959d5092b3d3925d8a3895d648e1f29d534a083225d4",
+    "transport.log": "f4391369958ee645c499e48d9490fe72d4b8dd3a6e4c4e0373f1451a6ba159bf",
+    "full-final.log": "58f7912d7b75343be42bd3ac48946a265e9b03ec25e2f5a276483d32163deafd",
+    "clippy.log": "426158b8abedd8a8828d02e4c8ca0d87221468e3d5e73eb04255008ba964fb0f",
+    "canonical-corrected.log": "5f9a70129478381d39b1dfbf633ed33c66fc4a521bf50117418efdf73e4b7c0d"
+  },
+  "complete_replay_report_sha256": "906ba27b53b9265648223451796f7674f57e5d3873f176eb8c09e95c457aec5f"
+}

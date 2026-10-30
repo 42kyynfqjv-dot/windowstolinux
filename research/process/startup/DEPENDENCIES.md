@@ -672,3 +672,16 @@ implemented export. This is native component progress; original entry remains
 blocked at0x402b00. Windows DLL initialization, error1114 and ordinary final-release
 unloading are not substituted by the process-owned native root policy. See
 [NATIVE-PROVIDER-INITIALIZATION.md](NATIVE-PROVIDER-INITIALIZATION.md).
+
+### Explicit native synchronization profile reaches the original export lookup
+
+The versioned opt-in `w2l-native-sync-20348-v1` component environment now prepares
+its actual process-owned replacement provider before entry. Original instructions
+execute LoadLibraryExW402b00, helper return and cache publication41cd0c, reaching
+GetProcAddress402ae0/IAT415070. Default admission still rejects402b00. Reference
+bookkeeping and loader validation use fixed storage; capacity rejection is an
+internal bound, never a fabricated Windows null/error. Future synchronization
+failure behavior is a separate API gate rather than a prerequisite for acquisition.
+Next bind named export lookup and original function-cache publication under live
+source/target authority. See [minimum predicates and scope](NATIVE-PLATFORM-PROFILE.md).
+No fresh Windows or whole-PE pair; complete environment/resource proof is still open.
