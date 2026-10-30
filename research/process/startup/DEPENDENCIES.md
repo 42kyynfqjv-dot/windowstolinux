@@ -1,5 +1,12 @@
 # Remaining entry-to-exit dependencies
 
+Latest follow-up: a real bounded native FLS process-index producer and checked
+stdcall adapter now exist, with no supplied allocation outcome. Original entry
+executes the FLS initializer through CALL `0x402968 -> 0x402b3e`; its allocation
+wrapper/export binding still rejects, so entry has allocated/published no FLS
+index. Prior lock/count effects remain. Default admission is unchanged. See
+[producer, tests and exact wrapper connection](NATIVE-FLS-PRODUCER.md).
+
 ## Latest executable checkpoint: native-profile lock construction
 
 The explicit native profile executes the original guard, indirect synchronization

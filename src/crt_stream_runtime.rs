@@ -61,7 +61,20 @@ struct CrtFlsSlot {fiber:CrtFiber,index:u32,serial:u64,allocation:CrtFlsIndex}
 /// Process index authority is distinct from each fiber's value lease.
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 struct CrtFlsIndex {anchor:guest_memory::Capability,index:u32,serial:u64}
+#[derive(Clone,Copy)]
 struct CrtProcessFls {id:CrtFlsIndex,callback:Option<(CrtProcessImage,CrtPointer)>,certain:bool,input_binding:bool}
+/// Fixed process-index storage. Keys remain independent of physical slots.
+struct CrtFlsIndices {slots:[Option<(u32,CrtProcessFls)>;64]}
+impl CrtFlsIndices {
+ fn new()->Self{Self{slots:[None;64]}}
+ fn len(&self)->usize{self.slots.iter().flatten().count()}
+ fn is_empty(&self)->bool{self.len()==0}
+ fn get(&self,k:&u32)->Option<&CrtProcessFls>{self.slots.iter().flatten().find(|(n,_)|n==k).map(|(_,v)|v)}
+ fn get_mut(&mut self,k:&u32)->Option<&mut CrtProcessFls>{self.slots.iter_mut().flatten().find(|(n,_)|n==k).map(|(_,v)|v)}
+ fn contains_key(&self,k:&u32)->bool{self.get(k).is_some()}
+ fn insert(&mut self,k:u32,v:CrtProcessFls){if let Some(old)=self.get_mut(&k){*old=v;return;}*self.slots.iter_mut().find(|x|x.is_none()).expect("checked FLS index capacity")=Some((k,v));}
+ fn remove(&mut self,k:&u32)->Option<CrtProcessFls>{self.slots.iter_mut().find(|x|x.as_ref().is_some_and(|(n,_)|n==k)).and_then(Option::take).map(|(_,v)|v)}
+}
 /// Object view only: the allocation capability, Buffer role and every alias
 /// remain unchanged. The view never promises that later writes preserve zeros.
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
@@ -165,7 +178,7 @@ impl CrtGlobalLeases {
 }
 struct CrtStreamRuntime {
  file_view:CrtPointer,main_image:Option<CrtProcessImage>,main_image_regions:Vec<CrtPointer>,loader_cells:std::collections::BTreeMap<u32,(CrtPointer,bool)>,modules:std::collections::BTreeMap<u32,CrtLoadedModule>,module_references:CrtModuleReferences,exports:std::collections::BTreeMap<u64,CrtExport>,providers:std::collections::BTreeMap<u32,CrtNativeProvider>,native_sync:CrtGlobalSlots<(CrtFunction,u32,CrtPointer)>,
- uncertain_allocations:Vec<CrtPointer>,completed_failed_frees:Vec<(guest_memory::Capability,u64)>,heap_ptds:Vec<CrtHeapPtdView>,fiber:Option<CrtFiber>,fls_indices:std::collections::BTreeMap<u32,CrtProcessFls>,fls:std::collections::BTreeMap<u32,(CrtFlsSlot,CrtValue)>,
+ uncertain_allocations:Vec<CrtPointer>,completed_failed_frees:Vec<(guest_memory::Capability,u64)>,heap_ptds:Vec<CrtHeapPtdView>,fiber:Option<CrtFiber>,fls_indices:CrtFlsIndices,fls:std::collections::BTreeMap<u32,(CrtFlsSlot,CrtValue)>,
  unobserved_contexts:Vec<(CrtPointer,std::rc::Rc<std::cell::Cell<bool>>)>,heap:Option<CrtHeap>,memory:guest_memory::Space,owner:u64,thread:u64,anchor:guest_memory::Capability,
  dispatchers:std::collections::BTreeMap<u64,CrtDispatcherContext>,regions:Vec<CrtRegion>,retired:Vec<CrtPointer>,tags:std::collections::BTreeMap<u32,CrtValue>,
  partial:std::collections::BTreeMap<u32,(u8,u8)>,descriptors:Vec<CrtDescriptor>,
@@ -186,7 +199,7 @@ impl CrtStreamRuntime {
  }
  fn from_file_storage(owner:u64,thread:u64,memory:guest_memory::Space,pointer:CrtPointer)->Result<Self,&'static str>{
   let anchor=pointer.cap;
-  Ok(Self{file_view:pointer,main_image:None,main_image_regions:vec![],loader_cells:std::collections::BTreeMap::new(),modules:std::collections::BTreeMap::new(),module_references:CrtModuleReferences::new(),exports:std::collections::BTreeMap::new(),providers:std::collections::BTreeMap::new(),native_sync:CrtGlobalSlots::new(),uncertain_allocations:vec![],completed_failed_frees:vec![],heap_ptds:vec![],fiber:None,fls_indices:std::collections::BTreeMap::new(),fls:std::collections::BTreeMap::new(),unobserved_contexts:vec![],heap:None,memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],global_objects:CrtGlobalSlots::new(),global_locks:CrtGlobalLeases::new(),record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,canonical_errno:false,errno_cell:None,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([pointer.base])})
+  Ok(Self{file_view:pointer,main_image:None,main_image_regions:vec![],loader_cells:std::collections::BTreeMap::new(),modules:std::collections::BTreeMap::new(),module_references:CrtModuleReferences::new(),exports:std::collections::BTreeMap::new(),providers:std::collections::BTreeMap::new(),native_sync:CrtGlobalSlots::new(),uncertain_allocations:vec![],completed_failed_frees:vec![],heap_ptds:vec![],fiber:None,fls_indices:CrtFlsIndices::new(),fls:std::collections::BTreeMap::new(),unobserved_contexts:vec![],heap:None,memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],global_objects:CrtGlobalSlots::new(),global_locks:CrtGlobalLeases::new(),record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,canonical_errno:false,errno_cell:None,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([pointer.base])})
  }
 
  /// Initial FILE storage is a bounded role view of the original writable
@@ -477,6 +490,17 @@ impl CrtStreamRuntime {
   let serial=self.serial.checked_add(2).ok_or("CRT FLS serial")?;
   let allocation=CrtFlsIndex{anchor:self.anchor,index,serial:serial-1};let slot=CrtFlsSlot{fiber:f,index,serial,allocation};
   self.fls_indices.insert(index,CrtProcessFls{id:allocation,callback:None,certain:true,input_binding:true});self.serial=serial;self.fls.insert(index,(slot,value));Ok(slot)
+ }
+ /// Actual bounded native allocation, not an observed/supplied index.
+ /// Capacity/serial rejection is outside this native component domain; no
+ /// Windows failure code or FLS_OUT_OF_INDEXES result is fabricated.
+ fn native_fls_allocate(&mut self,init:CrtInitialization,callback:Option<(CrtProcessImage,CrtPointer)>)->Result<CrtFlsIndex,&'static str>{
+  self.initialization(init)?;self.fls_callback(callback)?;
+  let index=(0..64).find(|n|!self.fls_indices.contains_key(n)).ok_or("CRT native FLS index capacity")?;
+  if self.fls_indices.len()>=64{return Err("CRT native FLS index capacity");}
+  let serial=self.serial.checked_add(1).ok_or("CRT FLS serial")?;
+  let id=CrtFlsIndex{anchor:self.anchor,index,serial};
+  self.fls_indices.insert(index,CrtProcessFls{id,callback,certain:true,input_binding:false});self.serial=serial;self.last_os_error=None;Ok(id)
  }
  /// Record a separately established allocation outcome, including its exact
  /// callback owner. This does not invoke FlsAlloc or assert loader effects.

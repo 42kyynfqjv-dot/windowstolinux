@@ -211,6 +211,13 @@ let collision=r.map_region(0xb000,24,CrtRegionKind::Module,None).unwrap();r.stor
 let sp=r.map_region(0xc000,64,CrtRegionKind::Stack,None).unwrap();r.store(sp,32,CrtValue::ProtectedReturn(717)).unwrap();r.store(r.offset(sp,4).unwrap(),32,CrtValue::Pointer(p)).unwrap();r.store(r.offset(sp,8).unwrap(),32,CrtValue::scalar(0)).unwrap();r.store(r.offset(sp,12).unwrap(),32,CrtValue::scalar(0)).unwrap();let mut cpu=CrtCpu::new(sp,717).unwrap();cpu.return_pop=12;
 DENY.store(true,std::sync::atomic::Ordering::SeqCst);
 let result=(||->Result<(),&'static str>{
+ // The same allocation-denied harness verifies the independent FLS producer.
+ for n in 0..64{let id=r.native_fls_allocate(i,None)?;assert_eq!(id.index,n);}
+ let saved=r.serial;r.last_os_error=Some(87);
+ assert_eq!(r.native_fls_allocate(i,None),Err("CRT native FLS index capacity"));
+ assert_eq!(r.serial,saved);assert_eq!(r.last_os_error,Some(87));assert_eq!(r.fls_indices.len(),64);assert!(r.fls.is_empty());
+ let old=r.fls_indices.get(&11).unwrap().id;r.fls_free_index_result(i,old,true)?;
+ let next=r.native_fls_allocate(i,None)?;assert_eq!(next.index,11);assert_ne!(old,next);assert!(r.fls_index(old).is_err());
  // A typed-alias rejection must also avoid allocating an overlap vector.
  assert_eq!(r.native_sync_initialize(i,f,0,alias,0,0),Err("CRT synchronization flags/object domain"));
  assert_eq!(r.load(alias,8),Err("CRT partial typed-word read"));assert_eq!(r.load(r.offset(alias,1)?,32),Err("CRT partial typed-word read"));assert_eq!(r.load(collision,32),Err("CRT partial typed-word read"));

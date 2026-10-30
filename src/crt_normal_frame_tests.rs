@@ -2144,11 +2144,12 @@ fn startup_entry_cases(){
 
 fn startup_feature_cases(){
  let file=std::fs::read(std::env::var("W2L_PE_MAPPING_INPUT").unwrap()).unwrap();
- for mode in 0..21{
+ for mode in 0..22{
   let(m,mut registry,main,mut permit)=fixture_with_extra(&[(0x410000,0x420000)]);
   let mut image_file=file.clone();if mode==9{let raw:Vec<_>=startup_cpu_code();let offsets:Vec<_>=image_file.windows(raw.len()).enumerate().filter(|(_,b)|*b==raw.as_slice()).map(|(i,_)|i).collect();assert_eq!(offsets.len(),1);image_file[offsets[0]]^=1;}
   if mode==20{let u16at=|at:usize|u16::from_le_bytes(image_file[at..at+2].try_into().unwrap()) as usize;let u32at=|at:usize|u32::from_le_bytes(image_file[at..at+4].try_into().unwrap()) as usize;let nt=u32at(60);let sections=nt+24+u16at(nt+20);let section=(0..u16at(nt+6)).map(|i|sections+40*i).find(|at|{let va=u32at(*at+12);va<=0x15d7c&&0x15d7c<va+u32at(*at+16)}).unwrap();let at=u32at(section+20)+0x15d7c-u32at(section+12);assert_eq!(&image_file[at..at+b"InitializeCriticalSectionEx\0".len()],b"InitializeCriticalSectionEx\0");image_file[at]=b'i';}
   if mode==19{let raw=resident_load_helper_code();let offsets:Vec<_>=image_file.windows(raw.len()).enumerate().filter(|(_,b)|*b==raw.as_slice()).map(|(i,_)|i).collect();assert_eq!(offsets.len(),1);image_file[offsets[0]]^=1;}
+  if mode==21{let raw=startup_fls_code();let offsets:Vec<_>=image_file.windows(raw.len()).enumerate().filter(|(_,b)|*b==raw.as_slice()).map(|(i,_)|i).collect();assert_eq!(offsets.len(),1);image_file[offsets[0]]^=1;}
   let(mut rt,init)=CrtStreamRuntime::new_initializing_pe32(registry.identity.owner,registry.identity.instance,0x41c080,3,1048576,&image_file).unwrap();rt.map_region(0x9000,0x6000,CrtRegionKind::Stack,None).unwrap();
   let inputs=CrtEntropyInputs::bind(&rt,init,17,19).unwrap();let mut backend=EntropyObservations{time:0x102030405060708,counter:0x8899aabbccddeeff,seen:vec![],fail:0};let mut c=cpu(&mut rt,0xd000,8100);c.return_pop=0;
   // Independent abstract CPU environments; not Windows observations or host claims.
@@ -2170,10 +2171,11 @@ fn startup_feature_cases(){
    #[cfg(all(target_os="linux",target_arch="x86_64"))]{let(i,mut b)=CrtNativeEntropy::acquire(&rt,init).unwrap();registry.with_normal_calls(&m,&mut permit,&main,|epoch|startup_connected(&mut rt,&mut c,&i,&mut b,Some(&features),epoch))}
    #[cfg(not(all(target_os="linux",target_arch="x86_64")))]{registry.with_normal_calls(&m,&mut permit,&main,|epoch|startup_connected(&mut rt,&mut c,&inputs,&mut backend,Some(&features),epoch))}
   }else{registry.with_normal_calls(&m,&mut permit,&main,|epoch|startup_connected(&mut rt,&mut c,&inputs,&mut backend,Some(&features),epoch))};
-  let expected=match mode{20=>"CRT native named export unsupported",19=>"startup resolver live code changed",15|17=>"startup FLS acquisition unbound at 0x4024d6",16=>"CRT unloaded module",18=>"CRT native provider reference budget",5=>"CPU observation owner/lifetime",6|7=>"CRT initialization owner/lifetime",8=>"CRT initialization storage lifetime",9=>"CPU classifier live code changed",10=>"CPU query outside observed leaf domain",11=>"CPU observation host lifetime/thread",_=>"startup LoadLibraryExW effects unbound at 0x402b00"};
+  let expected=match mode{21=>"startup module live code changed",20=>"CRT native named export unsupported",19=>"startup resolver live code changed",15|17=>"startup FlsAlloc resolver/ABI binding unbound at 0x402b3e",16=>"CRT unloaded module",18=>"CRT native provider reference budget",5=>"CPU observation owner/lifetime",6|7=>"CRT initialization owner/lifetime",8=>"CRT initialization storage lifetime",9=>"CPU classifier live code changed",10=>"CPU query outside observed leaf domain",11=>"CPU observation host lifetime/thread",_=>"startup LoadLibraryExW effects unbound at 0x402b00"};
   assert_eq!(got,Err(expected),"CPU startup mode {mode}");assert!(!c.returned);
   if mode<=4||matches!(mode,12..=15|17|18){let tier=rt.load(rt.process_image_pointer(inputs.image,0x41ccb8,4).unwrap(),32).unwrap().known_scalar().unwrap();if mode<=3{assert_eq!(tier,[0,1,3,5][mode]);}if mode==13||mode==14{assert_eq!(tier,6);}let flags=rt.load(rt.process_image_pointer(inputs.image,0x41c058,4).unwrap(),32).unwrap().known_scalar().unwrap();assert_eq!(flags&1,1);if mode>=1{assert_ne!(flags&2,0);}}
   if mode==20{assert_eq!(rt.module_references.len(),2);let cell=rt.process_image_pointer(inputs.image,0x41cd24,4).unwrap();assert_eq!(rt.load(cell,32).unwrap(),CrtValue::scalar(0));}
+  if mode==21{assert!(rt.global_objects.contains_key(&0));assert_eq!(rt.load(rt.process_image_pointer(inputs.image,0x41cd04,4).unwrap(),32).unwrap(),CrtValue::scalar(1));assert!(rt.fls_indices.is_empty());}
   if mode==19{assert_eq!(rt.module_references.len(),1);}
   if mode==15||mode==17{assert_eq!(rt.module_references.len(),2);let cell=rt.process_image_pointer(inputs.image,0x41cd0c,4).unwrap();assert_eq!(rt.load(cell,32).unwrap(),CrtValue::Module(platform.as_ref().unwrap().function.module));let function_cell=rt.process_image_pointer(inputs.image,0x41cd24,4).unwrap();assert_eq!(rt.load(function_cell,32).unwrap(),CrtValue::Function(platform.as_ref().unwrap().function));assert_eq!(rt.global_objects.values().count(),1);assert!(rt.global_objects.contains_key(&0));let count=rt.process_image_pointer(inputs.image,0x41cd04,4).unwrap();assert_eq!(rt.load(count,32).unwrap(),CrtValue::scalar(1));let a=rt.lock_global(rt.thread,0).unwrap();let b=rt.lock_global(rt.thread,0).unwrap();rt.unlock_global(b).unwrap();rt.unlock_global(a).unwrap();}
   if matches!(mode,5|7|9|10|11){assert_eq!(rt.load(rt.process_image_pointer(inputs.image,0x41ccb8,4).unwrap(),32).unwrap(),CrtValue::scalar(0));}
@@ -2241,6 +2243,34 @@ fn startup_resolver_cases(){
   if mode==1||mode==2{assert!(id.is_err());assert!(rt.fls_indices.is_empty());}else{let id=id.unwrap().unwrap();rt.fls_index(id).unwrap();if mode==3{rt.memory.release(p.cap,p.owner).unwrap();assert!(rt.fls_index(id).is_err());}else{let f=rt.bind_fiber(9).unwrap();let slot=rt.bind_fls_fiber(f,id).unwrap();let bootstrap=rt.process_image_pointer(image,0x41ccc4,40).unwrap();assert_eq!(rt.fls_set(f,slot,7,CrtValue::Pointer(bootstrap),true,None),Err("CRT FLS PTD root/extent"));assert_eq!(rt.fls_get(f,slot,7).unwrap(),CrtValue::scalar(0));}}
  }
 }
+fn native_fls_producer_cases(){
+ let file=std::fs::read(std::env::var("W2L_PE_MAPPING_INPUT").unwrap()).unwrap();
+ for mode in 0..10{
+  let(mut rt,init)=CrtStreamRuntime::new_initializing_pe32(7,9,0x41c080,3,1048576,&file).unwrap();
+  let image=rt.main_image.unwrap();rt.map_region(0x9000,0x1000,CrtRegionKind::Stack,None).unwrap();let mut c=cpu(&mut rt,0x9800,9701);c.return_pop=4;
+  let callback=rt.process_image_code(image,0x4028a7,1).unwrap();let value=if mode==1{CrtValue::scalar(0)}else{CrtValue::Pointer(callback)};let arg=rt.offset(CrtCpu::pointer(c.r[4]).unwrap(),4).unwrap();rt.store(arg,32,value).unwrap();
+  if mode==2{c.r[6]=CrtValue::scalar(42);}if mode==3{c.return_pop=0;}
+  if mode==4{for _ in 0..64{rt.native_fls_allocate(init,None).unwrap();}}
+  if mode==5{rt.serial=u64::MAX;}
+  if mode==6{rt.thread+=1;}
+  if mode==7{rt.store(arg,32,CrtValue::scalar(0x41ccc4)).unwrap();}
+  if mode==8{rt.store(arg,32,CrtValue::Scalar{bits:0,known:0}).unwrap();}
+  if mode==9{rt.memory.release(callback.cap,callback.owner).unwrap();}
+  let serial=rt.serial;let count=rt.fls_indices.len();rt.last_os_error=Some(87);
+  let got=c.native_fls_alloc_call(&mut rt,init,image);
+  if mode<=1{
+   assert_eq!(got,Ok(CrtValue::scalar(0)));assert!(c.returned);assert_eq!(CrtCpu::pointer(c.r[4]).unwrap().address(),0x9808);assert_eq!(rt.last_os_error,None);
+   let id=rt.fls_indices.get(&0).unwrap().id;assert_eq!(rt.fls_indices.get(&0).unwrap().callback,if mode==0{Some((image,callback))}else{None});assert!(rt.fls.is_empty());
+   let fiber=rt.bind_fiber(9).unwrap();let slot=rt.bind_fls_fiber(fiber,id).unwrap();assert_eq!(rt.fls_get(fiber,slot,0),Ok(CrtValue::scalar(0)));
+   let other=CrtFiber{serial:fiber.serial+1,..fiber};assert!(rt.fls_get(other,slot,0).is_err());
+   rt.detach_empty_fls_fiber(fiber,slot).unwrap();rt.fls_free_index_result(init,id,true).unwrap();let next=rt.native_fls_allocate(init,None).unwrap();assert_eq!(next.index,0);assert_ne!(next,id);assert!(rt.fls_index(id).is_err());assert!(rt.bind_fls_fiber(fiber,id).is_err());
+   assert!(c.native_fls_alloc_call(&mut rt,init,image).is_err());
+  }else{
+   assert!(got.is_err(),"native FLS mode {mode}: unexpected success");assert!(!c.returned);assert_eq!(rt.serial,serial);assert_eq!(rt.fls_indices.len(),count);assert!(rt.fls.is_empty());assert_eq!(rt.last_os_error,Some(87));
+   if mode==2||mode==3{assert_eq!(got,Err("CRT FLS allocation stdcall frame"));}if mode==4{assert_eq!(got,Err("CRT native FLS index capacity"));}if mode==5{assert_eq!(got,Err("CRT FLS serial"));}if mode==8{assert_eq!(got,Err("CRT FLS callback provenance"));}
+  }
+ }
+}
 fn startup_module_cases(){
  let file=std::fs::read(std::env::var("W2L_PE_MAPPING_INPUT").unwrap()).unwrap();
  for mode in 0..9{
@@ -2301,7 +2331,7 @@ fn canonical_startup_storage(){
  }
 
 }
-fn main(){match std::env::args().nth(1).unwrap().as_str(){"canonical-startup"=>{canonical_startup_storage();canonical_cookie_entropy();entropy_api_boundaries();native_entropy_startup();startup_entry_cases();startup_feature_cases();startup_module_cases();startup_resolver_cases();constructor_guard_cases();resident_loader_cases()},"inline-exit"=>{inline_exit_cases();inline_exit_delivery();inline_exit_image()},"abort-locked"=>abort_locked_cases(),"registered-errno"=>registered_errno_cases(),"ordered-search"=>ordered_search_cases(),"live-return"=>live_return_cases(),"chain-effect-lifetime"=>chain_effect_lifetime(),"shared-chain"=>{shared_chain_cases();shared_chain_nested();shared_chain_delivery()},"chain-ownership-gap"=>chain_ownership_gap(),"bound-cxx-invocation"=>bound_invocation(),"prefix-delivery-unwind"=>dispatcher_delivery_unwind(true),"dispatcher-delivery-unwind"=>dispatcher_delivery_unwind(false),"delivery-cached-unwind"=>delivery_cached_unwind(),"delivery-children"=>delivery_children(),"cxx-cached-unwind"=>cxx_cached_unwind(),"cxx-unwind"=>cxx_registered_unwind(),"manager-inherited"=>inherited_registered_manager(),"manager"=>manager_registered(),"live-finally"=>live_finally_cases(),"owned-loop"=>owned_loop_cases(),"owned-local"=>owned_local_cases(),"owned"=>{main_initial_rejections();initial_raise_rejections();owned_main_cases()},"path-edges"=>path_edges(),"live"=>live_dispatch(),"objects"=>captured_objects(),"handler"=>pending_handler_activation(),"pending"=>pending_normal_exception(),"pending-reject"=>reject_normal_exception(),"file"=>file_scope_normal(),"file-failure"=>file_scope_failure(),"nested"=>nested_actual(),"mutations"=>mutations(),"consumed"=>consumed_mutation(),"failure"=>body_failure(),"certificate"=>wrong_certificate(),"observed"=>observed(),_=>panic!("case")}}
+fn main(){match std::env::args().nth(1).unwrap().as_str(){"canonical-startup"=>{canonical_startup_storage();canonical_cookie_entropy();entropy_api_boundaries();native_entropy_startup();startup_entry_cases();startup_feature_cases();native_fls_producer_cases();startup_module_cases();startup_resolver_cases();constructor_guard_cases();resident_loader_cases()},"inline-exit"=>{inline_exit_cases();inline_exit_delivery();inline_exit_image()},"abort-locked"=>abort_locked_cases(),"registered-errno"=>registered_errno_cases(),"ordered-search"=>ordered_search_cases(),"live-return"=>live_return_cases(),"chain-effect-lifetime"=>chain_effect_lifetime(),"shared-chain"=>{shared_chain_cases();shared_chain_nested();shared_chain_delivery()},"chain-ownership-gap"=>chain_ownership_gap(),"bound-cxx-invocation"=>bound_invocation(),"prefix-delivery-unwind"=>dispatcher_delivery_unwind(true),"dispatcher-delivery-unwind"=>dispatcher_delivery_unwind(false),"delivery-cached-unwind"=>delivery_cached_unwind(),"delivery-children"=>delivery_children(),"cxx-cached-unwind"=>cxx_cached_unwind(),"cxx-unwind"=>cxx_registered_unwind(),"manager-inherited"=>inherited_registered_manager(),"manager"=>manager_registered(),"live-finally"=>live_finally_cases(),"owned-loop"=>owned_loop_cases(),"owned-local"=>owned_local_cases(),"owned"=>{main_initial_rejections();initial_raise_rejections();owned_main_cases()},"path-edges"=>path_edges(),"live"=>live_dispatch(),"objects"=>captured_objects(),"handler"=>pending_handler_activation(),"pending"=>pending_normal_exception(),"pending-reject"=>reject_normal_exception(),"file"=>file_scope_normal(),"file-failure"=>file_scope_failure(),"nested"=>nested_actual(),"mutations"=>mutations(),"consumed"=>consumed_mutation(),"failure"=>body_failure(),"certificate"=>wrong_certificate(),"observed"=>observed(),_=>panic!("case")}}
 "#;
 
 fn run(case: &str) {

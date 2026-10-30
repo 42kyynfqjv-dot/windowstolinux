@@ -171,7 +171,7 @@ fn startup_modules_platform(rt:&mut CrtStreamRuntime,c:&mut CrtCpu,inputs:&CrtEn
  (0x4024ca,0x4029b4)=>startup_locks(rt,c,inputs,&mut |rt,c,pc,target|match(pc,target){
  (0x4029c5,0x402c2d)=>startup_constructor_prefix(rt,c,inputs,&mut |rt,c,pc,target|{if pc==0x402c61{return startup_constructor_api_boundary(rt,c,inputs,target,platform.ok_or("startup native synchronization profile missing")?);}if(pc,target)!=(0x402c42,0x402a53){return Err("startup constructor fallback effect unbound");}startup_resolver(rt,c,inputs,&mut |rt,c,iat|if let Some(p)=platform{p.call(rt,c,inputs.init,iat)}else{Err(match iat{0x415074=>"startup LoadLibraryExW effects unbound at 0x402b00",_=>"startup loader effects unbound"})})}),
  _=>Err("startup lock effect unbound")}),
- (0x4024d6,0x402963)=>Err("startup FLS acquisition unbound at 0x4024d6"),
+ (0x4024d6,0x402963)=>startup_fls(rt,c,inputs,&mut |_,_,pc,target|{if (pc,target)==(0x402968,0x402b3e){Err("startup FlsAlloc resolver/ABI binding unbound at 0x402b3e")}else{Err("startup FLS publication/cleanup unbound")}}),
  _=>Err("startup module effect unbound")})
 }
 "#);
