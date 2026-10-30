@@ -1,5 +1,12 @@
 # Remaining entry-to-exit dependencies
 
+Current executable checkpoint: with an explicitly enabled native FLS service,
+original allocation wrapper/resolver/guard/indirect call and index store execute.
+Entry allocates a process index and retains callback ownership, then rejects at
+setter `0x402981 -> 0x402bef` before publishing a fiber value. Default admission
+remains blocked. [Contract, reproduced stack regression and next gate](FLS-ALLOCATION-WRAPPER.md).
+Earlier boundaries below are historical.
+
 Latest follow-up: a real bounded native FLS process-index producer and checked
 stdcall adapter now exist, with no supplied allocation outcome. Original entry
 executes the FLS initializer through CALL `0x402968 -> 0x402b3e`; its allocation

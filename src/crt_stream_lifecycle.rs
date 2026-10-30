@@ -1524,6 +1524,21 @@ fn main(){
             "{}",
             String::from_utf8_lossy(&built.stderr)
         );
+        // Keep generated runtime values usable within the Windows default
+        // main-stack budget; this also reproduces inline-table regressions on Linux.
+        #[cfg(target_os = "linux")]
+        {
+            let bounded = std::process::Command::new("sh")
+                .args(["-c", "ulimit -s 1024 && exec \"$1\"", "bounded-lifecycle"])
+                .arg(&executable)
+                .output()
+                .unwrap();
+            assert!(
+                bounded.status.success(),
+                "{}",
+                String::from_utf8_lossy(&bounded.stderr)
+            );
+        }
         let run = std::process::Command::new(&executable).output().unwrap();
         assert!(
             run.status.success(),

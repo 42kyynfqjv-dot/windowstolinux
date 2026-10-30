@@ -35,7 +35,7 @@ impl CrtResidentLoader {
 /// Explicit native replacement environment, not an inferred Windows loader state.
 /// Mapping revision 1 is grounded in the x86 Windows 10.0.20348 observation.
 /// Only this named domain is supported; no generic Windows version claim follows.
-struct CrtNativePlatform {anchor:guest_memory::Capability,function:CrtFunction}
+struct CrtNativePlatform {anchor:guest_memory::Capability,function:CrtFunction,fls:Option<CrtFunction>}
 impl CrtNativePlatform {
  const PROFILE:&'static str="w2l-native-sync-20348-v1";
  const CONTRACT:&'static str="api-ms-win-core-synch-l1-2-0";
@@ -45,7 +45,17 @@ impl CrtNativePlatform {
   // guest LoadLibrary result, fabricated LastError or DLL initialization receipt.
   let ticket=rt.provider_begin(init,"kernelbase.dll",handle,1)?;
   let(_,function)=rt.provider_initialize_sync(init,&ticket,address)?;
-  Ok(Self{anchor:rt.anchor,function})
+  Ok(Self{anchor:rt.anchor,function,fls:None})
+ }
+ /// Explicit optional native kernel32/FLS service, prepared before entry.
+ fn enable_fls(&mut self,rt:&mut CrtStreamRuntime,init:CrtInitialization,handle:u32,address:u32)->Result<(),&'static str>{
+  self.validate(rt,init)?;if self.fls.is_some(){return Err("native FLS provider already enabled");}
+  let ticket=rt.provider_begin(init,"kernel32.dll",handle,1)?;let mut published=None;
+  let result=(||{let m=rt.provider_publish(init,&ticket)?;published=Some(m);let d=rt.provider_export(init,m,m,"FlsAlloc",address)?;rt.bind_native_fls(init,d)})();
+  match result{Ok(f)=>{self.fls=Some(f);Ok(())},Err(e)=>{if let Some(m)=published{rt.provider_destroy(init,m)?;}else{rt.provider_abort(init,&ticket)?;}Err(e)}}
+ }
+ fn fls_call(&self,rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,init:CrtInitialization,image:CrtProcessImage,f:CrtFunction)->Result<CrtValue,&'static str>{
+  self.validate(rt,init)?;if self.fls!=Some(f)||rt.native_named_export(init,f.module,"FlsAlloc")?!=f{return Err("native FLS callable target");}rt.native_api_identity(f)?;cpu.native_fls_alloc_call(rt,init,image)
  }
  fn validate(&self,rt:&CrtStreamRuntime,init:CrtInitialization)->Result<(),&'static str>{
   rt.initialization(init)?;if self.anchor!=rt.anchor{return Err("native platform process identity");}
@@ -57,6 +67,10 @@ impl CrtNativePlatform {
   if reserved!=0||flags!=0x800{return Err("native platform loader flags/reserved");}
   if !name.is_ascii(){return Err("native platform API-set encoding");}
   let bare=if name.len()>=4&&name[name.len()-4..].eq_ignore_ascii_case(".dll"){&name[..name.len()-4]}else{name};
+  if bare.eq_ignore_ascii_case("kernel32")||bare.eq_ignore_ascii_case("api-ms-win-core-fibers-l1-1-1"){
+   let f=self.fls.ok_or("native platform FLS provider not enabled")?;rt.native_api_identity(f)?;rt.provider_ready(f.module)?;
+   let owned=rt.native_provider_acquire(init,f)?;rt.last_os_error=None;return Ok(owned.reference.module);
+  }
   if !bare.eq_ignore_ascii_case(Self::CONTRACT){return Err("native platform API-set mapping unsupported");}
   // No host allocation here. Exhaustion rejects the component; it is never a
   // guest BOOL/null return. Whole-program admission must establish this budget.
@@ -75,7 +89,7 @@ impl CrtNativePlatform {
   if iat==0x415070{
    if cpu.return_pop!=8||cpu.r[4]!=cpu.entry[4]||[3,5,6,7].iter().any(|&i|cpu.r[i]!=cpu.entry[i]){return Err("native platform stdcall frame");}
    let sp=CrtCpu::pointer(cpu.r[4])?;let CrtValue::Module(module)=rt.load(rt.offset(sp,4)?,32)? else{return Err("native platform export module authority");};
-   if module!=self.function.module{return Err("native platform export source identity");}
+   if module!=self.function.module&&self.fls.is_none_or(|f|module!=f.module){return Err("native platform export source identity");}
    let p=CrtCpu::pointer(rt.load(rt.offset(sp,8)?,32)?)?;let mut bytes=[0u8;256];let mut len=None;
    for(i,b)in bytes.iter_mut().enumerate(){let unit=rt.load(rt.offset(p,i as i64)?,8)?.known_scalar()?;if unit==0{len=Some(i);break;}*b=unit as u8;}
    let len=len.ok_or("native platform export unterminated name")?;let name=std::str::from_utf8(&bytes[..len]).map_err(|_|"native platform export encoding")?;
@@ -189,5 +203,26 @@ for mode in 0..12 {
 }
 "#,
         "native-profile-sync-boundary",
+    );
+}
+
+#[test]
+fn explicit_fls_provider_rolls_back_and_rejects_stale_or_unpublished_targets() {
+    crate::crt_stream_callees_tests::native(
+        TYPES,
+        r#"
+let(mut r,i)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();
+let mut p=CrtNativePlatform::prepare(&mut r,i,CrtNativePlatform::PROFILE,0x700000,0x701000).unwrap();
+assert!(p.enable_fls(&mut r,i,0x720000,0).is_err());assert!(p.fls.is_none());assert_eq!(r.providers.len(),1);assert_eq!(r.module_references.len(),1);assert_eq!(r.exports.len(),1);
+p.enable_fls(&mut r,i,0x720000,0x721000).unwrap();let f=p.fls.unwrap();assert!(p.enable_fls(&mut r,i,0x740000,0x741000).is_err());assert_eq!(r.providers.len(),2);
+for name in ["kernel32","KERNEL32.DLL","api-ms-win-core-fibers-l1-1-1"]{assert_eq!(p.load(&mut r,i,name,0,0x800),Ok(f.module));}
+assert_eq!(r.native_named_export(i,f.module,"FlsAlloc"),Ok(f));assert_eq!(r.native_named_export(i,f.module,"flsAlloc"),Err("CRT native named export unsupported"));
+assert!(r.native_named_export(i,p.function.module,"FlsAlloc").is_err());assert!(r.provider_destroy(i,f.module).is_err());
+let refs:Vec<_>=r.module_references.values().copied().filter(|x|x.module==f.module&&Some(*x)!=r.providers[&f.module.handle].root).collect();
+for reference in refs{r.native_provider_release(i,CrtNativeProviderReference{reference,function:f}).unwrap();}
+let ids=r.providers[&f.module.handle].exports.clone();r.providers.get_mut(&f.module.handle).unwrap().exports.clear();assert_eq!(r.native_named_export(i,f.module,"FlsAlloc"),Err("CRT native named export publication incomplete"));r.providers.get_mut(&f.module.handle).unwrap().exports=ids;
+r.provider_destroy(i,f.module).unwrap();assert!(r.native_api_identity(f).is_err());assert_eq!(p.load(&mut r,i,"kernel32",0,0x800),Err("CRT unloaded module"));assert_eq!(r.fls_indices.len(),0);
+"#,
+        "explicit-fls-provider",
     );
 }

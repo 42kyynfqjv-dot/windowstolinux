@@ -6,6 +6,7 @@ pub(crate) const REGIONS:&[(&str,u32,&str)]=&[
 ("destroy",4205040,"568b3504cd410085f674206bc618578db8d4cc410057ff1554504100ff0d04cd410083ef1883ee0175eb5fb0015ec3"),
 ("fls",4204899,"68a7284000e8d1010000a360c041005983f8ff750332c0c368c4cc410050e869020000595985c07507e805000000ebe5b001c3"),
 ("release",4204950,"a160c0410083f8ff741150e8d301000059c70560c04100ffffffffb001c3"),
+("fls_alloc",0x402b3e,"558bec5668305d410068285d410068305d41006a00e8fbfeffff8bf083c41085f67410ff75088bceff1528514100ffd65e5dc35e5dff255c504100"),
 ("constructor_prefix",4205613,"558bec56687c5d410068745d4100687c5d41006a04e80cfeffff8bf083c41085f67415ff75108bceff750cff7508ff1528514100ffd6eb0cff750cff7508ff15585041005e5dc3"),
 ];
 pub(crate) fn source(regions: &[Vec<u8>]) -> Result<String, String> {
@@ -33,7 +34,7 @@ pub(crate) fn source(regions: &[Vec<u8>]) -> Result<String, String> {
         if *bytes != expected {
             return Err("startup module original code".into());
         }
-        let graph = if name == "constructor_prefix" {
+        let graph = if name == "constructor_prefix" || name == "fls_alloc" {
             // Decode the closed original function using the existing indirect-call
             // emitter contract; generic Graph::decode intentionally rejects it.
             let mut nodes = std::collections::BTreeMap::new();
@@ -44,6 +45,9 @@ pub(crate) fn source(regions: &[Vec<u8>]) -> Result<String, String> {
                 iced_x86::DecoderOptions::NONE,
             );
             while d.can_decode() {
+                if name == "fls_alloc" && d.ip() == 0x402b73 {
+                    break;
+                }
                 let i = d.decode();
                 let at = (i.ip32() - origin) as usize;
                 nodes.insert(
@@ -66,6 +70,9 @@ pub(crate) fn source(regions: &[Vec<u8>]) -> Result<String, String> {
             &graph,
             |pc, target| {
                 let (Target::Direct(address) | Target::Import(address)) = target;
+                if name == "fls_alloc" && target == Target::Import(0x415128) {
+                    return Ok("let cell=rt.process_image_pointer(inputs.image,0x415128,4)?;if rt.load(cell,32)?.known_scalar()?!=0x401bf9{return Err(\"startup FLS guard target\");}let code=rt.process_image_code(inputs.image,0x401bf9,3)?;if rt.memory.read(code.address(),3).map_err(|_|\"startup FLS guard read\")?!=[0xc2,0,0]{return Err(\"startup FLS guard code\");}let CrtValue::Function(f)=cpu.r[1] else{return Err(\"startup FLS guard provenance\");};if cpu.r[6]!=CrtValue::Function(f)||rt.native_named_export(inputs.init,f.module,\"FlsAlloc\")?!=f{return Err(\"startup FLS guard mismatch\");}cpu.call_activation(rt,0x402b6c,0,startup_original_guard)?;guarded=Some(f);".into());
+                }
                 if name == "constructor_prefix" && target == Target::Import(0x415128) {
                     return Ok("startup_constructor_guard(rt,cpu,inputs)?;guarded=Some(match cpu.r[6]{CrtValue::Function(f)=>f,_=>return Err(\"startup guard target provenance\")});".into());
                 }
@@ -86,14 +93,26 @@ pub(crate) fn source(regions: &[Vec<u8>]) -> Result<String, String> {
             |_, _| Err("startup module thread effect unbound".into()),
             |_, _| Ok(String::new()),
             |_, _| Ok(None),
-            None,
+            if name == "fls_alloc" {
+                Some(0x402b73)
+            } else {
+                None
+            },
             |_, _, _| Ok(None),
             |pc, _| {
+                if name == "fls_alloc" {
+                    return Ok(format!("let CrtValue::Function(f)=target else{{return Err(\"startup FLS indirect provenance\");}};if guarded.take()!=Some(f)||rt.native_named_export(inputs.init,f.module,\"FlsAlloc\")?!=f{{return Err(\"startup FLS guard replay/target\");}}cpu.call_activation(rt,{},4,|rt,c|effects(rt,c,{pc},f.address))?;",pc+graph.nodes[&pc].length));
+                }
                 Ok(format!("let CrtValue::Function(f)=target else{{return Err(\"startup indirect target provenance\");}};startup_take_guard(rt,inputs,&mut guarded,f)?;cpu.call_activation(rt,{},12,|rt,c|effects(rt,c,{pc},f.address))?;",pc+graph.nodes[&pc].length))
             },
         )?;
-        let body = if name == "constructor_prefix" {
+        let body = if name == "constructor_prefix" || name == "fls_alloc" {
             format!("let mut guarded:Option<CrtFunction>=None;{body}")
+        } else {
+            body
+        };
+        let body = if name == "fls_alloc" {
+            format!("let value=(||->Result<CrtValue,&'static str>{{{body}}})()?;if !cpu.returned{{return Err(\"startup TLS allocation fallback unbound\");}}Ok(value)")
         } else {
             body
         };
@@ -171,7 +190,12 @@ fn startup_modules_platform(rt:&mut CrtStreamRuntime,c:&mut CrtCpu,inputs:&CrtEn
  (0x4024ca,0x4029b4)=>startup_locks(rt,c,inputs,&mut |rt,c,pc,target|match(pc,target){
  (0x4029c5,0x402c2d)=>startup_constructor_prefix(rt,c,inputs,&mut |rt,c,pc,target|{if pc==0x402c61{return startup_constructor_api_boundary(rt,c,inputs,target,platform.ok_or("startup native synchronization profile missing")?);}if(pc,target)!=(0x402c42,0x402a53){return Err("startup constructor fallback effect unbound");}startup_resolver(rt,c,inputs,&mut |rt,c,iat|if let Some(p)=platform{p.call(rt,c,inputs.init,iat)}else{Err(match iat{0x415074=>"startup LoadLibraryExW effects unbound at 0x402b00",_=>"startup loader effects unbound"})})}),
  _=>Err("startup lock effect unbound")}),
- (0x4024d6,0x402963)=>startup_fls(rt,c,inputs,&mut |_,_,pc,target|{if (pc,target)==(0x402968,0x402b3e){Err("startup FlsAlloc resolver/ABI binding unbound at 0x402b3e")}else{Err("startup FLS publication/cleanup unbound")}}),
+ (0x4024d6,0x402963)=>startup_fls(rt,c,inputs,&mut |rt,c,pc,target|match(pc,target){
+ (0x402968,0x402b3e)=>startup_fls_alloc(rt,c,inputs,&mut |rt,c,pc,target|match(pc,target){
+  (0x402b53,0x402a53)=>startup_resolver(rt,c,inputs,&mut |rt,c,iat|platform.ok_or("startup FLS native profile missing")?.call(rt,c,inputs.init,iat)),
+  (0x402b6c,address)=>{let CrtValue::Function(f)=c.r[6] else{return Err("startup FLS callable provenance");};if f.address!=address{return Err("startup FLS callable changed");}platform.ok_or("startup FLS native profile missing")?.fls_call(rt,c,inputs.init,inputs.image,f)},
+  _=>Err("startup FLS allocation effect unbound")}),
+ _=>Err("startup FLS publication/cleanup unbound")}),
  _=>Err("startup module effect unbound")})
 }
 "#);

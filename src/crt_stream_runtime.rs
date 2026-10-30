@@ -43,7 +43,7 @@ struct CrtExport {function:CrtFunction,symbol:String,target:CrtModule,callable:b
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 struct CrtProviderExport {record:CrtFunction}
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
-enum CrtNativeApi {InitializeGlobalCriticalSectionEx}
+enum CrtNativeApi {InitializeGlobalCriticalSectionEx,FlsAlloc}
 /// A native registry construction ticket, not a Windows DLL initialization proof.
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 struct CrtNativeProviderReference {reference:CrtModuleReference,function:CrtFunction}
@@ -64,9 +64,9 @@ struct CrtFlsIndex {anchor:guest_memory::Capability,index:u32,serial:u64}
 #[derive(Clone,Copy)]
 struct CrtProcessFls {id:CrtFlsIndex,callback:Option<(CrtProcessImage,CrtPointer)>,certain:bool,input_binding:bool}
 /// Fixed process-index storage. Keys remain independent of physical slots.
-struct CrtFlsIndices {slots:[Option<(u32,CrtProcessFls)>;64]}
+struct CrtFlsIndices {slots:Box<[Option<(u32,CrtProcessFls)>;64]>}
 impl CrtFlsIndices {
- fn new()->Self{Self{slots:[None;64]}}
+ fn new()->Self{Self{slots:Box::new([None;64])}}
  fn len(&self)->usize{self.slots.iter().flatten().count()}
  fn is_empty(&self)->bool{self.len()==0}
  fn get(&self,k:&u32)->Option<&CrtProcessFls>{self.slots.iter().flatten().find(|(n,_)|n==k).map(|(_,v)|v)}
@@ -374,14 +374,14 @@ impl CrtStreamRuntime {
  /// Real native reference bookkeeping, with no supplied load-success result.
  /// Only the already implemented synchronization operation is eligible.
  fn native_provider_acquire(&mut self,init:CrtInitialization,function:CrtFunction)->Result<CrtNativeProviderReference,&'static str>{
-  self.initialization(init)?;self.native_sync_identity(function)?;self.provider_ready(function.module)?;
+  self.initialization(init)?;self.native_api_identity(function)?;self.provider_ready(function.module)?;
   if self.module_references.len()>=256{return Err("CRT native provider reference budget");}
   let serial=self.serial.checked_add(1).ok_or("CRT native provider reference serial")?;
   let reference=CrtModuleReference{module:function.module,serial};self.module_references.insert(serial,reference);self.serial=serial;
   Ok(CrtNativeProviderReference{reference,function})
  }
  fn native_provider_release(&mut self,init:CrtInitialization,owned:CrtNativeProviderReference)->Result<(),&'static str>{
-  self.initialization(init)?;self.native_sync_identity(owned.function)?;let p=self.provider_ready(owned.reference.module)?;
+  self.initialization(init)?;self.native_api_identity(owned.function)?;let p=self.provider_ready(owned.reference.module)?;
   if owned.reference.module!=owned.function.module||p.root==Some(owned.reference)||self.module_references.get(&owned.reference.serial)!=Some(&owned.reference){return Err("CRT native provider reference owner/replay");}
   self.module_references.remove(&owned.reference.serial);Ok(())
  }
@@ -395,7 +395,7 @@ impl CrtStreamRuntime {
   if matches.next().is_some(){return Err("CRT native named export ambiguous");}
   if self.provider_ready(module)?.exports.iter().filter(|id|**id==e.function.serial).count()!=1{return Err("CRT native named export publication incomplete");}
   self.function_identity(e.function,Some(name))?;
-  if e.api!=Some(CrtNativeApi::InitializeGlobalCriticalSectionEx){return Err("CRT native named export implementation unbound");}
+  if e.api.is_none(){return Err("CRT native named export implementation unbound");}
   self.provider_ready(e.target)?;Ok(e.function)
  }
  /// This issuer binds only the implemented, startup-exclusive global-lock API.
@@ -403,6 +403,14 @@ impl CrtStreamRuntime {
   self.initialization(init)?;self.provider_target(descriptor)?;let e=self.exports.get_mut(&descriptor.record.serial).unwrap();
   if e.symbol!="InitializeCriticalSectionEx"{return Err("CRT native synchronization symbol/ABI");}
   e.api=Some(CrtNativeApi::InitializeGlobalCriticalSectionEx);e.callable=true;Ok(descriptor.record)
+ }
+ fn bind_native_fls(&mut self,init:CrtInitialization,descriptor:CrtProviderExport)->Result<CrtFunction,&'static str>{
+  self.initialization(init)?;self.provider_target(descriptor)?;let e=self.exports.get_mut(&descriptor.record.serial).unwrap();
+  if e.symbol!="FlsAlloc"{return Err("CRT native FLS symbol/ABI");}e.api=Some(CrtNativeApi::FlsAlloc);e.callable=true;Ok(descriptor.record)
+ }
+ fn native_api_identity(&self,f:CrtFunction)->Result<(),&'static str>{
+  self.function_identity(f,None)?;
+  match self.exports.get(&f.serial).and_then(|e|e.api){Some(CrtNativeApi::InitializeGlobalCriticalSectionEx)=>self.native_sync_identity(f),Some(CrtNativeApi::FlsAlloc)=>self.function_identity(f,Some("FlsAlloc")),None=>Err("CRT native API implementation unbound")}
  }
  fn native_sync_identity(&self,function:CrtFunction)->Result<(),&'static str>{
   self.function_identity(function,Some("InitializeCriticalSectionEx"))?;
