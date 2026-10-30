@@ -1,5 +1,12 @@
 # Remaining entry-to-exit dependencies
 
+Current checkpoint: original16-entry initialization/rollback loop executes with
+index/phase/owner-bound callback receipts. Two original callbacks and all five
+scalar-store callees execute; the third reaches VirtualProtect408129 with checked
+original arguments. No permission/output effect is admitted. Prior FLS, lock and
+callback writes remain live. Default admission is unchanged. See
+[ordering, negative tests and page-permission architecture gate](INITIALIZER-TABLE.md).
+
 Current checkpoint: original FLS setter/resolver/guard/indirect stdcall8 executes.
 The explicit native FLS service publishes opaque41ccc4 for the current stationary
 fiber and retains its real process-index/callback identity. Retrieving the value

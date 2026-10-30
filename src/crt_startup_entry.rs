@@ -10,7 +10,7 @@ pub(crate) const REGIONS: [(&str, u32, &str); 4] = [
     (
         "startup-initializer",
         0x401945,
-        "558bec837d08007507c60584cc410001e84b050000e86b0b0000",
+        "558bec837d08007507c60584cc410001e84b050000e86b0b000084c0750432c05dc3e8e75c000084c0750a6a00e8720b000059ebe9b0015dc3",
     ),
     (
         "startup-cpu-prefix",
@@ -49,6 +49,7 @@ pub(crate) fn source(regions: &[Vec<u8>], helper: &[u8]) -> Result<String, Strin
     let saved: Vec<_> = l.saved.iter().map(|(&o, &r)| (o, r)).collect();
     let layout=format!("fn startup_layout()->CrtNormalLayout{{CrtNormalLayout{{low:{},bp:{},record:{},scope_slot:{},level:{},saved_sp:{},guard:{},saved:vec!{:?},scope:0x41b238,handler:0x402210,cookie_address:0x41c000,pop:0}}}}",l.low,l.frame_pointer,l.record,l.scope_slot,l.level_slot,l.saved_sp,l.guard,saved);
     let mut out = p.emit("startup_helper")?;
+    out.push_str(&crate::crt_startup_table::source()?);
     out.push_str(&format!(
         "fn startup_helper_code()->Vec<u8>{{vec!{helper:?}}}"
     ));
@@ -97,6 +98,8 @@ pub(crate) fn source(regions: &[Vec<u8>], helper: &[u8]) -> Result<String, Strin
    (0x401955,Target::Direct(0x401ea5))=>"cpu.call_activation(rt,0x40195a,0,|rt,c|startup_cpu_prefix(rt,c,inputs,backend,features,platform))?;".into(),
    (0x401ebe,Target::Import(0x41501c))=>r#"cpu.call_activation(rt,0x401ec4,4,|rt,c|features.ok_or("startup processor feature contract unbound at 0x401ebe")?.api(rt,c))?;return startup_cpu_tail(rt,cpu,inputs,features.ok_or("startup feature scope missing")?);"#.into(),
    (0x40195a,Target::Direct(0x4024ca))=>"cpu.call_activation(rt,0x40195f,0,|rt,c|startup_modules_platform(rt,c,inputs,platform))?;".into(),
+   (0x401967,Target::Direct(0x407653))=>"cpu.call_activation(rt,0x40196c,0,|rt,c|startup_original_table(rt,c,inputs))?;".into(),
+   (0x401972,Target::Direct(0x4024e9))=>"return Err(\"startup initializer failure cleanup unbound\");".into(),
    _=>return Err("startup slice call binding".into())
   })
             },
