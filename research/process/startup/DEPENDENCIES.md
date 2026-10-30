@@ -1,5 +1,12 @@
 # Remaining entry-to-exit dependencies
 
+Current checkpoint: original process-heap callback `0x40c8f0` publishes the same
+canonical Space-owned heap proof to `0x41d2c8` and returns AL1. Its original
+cleanup clears that cell without destroying the heap. Entry next selects index7
+/ `0x40a407`, whose body remains unbound. Allocation policy stays unknown unless
+independently established. [Identity, ordering and cleanup](HEAP-INITIALIZER.md).
+Default admission/full startup/rcedit remain unproved.
+
 Current checkpoint: original callback `0x401bd5`, the fifteen-record lock loop
 `0x40bd8e`, its original tail thunk and checked native synchronization execute.
 The next selected callback is `0x40c8f0` (GetProcessHeap via IAT `0x4150f8`),

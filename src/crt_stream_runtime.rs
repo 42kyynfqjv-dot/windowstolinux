@@ -51,7 +51,7 @@ struct CrtProviderBuild {anchor:guest_memory::Capability,thread:u64,serial:u64,h
 struct CrtNativeProvider {serial:u64,identity:String,root:Option<CrtModuleReference>,exports:Vec<u64>,limit:usize}
 
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
-struct CrtHeap {anchor:guest_memory::Capability,exceptions:Option<bool>}
+struct CrtHeap {anchor:guest_memory::Capability,process:guest_memory::ProcessHeap,exceptions:Option<bool>}
 /// An explicitly bound, stationary fiber context. This is not a guessed TLS
 /// index or proof that original FlsAlloc/callback initialization has run.
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
@@ -912,9 +912,17 @@ impl CrtStreamRuntime {
  /// Bind an observed process-heap outcome without inventing handle bits.
  fn process_heap_result(&mut self,init:CrtInitialization,available:bool,exceptions:Option<bool>)->Result<CrtValue,&'static str>{
   self.initialization(init)?;self.canonical_errno=true;self.last_os_error=None;if !available{return Ok(CrtValue::scalar(0));}
-  let heap=CrtHeap{anchor:self.anchor,exceptions};if self.heap.is_some_and(|h|h!=heap){return Err("CRT changed process heap contract");}self.heap=Some(heap);Ok(CrtValue::Heap(heap))
+  let heap=CrtHeap{anchor:self.anchor,process:self.memory.process_heap(),exceptions};if self.heap.is_some_and(|h|h!=heap){return Err("CRT changed process heap contract");}self.heap=Some(heap);Ok(CrtValue::Heap(heap))
  }
- fn heap_identity(&self,heap:CrtHeap)->Result<(),&'static str>{if self.closed||heap.anchor!=self.anchor||self.heap!=Some(heap){return Err("CRT heap owner/lifetime");}Ok(())}
+ /// Acquire the one heap already owned by Space. This publishes a handle proof,
+ /// not a new allocation arena, supplied OS result or exception-policy fact.
+ fn native_process_heap(&mut self,init:CrtInitialization)->Result<CrtValue,&'static str>{
+  self.initialization(init)?;
+  if let Some(heap)=self.heap{self.heap_identity(heap)?;self.last_os_error=None;return Ok(CrtValue::Heap(heap));}
+  let heap=CrtHeap{anchor:self.anchor,process:self.memory.process_heap(),exceptions:None};
+  self.heap=Some(heap);self.last_os_error=None;Ok(CrtValue::Heap(heap))
+ }
+ fn heap_identity(&self,heap:CrtHeap)->Result<(),&'static str>{if self.closed||heap.anchor!=self.anchor||heap.process!=self.memory.process_heap()||self.heap!=Some(heap)||self.memory.validate(self.anchor,guest_memory::Owner::Module(self.owner)).is_err(){return Err("CRT heap owner/lifetime");}Ok(())}
  fn heap_alloc_result(&mut self,init:CrtInitialization,heap:CrtHeap,flags:u32,size:u32,descriptor:bool,available:bool)->Result<Option<CrtPointer>,&'static str>{
   self.initialization(init)?;self.heap_identity(heap)?;
   if heap.exceptions!=Some(false)||flags!=8||size==0{return Err("CRT unproved heap flags/exception/zero request");}

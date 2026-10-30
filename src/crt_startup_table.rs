@@ -97,20 +97,21 @@ fn startup_table_loop(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,image:CrtProcessI
  ("startup_init_store_a",0x407a8c,"8bff558bec8b4508a3a0ce41005dc3"),("startup_init_store_b",0x40ca00,"8bff558bec8b4508a3ccd241005dc3"),
  ("startup_init_store_c",0x40cbf6,"8bff558bec8b4508a3d0d24100a3d4d24100a3d8d24100a3dcd241005dc3"),
  ("startup_init_store_d",0x406660,"8bff558bec8b4508a33ccd41005dc3"),("startup_init_store_e",0x406fd7,"8bff558bec8b4508a35cce41005dc3"),
- ("startup_table_noop",0x401bd5,"b001c3"),("startup_table_third",0x408113,"8bff558bec518d45fc506a0268800000006800e04100ff15b050410085c00f95c0c9c3")]{
+ ("startup_table_heap_clear",0x40c910,"8325c8d2410000b001c3"),("startup_table_noop",0x401bd5,"b001c3"),("startup_table_third",0x408113,"8bff558bec518d45fc506a0268800000006800e04100ff15b050410085c00f95c0c9c3")]{
   let bytes=raw(code);let g=Graph::decode(&bytes,origin)?;
-  let roles=std::collections::BTreeMap::from_iter([0x41d134,0x41c000,0x41cea0,0x41d2cc,0x41d2d0,0x41d2d4,0x41d2d8,0x41d2dc,0x41cd3c,0x41ce5c,0x41e000].map(|a|(a,"CrtRegionKind::Module".into())));
+  let roles=std::collections::BTreeMap::from_iter([0x41d134,0x41c000,0x41cea0,0x41d2cc,0x41d2d0,0x41d2d4,0x41d2d8,0x41d2dc,0x41cd3c,0x41ce5c,0x41e000,0x41d2c8].map(|a|(a,"CrtRegionKind::Module".into())));
   let body=crate::crt_stream_emit::emit_body(&g,|pc,t|{let next=pc+g.nodes[&pc].length;if t==Target::Direct(0x40c926){return Ok(format!("cpu.call_activation(rt,{next},0,|rt,c|startup_table_loop(rt,c,inputs.image,callback))?;"));}else if t==Target::Import(0x4150b0){return Ok(format!("rt.process_image_import(inputs.image,0x4150b0,\"kernel32.dll\",\"VirtualProtect\")?;cpu.call_activation(rt,{next},16,|rt,c|c.virtual_protect_call(rt,inputs.image))?;"));}let callee=match t{Target::Direct(0x407a8c)=>"startup_init_store_a",Target::Direct(0x40ca00)=>"startup_init_store_b",Target::Direct(0x40cbf6)=>"startup_init_store_c",Target::Direct(0x406660)=>"startup_init_store_d",Target::Direct(0x406fd7)=>"startup_init_store_e",_=>return Err("initializer callback call binding".into())};Ok(format!("cpu.call_activation(rt,{next},0,|rt,c|{callee}(rt,c,inputs))?;"))},&roles,512)?;
   let params=if name=="startup_table_entry"{",callback:&mut impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu,usize,bool,CrtPointer)->Result<CrtValue,&'static str>"}else{""};
   out.push_str(&format!("fn {name}(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs{params})->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;let p=rt.process_image_code(inputs.image,{origin},{})?;if rt.memory.read(p.address(),{}).map_err(|_|\"initializer helper code read\")?!=&{bytes:?}{{return Err(\"initializer helper code changed\");}}{body}}}",bytes.len(),bytes.len()));
  }
     let table = raw(TABLE);
-    out.push_str(&format!("fn startup_original_table(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs)->Result<CrtValue,&'static str>{{let p=rt.process_image_pointer(inputs.image,0x415fb8,128)?;if rt.memory.read(p.address(),128).map_err(|_|\"initializer table read\")?!=&{table:?}{{return Err(\"original initializer table changed\");}}startup_table_entry(rt,cpu,inputs,&mut |rt,c,index,cleanup,target|{{if !cleanup{{match(index,target.address()){{(0,0x407558)=>startup_table_first(rt,c,inputs),(1,0x407587)=>startup_table_second(rt,c,inputs),(2,0x408113)=>startup_table_third(rt,c,inputs),(3,0x401bd5)=>startup_table_noop(rt,c,inputs),(4,0x40bd8e)=>startup_lock_loop(rt,c,inputs,&mut startup_lock_api),_=>Err(\"original initializer callback effect unbound\")}}}}else{{Err(\"original initializer cleanup effect unbound\")}}}})}}"));
+    out.push_str(&format!("fn startup_original_table(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs)->Result<CrtValue,&'static str>{{let p=rt.process_image_pointer(inputs.image,0x415fb8,128)?;if rt.memory.read(p.address(),128).map_err(|_|\"initializer table read\")?!=&{table:?}{{return Err(\"original initializer table changed\");}}startup_table_entry(rt,cpu,inputs,&mut |rt,c,index,cleanup,target|{{if !cleanup{{match(index,target.address()){{(0,0x407558)=>startup_table_first(rt,c,inputs),(1,0x407587)=>startup_table_second(rt,c,inputs),(2,0x408113)=>startup_table_third(rt,c,inputs),(3,0x401bd5)=>startup_table_noop(rt,c,inputs),(4,0x40bd8e)=>startup_lock_loop(rt,c,inputs,&mut startup_lock_api),(5,0x40c8f0)=>startup_heap_original(rt,c,inputs,&mut startup_heap_api),_=>Err(\"original initializer callback effect unbound\")}}}}else{{match(index,target.address()){{(5,0x40c910)=>startup_table_heap_clear(rt,c,inputs),_=>Err(\"original initializer cleanup effect unbound\")}}}}}})}}"));
     out.push_str(&format!(
         "fn crate_second_b_bytes()->Vec<u8>{{vec!{:?}}}",
         raw("8bff558bec8b4508a3ccd241005dc3")
     ));
     out.push_str(&crate::crt_startup_locks::source()?);
+    out.push_str(&crate::crt_startup_heap::source()?);
     out.push_str(&literals);
     Ok(out)
 }
