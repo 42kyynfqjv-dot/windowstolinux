@@ -297,6 +297,7 @@ def check(original, observation, out, compare=None):
         b'crt_cxx_ptd::original_lazy_ptd_setter_publication_and_cleanup_preserve_heap_identity',
         b'crt_cxx_record::owned_cxx_record_keeps_state_metadata_and_continuation_distinct',
         b'crt_cxx_record::common_handler_executes_cached_getter_with_owned_context_and_no_loader_authority',
+        b'crt_cxx_record::common_handler_acquires_heap_ptd_through_original_lazy_producer',
     ])
     unwind_run=subprocess.run(['cargo','test','--locked','--example','crt_stream','original_cxx_unwind_registers_eh4_preserves_pending_action_and_counter_failures'],env=env,capture_output=True,timeout=180)
     (out/'cxx-unwind-native.stdout').write_bytes(unwind_run.stdout)
@@ -399,7 +400,7 @@ def check(original, observation, out, compare=None):
                   main_scope_header_sha256=sha((out/'Main-scope-header.bin').read_bytes()),
                   locale_state_evidence=locale_state_evidence(image),
                   unwind_binding_source_sha256=sha((out/'cxx-unwind-connected.rs').read_bytes()),
-                  heap_ptd_view_native_cases=17, lazy_ptd_native_cases=15, lazy_ptd_new_windows_pairs=0, ordered_search_native_cases=76, unobserved_context_native_cases=27, unobserved_context_new_windows_pairs=0, original_empty_search_native_cases=1, ordered_search_new_windows_pairs=0, shared_chain_native_cases=24, shared_chain_effect_lifetime_cases=4, shared_chain_new_windows_pairs=0, chain_ownership_diagnostic_experiments=1, chain_ownership_new_windows_pairs=0, bound_cxx_invocation_native_cases=34, bound_cxx_invocation_new_windows_pairs=0, prefix_delivery_unwind_native_cases=14, prefix_delivery_new_windows_pairs=0, dispatcher_delivery_unwind_native_cases=8, dispatcher_delivery_new_windows_pairs=0, delivery_child_native_cases=14, delivery_cached_unwind_native_cases=4, delivery_new_windows_pairs=0,
+                  lazy_common_handler_native_cases=24, lazy_common_handler_new_windows_pairs=0, heap_ptd_view_native_cases=17, lazy_ptd_native_cases=15, lazy_ptd_new_windows_pairs=0, ordered_search_native_cases=76, unobserved_context_native_cases=27, unobserved_context_new_windows_pairs=0, original_empty_search_native_cases=1, ordered_search_new_windows_pairs=0, shared_chain_native_cases=24, shared_chain_effect_lifetime_cases=4, shared_chain_new_windows_pairs=0, chain_ownership_diagnostic_experiments=1, chain_ownership_new_windows_pairs=0, bound_cxx_invocation_native_cases=34, bound_cxx_invocation_new_windows_pairs=0, prefix_delivery_unwind_native_cases=14, prefix_delivery_new_windows_pairs=0, dispatcher_delivery_unwind_native_cases=8, dispatcher_delivery_new_windows_pairs=0, delivery_child_native_cases=14, delivery_cached_unwind_native_cases=4, delivery_new_windows_pairs=0,
                   unwind_native_cases=24, cached_unwind_native_cases=14, cached_unwind_new_windows_pairs=0, unwind_new_windows_pairs=0, unwind_binding_rust_tests=1,
                   unwind_state_source_sha256=sha((out/'unwind-state-live.rs').read_bytes()),
                   unwind_state_native_cases=12, unwind_state_new_windows_pairs=0,

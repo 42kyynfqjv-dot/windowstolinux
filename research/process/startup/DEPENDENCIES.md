@@ -346,3 +346,18 @@ termination, free body, actual acquisition and incoming-chain containment remain
 unclosed. This checkpoint adds no whole-PE acceptance. See
 [the view contract and review gate](CAPTURE-ACQUISITION.md#heap-ptd-view-and-original-setter-connection)
 and [preserved predecessor CI failures](evidence/ci-db4fc00.json).
+
+### Checked common-handler lazy producer composition
+
+The original common dispatcher can now call the live lazy PTD producer through
+its protected call boundary, validate the actual completed child result and
+published root, then execute original PTD reads and return. Twenty-four native
+cases cover the composition; initial module/fiber/slot and API effects remain
+explicit inputs. The pending-event ordered adapter is still cached-only.
+
+Next close the original free body's normal-return HeapFree failure path with an
+owned API outcome and justified alias/lifetime/errno effects. The existing memory
+kernel has successful retirement and explicit rejection, not a Windows FALSE
+outcome. Do not remove the missing-free check or infer atomicity. Then carry the
+producer through the pending-event delivery lease. Details and the predecessor
+CI conclusions are in [the common-handler contract](CAPTURE-ACQUISITION.md#common-handler-with-the-live-lazy-ptd-producer).

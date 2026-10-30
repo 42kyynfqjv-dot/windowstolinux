@@ -480,7 +480,7 @@ created by this change.
 
 The concrete free-body follow-up is not a guessed unconditional deallocation:
 0x407d50..0x407d8a tests null, calls HeapFree through IAT0x415098, and on a false
-result calls GetLastError, error mapping0x407c12 and errno accessor0x407ccd before
+result calls GetLastError, error mapping 0x407c12 and errno accessor0x407ccd before
 returning normally. The current component's checked free callback admits an
 actual retirement or rejects; it does not yet admit that normal-return failure
 path. Closing it requires an owned HeapFree outcome and justified failure
@@ -496,3 +496,57 @@ The unchanged PE SHA256 remains 1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177e
 [Machine-readable evidence](evidence/heap-ptd-view.json) records counts, bindings,
 remaining cuts and test-development corrections. No fresh Windows observations
 or whole-PE comparisons are added by these local runs.
+
+## Common handler with the live lazy PTD producer
+
+Independent review of 1788a76 found no heap-view identity or stale-count gate
+regression. All three workflows completed successfully: 40995444671,
+40995440369 and 40995440136. Those results do not diagnose the preserved Windows
+timeouts or turn retained component observations into full startup execution.
+
+The shared common-dispatcher lowering now supports a checked whole-PTD producer
+at its original call boundary. It requires a completed protected child return,
+the exact returned EAX value, and a live published PTD root before the original
+PTD reads execute. The original prefix, dispatcher, metadata and context checks
+are reused. Cached-only and generic-lookup modes retain their existing contracts.
+
+A 24-case native composition starts from null FLS and executes the original lazy
+getter, setter wrappers, allocation/free thunks, common dispatcher and return.
+Success requires a newly published heap Buffer capability distinct from the
+old supplied ThreadData object. Its actual offset32 value drives the dispatcher;
+the cases include both known values and an unknown-bit rejection. Negative cases
+cover stale slot/module/context/allocation, cross-fiber access, changed guard,
+failed publication, premature provider return, mismatched return values, replay
+and retirement between production and consumption. The allocator availability
+and zeroing and the setter/free outcomes remain explicit component API effects;
+the separate existing lazy-producer test executes the original calloc body.
+This component path does not change the pending-event ordered-search adapter.
+
+The shared fixture initially retained a cached-mode replay signature and an
+incorrect LastError expectation for a lazy failure before the restore call.
+Both test issues were corrected; the runtime's failure ordering was preserved.
+The runner now requires the new named test and records 24 native cases separately
+from the five retained Windows wrapper comparisons. No new Windows or whole-PE
+translation pair is claimed.
+
+HeapFree failure remains a concrete effect-model gate. `Space::heap_free` models
+successful retirement or an out-of-domain error; it has no independently supplied
+FALSE/LastError outcome. Original free 0x407d50 instead returns normally after
+FALSE, GetLastError, error mapping 0x407c12 and errno 0x407ccd. The current lazy
+component requires retirement after the free callback and therefore rejects that
+unclosed normal-return failure. Removing this check would manufacture cleanup
+success. A bounded semantic pass must define live/uncertain allocation authority
+for a failed HeapFree, preserve alias and errno effects in original order, and
+connect the original body before changing that gate. No failure atomicity follows
+from the BOOL result alone. Actual delivery/capture acquisition, incoming-handler
+containment, termination and full formatter/exit remain open.
+
+Validation for this connection: 229 CRT tests pass with the observation-dependent
+case passing separately in retained-artifact replay; 60 Python tests pass with
+one existing skip; all-target Clippy and formatting pass. The unchanged PE hash
+remains 1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4.
+Final replay passes five recorded wrapper comparisons, 76 ordered cases and the
+new 24 common-handler cases. Wrapper Rust SHA256 is
+aedf1f817e42f95331861e73866590152796db03de12f68fe597b19af8f63e26.
+[Review, component hashes and independent original free inventory](evidence/common-lazy-ptd.json)
+record the exact boundary and inputs. Full startup/rcedit remains unsupported.

@@ -159,6 +159,29 @@ fn common_source_mode(
     cached: bool,
     delivery: bool,
 ) -> Result<String, String> {
+    common_source_provider(common, thunk, entry, tail_bytes, cached, delivery, false)
+}
+/// Execute the same original dispatcher with an owned, checked whole-PTD
+/// producer. The caller must bind its actual allocator/API effects separately.
+fn common_source_provider(
+    common: &[u8],
+    thunk: &[u8],
+    entry: &[u8],
+    tail_bytes: &[u8],
+    cached: bool,
+    delivery: bool,
+    whole_ptd: bool,
+) -> Result<String, String> {
+    if whole_ptd && cached {
+        return Err("C++ conflicting PTD provider modes".into());
+    }
+    let ptd_call = if whole_ptd {
+        "let value=lookup(rt,child)?;if !child.returned||child.r[0]!=value{return Err(\"C++ PTD provider return authority\");}rt.dispatcher_ptd(CrtCpu::pointer(value)?)?;Ok(value)".to_string()
+    } else if cached {
+        "cxx_ptd_required(rt,child,CrtResolverAccess::Cached,fiber,slot,&mut |_,_,_|Err(\"C++ cached handler cannot load\"))".into()
+    } else {
+        "cxx_ptd_required(rt,child,lookup)".into()
+    };
     let epoch_parameter = if delivery {
         "epoch:&mut NormalCallEpoch<'_>,"
     } else {
@@ -178,11 +201,6 @@ fn common_source_mode(
         "fiber:CrtFiber,slot:CrtFlsSlot"
     } else {
         "lookup:&mut impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu)->Result<CrtValue,&'static str>"
-    };
-    let arguments = if cached {
-        "CrtResolverAccess::Cached,fiber,slot,&mut |_,_,_|Err(\"C++ cached handler cannot load\")"
-    } else {
-        "lookup"
     };
     if common != crate::crt_ptd::raw(COMMON)
         || thunk != crate::crt_ptd::raw(DISPATCH_THUNK)
@@ -270,7 +288,7 @@ fn cxx_common(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,owner:&CrtCpu,frame:&CrtP
   if rt.load(CrtCpu::pointer(cpu.r[4])?,32)?!=CrtValue::Pointer(context.context){{return Err("C++ validator context argument");}}
   cpu.call_activation(rt,0x403d84,0,|rt,child|{{context.check(rt,owner,frame)?;child.clobber(CrtValue::Scalar{{bits:0,known:0}});child.finish(rt)}})?;
   let argument=cpu.pop(rt)?;cpu.r[1]=argument;
-  cpu.call_activation(rt,0x403d8a,0,|rt,child|cxx_ptd_required(rt,child,{arguments}))?;
+  cpu.call_activation(rt,0x403d8a,0,|rt,child|{{{ptd_call}}})?;
   let _=(||->Result<CrtValue,&'static str>{{{use_ptd}}})()?;
   record.state(rt,owner,frame)?;context.check(rt,owner,frame)?;
   if CrtCpu::number(cpu.r[1])?!=record.metadata.address(){{return Err("C++ dispatcher metadata identity");}}cpu.r[1]=CrtValue::Pointer(record.metadata);
@@ -531,6 +549,13 @@ rt.store(state,32,CrtValue::Scalar{{bits:0,known:0}}).unwrap();assert!(binding.s
 
 #[test]
 fn common_handler_executes_cached_getter_with_owned_context_and_no_loader_authority() {
+    common_handler_fixture(false);
+}
+#[test]
+fn common_handler_acquires_heap_ptd_through_original_lazy_producer() {
+    common_handler_fixture(true);
+}
+fn common_handler_fixture(lazy: bool) {
     let security = crate::crt_stream_callees::prove_security(
         &crate::crt_ptd::raw("3b0d00c041007501c3e97c020000"),
         0x40154c,
@@ -559,27 +584,41 @@ fn common_handler_executes_cached_getter_with_owned_context_and_no_loader_author
             0x41b42c,
             0x403002,
             &security,
-            true
+            !lazy
         )
         .unwrap(),
-        common_source_bound(
+        common_source_provider(
             &crate::crt_ptd::raw(COMMON),
             &crate::crt_ptd::raw(DISPATCH_THUNK),
             &crate::crt_ptd::raw(DISPATCH_ENTRY),
             &crate::crt_ptd::raw(DISPATCH_TAIL),
-            true
+            !lazy,
+            false,
+            lazy
         )
         .unwrap(),
         context_source(&crate::crt_ptd::raw(CONTEXT_CHECK)).unwrap(),
-        crate::crt_cxx_ptd::dynamic_source(
-            &crate::crt_ptd::raw(crate::crt_cxx_ptd::GETTER),
-            &crate::crt_ptd::raw(crate::crt_cxx_ptd::REQUIRED)
-        )
+        if lazy {
+            crate::crt_cxx_ptd::lazy_source(
+                &crate::crt_ptd::raw(crate::crt_cxx_ptd::GETTER),
+                &crate::crt_ptd::raw(crate::crt_cxx_ptd::REQUIRED),
+                &crate::crt_ptd::raw(crate::crt_cxx_lookup::SETTER),
+            )
+        } else {
+            crate::crt_cxx_ptd::dynamic_source(
+                &crate::crt_ptd::raw(crate::crt_cxx_ptd::GETTER),
+                &crate::crt_ptd::raw(crate::crt_cxx_ptd::REQUIRED),
+            )
+        }
         .unwrap()
     );
     if let Some(out) = std::env::var_os("W2L_EH4_EVIDENCE") {
         std::fs::write(
-            std::path::Path::new(&out).join("cached-common-handler.rs"),
+            std::path::Path::new(&out).join(if lazy {
+                "lazy-common-handler.rs"
+            } else {
+                "cached-common-handler.rs"
+            }),
             format!(
                 "{}\n{}\n{}",
                 crate::crt_stream_runtime::EMITTED_TYPES,
@@ -591,15 +630,37 @@ fn common_handler_executes_cached_getter_with_owned_context_and_no_loader_author
     }
     let meta = crate::crt_ptd::raw(METADATA);
     let map = crate::crt_ptd::raw(UNWIND_MAP);
+    let invoke = if lazy {
+        r#"cxx_handler_prefix(&mut rt,&mut child,&owner,&frame,&record,&context,&mut |rt,c|{if mode==22{return Ok(CrtValue::Pointer(ptd));}let value=cxx_ptd_required(rt,c,CrtResolverAccess::Cached,if mode==7{foreign}else{fiber},slot,&mut|_,_,_|Err("lazy handler cannot load"),&mut|rt,_,value|{
+       if let CrtValue::Pointer(p)=value{if mode==12{rt.free_allocation(p)?;}else if mode==2{rt.store(rt.offset(p,32)?,32,CrtValue::Scalar{bits:0,known:0})?;}else if mode==18{rt.store(rt.offset(p,32)?,32,CrtValue::scalar(1))?;}}
+       Ok((u32::from(mode!=19||!matches!(value,CrtValue::Pointer(_))),None))
+      },&mut|rt,c,target|{let sp=CrtCpu::pointer(c.r[4])?;let v=if target==0x407cf0{assert_eq!(rt.load(rt.offset(sp,4)?,32)?,CrtValue::scalar(1));assert_eq!(rt.load(rt.offset(sp,8)?,32)?,CrtValue::scalar(40));CrtValue::Pointer(rt.allocate(40,true,true)?.ok_or("allocation unavailable")?)}else{assert_eq!(target,0x407d50);let value=rt.load(rt.offset(sp,4)?,32)?;if let CrtValue::Pointer(p)=value{rt.free_allocation(p)?;}else{assert_eq!(value,CrtValue::scalar(0));}CrtValue::Scalar{bits:0,known:0}};c.clobber(v);c.finish(rt)})?;if mode==20{return Ok(CrtValue::scalar(0));}if mode==21{c.r[0]=CrtValue::scalar(0);}if mode==23{rt.free_allocation(CrtCpu::pointer(value)?)?;}Ok(value)})"#
+    } else {
+        "cxx_handler_prefix(&mut rt,&mut child,&owner,&frame,&record,&context,if mode==7{foreign}else{fiber},slot)"
+    };
+    let lazy_setup = if lazy {
+        r#"let setter=rt.module_export_result(init,m,"FlsSetValue",0x722000).unwrap();rt.store(rt.offset(cache_root,12).unwrap(),32,CrtValue::Function(setter)).unwrap();rt.map_region(0x415d60,8,CrtRegionKind::Input,Some(&[0,0,0,0,2,0,0,0])).unwrap();rt.map_region(0x415d68,12,CrtRegionKind::Input,Some(b"FlsSetValue\0")).unwrap();"#
+    } else {
+        ""
+    };
+    let replay = if lazy {
+        "cxx_handler_prefix(&mut rt,&mut child,&owner,&frame,&record,&context,&mut|_,_|panic!(\"replayed producer\"))"
+    } else {
+        "cxx_handler_prefix(&mut rt,&mut child,&owner,&frame,&record,&context,fiber,slot)"
+    };
+    let cache_size = if lazy { 16 } else { 12 };
+    let null_slot = lazy;
+    let count = if lazy { 24 } else { 20 };
     let body = format!(
         r#"
-for mode in 0..20{{
+for mode in 0..{count}{{
  let(mut rt,init)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();let(m,reference)=rt.module_acquire_result(init,"independent handler dependency",0x720000).unwrap();let function=rt.module_export_result(init,m,"FlsGetValue",0x721000).unwrap();
- let cache_root=rt.map_region(0x41cd14,12,CrtRegionKind::Module,None).unwrap();let cache=rt.offset(cache_root,8).unwrap();rt.store(cache,32,if mode==14{{CrtValue::scalar(0)}}else{{CrtValue::Function(function)}}).unwrap();
+ let cache_root=rt.map_region(0x41cd14,{cache_size},CrtRegionKind::Module,None).unwrap();let cache=rt.offset(cache_root,8).unwrap();rt.store(cache,32,if mode==14{{CrtValue::scalar(0)}}else{{CrtValue::Function(function)}}).unwrap();
  rt.map_region(0x415128,4,CrtRegionKind::Module,Some(&(if mode==13{{0x401bfau32}}else{{0x401bf9u32}}).to_le_bytes())).unwrap();
  rt.map_region(0x415d4c,8,CrtRegionKind::Input,Some(&[0,0,0,0,2,0,0,0])).unwrap();rt.map_region(0x415d54,12,CrtRegionKind::Input,Some(b"FlsGetValue\0")).unwrap();rt.map_region(0x41c060,4,CrtRegionKind::Module,Some(&3u32.to_le_bytes())).unwrap();
+ {lazy_setup}
  let ptd=rt.map_region(0xd000,40,CrtRegionKind::ThreadData,None).unwrap();if mode!=2{{rt.store(rt.offset(ptd,32).unwrap(),32,CrtValue::scalar(if mode==18{{1}}else{{0}})).unwrap();}}
- let fiber=rt.bind_fiber(9).unwrap();let slot=rt.bind_fls(fiber,3,if mode==19{{CrtValue::scalar(0)}}else{{CrtValue::Pointer(ptd)}}).unwrap();
+ let fiber=rt.bind_fiber(9).unwrap();let slot=rt.bind_fls(fiber,3,if {null_slot}||mode==19{{CrtValue::scalar(0)}}else{{CrtValue::Pointer(ptd)}}).unwrap();
  if mode==8||mode==9{{rt.retire_fls(fiber,slot).unwrap();if mode==9{{rt.bind_fls(fiber,3,CrtValue::Pointer(ptd)).unwrap();}}}}if mode==10||mode==11{{rt.module_release_result(init,reference,true).unwrap();if mode==11{{rt.module_acquire_result(init,"independent handler dependency",0x720000).unwrap();}}}}if mode==12{{rt.retire_region(ptd).unwrap();}}rt.end_initialization(init).unwrap();
  rt.map_region(0x41c000,4,CrtRegionKind::Module,Some(&123u32.to_le_bytes())).unwrap();rt.map_region(0x41b42c,36,CrtRegionKind::Module,Some(&{meta:?})).unwrap();rt.map_region(0x41b41c,16,CrtRegionKind::Module,Some(&{map:?})).unwrap();
  let stack=rt.map_region(0x9000,1024,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,768).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(1)).unwrap();let mut owner=CrtCpu::new(sp,1).unwrap();owner.push(&mut rt,CrtValue::scalar(0)).unwrap();owner.r[0]=CrtValue::scalar(0x414ad6);let previous=rt.thread_head(4,5,[1,2,3]).unwrap();let mut frame=CrtPtdFrame::new(&rt,&owner,previous,0x414ad6,0x41c000).unwrap();ptd_prolog(&mut rt,&mut owner,&mut frame,0x40a33e).unwrap();let record=cxx_bind(&rt,&owner,&frame).unwrap();
@@ -608,13 +669,23 @@ for mode in 0..20{{
  let scratch=rt.map_region(0xa000,4096,CrtRegionKind::Stack,None).unwrap();let hs=rt.offset(scratch,3072).unwrap();rt.store(hs,32,CrtValue::ProtectedReturn(123)).unwrap();rt.store(rt.offset(hs,4).unwrap(),32,CrtValue::Pointer(exception)).unwrap();rt.store(rt.offset(hs,8).unwrap(),32,CrtValue::Pointer(rt.offset(frame.bp,-12).unwrap())).unwrap();rt.store(rt.offset(hs,12).unwrap(),32,CrtValue::Pointer(if mode==17{{rt.offset(context_pointer,4).unwrap()}}else{{context_pointer}})).unwrap();rt.store(rt.offset(hs,16).unwrap(),32,CrtValue::scalar(0x5678)).unwrap();let mut child=CrtCpu::new(hs,123).unwrap();
  match mode{{3=>{{rt.store(rt.offset(context_pointer,196).unwrap(),32,CrtValue::scalar(frame.low.address())).unwrap();}},4=>{{rt.store(rt.offset(context_pointer,196).unwrap(),32,CrtValue::Pointer(scratch)).unwrap();}},5=>context.retire(),6=>rt.retire_region(context_pointer).unwrap(),16=>owner.return_id+=1,_=>{{}}}}
  let(mut other,_)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();let foreign=other.bind_fiber(9).unwrap();rt.last_os_error=Some(77);let cache_bytes=rt.memory.read(cache.address(),4).unwrap().to_vec();let refs=rt.module_references.len();
- let result=cxx_handler_prefix(&mut rt,&mut child,&owner,&frame,&record,&context,if mode==7{{foreign}}else{{fiber}},slot);
- if mode==0||mode==1||mode==18{{assert_eq!(result.unwrap(),CrtValue::scalar(1));assert!(child.returned);assert_eq!(child.r[4],CrtValue::Pointer(rt.offset(hs,4).unwrap()));assert_eq!(owner.r[5],CrtValue::Pointer(frame.bp));assert!(cxx_handler_prefix(&mut rt,&mut child,&owner,&frame,&record,&context,fiber,slot).is_err());}}else{{assert!(result.is_err(),"mode {{mode}}");assert!(!child.returned);}}
- assert_eq!(rt.initialization,None);assert_eq!(rt.module_references.len(),refs);assert_eq!(rt.memory.read(cache.address(),4).unwrap(),cache_bytes);assert_eq!(rt.last_os_error,if mode==19{{None}}else{{Some(77)}});
+ let result={invoke};let result_error=result.as_ref().err().copied();
+ if mode==0||mode==1||mode==18{{assert_eq!(result.unwrap(),CrtValue::scalar(1));assert!(child.returned);assert_eq!(child.r[4],CrtValue::Pointer(rt.offset(hs,4).unwrap()));assert_eq!(owner.r[5],CrtValue::Pointer(frame.bp));assert!({replay}.is_err());}}else{{assert!(result.is_err(),"mode {{mode}}");assert!(!child.returned);}}
+ if {null_slot}&&matches!(mode,0|1|18){{let CrtValue::Pointer(actual)=rt.fls.get(&3).unwrap().1 else{{panic!("PTD not actually published")}};assert_eq!(actual.kind,CrtRegionKind::Buffer);assert_ne!(actual.cap,ptd.cap);rt.dispatcher_ptd(actual).unwrap();assert_eq!(rt.load(rt.offset(actual,32).unwrap(),32).unwrap(),CrtValue::scalar(if mode==18{{1}}else{{0}}));}}
+ if {null_slot}{{match mode{{2=>assert_eq!(result_error,Some("CRT unknown scalar bits observed")),12|23=>assert_eq!(result_error,Some("CRT stale/foreign pointer")),19=>assert_eq!(result_error,Some("C++ required PTD termination effect unbound")),20..=22=>assert_eq!(result_error,Some("C++ PTD provider return authority")),_=>{{}}}}}}
+ assert_eq!(rt.initialization,None);assert_eq!(rt.module_references.len(),refs);assert_eq!(rt.memory.read(cache.address(),4).unwrap(),cache_bytes);assert_eq!(rt.last_os_error,if mode==19&&!{null_slot}||mode==12&&{null_slot}{{None}}else{{Some(77)}},"mode {{mode}}");
 }}
 "#
     );
-    crate::crt_stream_callees_tests::native(&extra, &body, "cached-common-handler");
+    crate::crt_stream_callees_tests::native(
+        &extra,
+        &body,
+        if lazy {
+            "lazy-common-handler"
+        } else {
+            "cached-common-handler"
+        },
+    );
     for (which, bytes) in [COMMON, DISPATCH_THUNK, DISPATCH_ENTRY, DISPATCH_TAIL]
         .into_iter()
         .enumerate()
