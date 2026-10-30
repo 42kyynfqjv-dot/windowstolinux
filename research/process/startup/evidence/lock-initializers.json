@@ -1,0 +1,85 @@
+{
+  "kind": "Original lock initializer/tail thunk/rollback component; zero whole-PE translations",
+  "reviewed_commit": "ed19128373c740662472b0642df4d272173678c0",
+  "source_sha256": {
+    "src/crt_startup_locks.rs": "3d8983a93c861feeca1586c67f8697cd24da9e8b0de89158b3b8b4b88af65d50",
+    "src/crt_startup_table.rs": "4039659f906fbd3e791cdf2bb3845d3037e9ce0240bdd5f242e9ee34a914eac9",
+    "src/crt_normal_frame_tests.rs": "e73b2854f23f09d1672e6f897da5419c5f667d29623c3a80d262785de4a17e48",
+    "examples/crt_stream.rs": "22632959d60dda4cd86b5619d9b4f4b1f5b06864666bcfe9e9f0c717c29080f4",
+    "research/process/startup/check_normal_wrapper.py": "15760e7de1d554f2f729afff17431dfb91c6ace143000af87a09224ace19ca48",
+    "research/process/check_memory.py": "fb134cc4a5cd1c147149d9a729031c7c5b939fa6246edbf6a4ecff9634c066b1"
+  },
+  "validation": {
+    "crt_passed": 284,
+    "ignored_in_full": 2,
+    "artifact_tests": "both passed in replay",
+    "lock_loop_native_cases": 14,
+    "python_run": 76,
+    "python_skip": 1,
+    "guard_mutants_detected": 7,
+    "emitted_frame_vectors": 10,
+    "clippy": "passed",
+    "format": "passed"
+  },
+  "evidence": {
+    "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+    "rust_sha256": "e23c66eca09dd2cc138b78005f29b17fe365e7faa24cacdda59ef0261693a2f6",
+    "report_sha256": "29077b6472258b6639179acc1025612d2f8b4648262f4f4355e810477456de03",
+    "recorded_windows_wrapper_comparisons": 5,
+    "new_lock_windows_pairs": 0,
+    "whole_pe_pairs": 0
+  },
+  "production_component": {
+    "completed_callbacks": [
+      "407558",
+      "407587",
+      "408113",
+      "401bd5",
+      "40bd8e"
+    ],
+    "new_locks": 15,
+    "total_bootstrap_plus_new_locks": 16,
+    "counter": "41d2b8=15",
+    "next_boundary": "index5 callback40c8f0 unbound; first instruction GetProcessHeap4150f8; handle destination41d2c8",
+    "default_admission": "402b00 remains blocked"
+  },
+  "negative_cases": [
+    "failure iterations0/1/7/14 with exact reverse cleanup",
+    "delete completes then independent failure before count decrement",
+    "changed loop/thunk/cleanup code",
+    "initial nonzero count",
+    "retired image storage",
+    "read-only object page",
+    "stale provider before entry",
+    "provider certainty revoked after first initialization"
+  ],
+  "ci_repair": {
+    "runs": [
+      41084175194,
+      41084182743
+    ],
+    "failed_jobs": [
+      124160837592,
+      124160863776
+    ],
+    "cause": "mutation harness searched removed whole-region writable guard; failed before mutant compilation",
+    "repair": "target actual page-permission destination guard; independently require mutant failure",
+    "historical_windows_timeouts": "unresolved"
+  },
+  "log_sha256": {
+    "full.log": "f653564299bec2d42b71aed655a8d583f2238280b589b0f1e03b5ddaf09ef99a",
+    "final-cases.log": "31531f0b0fc1385a5acdc30e9bde6f7538068f1a410ee18ea91965c9b644c588",
+    "memory-mutations.log": "9e375eb448d2c6575b085cf190827436072230e94625022c8b4551a3f0f3ba7e",
+    "clippy-final.log": "22e0df986057b9ba5be07526ac5fb348862a3dedef42108383cc3e088acbb889",
+    "python.log": "31919ad211de72730f43c215f4c912f123b5b2b4ab2c6cdadeb527ee69d91663",
+    "first.log": "cb8fb681564df6abb3ee3f873665cc09582f02741e531c545063ea99faa037b8",
+    "cases.log": "542b1ccf8e22cebec9a58608945a809f9e616e5f8cf51b6d040ae96dae84597f",
+    "reviewed.log": "572c4576db992550e67548b5c706978f7d58f17c75d7607fae0bc859cc75f476"
+  },
+  "limits": [
+    "explicit fixed native resource profile; Windows allocation-failure equivalence unproved",
+    "test-only false outcomes are conformance injections, not OS resource failures",
+    "default/full startup/rcedit unsupported",
+    "final-head CI/independent review pending"
+  ]
+}

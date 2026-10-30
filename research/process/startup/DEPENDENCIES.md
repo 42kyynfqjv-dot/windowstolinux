@@ -1,5 +1,12 @@
 # Remaining entry-to-exit dependencies
 
+Current checkpoint: original callback `0x401bd5`, the fifteen-record lock loop
+`0x40bd8e`, its original tail thunk and checked native synchronization execute.
+The next selected callback is `0x40c8f0` (GetProcessHeap via IAT `0x4150f8`),
+whose body remains unbound. Count 15 and all locks remain live at rejection.
+[Original execution, rollback tests and CI harness repair](LOCK-INITIALIZERS.md).
+Default admission/full startup/rcedit remain unproved.
+
 Current checkpoint: the explicit native profile executes original callback
 `0x408113`, its `VirtualProtect` call at `0x408129`, original zero/nonzero result
 handling and protected return. `.fptable` becomes read-only with canonical mapping
