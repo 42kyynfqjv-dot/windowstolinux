@@ -30,6 +30,24 @@ jobs:
           path: |
             original/startup-inventory.json
             original/execution-boundary.json
+  api-set-observation:
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Measure pinned x86 API-set mapping and reference behavior
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $install = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $vcvars = Join-Path $install 'VC\Auxiliary\Build\vcvarsall.bat'
+          cmd /c "`"$vcvars`" x86 -vcvars_ver=14.44 && python research/process/startup/measure_api_set.py %RUNNER_TEMP%/api-set-observation"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: startup-api-set-observation
+          path: ${{ runner.temp }}/api-set-observation
   original-user-mode-probes:
     runs-on: windows-2022
     steps:

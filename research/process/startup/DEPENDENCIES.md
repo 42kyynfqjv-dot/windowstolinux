@@ -602,3 +602,13 @@ original entry still stops at402b00 because api-ms-win-core-synch-l1-2-0 mapping
 and initialization effects are not established. Next: justify the system-module
 namespace and native export contracts, then constructor/FLS effects. See
 [RESIDENT-LOADER.md](RESIDENT-LOADER.md). No new whole-PE support.
+
+### API-set namespace and provider initialization
+
+The default entry remains at LoadLibraryExW402b00. A frozen x86 Server2022/20348
+observer now measures contract→load-host→export-host identity and reference
+survival, independently of the converter. Missing/ambiguous evidence rejects;
+no observation issues native initialization authority. Next: a process-owned,
+initialized lock provider with documented ABI/effects and failure-atomic export
+publication, then dynamic FLS. See [API-SET-BOUNDARY.md](API-SET-BOUNDARY.md).
+This is a measurement gate, not actual acquisition or new PE/ELF evidence.

@@ -435,3 +435,11 @@ unbound, so actual entry still rejects at402b00. Native named-export/constructor
 FLS allocation/publication and bootstrap PTD callbacks remain open. See
 RESIDENT-LOADER.md; missing authority is never converted to an assumed failed or
 successful Windows load.
+
+API-set acquisition at402b00 is still unbound. The new pinned x86 observer and
+strict namespace validator establish a reproducible mapping-evidence gate;
+they cannot authorize native module initialization. Provider construction,
+publication/rollback, final-release lifetime, export behavior and unsupported
+loader callbacks remain explicit requirements in
+[API-SET-BOUNDARY.md](API-SET-BOUNDARY.md). No resident-fixture assumption has
+been promoted to actual original-entry acquisition.
