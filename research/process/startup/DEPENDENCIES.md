@@ -1,5 +1,27 @@
 # Remaining entry-to-exit dependencies
 
+## Current executable checkpoint: registered UCRT getter and native FLS read
+
+The explicit second-fiber profile now carries the actual live `NormalCallEpoch`
+from original entry through initializer/table/callback7 into UCRT getter
+`0x40a332`. Its original prolog links the byte-backed C++-style record to the same
+canonical startup chain. Actual GetLastError and the original static FlsGetValue
+thunk execute; the newly allocated native index1 issues its current stationary
+fiber's documented initial null value, without a supplied slot or PTD pointer.
+
+Execution now rejects at original CALL `0x40a3a3 -> 0x40a1ee`, before lazy PTD
+allocation. The live record and prior cache/FLS/lock effects remain; callback7
+has not completed and no PTD heap object or restoration receipt is issued.
+[Contract, independent cases and exact next gates](STARTUP-PTD-ACQUISITION.md).
+
+The next UCRT body requires sentinel publication, calloc(1,0x364), failure cleanup
+and original initializer40a067 (including409efb/40a00d locale/reference helpers).
+This868-byte object is distinct from the existing40-byte VCRUNTIME dispatcher
+PTD view; do not retag/copy that view or assume locale initialization. Reuse checked
+heap, FLS setter and shared registry transitions with a justified UCRT object view.
+Default admission/full startup/rcedit remain unproved; no new Windows/ELF pair.
+Earlier checkpoints below are historical and superseded where stated.
+
 ## Current executable checkpoint: protected second-resolver publication
 
 Under the explicitly enabled `w2l-native-second-fiber-20348-2398cc6a-v1`

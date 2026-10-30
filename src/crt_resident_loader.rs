@@ -59,6 +59,13 @@ impl CrtNativePlatform {
  fn fls_call(&self,rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,init:CrtInitialization,image:CrtProcessImage,f:CrtFunction)->Result<CrtValue,&'static str>{
   self.validate(rt,init)?;if self.fls!=Some(f)||rt.native_named_export(init,f.module,"FlsAlloc")?!=f{return Err("native FLS callable target");}rt.native_api_identity(f)?;cpu.native_fls_alloc_call(rt,init,image)
  }
+ /// Static named-import adapter only. This does not publish a dynamic export
+ /// descriptor or grant GetProcAddress authority for FlsGetValue.
+ fn fls_get_call(&self,rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,init:CrtInitialization)->Result<CrtValue,&'static str>{
+  self.validate(rt,init)?;let f=self.fls.ok_or("native FLS getter provider not enabled")?;rt.native_api_identity(f)?;rt.provider_ready(f.module)?;
+  if !rt.modules.get(&f.module.handle).is_some_and(|m|m.identity=="kernel32.dll"){return Err("native FLS getter provider identity");}
+  let fiber=rt.fiber.ok_or("native FLS current fiber unbound")?;cpu.native_fls_get_call(rt,init,fiber)
+ }
  fn fls_set_call(&self,rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,init:CrtInitialization,f:CrtFunction)->Result<CrtValue,&'static str>{
   self.validate(rt,init)?;if self.fls_set!=Some(f)||rt.native_named_export(init,f.module,"FlsSetValue")?!=f{return Err("native FLS setter callable target");}rt.native_api_identity(f)?;let fiber=rt.fiber.ok_or("native FLS current fiber unbound")?;rt.check_fiber(fiber)?;cpu.native_fls_set_call(rt,init,fiber)
  }

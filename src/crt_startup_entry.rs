@@ -94,11 +94,11 @@ pub(crate) fn source(regions: &[Vec<u8>], helper: &[u8]) -> Result<String, Strin
                 Ok(match(pc,target){
    (0x4017a4,Target::Direct(0x401b71))=>"cpu.call_activation(rt,0x4017a9,0,|rt,c|original_cookie_init_connected(rt,c,inputs,backend))?;".into(),
    (0x401626,Target::Direct(0x401e60))=>r#"let n=rt.generation.checked_add(1).filter(|n|*n<1u64<<63).ok_or("startup helper identity exhausted")?;let id=n|(1u64<<63);if rt.tags.values().any(|v|*v==CrtValue::ProtectedReturn(id)){return Err("startup helper identity collision");}cpu.push(rt,CrtValue::ProtectedReturn(id))?;rt.generation=n;startup_helper(rt,cpu,id,binding.token,|rt,c,record,head|binding.install(rt,c,epoch,record,head))?;"#.into(),
-   (0x40162d,Target::Direct(0x401945))=>"cpu.call_activation(rt,0x401632,0,|rt,c|startup_initializer(rt,c,inputs,backend,features,platform))?;".into(),
+   (0x40162d,Target::Direct(0x401945))=>"cpu.call_activation(rt,0x401632,0,|rt,c|startup_initializer(rt,c,inputs,backend,features,platform,Some(epoch)))?;".into(),
    (0x401955,Target::Direct(0x401ea5))=>"cpu.call_activation(rt,0x40195a,0,|rt,c|startup_cpu_prefix(rt,c,inputs,backend,features,platform))?;".into(),
    (0x401ebe,Target::Import(0x41501c))=>r#"cpu.call_activation(rt,0x401ec4,4,|rt,c|features.ok_or("startup processor feature contract unbound at 0x401ebe")?.api(rt,c))?;return startup_cpu_tail(rt,cpu,inputs,features.ok_or("startup feature scope missing")?);"#.into(),
    (0x40195a,Target::Direct(0x4024ca))=>"cpu.call_activation(rt,0x40195f,0,|rt,c|startup_modules_platform(rt,c,inputs,platform))?;".into(),
-   (0x401967,Target::Direct(0x407653))=>"cpu.call_activation(rt,0x40196c,0,|rt,c|startup_original_table(rt,c,inputs,platform))?;".into(),
+   (0x401967,Target::Direct(0x407653))=>"cpu.call_activation(rt,0x40196c,0,|rt,c|startup_original_table(rt,c,inputs,platform,epoch.as_deref_mut()))?;".into(),
    (0x401972,Target::Direct(0x4024e9))=>"return Err(\"startup initializer failure cleanup unbound\");".into(),
    _=>return Err("startup slice call binding".into())
   })
@@ -132,7 +132,10 @@ pub(crate) fn source(regions: &[Vec<u8>], helper: &[u8]) -> Result<String, Strin
                 "startup_prefix",
                 ",epoch:&mut NormalCallEpoch<'_>,binding:&mut CrtNormalBinding",
             ),
-            2 => ("startup_initializer", ""),
+            2 => (
+                "startup_initializer",
+                ",mut epoch:Option<&mut NormalCallEpoch<'_>>",
+            ),
             _ => ("startup_cpu_prefix", ""),
         };
         out.push_str(&format!("fn {name}(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,backend:&mut impl CrtEntropyBackend,features:Option<&CrtFeatureObservation>,platform:Option<&CrtNativePlatform>{params})->Result<CrtValue,&'static str>{{cpu.validate_active(rt)?;inputs.validate(rt)?;let p=rt.process_image_code(inputs.image,{origin},{})?;if rt.memory.read(p.address(),{}).map_err(|_|\"startup code read\")?!=&{bytes:?}{{return Err(\"startup live code changed\");}}{body}}}",bytes.len(),bytes.len()));

@@ -1,5 +1,8 @@
 # Original second-resolver lock and protected cache publication
 
+The later [registered UCRT getter connection](STARTUP-PTD-ACQUISITION.md)
+supersedes this checkpoint's PTD-call endpoint; its lock/protection evidence remains.
+
 ## Address and ownership contract
 
 The original indexed helpers at `0x40bdcf` and `0x40be17` execute their certified

@@ -27,6 +27,11 @@ impl CrtCpu{
   let callback=match value{CrtValue::Scalar{bits:0,known:u32::MAX}=>None,CrtValue::Scalar{bits,known:u32::MAX}=>Some((image,rt.process_image_code(image,bits,1)?)),CrtValue::Pointer(p)=>{if rt.process_image_code(image,p.address(),1)?!=p{return Err("CRT FLS callback image/alias");}Some((image,p))},_=>return Err("CRT FLS callback provenance")};
   let id=rt.native_fls_allocate(init,callback)?;self.clobber(CrtValue::scalar(id.index));self.finish_pop(rt,4)
  }
+ fn native_fls_get_call(&mut self,rt:&mut CrtStreamRuntime,init:CrtInitialization,fiber:CrtFiber)->Result<CrtValue,&'static str>{
+  self.validate_active(rt)?;if self.return_pop!=4||self.r[4]!=self.entry[4]||[3,5,6,7].iter().any(|&i|self.r[i]!=self.entry[i]){return Err("CRT FLS getter stdcall frame");}
+  let sp=Self::pointer(self.r[4])?;rt.offset(sp,8)?;rt.memory.validate_writable(sp.cap,sp.owner,sp.address(),8).map_err(|_|"CRT FLS getter stack permission")?;let index=rt.load(rt.offset(sp,4)?,32)?.known_scalar()?;
+  let value=rt.native_fls_read(init,fiber,index)?;self.clobber(value);self.finish_pop(rt,4)
+ }
  fn native_fls_set_call(&mut self,rt:&mut CrtStreamRuntime,init:CrtInitialization,fiber:CrtFiber)->Result<CrtValue,&'static str>{
   self.validate_active(rt)?;if self.return_pop!=8||self.r[4]!=self.entry[4]||[3,5,6,7].iter().any(|&i|self.r[i]!=self.entry[i]){return Err("CRT FLS setter stdcall frame");}
   let sp=Self::pointer(self.r[4])?;let index=rt.load(rt.offset(sp,4)?,32)?.known_scalar()?;let value=rt.load(rt.offset(sp,8)?,32)?;

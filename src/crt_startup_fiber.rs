@@ -53,7 +53,7 @@ fn startup_second_bind(rt:&mut CrtStreamRuntime,c:&CrtCpu,i:&CrtEntropyInputs)->
  Target::Direct(0x408136)=>("startup_fiber_selector",0),Target::Direct(0x407e41)=>("startup_fiber_resolve",0),Target::Direct(0x407f0e)=>("startup_fiber_load",0),Target::Direct(0x40a43d)=>("startup_fiber_cleanup",0),
  Target::Direct(0x40803c)=>return Ok(format!("cpu.call_activation(rt,{next},4,|rt,c|startup_second_thunk(rt,c,inputs,platform,effect,0x40803c,0x41509c))?;")),
  Target::Direct(0x408048)=>return Ok(format!("cpu.call_activation(rt,{next},4,|rt,c|startup_second_thunk(rt,c,inputs,platform,effect,0x408048,0x4150a8))?;")),
- Target::Direct(0x40a332)=>return Ok("return Err(\"startup registered PTD acquisition context unbound at 0x40a428\");".into()),
+ Target::Direct(0x40a332)=>return Ok(format!("let e=epoch.as_deref_mut().ok_or(\"startup registered PTD acquisition context unbound at 0x40a428\")?;let p=platform.ok_or(\"startup PTD native profile absent\")?;cpu.call_activation(rt,{next},0,|rt,c|ptd_get_native_registered_with_lazy(rt,c,e,inputs,p,|_,_|Err(\"startup PTD lazy allocation effect unbound at 0x40a3a3\")))?;")),
  Target::Direct(0x40bdcf)|Target::Direct(0x40be17)=>return Ok(format!("cpu.call_activation(rt,{next},0,|rt,c|startup_second_lock(rt,c,inputs,{},&mut cache_lease))?;",t==Target::Direct(0x40bdcf))),
  Target::Direct(0x4078e0)=>return Ok("return Err(\"startup second resolver retry comparison unbound\");".into()),
  Target::Direct(0x4077ff)=>return Ok("return Err(\"startup second resolver abort effect unbound\");".into()),
@@ -101,8 +101,22 @@ fn startup_second_bind(rt:&mut CrtStreamRuntime,c:&CrtCpu,i:&CrtEntropyInputs)->
         } else {
             ""
         };
-        out.push_str(&format!("fn {name}(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:Option<&CrtNativePlatform>,effect:&mut impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu,&CrtEntropyInputs,Option<&CrtNativePlatform>,u32)->Result<CrtValue,&'static str>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;let p=rt.process_image_code(inputs.image,{origin},{})?;if rt.memory.read(p.address(),{}).map_err(|_|\"second FLS code read\")?!=&{bytes:?}{{return Err(\"second FLS code changed\");}}{bind}{body}}}",bytes.len(),bytes.len()));
+        let params = if name == "startup_fiber_init" {
+            ",mut epoch:Option<&mut NormalCallEpoch<'_>>"
+        } else {
+            ""
+        };
+        let emitted_name = if name == "startup_fiber_init" {
+            "startup_fiber_init_registered"
+        } else {
+            name
+        };
+        out.push_str(&format!("fn {emitted_name}(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:Option<&CrtNativePlatform>{params},effect:&mut impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu,&CrtEntropyInputs,Option<&CrtNativePlatform>,u32)->Result<CrtValue,&'static str>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;let p=rt.process_image_code(inputs.image,{origin},{})?;if rt.memory.read(p.address(),{}).map_err(|_|\"second FLS code read\")?!=&{bytes:?}{{return Err(\"second FLS code changed\");}}{bind}{body}}}",bytes.len(),bytes.len()));
     }
+    out.push_str(&crate::crt_ptd::native_registered_source(
+        &crate::crt_ptd::raw(crate::crt_ptd::GETTER),
+    )?);
+    out.push_str("fn startup_fiber_init(rt:&mut CrtStreamRuntime,c:&mut CrtCpu,i:&CrtEntropyInputs,p:Option<&CrtNativePlatform>,effect:&mut impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu,&CrtEntropyInputs,Option<&CrtNativePlatform>,u32)->Result<CrtValue,&'static str>)->Result<CrtValue,&'static str>{startup_fiber_init_registered(rt,c,i,p,None,effect)}");
     for (name, origin, iat) in [
         ("startup_second_enter_body", 0x40bdcf, 0x41504cu32),
         ("startup_second_leave_body", 0x40be17, 0x415050),

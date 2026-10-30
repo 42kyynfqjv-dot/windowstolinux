@@ -6,7 +6,9 @@ use std::collections::BTreeMap;
 
 pub(crate) fn raw(s: &str) -> Vec<u8> {
     s.as_bytes()
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|b| u8::from_str_radix(std::str::from_utf8(b).unwrap(), 16).unwrap())
         .collect()
 }
@@ -30,7 +32,7 @@ pub(crate) fn helper_source(
         || po == 0
         || eo == 0
         || cookie == 0
-        || cookie % 4 != 0
+        || !cookie.is_multiple_of(4)
     {
         return Err("PTD continuation helper protocol".into());
     }
@@ -84,7 +86,12 @@ fn fls_thunk_source(bytes: &[u8], origin: u32, iat: u32) -> Result<String, Strin
     expected[8..12].copy_from_slice(&iat.to_le_bytes());
     let end = origin.checked_add(12).ok_or("FLS thunk overflow")?;
     let ie = iat.checked_add(4).ok_or("FLS IAT overflow")?;
-    if bytes != expected || origin == 0 || iat == 0 || iat % 4 != 0 || origin < ie && iat < end {
+    if bytes != expected
+        || origin == 0
+        || iat == 0
+        || !iat.is_multiple_of(4)
+        || origin < ie && iat < end
+    {
         return Err("FLS original thunk/IAT protocol".into());
     }
     let graph = Graph::decode_linear_fragment(&bytes[..6], origin)?;
@@ -96,7 +103,7 @@ pub(crate) fn source() -> String {
     let mut source =
         helper_source(&raw(PROLOG), 0x414268, &raw(EPILOG), 0x414254, 0x41c000).unwrap();
     source.push_str(&fls_thunk_source(&raw(FLS_THUNK), 0x408061, 0x4150a0).unwrap());
-    source.push_str(&getter_source(&raw(GETTER), false).unwrap());
+    source.push_str(&getter_source(&raw(GETTER), false, false).unwrap());
     source
 }
 
@@ -106,10 +113,15 @@ pub(crate) fn registered_source(bytes: &[u8]) -> Result<String, String> {
     Ok(format!(
         "{}{}",
         fls_thunk_source(&raw(FLS_THUNK), 0x408061, 0x4150a0)?,
-        getter_source(bytes, true)?
+        getter_source(bytes, true, false)?
     ))
 }
-fn getter_source(bytes: &[u8], registered: bool) -> Result<String, String> {
+/// Original registered getter with native current-fiber acquisition at the
+/// actual static import. Shared prolog/epilog and chain definitions are required.
+pub(crate) fn native_registered_source(bytes: &[u8]) -> Result<String, String> {
+    getter_source(bytes, true, true)
+}
+fn getter_source(bytes: &[u8], registered: bool, native: bool) -> Result<String, String> {
     if bytes != raw(GETTER) {
         return Err("PTD getter code binding".into());
     }
@@ -122,17 +134,19 @@ fn getter_source(bytes: &[u8], registered: bool) -> Result<String, String> {
     ]);
     let body=crt_stream_emit::emit_body_with_hooks(&graph,|pc,target|{
   let next=pc+graph.nodes[&pc].length;
-  Ok(match target{
+  let binding=if native{match target{Target::Import(0x415044)=>"rt.process_image_import(inputs.image,0x415044,\"kernel32.dll\",\"GetLastError\")?;",Target::Import(0x415048)=>"rt.process_image_import(inputs.image,0x415048,\"kernel32.dll\",\"SetLastError\")?;",_=>""}}else{""};
+  let call=match target{
    Target::Direct(0x414268) if registered=>"binding=Some(CrtCxxChainBinding::bind(rt,cpu,epoch)?);binding.as_ref().unwrap().prepare(rt,cpu,epoch)?;frame=Some(CrtPtdFrame::new_mode(rt,cpu,binding.as_ref().unwrap().token,0x414ad6,0x41c000,true)?);ptd_prolog_registered(rt,cpu,epoch,frame.as_mut().unwrap(),binding.as_mut().unwrap(),0x40a33e)?;".into(),
    Target::Direct(0x414254) if registered=>"ptd_epilog_registered(rt,cpu,epoch,frame.as_mut().ok_or(\"PTD missing frame\")?,binding.as_mut().ok_or(\"PTD missing registry binding\")?,0x40a3b8)?;".into(),
    Target::Direct(0x414268)=>"frame=Some(CrtPtdFrame::new(rt,cpu,previous,0x414ad6,0x41c000)?);ptd_prolog(rt,cpu,frame.as_mut().unwrap(),0x40a33e)?;".into(),
    Target::Direct(0x414254)=>"ptd_epilog(rt,cpu,frame.as_mut().ok_or(\"PTD missing frame\")?,0x40a3b8)?;".into(),
    Target::Import(0x415044)=>format!("cpu.call_activation(rt,{next},0,|rt,child|{{let value=rt.last_os_error.map(CrtValue::scalar).unwrap_or(CrtValue::Scalar{{bits:0,known:0}});child.clobber(value);child.finish(rt)}})?;"),
    Target::Import(0x415048)=>format!("cpu.call_activation(rt,{next},4,|rt,child|{{let sp=CrtCpu::pointer(child.r[4])?;let value=rt.load(rt.offset(sp,4)?,32)?;if !matches!(value,CrtValue::Scalar{{..}}){{return Err(\"LastError scalar type\");}}rt.last_os_error=value.known_scalar().ok();child.clobber(CrtValue::Scalar{{bits:0,known:0}});child.finish_pop(rt,4)}})?;"),
+   Target::Direct(0x408061) if native=>format!("frame.as_ref().ok_or(\"PTD missing frame\")?.live(rt,cpu)?;let raw=rt.process_image_code(inputs.image,0x408061,12)?;if rt.memory.read(raw.address(),12).map_err(|_|\"PTD FLS thunk read\")?!=&{:?}{{return Err(\"PTD FLS thunk changed\");}}rt.process_image_import(inputs.image,0x4150a0,\"kernel32.dll\",\"FlsGetValue\")?;cpu.call_activation(rt,{next},4,|rt,child|{{{}}})?;",raw(FLS_THUNK), {let g=Graph::decode_linear_fragment(&raw(FLS_THUNK)[..6],0x408061)?;let pre=crt_stream_emit::emit_linear_fragment(&g,&Default::default())?;format!("let cpu=&mut *child;let _=(||->Result<CrtValue,&'static str>{{{pre}}})()?;platform.fls_get_call(rt,cpu,inputs.init)")}),
    Target::Direct(0x408061)=>format!("frame.as_ref().ok_or(\"PTD missing frame\")?.live(rt,cpu)?;cpu.call_activation(rt,{next},4,|rt,child|{{ptd_fls_thunk(rt,child,fiber,slot)}})?;"),
    Target::Direct(0x408054)=>"return Err(\"PTD dynamic FlsGetValue2 effect unbound\");".into(),
    Target::Direct(0x40a1ee)=>format!("cpu.call_activation(rt,{next},0,|rt,child|lazy(rt,child))?;"),
-   _=>return Err("PTD unexpected call target".into())})
+   _=>return Err("PTD unexpected call target".into())};Ok(format!("{binding}{call}"))
  },&roles,4096,|_,_|Err("PTD getter direct FS unbound".into()),|_,_|Ok(String::new()),|_,pop|{if pop!=0{return Err("PTD getter RET cleanup".into());}Ok(Some("if !frame.as_ref().is_some_and(|f|f.phase==2){return Err(\"PTD incomplete epilog\");}return cpu.finish(rt);".into()))}).unwrap();
     source.push_str(&format!("fn ptd_get_with_lazy(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,previous:CrtThreadHead,fiber:CrtFiber,slot:CrtFlsSlot,mut lazy:impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu)->Result<CrtValue,&'static str>)->Result<CrtValue,&'static str>{{rt.check_fiber(fiber)?;rt.validate_thread_head(previous)?;let mut frame:Option<CrtPtdFrame>=None;{body}}}"));
     source.push_str("fn ptd_get(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,previous:CrtThreadHead,fiber:CrtFiber,slot:CrtFlsSlot)->Result<CrtValue,&'static str>{ptd_get_with_lazy(rt,cpu,previous,fiber,slot,|_,_|Err(\"PTD lazy acquisition/recursive errno unbound\"))}");
@@ -141,6 +155,33 @@ fn getter_source(bytes: &[u8], registered: bool) -> Result<String, String> {
           .replace("previous:CrtThreadHead,", "epoch:&mut NormalCallEpoch<'_>,")
           .replace("rt.validate_thread_head(previous)?;", "cpu.validate_active(rt)?;epoch.state()?;CrtNormalBinding::validate_cxx_head(rt,epoch)?;let mut binding:Option<CrtCxxChainBinding>=None;")
           .replace("rt,cpu,previous,fiber,slot", "rt,cpu,epoch,fiber,slot");
+    }
+    if native {
+        let end = source
+            .find("fn ptd_get_registered(rt:")
+            .ok_or("PTD native wrapper boundary")?;
+        source.truncate(end);
+        source = source
+            .replace(
+                "fn ptd_get_registered_with_lazy(",
+                "fn ptd_get_native_registered_with_lazy(",
+            )
+            .replace(
+                "fiber:CrtFiber,slot:CrtFlsSlot,",
+                "inputs:&CrtEntropyInputs,platform:&CrtNativePlatform,",
+            )
+            .replace(
+                "rt.check_fiber(fiber)?;",
+                "inputs.validate(rt)?;platform.validate(rt,inputs.init)?;",
+            );
+        let guard=format!("let code=rt.process_image_code(inputs.image,0x40a332,{})?;if rt.memory.read(code.address(),{}).map_err(|_|\"PTD getter code read\")?!=&{:?}{{return Err(\"PTD getter code changed\");}}",bytes.len(),bytes.len(),bytes);
+        let prolog = raw(PROLOG);
+        let epilog = raw(EPILOG);
+        let guard=format!("{guard}let p=rt.process_image_code(inputs.image,0x414268,{})?;if rt.memory.read(p.address(),{}).map_err(|_|\"PTD prolog code read\")?!=&{:?}{{return Err(\"PTD prolog code changed\");}}let p=rt.process_image_code(inputs.image,0x414254,{})?;if rt.memory.read(p.address(),{}).map_err(|_|\"PTD epilog code read\")?!=&{:?}{{return Err(\"PTD epilog code changed\");}}",prolog.len(),prolog.len(),prolog,epilog.len(),epilog.len(),epilog);
+        source = source.replace(
+            "cpu.validate_active(rt)?;epoch.state()?;",
+            &format!("{guard}cpu.validate_active(rt)?;epoch.state()?;"),
+        );
     }
     Ok(source)
 }
@@ -498,5 +539,39 @@ for i in 0..63 {other.fls_allocation_result(oi,i+100,None).unwrap().unwrap();}
 let count=other.fls_indices.len();assert_eq!(count,64);assert!(other.fls_allocation_result(oi,999,None).is_err());assert_eq!(other.fls_indices.len(),count);other.fls_index(oid).unwrap();
 "#,
         "fls-process-index",
+    );
+}
+
+#[test]
+fn native_fls_read_issues_only_current_live_allocation_state() {
+    crate::crt_stream_callees_tests::native(
+        "",
+        r#"
+for mode in 0..16{
+ let(mut rt,init)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();let fiber=rt.bind_fiber(9).unwrap();
+ let id=if mode==3{rt.fls_allocation_result(init,5,None).unwrap().unwrap()}else{rt.native_fls_allocate(init,None).unwrap()};rt.last_os_error=Some(913);
+ if mode==0||mode==7||mode==8||mode==9||mode==15{
+  assert_eq!(rt.native_fls_read(init,fiber,id.index).unwrap(),CrtValue::scalar(0));let slot=rt.fls.get(&id.index).unwrap().0;let serial=rt.serial;
+  if mode==0{assert_eq!(rt.native_fls_read(init,fiber,id.index).unwrap(),CrtValue::scalar(0));assert_eq!(rt.serial,serial);assert_eq!(rt.fls.get(&id.index).unwrap().0,slot);continue;}
+  rt.native_fls_set(init,fiber,id.index,CrtValue::scalar(0x7000)).unwrap();
+  if mode==7{let v=rt.native_fls_read(init,fiber,id.index).unwrap();assert_eq!(v,CrtValue::scalar(0x7000));assert!(CrtCpu::pointer(v).is_err());continue;}
+  if mode==8{rt.fls_set(fiber,slot,id.index,CrtValue::scalar(17),false,Some(5)).unwrap();assert_eq!(rt.native_fls_read(init,fiber,id.index),Err("CRT FLS unknown/forged PTD value"));assert_eq!(rt.fls.get(&id.index).unwrap().1,CrtValue::Scalar{bits:0,known:0});assert_eq!(rt.last_os_error,Some(5));continue;}
+  if mode==9{rt.fls.get_mut(&id.index).unwrap().0.allocation.serial+=1;}
+  if mode==15{let other=CrtFiber{serial:fiber.serial+1,..fiber};rt.fiber=Some(other);}
+ }
+ if mode==2{rt.fls_free_index_result(init,id,true).unwrap();}if mode==5{rt.serial=u64::MAX;}if mode==6{rt.fls_indices.get_mut(&id.index).unwrap().certain=false;}if mode==10{rt.end_initialization(init).unwrap();}
+ let before=rt.serial;let count=rt.fls.len();rt.last_os_error=Some(913);
+ if mode>=11&&mode<=14{
+  let stack=rt.map_region(0x9000,512,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,384).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(41)).unwrap();rt.store(rt.offset(sp,4).unwrap(),32,if mode==12{CrtValue::Scalar{bits:0,known:0}}else{CrtValue::scalar(id.index)}).unwrap();let mut cpu=CrtCpu::new(sp,41).unwrap();cpu.return_pop=if mode==11{8}else{4};if mode==13{cpu.r[3]=CrtValue::scalar(17);}
+  let result=cpu.native_fls_get_call(&mut rt,init,fiber);
+  if mode==14{assert_eq!(result.unwrap(),CrtValue::scalar(0));assert!(cpu.returned);assert_eq!(rt.fls.len(),1);assert_eq!(rt.last_os_error,None);assert!(cpu.native_fls_get_call(&mut rt,init,fiber).is_err());}
+  else{assert!(result.is_err());assert!(!cpu.returned);assert_eq!(rt.fls.len(),count);assert_eq!(rt.serial,before);assert_eq!(rt.last_os_error,Some(913));}continue;
+ }
+ let f=if mode==1{CrtFiber{thread:fiber.thread+1,..fiber}}else if mode==4{CrtFiber{anchor:CrtStreamRuntime::new(7,9,0x8100,65536).unwrap().anchor,..fiber}}else if mode==15{rt.fiber.unwrap()}else{fiber};
+ let result=rt.native_fls_read(init,f,id.index);let expected=match mode{1|4=>"CRT fiber identity/lifetime",2=>"CRT native FLS read stale index",3=>"CRT native FLS read supplied allocation",5=>"CRT FLS serial",6=>"CRT FLS process index owner/lifetime",9|15=>"CRT native FLS read fiber/index identity",10=>"CRT initialization owner/lifetime",_=>panic!("unhandled native read mode")};
+ assert_eq!(result,Err(expected),"native FLS read mode {mode}");assert_eq!(rt.fls.len(),count);assert_eq!(rt.serial,before);assert_eq!(rt.last_os_error,Some(913));
+}
+"#,
+        "native-fls-read",
     );
 }

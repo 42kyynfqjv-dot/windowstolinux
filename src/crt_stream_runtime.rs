@@ -556,6 +556,21 @@ impl CrtStreamRuntime {
   let id=CrtFlsIndex{anchor:self.anchor,index,serial};
   self.fls_indices.insert(index,CrtProcessFls{id,callback,certain:true,input_binding:false,native:true});self.serial=serial;self.last_os_error=None;Ok(id)
  }
+ /// Native current-fiber read. A fresh native allocation has the documented
+ /// initial zero value; supplied/uncertain allocations cannot issue that fact.
+ /// Existing values, including unknown bits, are never reset by acquisition.
+ fn native_fls_read(&mut self,init:CrtInitialization,f:CrtFiber,index:u32)->Result<CrtValue,&'static str>{
+  self.initialization(init)?;self.check_fiber(f)?;
+  let entry=*self.fls_indices.get(&index).ok_or("CRT native FLS read stale index")?;self.fls_index(entry.id)?;
+  if !entry.native{return Err("CRT native FLS read supplied allocation");}
+  let slot=if let Some(&(slot,_))=self.fls.get(&index){
+   if slot.fiber!=f||slot.allocation!=entry.id{return Err("CRT native FLS read fiber/index identity");}slot
+  }else{
+   if self.fls.len()>=64{return Err("CRT native FLS value capacity");}
+   let serial=self.serial.checked_add(1).ok_or("CRT FLS serial")?;let slot=CrtFlsSlot{fiber:f,index,serial,allocation:entry.id};
+   self.fls.insert(index,(slot,CrtValue::scalar(0)));self.serial=serial;slot
+  };self.fls_get(f,slot,index)
+ }
  /// Fixed-storage publication for an actually allocated native index. Opaque
  /// scalar values carry bits only and confer no pointer/PTD authority.
  fn native_fls_set(&mut self,init:CrtInitialization,f:CrtFiber,index:u32,value:CrtValue)->Result<bool,&'static str>{
