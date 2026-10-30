@@ -4,7 +4,9 @@ from api_set_namespace import CONTRACTS, SYMBOLS, validate, authorize_native
 
 def fixture():
     module=dict(machine=0x14c,sha256='a'*64,path='explicit synthetic fixture')
-    return dict(windows_version=[10,0,20348],machine=0x14c,rows=[
+    return dict(windows_version=[10,0,20348],machine=0x14c,
+        source_sha256=json.loads(Path(__file__).with_name('api-set-frozen.json').read_text())['source_sha256'],
+        pe_sha256='b'*64,compiler_sha256='c'*64,translated_pairs=0,rows=[
         dict(contract=c,symbol=SYMBOLS[i],flags=0x800,loaded=i<3,same_handle=True,
              export_survives_one_release=True,load_host=module.copy(),export_host=module.copy(),
              ntdll=module.copy(),error=126) for i,c in enumerate(CONTRACTS)])
@@ -49,6 +51,16 @@ class NamespaceEvidence(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'observation failed'):validate(r)
         r=fixture();r['rows'][3]['loaded']=True
         with self.assertRaisesRegex(ValueError,'did not fail'):validate(r)
+    def test_source_and_translation_provenance(self):
+        for field,value in [('source_sha256','0'*64),('pe_sha256','bad'),('compiler_sha256','unknown'),('translated_pairs',1),('translated_pairs',False)]:
+            r=fixture();r[field]=value
+            with self.assertRaisesRegex(ValueError,'provenance|translated evidence'):validate(r)
+    def test_recorded_windows_forwarded_export_keeps_distinct_identity(self):
+        evidence=json.loads(Path(__file__).with_name('evidence').joinpath('api-set-observed.json').read_text())
+        result=validate(evidence['report'])
+        heap=result['mapping']['api-ms-win-core-heap-l1-1-0']
+        self.assertNotEqual(heap['load_host']['sha256'],heap['export_host']['sha256'])
+        self.assertFalse(result['native_admission'])
     def test_original_authored_source_is_frozen(self):
         here=Path(__file__).resolve().parent;expected=json.loads((here/'api-set-frozen.json').read_text())['source_sha256'];source=(here/'api_set_probe.c').read_bytes()
         self.assertEqual(hashlib.sha256(source).hexdigest(),expected)

@@ -81,3 +81,37 @@ checkpoint; full workflows still had Linux work running. The new work changes
 measurement/validation only. Historical original-Windows process timeouts remain
 unresolved and are unrelated to a claim of API-set closure. PR #45 stays draft;
 full formatter/startup/rcedit remains unsupported.
+
+## First recorded Windows result
+
+[Run 41042507916, job 124018486441](https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41042507916/job/124018486441)
+passed the four original observations at commit `f30aff6`. The frozen source was
+unchanged. [Machine-readable evidence](evidence/api-set-observed.json) was
+extracted from the job's JSON stdout; artifact 12970567877 holds the build,
+executable and raw logs. Its archive digest is upload-reported, not independently
+download-verified. These are four original Windows observations, zero translated
+pairs and zero export invocations.
+
+| Contract | Load host | Export host |
+| --- | --- | --- |
+| synch-l1-2-0 / InitializeCriticalSectionEx | x86 KernelBase | x86 KernelBase |
+| fibers-l1-1-1 / FlsAlloc | x86 KernelBase | x86 KernelBase |
+| heap-l1-1-0 / HeapAlloc | x86 KernelBase | x86 ntdll |
+
+The invented contract failed with error 126 in this observation. This does not
+prove that every missing mapping has that result. All successful cases retained
+the export after one acquired release. Both DLL files were resolved under
+SysWOW64 and their PE machine fields were 0x14c. The distinct HeapAlloc host is
+important: `CrtFunction` currently carries one `CrtModule`, and
+`module_export_result` explicitly excludes forwarded-owner assumptions. Reusing
+a load-handle token as the export's sole lifetime authority would lose this
+observed distinction. Forwarded exports require a checked relationship to the
+actual provider lifetime before they can be admitted. The first synch contract
+has one observed host, but native provider initialization still remains unproved.
+
+Local review tightened the report validator to bind the frozen source and valid
+compiler/PE hashes and reject false translation counts or truthy non-Boolean
+observations. The existing resident-lifetime native regression passed; Python
+ran 70 tests with one existing skip. All three workflows for ancestor `8edb01a`
+completed successfully. At the latest read, `ad8ea68` and the new complete
+workflows remained in progress; the new API-set job and inventory job passed.
