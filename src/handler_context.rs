@@ -664,6 +664,25 @@ mod tests {
         prove_context_check(&code(), ORIGIN, SELECTOR).unwrap();
     }
     #[test]
+    fn bypass_observation_guard_is_path_local_at_shared_return() {
+        // Both the selector bypass and the allowed bounds arm reach offset 46.
+        // A guard that leaks non-bypass permission across their join is unsound.
+        for read in [
+            vec![0x8b, 0x55, 8, 0x8b, 0x92, 0xc4, 0, 0, 0],
+            vec![0x64, 0x8b, 0x15, 0x18, 0, 0, 0],
+        ] {
+            let mut changed = code();
+            assert_eq!(&changed[46..], &[0x5d, 0xc3]);
+            changed.splice(46..46, read);
+            assert_eq!(
+                prove_context_check(&changed, ORIGIN, SELECTOR)
+                    .err()
+                    .as_deref(),
+                Some("context helper: capture read before non-bypass decision")
+            );
+        }
+    }
+    #[test]
     fn changed_offsets_branches_failure_and_saved_state_reject() {
         for (at, value) in [
             (14, 30),

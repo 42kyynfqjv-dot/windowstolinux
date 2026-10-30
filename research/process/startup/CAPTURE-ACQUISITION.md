@@ -130,3 +130,31 @@ that copy as a Rust test with the project's built iced_x86 dependency. Run
 `bypass_certificate_rejects_dead_capture_reads_before_selector`. Compilation must
 succeed, then the test must fail with actual `None` versus the expected rejection;
 an unrelated compiler/runtime failure is not counterexample evidence.
+
+## Independent path and neighboring-transform review
+
+Review of 72974f0 confirms that the new read guard inspects original memory
+operands before symbolic execution, tracks copied Context/TEB provenance, and
+carries permission separately on each branch. A further test inserts dead
+CONTEXT and FS loads at the shared return block. Both the bypass and non-bypass
+paths reach that block; an allowed non-bypass path must not grant permission to
+the bypass. A separately compiled mutant changing only the selector's yes-arm
+permission to true accepts the dead read and fails the exact new assertion.
+This challenges path isolation independently of removing the entire guard.
+
+The related transformations inspected were selection filter live-load emission,
+normalizer declared-global preflight and prefix object-read validation. Filters
+emit their live reads; the normalizer checks declared readable initialized globals
+at its explicit composition boundary; prefix reads reject unbound object fields.
+This bounded inspection found no additional capture-authority defect. It is not
+a certificate covering all callers, asynchronous mutation or external callbacks.
+
+The remaining implementation is unchanged: compose a closed observation summary
+for every reachable original prefix/helper/filter/return/C++ callee and bind it
+to the live normal event's registry, epoch, source-frame generation, storage
+capabilities and lifecycle. The issuer must reject missing summaries, changed code,
+raw access/escape and unproved external effects before whole-program emission.
+Only then can the component remove supplied ESP bits while leaving raw capture
+storage unknown. The no-read bypass path should carry no invented stack predicate;
+the non-bypass path still needs its explicit acquisition domain. Receipts must
+retain and revalidate that same authority, with single-use completion/retirement.

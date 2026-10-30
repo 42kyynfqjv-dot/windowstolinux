@@ -259,3 +259,17 @@ rejects them; the previous decision tree alone was not a no-observation proof.
 A separately compiled guard-removal mutant confirms the counterexample. See
 CAPTURE-ACQUISITION.md. Whole-event observation composition and the same-event
 capture lifetime issuer remain unimplemented; no supplied value gained authority.
+
+Independent review of 72974f0 adds shared-return CONTEXT/FS read regressions and a
+compiled bypass-permission-leak mutant; no further runtime defect was found.
+Related filter/normalizer/prefix inspection is bounded and grants no whole-event
+capture certificate. The original Windows output-probe timed out after 15 seconds
+in run40983904709/job123830245636. The diagnostic artifact was uploaded as
+12945762783; available logs do not establish original stdout/stderr or root cause.
+The evidence metadata is retained in evidence/windows-output-probe-72974f0.json.
+No retry or timeout relaxation was used. Historical failures remain unresolved.
+
+Review validation passed all 225 CRT tests, including eight context-proof tests
+and the existing 49 ordered cases, plus all-target Clippy. The observation-dependent
+test remains separately verified at 72974f0; this test/documentation-only review
+adds no generated runtime change or new Windows/whole-PE comparison.

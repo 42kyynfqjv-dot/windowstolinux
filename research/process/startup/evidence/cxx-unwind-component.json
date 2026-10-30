@@ -261,5 +261,27 @@
       "generated_harness_unchanged": true,
       "fresh_windows_observations": 0
     }
+  },
+  "capture_observation_independent_review": {
+    "reviewed": "72974f03e647a261811fb2876edbe8fa04c8c714",
+    "additional_runtime_defects_found": 0,
+    "new_shared_return_read_insertions": 2,
+    "context_proof_tests": 8,
+    "mutant": {
+      "kind": "bypass path permission leak; compiler proof only",
+      "mutant_sha256": "7c377611ebfa36c3f3fb602359bfc422ab9cbe9711caab922faf1b96b0caf48e",
+      "returncode": 101,
+      "observed": "shared-return dead read accepted when bypass arm incorrectly gains permission",
+      "new_windows_observations": 0,
+      "whole_pe_pairs": 0
+    },
+    "inspection_scope": [
+      "filter live reads",
+      "normalizer declared globals",
+      "prefix object-read permissions"
+    ],
+    "whole_event_capture_certificate": false,
+    "new_windows_observations": 0,
+    "whole_pe_pairs": 0
   }
 }
