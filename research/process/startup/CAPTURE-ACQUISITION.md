@@ -837,3 +837,62 @@ explicit. Sol review can verify this connected helper and attempt that scope;
 Astra is only needed for a demonstrated ownership/exception contract question.
 Full startup/rcedit and all historical timeout causes remain unresolved.
 See [locked-query evidence](evidence/abort-locked-review.json).
+
+### Original abort branches and exit wrapper
+
+The registered path now executes the original abort TEST/branches from407804.
+A nonzero decoded query result pushes signal22 and rejects at actual dispatch
+40cc14. A zero result tests the actual module flag byte41c128: bit1 clear reaches
+the original exit wrapper407004, while bit1 set pushes feature23 and rejects at
+IAT41501c. Unknown query ZF or the relevant flag bit rejects; unrelated unknown
+flag bits do not become zero or prevent an otherwise justified decision.
+
+The full exit wrapper executes its original prolog and pushes status3, mode2 and
+zero before the unbound shared-exit CALL406e69. No host termination, flush policy,
+signal callback or API result replaces that missing contract. The INT29/report
+instructions are not lifted as supported execution: the preceding unbound
+feature API call terminates this proof domain before either can execute. Each
+pruned call always rejects, including the exit wrapper's shared-call boundary.
+
+Thirteen independent native cases check null/nonzero/unknown query results,
+known/partial/unknown flags, stale flag storage, a query failure after writes,
+missing protected return, thread/process owner changes and closed runtime state.
+Original argument words22/23 and3/2/0 are independently asserted. Runtime anchor,
+thread, owner and active-call state are rechecked across decisions. Rejection
+preserves earlier writes and creates no normal-return or termination receipt.
+These standalone branch cases use explicit query callbacks; the connected
+pending path continues to use the original registered query producer.
+
+Independent predecessor review reran the old lock-guard mutant, which again
+released a live lock before rejecting the changed thread. The corrected twelve
+registered-query cases and strict pending cases remain part of replay. A local
+test correction handles retirement accurately: after the runtime closes,
+ordinary reads reject, so the test inspects retained backing bytes to verify the
+prior write. The earlier failed test/replay logs are retained locally.
+
+Next executable gaps are distinct: signal dispatch40cc14 needs its original EH4,
+selector, lock/decode and callback/default/ignore behavior; shared exit406e69
+needs its own FS frame, lock and exit policy before process effects are bound.
+The retained exit inventory shows FS installation, calls401d51/406f55/406cfa/
+40be53/40be2e and conditional return/termination paths. That static inventory is
+not proof all calls execute in mode2. Freeze the mode2 reachable graph and API
+arguments before implementing a process termination backend. Sol can review and
+advance that bounded policy/frame scope; escalate only a concrete nonlocal
+exception or callback-ownership question. Initial abort flags/module state,
+actual Windows delivery and full startup remain unproved.
+
+No new Windows observations or whole-PE pairs are claimed. Full startup/rcedit
+remains unsupported and original-Windows timeout causes remain unresolved.
+[Branch review evidence](evidence/abort-branches-review.json).
+
+A concrete ownership distinction emerged in the full shared-exit inventory:
+406e69 builds an inline FS record at EBP-12 with handler414af3, an explicit
+try-level word, 24 local bytes and a cookie, rather than using the proven EH4
+helper or the saved-register layout of CrtPtdFrame. Its conditional return
+unlinks FS, while the nonreturning process path does not execute that epilog.
+Do not relabel this as the existing414ad6/EH4 frame. A bounded Astra pass is
+justified if the next step composes this distinct record with the canonical
+registry: establish declarative inline-frame ownership, byte image, permitted
+return versus terminal lifetime and failure effects, using independent return,
+nonreturn and stale-owner cases. Mode2 policy and physical exit effects still
+need their own contracts; the inventory alone closes neither.

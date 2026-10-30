@@ -1502,6 +1502,7 @@ fn ordered_search_cases(){for mode in 0..85{
   if mode>=76{
    let set=next.module_export_result(init,module,"FlsSetValue",0x722000).unwrap();next.store(next.offset(cache,12).unwrap(),32,CrtValue::Function(set)).unwrap();
    next.map_region(0x415d60,8,CrtRegionKind::Input,Some(&[0,0,0,0,2,0,0,0])).unwrap();next.map_region(0x415d68,12,CrtRegionKind::Input,Some(b"FlsSetValue\0")).unwrap();
+   next.map_region(0x41c128,1,CrtRegionKind::Module,Some(&[0])).unwrap();
    next.map_region(0x41ce80,4,CrtRegionKind::Module,Some(&0u32.to_le_bytes())).unwrap();let heap=next.process_heap_result(init,true,Some(false)).unwrap();let cell=next.map_region(0x41d2c8,4,CrtRegionKind::Module,None).unwrap();next.store(cell,32,heap).unwrap();
    let lock=next.map_region(0x41d198,24,CrtRegionKind::Module,None).unwrap();next.construct_global_lock(init,3,lock,1).unwrap();next.map_region(0x41b740,28,CrtRegionKind::Module,Some(&abort_scope_bytes())).unwrap();next.map_region(0x41d2d8,4,CrtRegionKind::Module,Some(&0x12345678u32.to_le_bytes())).unwrap();
    let p=next.map_region(0x7100,32,CrtRegionKind::ThreadData,None).unwrap();next.store(next.offset(p,16).unwrap(),32,CrtValue::scalar(73)).unwrap();
@@ -1666,7 +1667,7 @@ fn ordered_search_cases(){for mode in 0..85{
       if mode==83{event.generation+=1;}
       let taken=cxx_take_selected_search(&mut search,&mut event,&objects,receipt,&rt,&c,e,&b,&ancestor,&af,&rec);
       assert_eq!(taken,if mode==83{Err("normal exception stale/foreign ownership")}else{Ok(1)});
-     }else{let expected=match mode{77=>"abort signal/report/exit effects unbound",78=>"CRT unknown scalar bits observed",79=>"CRT fiber identity/lifetime",80=>"CRT pointer lifetime",81=>"selected errno failure after prior write",82=>"CRT stale/foreign pointer",84=>"abort signal/report/exit effects unbound",_=>unreachable!()};assert_eq!(result.err(),Some(expected),"lazy pending case {mode}");assert_eq!(search.phase,3);assert_eq!(event.delivery,CrtNormalDelivery::Failed);}
+     }else{let expected=match mode{77=>"abort shared exit 0x406e69 status3 mode2 unbound",78=>"CRT unknown scalar bits observed",79=>"CRT fiber identity/lifetime",80=>"CRT pointer lifetime",81=>"selected errno failure after prior write",82=>"CRT stale/foreign pointer",84=>"abort shared exit 0x406e69 status3 mode2 unbound",_=>unreachable!()};assert_eq!(result.err(),Some(expected),"lazy pending case {mode}");assert_eq!(search.phase,3);assert_eq!(event.delivery,CrtNormalDelivery::Failed);}
      if mode==84{assert_eq!(rt.fls_get(fiber,slot,3)?,CrtValue::scalar(0));assert!(rt.heap_ptds.is_empty());assert_eq!(rt.load(rt.resolve_absolute(0x7110,CrtRegionKind::ThreadData)?,32)?,CrtValue::scalar(12));assert_eq!(rt.errno,None);}
      if mode==77||mode==81{assert_eq!(rt.uncertain_allocations.len(),1);let p=rt.uncertain_allocations[0];assert!(rt.valid(p,0).is_err());assert!(rt.memory.validate(p.cap,p.owner).is_ok());let field=rt.resolve_absolute(0x7110,CrtRegionKind::ThreadData)?;assert_eq!(rt.load(field,32)?,CrtValue::scalar(if mode==77{13}else{74}));assert!(rt.completed_failed_frees.is_empty());}
      assert_eq!(c.r,saved);assert!(!objects.unobserved.as_ref().unwrap().live.get());checked=true;return Err("ordered rejection checked");
@@ -1713,7 +1714,7 @@ fn ordered_search_cases(){for mode in 0..85{
    assert_eq!(taken,Err(expected),"consume negative {mode}");assert_ne!(search.current,predecessor);
   }
   checked=true;Err::<(),_>("ordered rejection checked")
- });assert_eq!(result,Err(if mode==12||mode==69{"CRT scalar knowledge/type"}else if mode==74{"CRT unknown scalar bits observed"}else if mode==75{"C++ PTD lazy setter/allocation/free effect unbound"}else if matches!(mode,77..=82|84){match mode{77=>"abort signal/report/exit effects unbound",78=>"CRT unknown scalar bits observed",79=>"CRT fiber identity/lifetime",80=>"CRT pointer lifetime",81=>"selected errno failure after prior write",82=>"CRT stale/foreign pointer",84=>"abort signal/report/exit effects unbound",_=>unreachable!()}}else{"ordered rejection checked"}),"outer case {mode}");assert!(checked,"case {mode} did not reach its required assertion");
+ });assert_eq!(result,Err(if mode==12||mode==69{"CRT scalar knowledge/type"}else if mode==74{"CRT unknown scalar bits observed"}else if mode==75{"C++ PTD lazy setter/allocation/free effect unbound"}else if matches!(mode,77..=82|84){match mode{77=>"abort shared exit 0x406e69 status3 mode2 unbound",78=>"CRT unknown scalar bits observed",79=>"CRT fiber identity/lifetime",80=>"CRT pointer lifetime",81=>"selected errno failure after prior write",82=>"CRT stale/foreign pointer",84=>"abort shared exit 0x406e69 status3 mode2 unbound",_=>unreachable!()}}else{"ordered rejection checked"}),"outer case {mode}");assert!(checked,"case {mode} did not reach its required assertion");
  if mode==64{let lease=escaped_lease.unwrap();assert!(lease.live.get(),"event deliberately retained outside epoch");assert!(!lease.epoch_live.get());assert_eq!(lease.validate(&rt),Err("unobserved context expired/foreign lease"));drop(escaped_event);assert!(!lease.live.get());}
 }}
 fn live_return_cases(){

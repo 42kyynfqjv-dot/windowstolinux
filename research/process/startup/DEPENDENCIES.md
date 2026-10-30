@@ -426,3 +426,13 @@ continuation. Initial encoded-cell/module/lock state is still supplied, and
 proof rejection does not simulate exceptional finally execution. Twelve negative/
 normal cases and an old-guard mutant protect ownership and prior effects.
 [Current contract and next gate](CAPTURE-ACQUISITION.md#connected-locked-signal-query).
+
+## Abort branches now executed
+
+Original407804 query decision and flags41c128 choose actual unbound signal22
+call40cc14, feature23 import41501c or exit wrapper407004. The exit wrapper's
+original pushes now reach shared exit406e69 with3/2/0; shared exit itself remains
+unbound. Unknown conditions reject, no missing call supplies success, and owner/
+lifetime checks preserve prior effects. Next establish the original mode2 exit
+policy/FS frame and separate signal dispatch contracts.
+[Current branch/exit evidence](CAPTURE-ACQUISITION.md#original-abort-branches-and-exit-wrapper).

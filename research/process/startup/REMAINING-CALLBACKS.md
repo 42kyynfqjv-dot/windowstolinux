@@ -327,3 +327,8 @@ component input includes initial live lock3 and module signal/cookie state;
 exception delivery remains a separate gate. The connected pending path rejects
 at abort's407804 continuation pending actual signal22 dispatch, encoded callback
 authority, reporting/fast-fail and exit. No terminate/abort success is claimed.
+
+Abort407804 decisions and exit wrapper407004 now execute original instructions.
+Unbound boundaries are signal22 dispatch40cc14, feature23 query41501c and shared
+exit406e69 after actual3/2/0 pushes. No callback/API outcome or process exit is
+fabricated. Initial flags and full delivery/startup effects remain supplied.

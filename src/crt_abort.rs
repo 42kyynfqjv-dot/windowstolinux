@@ -232,7 +232,121 @@ fn abort_locked_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,epoch:&mut Nor
 }
 
 pub(crate) fn registered_entry_source() -> Result<String, String> {
-    Ok(source(&crate::crt_ptd::raw(ENTRY),&crate::crt_ptd::raw(QUERY))?
- .replace("fn abort_entry_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)","fn abort_entry_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,epoch:&mut NormalCallEpoch<'_>)")
- .replace("&mut|_,_|Err(\"abort locked signal query 0x40cafd unbound\")","&mut|rt,c|abort_locked_original(rt,c,epoch,&mut|_|Ok(()))"))
+    let mut s = source(&crate::crt_ptd::raw(ENTRY), &crate::crt_ptd::raw(QUERY))?;
+    s = s[..s
+        .find("fn abort_entry_original")
+        .ok_or("abort source entry boundary")?]
+        .into();
+    s.push_str(&branch_source(
+        &crate::crt_ptd::raw(ABORT),
+        &crate::crt_ptd::raw(EXIT),
+    )?);
+    s.push_str("fn abort_entry_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,epoch:&mut NormalCallEpoch<'_>)->RegistryResult<CrtValue>{abort_branch_original(rt,cpu,&mut|rt,c|abort_query_original(rt,c,&mut|rt,c|abort_locked_original(rt,c,epoch,&mut|_|Ok(()))))}");
+    Ok(s)
+}
+
+pub(crate) const ABORT:&str="e8cb53000085c074086a16e80554000059f60528c141000274226a17ff151c50410085c074056a0759cd296a0168150000406a03e81b01000083c40c6a03e8c2f7ffff";
+
+pub(crate) const EXIT: &str = "8bff558bec6a006a02ff7508e854feffff83c40c5dc3";
+
+pub(crate) fn branch_source(abort: &[u8], exit: &[u8]) -> Result<String, String> {
+    if abort != crate::crt_ptd::raw(ABORT) || exit != crate::crt_ptd::raw(EXIT) {
+        return Err("abort branch/exit code binding".into());
+    }
+    let mut nodes = std::collections::BTreeMap::new();
+    let mut todo = vec![0x4077ff];
+    while let Some(pc) = todo.pop() {
+        if nodes.contains_key(&pc) {
+            continue;
+        }
+        let at = (pc - 0x4077ff) as usize;
+        let mut decoder = iced_x86::Decoder::with_ip(
+            32,
+            &abort[at..],
+            u64::from(pc),
+            iced_x86::DecoderOptions::NONE,
+        );
+        let i = decoder.decode();
+        let mut node = Graph::decode_instruction(&abort[at..at + i.len()], pc)?;
+        if matches!(pc, 0x40780a | 0x40781b | 0x40783d) {
+            node.successors.clear();
+        }
+        todo.extend_from_slice(&node.successors);
+        nodes.insert(pc, node);
+    }
+    let graph = Graph {
+        origin: 0x4077ff,
+        end: 0x407842,
+        nodes,
+    };
+    let body = crate::crt_stream_emit::emit_body_with_hooks(
+        &graph,
+        |pc, target| {
+            Ok(match(pc,target){
+  (0x4077ff,Target::Direct(0x40cbcf))=>"cpu.call_activation(rt,0x407804,0,|rt,c|lookup(rt,c))?;".into(),
+  (0x40780a,Target::Direct(0x40cc14))=>"if rt.load(CrtCpu::pointer(cpu.r[4])?,32)?!=CrtValue::scalar(22){return Err(\"abort signal argument\");}return Err(\"abort signal22 dispatch 0x40cc14 unbound\");".into(),
+  (0x40781b,Target::Import(0x41501c))=>"if rt.load(CrtCpu::pointer(cpu.r[4])?,32)?!=CrtValue::scalar(23){return Err(\"abort feature argument\");}return Err(\"abort processor-feature/report/fast-fail effects unbound\");".into(),
+  (0x40783d,Target::Direct(0x407004))=>"cpu.call_activation(rt,0x407842,0,|rt,c|abort_exit_original(rt,c))?;return Err(\"abort exit unexpectedly returned\");".into(),
+  _=>return Err("abort branch call inventory".into())
+ })
+        },
+        &std::collections::BTreeMap::from([(0x41c128, "CrtRegionKind::Module".into())]),
+        128,
+        |_, _| Err("abort direct FS".into()),
+        |_, _| {
+            Ok("if rt.closed||rt.anchor!=anchor||rt.thread!=thread||rt.owner!=owner{return Err(\"abort owner changed\");}cpu.validate_active(rt)?;".into())
+        },
+        |_, _| Err("abort cannot return normally".into()),
+    )?;
+    let exit_body = crate::crt_stream_emit::emit_body(
+        &Graph::decode(exit, 0x407004)?,
+        |_, target| {
+            if target != Target::Direct(0x406e69) {
+                return Err("abort exit target".into());
+            }
+            Ok("let sp=CrtCpu::pointer(cpu.r[4])?;for(i,value)in [3,2,0].into_iter().enumerate(){if rt.load(rt.offset(sp,i as i64*4)?,32)?!=CrtValue::scalar(value){return Err(\"abort shared exit argument domain\");}}return Err(\"abort shared exit 0x406e69 status3 mode2 unbound\");".into())
+        },
+        &Default::default(),
+        32,
+    )?;
+    Ok(format!("fn abort_exit_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->RegistryResult<CrtValue>{{cpu.validate_active(rt)?;{exit_body}}}fn abort_branch_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,lookup:&mut impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu)->RegistryResult<CrtValue>)->RegistryResult<CrtValue>{{cpu.validate_active(rt)?;let anchor=rt.anchor;let thread=rt.thread;let owner=rt.owner;{body}}}"))
+}
+
+#[test]
+fn original_abort_branches_reject_unknown_stale_and_cross_thread_effects() {
+    let extra = format!(
+        "type RegistryResult<T>=Result<T,&'static str>;{}",
+        branch_source(&crate::crt_ptd::raw(ABORT), &crate::crt_ptd::raw(EXIT)).unwrap()
+    );
+    crate::crt_stream_callees_tests::native(
+        &extra,
+        r#"
+for mode in 0..13{
+ let mut rt=CrtStreamRuntime::new(7,9,0x8000,65536).unwrap();let stack=rt.map_region(0x9000,2048,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,1536).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(1)).unwrap();let mut cpu=CrtCpu::new(sp,1).unwrap();
+ let flags=rt.map_region(0x41c128,1,CrtRegionKind::Module,None).unwrap();rt.store(flags,8,match mode{3=>CrtValue::scalar(2),4=>CrtValue::Scalar{bits:0,known:0},5=>CrtValue::Scalar{bits:0,known:2},6=>CrtValue::Scalar{bits:2,known:2},_=>CrtValue::scalar(0)}).unwrap();let marker=rt.map_region(0x7000,4,CrtRegionKind::ThreadData,Some(&[0;4])).unwrap();let mut visited=false;
+ let result=abort_branch_original(&mut rt,&mut cpu,&mut|rt,c|{
+  visited=true;rt.store(marker,32,CrtValue::scalar(77))?;
+  if mode==11{rt.owner+=1;}if mode==12{rt.closed=true;}if mode==9{return Err("independent query failure after write");}if mode==7{rt.thread+=1;}if mode==8{rt.memory.release(flags.cap,flags.owner).map_err(|_|"independent flag storage retirement")?;}
+  c.clobber(if mode==2{CrtValue::Scalar{bits:0,known:0}}else{CrtValue::scalar(u32::from(mode==1))});if mode==10{Ok(c.r[0])}else{c.finish(rt)}
+ });assert!(visited);assert!(!cpu.returned);if mode==12{assert_eq!(rt.memory.read(marker.address(),4).unwrap(),&[77,0,0,0]);}else{assert_eq!(rt.load(marker,32).unwrap(),CrtValue::scalar(77));}
+ let expected=match mode{0|5=>"abort shared exit 0x406e69 status3 mode2 unbound",1=>"abort signal22 dispatch 0x40cc14 unbound",2|4=>"CRT unknown ZF",3|6=>"abort processor-feature/report/fast-fail effects unbound",7|11=>"abort owner changed",12=>"CRT retired stream lifecycle",8=>"CRT pointer lifetime",9=>"independent query failure after write",10=>"CRT callee missing exact protected RET",_=>unreachable!()};assert_eq!(result,Err(expected),"branch case {mode}");
+ if mode==0||mode==5{let s=CrtCpu::pointer(cpu.r[4]).unwrap();for(i,value)in [3,2,0].into_iter().enumerate(){assert_eq!(rt.load(rt.offset(s,i as i64*4).unwrap(),32).unwrap(),CrtValue::scalar(value));}}
+ if mode==1{assert_eq!(rt.load(CrtCpu::pointer(cpu.r[4]).unwrap(),32).unwrap(),CrtValue::scalar(22));}
+ if mode==3||mode==6{assert_eq!(rt.load(CrtCpu::pointer(cpu.r[4]).unwrap(),32).unwrap(),CrtValue::scalar(23));}
+}
+"#,
+        "abort-branches",
+    );
+    let a = crate::crt_ptd::raw(ABORT);
+    let e = crate::crt_ptd::raw(EXIT);
+    for i in 0..a.len() {
+        let mut b = a.clone();
+        b[i] ^= 1;
+        assert!(branch_source(&b, &e).is_err());
+    }
+    for i in 0..e.len() {
+        let mut b = e.clone();
+        b[i] ^= 1;
+        assert!(branch_source(&a, &b).is_err());
+    }
 }
