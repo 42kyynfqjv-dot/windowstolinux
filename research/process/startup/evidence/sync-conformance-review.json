@@ -4,7 +4,7 @@
   "windows_source_sha256": "65d78f954866e96bf1db08f5f4eaa206d3bb96b28448d69b2138017490bb69e1",
   "windows_pe_sha256": "a98b7df84136da0f6162f42b8ef69e15092d810f645b679e96e3547e9c132117",
   "native_runtime_sha256": "c8080c16df9a4911f4422149100c7c055ee922b9231a2bdede3dc0c68e4fc400",
-  "windows_artifact_verification": "pending cross-host CI; local report transcribed from job stdout, no executable archive downloaded",
+  "windows_artifact_verification": "Local report extracted from Windows job stdout without downloading its executable archive; subsequently completed Linux CI job 124037739207 verified the downloaded observer executable hash. See cross_host_ci.",
   "native_files_sha256": {
     "native-0.json": "9e54a8d19f33da063f93d281bbaedf51b146b4ed48842918f79920bfa50c403e",
     "native-4000.json": "9e54a8d19f33da063f93d281bbaedf51b146b4ed48842918f79920bfa50c403e"

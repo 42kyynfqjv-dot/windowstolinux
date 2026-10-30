@@ -120,13 +120,37 @@ impl CrtUnobservedContext {
 }
 struct CrtRegion {pointer:CrtPointer,heap:bool,file_owner:Option<u32>}
 struct CrtDescriptor {id:CrtDescriptorId,live:bool,record:Option<CrtPointer>,record_initialized:bool}
+/// Fixed storage for the admitted 32 global objects. No guest operation grows
+/// a map or allocates a tracking node. Capacity is a conversion-domain bound,
+/// never a Windows BOOL-zero/GetLastError outcome.
+struct CrtGlobalSlots<T:Copy> {slots:[Option<T>;32]}
+impl<T:Copy> CrtGlobalSlots<T> {
+ fn new()->Self{Self{slots:[None;32]}}
+ fn get(&self,index:&u32)->Option<&T>{self.slots.get(*index as usize).and_then(Option::as_ref)}
+ fn contains_key(&self,index:&u32)->bool{self.get(index).is_some()}
+ fn values(&self)->impl Iterator<Item=&T>{self.slots.iter().flatten()}
+ fn is_empty(&self)->bool{self.values().next().is_none()}
+ fn insert(&mut self,index:u32,value:T){self.slots[index as usize]=Some(value);}
+ fn remove(&mut self,index:&u32)->Option<T>{self.slots.get_mut(*index as usize).and_then(Option::take)}
+}
+/// Recursive leases use the same fixed domain as the object table.
+struct CrtGlobalLeases {slots:[Option<CrtGlobalLock>;32],len:usize}
+impl CrtGlobalLeases {
+ fn new()->Self{Self{slots:[None;32],len:0}}
+ fn len(&self)->usize{self.len}
+ fn is_empty(&self)->bool{self.len==0}
+ fn iter(&self)->impl Iterator<Item=&CrtGlobalLock>{self.slots[..self.len].iter().flatten()}
+ fn last(&self)->Option<&CrtGlobalLock>{self.len.checked_sub(1).and_then(|i|self.slots[i].as_ref())}
+ fn push(&mut self,value:CrtGlobalLock){self.slots[self.len]=Some(value);self.len+=1;}
+ fn pop(&mut self)->Option<CrtGlobalLock>{if self.len==0{return None;}self.len-=1;self.slots[self.len].take()}
+}
 struct CrtStreamRuntime {
- file_view:CrtPointer,main_image:Option<CrtProcessImage>,main_image_regions:Vec<CrtPointer>,loader_cells:std::collections::BTreeMap<u32,(CrtPointer,bool)>,modules:std::collections::BTreeMap<u32,CrtLoadedModule>,module_references:std::collections::BTreeMap<u64,CrtModuleReference>,exports:std::collections::BTreeMap<u64,CrtExport>,providers:std::collections::BTreeMap<u32,CrtNativeProvider>,native_sync:Vec<(CrtFunction,u32,CrtPointer)>,
+ file_view:CrtPointer,main_image:Option<CrtProcessImage>,main_image_regions:Vec<CrtPointer>,loader_cells:std::collections::BTreeMap<u32,(CrtPointer,bool)>,modules:std::collections::BTreeMap<u32,CrtLoadedModule>,module_references:std::collections::BTreeMap<u64,CrtModuleReference>,exports:std::collections::BTreeMap<u64,CrtExport>,providers:std::collections::BTreeMap<u32,CrtNativeProvider>,native_sync:CrtGlobalSlots<(CrtFunction,u32,CrtPointer)>,
  uncertain_allocations:Vec<CrtPointer>,completed_failed_frees:Vec<(guest_memory::Capability,u64)>,heap_ptds:Vec<CrtHeapPtdView>,fiber:Option<CrtFiber>,fls_indices:std::collections::BTreeMap<u32,CrtProcessFls>,fls:std::collections::BTreeMap<u32,(CrtFlsSlot,CrtValue)>,
  unobserved_contexts:Vec<(CrtPointer,std::rc::Rc<std::cell::Cell<bool>>)>,heap:Option<CrtHeap>,memory:guest_memory::Space,owner:u64,thread:u64,anchor:guest_memory::Capability,
  dispatchers:std::collections::BTreeMap<u64,CrtDispatcherContext>,regions:Vec<CrtRegion>,retired:Vec<CrtPointer>,tags:std::collections::BTreeMap<u32,CrtValue>,
  partial:std::collections::BTreeMap<u32,(u8,u8)>,descriptors:Vec<CrtDescriptor>,
- global_objects:std::collections::BTreeMap<u32,CrtPointer>,global_locks:Vec<CrtGlobalLock>,record_objects:Vec<CrtPointer>,record_locks:Vec<CrtRecordLock>,locks:Vec<CrtLock>,descriptor_locks:Vec<CrtDescriptorLock>,serial:u64,generation:u64,canonical_errno:bool,errno_cell:Option<CrtPointer>,errno:Option<i32>,doserrno:Option<u32>,last_os_error:Option<u32>,
+ global_objects:CrtGlobalSlots<CrtPointer>,global_locks:CrtGlobalLeases,record_objects:Vec<CrtPointer>,record_locks:Vec<CrtRecordLock>,locks:Vec<CrtLock>,descriptor_locks:Vec<CrtDescriptorLock>,serial:u64,generation:u64,canonical_errno:bool,errno_cell:Option<CrtPointer>,errno:Option<i32>,doserrno:Option<u32>,last_os_error:Option<u32>,
  locale_generation:u64,locale_live:bool,initialization:Option<u64>,shutdown:Option<CrtShutdown>,closed:bool,lock_objects:std::collections::BTreeSet<u32>,
 }
 impl CrtStreamRuntime {
@@ -143,7 +167,7 @@ impl CrtStreamRuntime {
  }
  fn from_file_storage(owner:u64,thread:u64,memory:guest_memory::Space,pointer:CrtPointer)->Result<Self,&'static str>{
   let anchor=pointer.cap;
-  Ok(Self{file_view:pointer,main_image:None,main_image_regions:vec![],loader_cells:std::collections::BTreeMap::new(),modules:std::collections::BTreeMap::new(),module_references:std::collections::BTreeMap::new(),exports:std::collections::BTreeMap::new(),providers:std::collections::BTreeMap::new(),native_sync:vec![],uncertain_allocations:vec![],completed_failed_frees:vec![],heap_ptds:vec![],fiber:None,fls_indices:std::collections::BTreeMap::new(),fls:std::collections::BTreeMap::new(),unobserved_contexts:vec![],heap:None,memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],global_objects:std::collections::BTreeMap::new(),global_locks:vec![],record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,canonical_errno:false,errno_cell:None,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([pointer.base])})
+  Ok(Self{file_view:pointer,main_image:None,main_image_regions:vec![],loader_cells:std::collections::BTreeMap::new(),modules:std::collections::BTreeMap::new(),module_references:std::collections::BTreeMap::new(),exports:std::collections::BTreeMap::new(),providers:std::collections::BTreeMap::new(),native_sync:CrtGlobalSlots::new(),uncertain_allocations:vec![],completed_failed_frees:vec![],heap_ptds:vec![],fiber:None,fls_indices:std::collections::BTreeMap::new(),fls:std::collections::BTreeMap::new(),unobserved_contexts:vec![],heap:None,memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],global_objects:CrtGlobalSlots::new(),global_locks:CrtGlobalLeases::new(),record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,canonical_errno:false,errno_cell:None,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([pointer.base])})
  }
 
  /// Initial FILE storage is a bounded role view of the original writable
@@ -295,7 +319,7 @@ impl CrtStreamRuntime {
  }
  fn provider_destroy(&mut self,init:CrtInitialization,module:CrtModule)->Result<(),&'static str>{
   self.initialization(init)?;let p=self.provider_ready(module)?;let root=p.root.unwrap();
-  if self.native_sync.iter().any(|(f,_,_)|f.module==module||self.exports.get(&f.serial).is_some_and(|e|e.target==module))||self.module_references.values().any(|r|r.module==module&&*r!=root)||self.exports.values().any(|e|e.target==module&&e.function.module!=module){return Err("CRT provider still acquired/borrowed");}
+  if self.native_sync.values().any(|(f,_,_)|f.module==module||self.exports.get(&f.serial).is_some_and(|e|e.target==module))||self.module_references.values().any(|r|r.module==module&&*r!=root)||self.exports.values().any(|e|e.target==module&&e.function.module!=module){return Err("CRT provider still acquired/borrowed");}
   // All rejection checks precede teardown; unrelated earlier effects survive.
   self.exports.retain(|_,e|e.function.module!=module);self.providers.remove(&module.handle);self.module_references.remove(&root.serial);self.modules.remove(&module.handle);Ok(())
  }
@@ -309,20 +333,20 @@ impl CrtStreamRuntime {
   self.function_identity(function,Some("InitializeCriticalSectionEx"))?;
   if self.exports.get(&function.serial).and_then(|e|e.api)!=Some(CrtNativeApi::InitializeGlobalCriticalSectionEx){return Err("CRT native synchronization implementation unbound");}Ok(())
  }
- /// Successful construction follows actual native bookkeeping allocation and
- /// object installation. Budget/domain rejection is not a fabricated BOOL/error.
+ /// Object and lease storage is fixed at runtime creation. This closes native
+ /// bookkeeping allocation only, not Windows allocation-failure equivalence.
  fn native_sync_initialize(&mut self,init:CrtInitialization,function:CrtFunction,index:u32,p:CrtPointer,_spin:u32,flags:u32)->Result<u32,&'static str>{
   self.initialization(init)?;self.native_sync_identity(function)?;self.identity_range(p,24)?;
   self.memory.validate_writable(p.cap,p.owner,p.address,24).map_err(|_|"CRT synchronization writable range")?;
-  if flags!=0||index>=32||p.kind!=CrtRegionKind::Module||p.address%4!=0||self.global_objects.contains_key(&index)||self.global_objects.values().any(|q|u64::from(p.address)<u64::from(q.address)+24&&u64::from(q.address)<u64::from(p.address)+24)||!self.overlapping_tags(p.address,24).is_empty(){return Err("CRT synchronization flags/object domain");}
+  if flags!=0||index>=32||p.kind!=CrtRegionKind::Module||p.address%4!=0||self.global_objects.contains_key(&index)||self.global_objects.values().any(|q|u64::from(p.address)<u64::from(q.address)+24&&u64::from(q.address)<u64::from(p.address)+24)||self.has_overlapping_tags(p.address,24){return Err("CRT synchronization flags/object domain");}
   self.ordinary_file_bytes(p,24)?;
-  self.native_sync.try_reserve(1).map_err(|_|"CRT native synchronization allocation unclosed")?;
-  self.construct_global_lock(init,index,p,1)?;self.native_sync.push((function,index,p));Ok(1)
+  if self.native_sync.contains_key(&index){return Err("CRT synchronization tracking occupied");}
+  self.construct_global_lock(init,index,p,1)?;self.native_sync.insert(index,(function,index,p));Ok(1)
  }
  fn native_sync_delete(&mut self,init:CrtInitialization,function:CrtFunction,index:u32,p:CrtPointer)->Result<(),&'static str>{
   self.initialization(init)?;self.native_sync_identity(function)?;self.identity_range(p,24)?;
-  let at=self.native_sync.iter().position(|e|*e==(function,index,p)).ok_or("CRT synchronization object owner/lifetime")?;
-  self.destroy_global_lock(init,index)?;self.native_sync.remove(at);Ok(())
+  if self.native_sync.get(&index)!=Some(&(function,index,p)){return Err("CRT synchronization object owner/lifetime");}
+  self.destroy_global_lock(init,index)?;self.native_sync.remove(&index);Ok(())
  }
  fn loader_value(&self,value:CrtValue)->Result<(),&'static str>{match value{
   CrtValue::Module(m)=>self.module_identity(m),CrtValue::Function(f)=>self.function_identity(f,None),
@@ -486,9 +510,10 @@ impl CrtStreamRuntime {
  /// Explicit successful initialization outcome for a distinct module lock.
  fn construct_global_lock(&mut self,token:CrtInitialization,index:u32,p:CrtPointer,result:u32)->Result<bool,&'static str>{
   self.initialization(token)?;self.identity_range(p,24)?;
-  if index>=32||p.kind!=CrtRegionKind::Module||p.address%4!=0||self.global_objects.contains_key(&index)||self.global_objects.values().any(|q|u64::from(p.address)<u64::from(q.address)+24&&u64::from(q.address)<u64::from(p.address)+24)||!self.overlapping_tags(p.address,24).is_empty(){return Err("CRT global lock role/index/alias");}
+  if index>=32||p.kind!=CrtRegionKind::Module||p.address%4!=0||self.global_objects.contains_key(&index)||self.global_objects.values().any(|q|u64::from(p.address)<u64::from(q.address)+24&&u64::from(q.address)<u64::from(p.address)+24)||self.has_overlapping_tags(p.address,24){return Err("CRT global lock role/index/alias");}
+  let object=self.subrange(p,24)?;
   self.memory.forget(p.address,24).map_err(|_|"CRT global lock bytes")?;self.partial.retain(|&at,_|at<p.address||at>=p.address+24);self.last_os_error=None;
-  if result!=0{self.global_objects.insert(index,self.subrange(p,24)?);}Ok(result!=0)
+  if result!=0{self.global_objects.insert(index,object);}Ok(result!=0)
  }
  /// An integer produced by a certified helper does not itself grant memory
  /// authority. Bind it to the live module object for the exact table/index.
@@ -618,6 +643,9 @@ impl CrtStreamRuntime {
  fn check_lock(&self,token:CrtLock)->Result<(),&'static str>{
   if self.locks.last()!=Some(&token){return Err("CRT live exclusive lock required");}Ok(())
  }
+ fn has_overlapping_tags(&self,address:u32,size:u32)->bool{
+  self.tags.keys().any(|&at|u64::from(at)<u64::from(address)+u64::from(size)&&u64::from(address)<u64::from(at)+4)
+ }
  fn overlapping_tags(&self,address:u32,size:u32)->Vec<(u32,CrtValue)>{
   self.tags.iter().filter(|(at,_)|u64::from(**at)<u64::from(address)+u64::from(size)&&u64::from(address)<u64::from(**at)+4).map(|(&a,&v)|(a,v)).collect()
  }
@@ -628,10 +656,12 @@ impl CrtStreamRuntime {
  /// Internal storage validation only. Original guest loads always use load().
  fn load_unsealed(&self,p:CrtPointer,width:u8)->Result<CrtValue,&'static str>{
   let size=match width{8=>1,16=>2,32=>4,_=>return Err("CRT load width")};self.valid(p,size)?;self.ordinary_file_bytes(p,size)?;
-  let tags=self.overlapping_tags(p.address,size);
-  if !tags.is_empty(){if width!=32||tags.len()!=1||tags[0].0!=p.address{return Err("CRT partial typed-word read");}
-   match tags[0].1{CrtValue::Module(m)=>self.module_identity(m)?,CrtValue::Function(f)=>self.function_identity(f,None)?,CrtValue::Heap(h)=>self.heap_identity(h)?,CrtValue::Dispatcher(token)=>self.dispatcher(token)?,CrtValue::Pointer(q)=>self.pointer_transport(q)?,CrtValue::Handle(h)=>{self.descriptor(h)?;},CrtValue::ThreadHead(head)=>self.thread_head_transport(head)?,_=>{}}
-   return Ok(tags[0].1);
+  // A checked scalar/typed load needs at most one matching tag. Inspect the
+  // iterator directly so argument and protected-return reads cannot allocate.
+  let mut tags=self.tags.iter().filter(|(at,_)|u64::from(**at)<u64::from(p.address)+u64::from(size)&&u64::from(p.address)<u64::from(**at)+4);
+  if let Some((&at,&value))=tags.next(){if width!=32||at!=p.address||tags.next().is_some(){return Err("CRT partial typed-word read");}
+   match value{CrtValue::Module(m)=>self.module_identity(m)?,CrtValue::Function(f)=>self.function_identity(f,None)?,CrtValue::Heap(h)=>self.heap_identity(h)?,CrtValue::Dispatcher(token)=>self.dispatcher(token)?,CrtValue::Pointer(q)=>self.pointer_transport(q)?,CrtValue::Handle(h)=>{self.descriptor(h)?;},CrtValue::ThreadHead(head)=>self.thread_head_transport(head)?,_=>{}}
+   return Ok(value);
   }
   let(mut bits,mut known)=(0u32,0u32);for i in 0..size{let a=p.address+i;
    let(byte,mask)=match self.memory.read(a,1){Ok(bytes)=>(bytes[0],255),Err(guest_memory::Fault::Uninitialized)=>self.partial.get(&a).copied().unwrap_or((0,0)),Err(_)=>return Err("CRT scalar read permission/range")};

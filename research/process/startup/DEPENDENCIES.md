@@ -642,3 +642,14 @@ Fresh Windows/native component comparison is a separate CI gate; no runtime
 support widening occurs. It cannot close allocation-failure error behavior or
 API-set initialization at402b00. See [SYNC-CONFORMANCE.md](SYNC-CONFORMANCE.md)
 for the explicit resource-contract decision required before admission.
+
+## Synchronization resource checkpoint
+
+The native global-object map, tracking vector and recursive lease vector now use
+fixed 32-slot storage; checked argument/return reads no longer allocate temporary
+tag vectors. Allocation-denial and partial-construction tests cover the actual
+stdcall operation and failure ordering. This closes native per-call bookkeeping,
+not Windows Ex BOOL-zero/LastError equivalence or provider initial state. Original
+entry still rejects LoadLibraryExW at0x402b00. See [SYNC-RESOURCES.md](SYNC-RESOURCES.md)
+for the exact resource contract and next external-effect decision; no API-set
+admission follows merely from fixed storage.

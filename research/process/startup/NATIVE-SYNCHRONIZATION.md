@@ -17,8 +17,11 @@ roles, unsupported flags, overlap, duplicate construction and typed aliases reje
 Spin count has no scheduling effect in the admitted thread-exclusive domain;
 contention and general concurrent use remain unsupported.
 
-`native_sync_initialize` reserves actual native tracking storage, then installs
-the existing checked global-lock object and makes its guest bytes unknown/opaque.
+`native_sync_initialize` installs the checked global-lock object in fixed storage
+and makes its guest bytes unknown/opaque. Object tracking, the indexed object
+table and recursive lease stack each use 32 inline slots; none grows during a
+call. Typed argument/return reads inspect tags without allocating a temporary
+vector. See [SYNC-RESOURCES.md](SYNC-RESOURCES.md) for the resource boundary.
 Success returns one because this construction completed, not because a test
 supplied an API success value. Adjacent bytes retain their earlier values. The
 existing global-lock implementation supports recursive acquisition by the owned
@@ -28,13 +31,14 @@ provider borrow. [DeleteCriticalSection](https://learn.microsoft.com/en-us/windo
 requires an unowned object and leaves later use invalid; tests enforce that
 boundary. The deletion adapter is internal, not a newly bound guest export.
 
-Supported validation failures occur before object writes. Allocation failure is
-propagated as an unclosed effect, not translated into an invented Win32 error.
-The BOOL-zero/GetLastError resource-failure behavior is therefore **not closed**.
-No forced allocator OOM or new Windows initialization failure observation is
-claimed. Rust map allocation can still abort on OOM. This limitation blocks
-unconditional whole-program admission and needs an explicit resource/failure
-contract before API-set integration can rely on this implementation.
+Validation failures occur before object writes. Domain exhaustion rejects without
+a Windows result or error write. The operation no longer allocates either native
+tracking entries or object-map nodes, including on rejected aliases. This closes
+the native per-call bookkeeping gap, but the Windows BOOL-zero/GetLastError
+failure relation is **not closed**. No original Windows initialization failure
+observation is claimed. Provider setup and the rest of the runtime still have
+allocating collections; they are outside this bounded operation contract.
+Unconditional API-set/startup admission remains rejected.
 
 ## Callable authority and ABI
 

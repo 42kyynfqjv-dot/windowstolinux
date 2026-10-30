@@ -463,3 +463,11 @@ successful operations. Allocation-failure BOOL/LastError and loader initial stat
 still need a reviewed resource/effect contract; forcing synthetic allocator failure
 would be native test evidence, not an observed Windows allocation failure.
 [SYNC-CONFORMANCE.md](SYNC-CONFORMANCE.md) records this next decision.
+
+Synchronization resource update: object tracking/map/recursive leases are fixed
+32-slot arrays, and the protected stdcall path is tested with every native
+allocation denied. Capacity/ownership errors remain converter-domain rejection,
+not invented Windows errors. Ex failure triggers/error/poststate and system-provider
+initialization remain unproved. Actual original entry is still blocked at402b00;
+see [SYNC-RESOURCES.md](SYNC-RESOURCES.md). No additional success samples are needed
+to restate this remaining semantic decision.

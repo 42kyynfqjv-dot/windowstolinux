@@ -186,3 +186,72 @@ for spin in [0u32,4000] {
         "native-sync-conformance",
     );
 }
+
+#[test]
+fn native_sync_fixed_storage_survives_allocator_denial_and_full_capacity() {
+    native(
+        r#"
+struct RejectingAllocator;
+static DENY:std::sync::atomic::AtomicBool=std::sync::atomic::AtomicBool::new(false);
+static ATTEMPTS:std::sync::atomic::AtomicUsize=std::sync::atomic::AtomicUsize::new(0);
+unsafe impl std::alloc::GlobalAlloc for RejectingAllocator {
+ unsafe fn alloc(&self,l:std::alloc::Layout)->*mut u8{if DENY.load(std::sync::atomic::Ordering::SeqCst){ATTEMPTS.fetch_add(1,std::sync::atomic::Ordering::SeqCst);std::ptr::null_mut()}else{std::alloc::System.alloc(l)}}
+ unsafe fn alloc_zeroed(&self,l:std::alloc::Layout)->*mut u8{if DENY.load(std::sync::atomic::Ordering::SeqCst){ATTEMPTS.fetch_add(1,std::sync::atomic::Ordering::SeqCst);std::ptr::null_mut()}else{std::alloc::System.alloc_zeroed(l)}}
+ unsafe fn realloc(&self,p:*mut u8,l:std::alloc::Layout,n:usize)->*mut u8{if DENY.load(std::sync::atomic::Ordering::SeqCst){ATTEMPTS.fetch_add(1,std::sync::atomic::Ordering::SeqCst);std::ptr::null_mut()}else{std::alloc::System.realloc(p,l,n)}}
+ unsafe fn dealloc(&self,p:*mut u8,l:std::alloc::Layout){std::alloc::System.dealloc(p,l)}
+}
+#[global_allocator] static ALLOCATOR:RejectingAllocator=RejectingAllocator;
+"#,
+        r#"
+let(mut r,i)=CrtStreamRuntime::new_initializing(2,3,0x8000,65536).unwrap();
+let t=r.provider_begin(i,"FixedResource",0x700000,1).unwrap();let m=r.provider_publish(i,&t).unwrap();let d=r.provider_export(i,m,m,"InitializeCriticalSectionEx",0x701000).unwrap();let f=r.bind_native_sync(i,d).unwrap();
+let p=r.map_region(0x9000,33*24,CrtRegionKind::Module,Some(&[73;33*24])).unwrap();
+let alias=r.map_region(0xa000,24,CrtRegionKind::Module,None).unwrap();r.store(alias,32,CrtValue::Pointer(r.file())).unwrap();
+let collision=r.map_region(0xb000,24,CrtRegionKind::Module,None).unwrap();r.store(collision,32,CrtValue::Pointer(r.file())).unwrap();r.tags.insert(collision.address()+1,CrtValue::Pointer(r.file()));
+let sp=r.map_region(0xc000,64,CrtRegionKind::Stack,None).unwrap();r.store(sp,32,CrtValue::ProtectedReturn(717)).unwrap();r.store(r.offset(sp,4).unwrap(),32,CrtValue::Pointer(p)).unwrap();r.store(r.offset(sp,8).unwrap(),32,CrtValue::scalar(0)).unwrap();r.store(r.offset(sp,12).unwrap(),32,CrtValue::scalar(0)).unwrap();let mut cpu=CrtCpu::new(sp,717).unwrap();cpu.return_pop=12;
+DENY.store(true,std::sync::atomic::Ordering::SeqCst);
+let result=(||->Result<(),&'static str>{
+ // A typed-alias rejection must also avoid allocating an overlap vector.
+ assert_eq!(r.native_sync_initialize(i,f,0,alias,0,0),Err("CRT synchronization flags/object domain"));
+ assert_eq!(r.load(alias,8),Err("CRT partial typed-word read"));assert_eq!(r.load(r.offset(alias,1)?,32),Err("CRT partial typed-word read"));assert_eq!(r.load(collision,32),Err("CRT partial typed-word read"));
+ for index in 0..32 {let q=r.offset(p,i64::from(index)*24)?;assert_eq!(r.native_sync_initialize(i,f,index,q,0,0)?,1);}
+ assert_eq!(r.global_objects.values().count(),32);assert_eq!(r.native_sync.values().count(),32);
+ let extra=r.offset(p,32*24)?;r.last_os_error=Some(1234);
+ assert_eq!(r.native_sync_initialize(i,f,32,extra,0,0),Err("CRT synchronization flags/object domain"));assert_eq!(r.last_os_error,Some(1234));
+ let mut leases=[None;32];for lease in &mut leases{*lease=Some(r.lock_global(3,17)?);}
+ let serial=r.serial;assert_eq!(r.lock_global(3,17),Err("CRT global lock thread/budget"));assert_eq!(r.serial,serial);
+ assert_eq!(r.native_sync_delete(i,f,17,r.offset(p,17*24)?),Err("CRT live global lock destruction"));
+ for lease in leases.into_iter().rev(){r.unlock_global(lease.unwrap())?;}
+ // Sparse removal/reuse must preserve the other 31 source/target borrows.
+ r.native_sync_delete(i,f,17,r.offset(p,17*24)?)?;assert_eq!(r.native_sync.values().count(),31);
+ assert_eq!(r.native_sync_initialize(i,f,17,r.offset(p,17*24)?,4000,0)?,1);
+ for index in (0..32).rev(){r.native_sync_delete(i,f,index,r.offset(p,i64::from(index)*24)?)?;}
+ assert_eq!(cpu.native_sync_call(&mut r,i,f,0)?,CrtValue::scalar(1));assert!(cpu.returned);assert_eq!(CrtCpu::pointer(cpu.r[4])?.address(),0xc010);
+ assert!(cpu.native_sync_call(&mut r,i,f,0).is_err());r.native_sync_delete(i,f,0,p)?;
+ Ok(())})();
+DENY.store(false,std::sync::atomic::Ordering::SeqCst);
+result.unwrap();assert_eq!(ATTEMPTS.load(std::sync::atomic::Ordering::SeqCst),0);assert!(r.global_objects.is_empty());assert!(r.native_sync.is_empty());assert!(r.global_locks.is_empty());
+assert_eq!(r.load(r.offset(p,32*24).unwrap(),8).unwrap(),CrtValue::scalar(73));assert_eq!(r.load(alias,32).unwrap(),CrtValue::Pointer(r.file()));r.provider_destroy(i,m).unwrap();
+"#,
+        "native-sync-fixed-resource",
+    );
+}
+
+#[test]
+fn native_sync_partial_construction_preserves_prior_objects_and_error_order() {
+    native(
+        "",
+        r#"
+let(mut r,i)=CrtStreamRuntime::new_initializing(2,3,0x8000,65536).unwrap();let t=r.provider_begin(i,"PartialResource",0x700000,1).unwrap();let m=r.provider_publish(i,&t).unwrap();let d=r.provider_export(i,m,m,"InitializeCriticalSectionEx",0x701000).unwrap();let f=r.bind_native_sync(i,d).unwrap();
+let first=r.map_region(0x9000,24,CrtRegionKind::Module,Some(&[61;24])).unwrap();let second=r.map_region(0xa000,24,CrtRegionKind::Module,Some(&[62;24])).unwrap();
+assert_eq!(r.native_sync_initialize(i,f,4,first,0,0),Ok(1));let token=r.lock_global(3,4).unwrap();
+r.last_os_error=Some(91);let short=r.subrange(second,20).unwrap();assert!(r.native_sync_initialize(i,f,5,short,0,0).is_err());assert_eq!(r.last_os_error,Some(91));assert_eq!(r.load(second,8).unwrap(),CrtValue::scalar(62));r.check_global(token).unwrap();assert_eq!(r.global_objects.values().count(),1);assert_eq!(r.native_sync.values().count(),1);
+// Permissions fail before forgetting bytes, publishing tracking or changing error knowledge.
+let cap=r.memory.map_image(0xb000,24,r.owner,guest_memory::Permissions::READ,&[63;24]).unwrap();let readonly=CrtPointer{cap,owner:guest_memory::Owner::Module(r.owner),base:0xb000,size:24,address:0xb000,kind:CrtRegionKind::Module};r.regions.push(CrtRegion{pointer:readonly,heap:false,file_owner:None});assert_eq!(r.native_sync_initialize(i,f,5,readonly,0,0),Err("CRT synchronization writable range"));assert_eq!(r.last_os_error,Some(91));assert_eq!(r.load(second,8).unwrap(),CrtValue::scalar(62));
+r.unlock_global(token).unwrap();r.native_sync_delete(i,f,4,first).unwrap();assert!(r.check_global(token).is_err());assert_eq!(r.native_sync_initialize(i,f,4,first,0,0),Ok(1));assert!(r.check_global(token).is_err());
+// Mapping retirement cannot silently free the borrow or make a stale object callable.
+r.memory.release(first.cap,first.owner).unwrap();assert!(r.native_sync_delete(i,f,4,first).is_err());assert!(r.provider_destroy(i,m).is_err());assert_eq!(r.native_sync.values().count(),1);assert_eq!(r.global_objects.values().count(),1);
+"#,
+        "native-sync-partial-resource",
+    );
+}
