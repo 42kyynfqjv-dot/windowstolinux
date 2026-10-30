@@ -38,6 +38,11 @@ pub(crate) enum Op {
     FsWrite(Reg),
     FsPush,
     SignDividend,
+    XmmZero(u8),
+    XmmStoreLow64 {
+        source: u8,
+        address: graph::Address,
+    },
     RotateRightCl(Reg),
     AddCarry {
         destination: Operand,
@@ -102,6 +107,12 @@ pub(crate) struct Graph {
     pub origin: u32,
     pub end: u32,
     pub nodes: BTreeMap<u32, Node>,
+}
+fn xmm(r: Register) -> Result<u8, String> {
+    if !(Register::XMM0..=Register::XMM7).contains(&r) {
+        return Err("CRT IR: legacy XMM register".into());
+    }
+    Ok((r as u32 - Register::XMM0 as u32) as u8)
 }
 fn full(r: Register) -> Result<Reg, String> {
     let index = match r {
@@ -191,6 +202,31 @@ fn extended(i: &Instruction, raw: &[u8], tables: &[JumpTable<'_>]) -> Result<Op,
             },
             destination,
             source,
+        });
+    }
+    // Only legacy, non-faulting SSE/SSE2 forms under an explicit enabled-SSE
+    // execution premise. No general SIMD or floating-point contract follows.
+    if i.code() == Code::Xorps_xmm_xmmm128
+        && i.op0_kind() == OpKind::Register
+        && i.op1_kind() == OpKind::Register
+        && i.op0_register() == i.op1_register()
+        && raw.len() == 3
+        && raw[..2] == [0x0f, 0x57]
+    {
+        return Ok(Op::XmmZero(xmm(i.op0_register())?));
+    }
+    if i.code() == Code::Movlpd_m64_xmm
+        && raw.starts_with(&[0x66, 0x0f, 0x13])
+        && i.segment_prefix() == Register::None
+        && i.op0_kind() == OpKind::Memory
+        && i.op1_kind() == OpKind::Register
+    {
+        let Operand::Memory(address, _) = operand_from_move(i, 0)? else {
+            return Err("CRT IR: MOVLPD memory".into());
+        };
+        return Ok(Op::XmmStoreLow64 {
+            source: xmm(i.op1_register())?,
+            address,
         });
     }
     // Exact word-memory compare used by STARTUPINFO.cbReserved2. Keep the

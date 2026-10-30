@@ -426,6 +426,8 @@ pub(crate) fn emit_body_with_indirect(
  Op::ReturnPop(bytes)=>{out.push_str(&return_hook(pc,*bytes)?.unwrap_or_else(||format!("return cpu.finish_pop(rt,{bytes});")));controlled=true;},
  Op::RotateRightCl(dst)=>{let o=register(*dst);out.push_str(&format!("let count=cpu.get(1,8,0)?;let v=cpu.rotate_right32({},count)?;{}",read(&o,roles)?,write(&o,"v",roles)?));},
  Op::SignDividend=>out.push_str("cpu.sign_dividend()?;"),
+ Op::XmmZero(index)=>out.push_str(&format!("cpu.xmm[{index}]=[CrtValue::scalar(0);4];")),
+ Op::XmmStoreLow64{source,address:a}=>out.push_str(&format!("let p={};rt.store_stack_pair(p,[cpu.xmm[{source}][0],cpu.xmm[{source}][1]])?;",address(a,roles)?)),
  Op::AddCarry{destination,source:operand}=>out.push_str(&format!("let a={};let b={};let v=cpu.add_carry(a,b)?;{}",read(destination,roles)?,read(operand,roles)?,write(destination,"v",roles)?)),
  Op::DivideUnsigned(operand)=>out.push_str(&format!("let divisor={};cpu.divide_unsigned(divisor)?;",read(operand,roles)?)),
  Op::TableJump{index,address:table,targets}=>{

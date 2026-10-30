@@ -2028,6 +2028,75 @@ fn chain_ownership_gap(){let delivery_mode=0;let mode=0;
   Err::<(),_>("two local FS views cannot establish actual handler selection")
  });assert!(result.is_err());
 }
+struct EntropyObservations{time:u64,counter:u64,seen:Vec<u8>,fail:u8}
+impl CrtEntropyBackend for EntropyObservations{
+ fn filetime(&mut self)->Result<u64,&'static str>{self.seen.push(0);if self.fail==1{Err("independent time acquisition failure")}else{Ok(self.time)}}
+ fn counter(&mut self)->Result<u64,&'static str>{self.seen.push(3);if self.fail==2{Err("independent counter acquisition failure")}else{Ok(self.counter)}}
+}
+fn canonical_cookie_entropy(){
+ let file=std::fs::read(std::env::var("W2L_PE_MAPPING_INPUT").unwrap()).unwrap();
+ for mode in 0..16{
+  let(m,mut registry,main,mut permit)=fixture_with_extra(&[(0x410000,0x420000)]);let head=registry.head;
+  let(mut rt,init)=CrtStreamRuntime::new_initializing_pe32(registry.identity.owner,registry.identity.instance,0x41c080,3,1048576,&file).unwrap();let image=rt.main_image.unwrap();
+  rt.map_region(0x9000,0x6000,CrtRegionKind::Stack,None).unwrap();
+  let cookie=rt.process_image_pointer(image,0x41c000,4).unwrap();let complement=rt.process_image_pointer(image,0x41c040,4).unwrap();let initial_cookie=rt.load(cookie,32).unwrap();let initial_complement=rt.load(complement,32).unwrap();
+  let inputs=CrtEntropyInputs::bind(&rt,init,0x10203040,0x50607080).unwrap();
+  let entry=0xd000+mode*16;let mix_address=entry-20;
+  let mut b=EntropyObservations{time:0x89abcdef01234567,counter:0xfedcba9876543210,seen:Vec::new(),fail:0};
+  // Independent API observations selected to exercise original repair branches.
+  // The backend returns raw 64-bit observations, never a cookie or XOR result.
+  if mode==1{b.time=0;b.counter=u64::from(mix_address^inputs.process_id^inputs.thread_id^0xbb40e64e);}
+  if mode==2{b.time=0;b.counter=u64::from(mix_address^inputs.process_id^inputs.thread_id^0x11);}
+  if mode==3{b.time=u64::MAX;b.counter=0;}
+  if mode==4{b.fail=1;}if mode==5{b.fail=2;}
+  if mode==6{rt.end_initialization(init).unwrap();}
+  if mode==7{rt.thread+=1;}
+  if mode==8{rt.owner+=1;}
+  if mode==9{rt.memory.release(cookie.cap,cookie.owner).unwrap();}
+  if mode==10{assert!(CrtEntropyInputs::bind(&rt,init,0,12).is_err());}
+  if mode==11{let(other,_)=CrtStreamRuntime::new_initializing_pe32(7,9,0x41c080,3,1048576,&file).unwrap();assert!(inputs.validate(&other).is_err());}
+  if mode==12{b.time=0;b.counter=0;}
+  if mode==13{b.time=1u64<<63;b.counter=1;}
+  if mode==14{b.time=0x100000000;b.counter=0x100000000;}
+  let mut c=cpu(&mut rt,entry,1000+u64::from(mode));c.return_pop=0;let saved=c.entry;
+  let got=original_cookie_init_connected(&mut rt,&mut c,&inputs,&mut b);
+  if (4..=9).contains(&mode){
+   let expected=match mode{4=>"independent time acquisition failure",5=>"independent counter acquisition failure",6|7=>"CRT initialization owner/lifetime",8=>"CRT process image owner/lifetime",9=>"CRT pointer lifetime",_=>unreachable!()};assert_eq!(got,Err(expected),"entropy rejection {mode}");assert!(!c.returned);
+   if mode!=9{assert_eq!(rt.load(cookie,32).unwrap(),initial_cookie);assert_eq!(rt.load(complement,32).unwrap(),initial_complement);}
+   if mode==4||mode==5{
+    assert_eq!(b.seen,if mode==4{vec![0]}else{vec![0,3]});
+    let local=rt.resolve_absolute(entry-28,CrtRegionKind::Stack).unwrap();
+    let expected=if mode==4{0}else{b.time};assert_eq!(rt.load(local,32).unwrap(),CrtValue::scalar(expected as u32));assert_eq!(rt.load(rt.offset(local,4).unwrap(),32).unwrap(),CrtValue::scalar((expected>>32)as u32));
+    if mode==5{let q=rt.resolve_absolute(entry-36,CrtRegionKind::Stack).unwrap();assert_eq!(CrtCpu::bits(rt.load(q,32).unwrap()).unwrap().1,0);assert_eq!(CrtCpu::bits(rt.load(rt.offset(q,4).unwrap(),32).unwrap()).unwrap().1,0);}
+   }else{assert!(b.seen.is_empty());}
+  }else{
+   got.expect("original default-cookie helper and store must return");assert!(c.returned);assert_eq!(b.seen,vec![0,3]);
+   let raw=(b.time as u32)^((b.time>>32)as u32)^inputs.thread_id^inputs.process_id^(b.counter as u32)^((b.counter>>32)as u32)^mix_address;
+   let expected=if raw==0xbb40e64e{0xbb40e64f}else if raw&0xffff0000==0{raw|((raw|0x4711)<<16)}else{raw};
+   assert_eq!(rt.load(cookie,32).unwrap(),CrtValue::scalar(expected));assert_eq!(rt.load(complement,32).unwrap(),CrtValue::scalar(!expected));for i in [3,5,6,7]{assert_eq!(c.r[i],saved[i]);}
+   let count=b.seen.len();assert_eq!(original_cookie_init_connected(&mut rt,&mut c,&inputs,&mut b),Err("CRT active caller lifetime/return authority"));assert_eq!(b.seen.len(),count);
+   rt.end_initialization(init).unwrap();
+   registry.with_normal_calls(&m,&mut permit,&main,|epoch|{let mut frame=cpu(&mut rt,0xe000,5000+u64::from(mode));let mut binding=CrtNormalBinding::bind(&rt,&frame,epoch,epilog_run_layout())?;start(&mut rt,&mut frame,epoch,&mut binding,9000+u64::from(mode))?;assert_eq!(rt.load(cookie,32)?,CrtValue::scalar(expected));frame.r[0]=CrtValue::scalar(63);let value=epilog_run(&mut rt,&mut frame,epoch,&mut binding)?;assert_eq!(value,CrtValue::scalar(63));assert!(binding.authority(&rt,epoch).is_err());Ok(())}).expect("entropy-produced cookie feeds original registered record lifecycle");assert_eq!(registry.head,head);
+  }
+ }
+}
+fn entropy_api_boundaries(){
+ let file=std::fs::read(std::env::var("W2L_PE_MAPPING_INPUT").unwrap()).unwrap();
+ for mode in 0..9{
+  let(mut rt,init)=CrtStreamRuntime::new_initializing_pe32(7,9,0x41c080,3,1048576,&file).unwrap();let inputs=CrtEntropyInputs::bind(&rt,init,17,19).unwrap();
+  let stack=rt.map_region(0x9000,256,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,100).unwrap();let p=rt.offset(sp,16).unwrap();let q=rt.offset(p,4).unwrap();let bp=rt.offset(sp,40).unwrap();rt.store(p,32,CrtValue::scalar(0x12345678)).unwrap();
+  rt.store(sp,32,CrtValue::ProtectedReturn(77)).unwrap();rt.store(rt.offset(sp,4).unwrap(),32,CrtValue::Pointer(p)).unwrap();let mut c=CrtCpu::new(sp,77).unwrap();c.r[5]=CrtValue::Pointer(bp);c.entry=c.r;c.return_pop=4;
+  if mode==2{rt.store(rt.offset(sp,4).unwrap(),32,CrtValue::Pointer(rt.subrange(p,4).unwrap())).unwrap();}
+  if mode==3{rt.store(q,32,CrtValue::ProtectedReturn(88)).unwrap();}
+  if mode==4{rt.store(rt.offset(sp,4).unwrap(),32,CrtValue::Pointer(sp)).unwrap();}
+  if mode==5{rt.memory.release(stack.cap,stack.owner).unwrap();}
+  if mode==6{rt.end_initialization(init).unwrap();}
+  let mut b=EntropyObservations{time:0x0102030405060708,counter:0xfedcba9876543210,seen:Vec::new(),fail:if mode==7{1}else if mode==8{2}else{0}};
+  let kind=if mode==1||mode==8{3}else{0};let got=entropy_api(&mut rt,&mut c,&inputs,&mut b,kind);
+  if (2..=8).contains(&mode){assert_eq!(got,Err(match mode{2=>"CRT pointer complete range/identity",3=>"CRT scalar pair role/typed alias",4=>"entropy output is not an owned local pair",5=>"CRT pointer lifetime",6=>"CRT initialization owner/lifetime",7=>"independent time acquisition failure",8=>"independent counter acquisition failure",_=>unreachable!()}),"API mode {mode}");assert!(!c.returned);if mode!=5{assert_eq!(rt.load(p,32).unwrap(),CrtValue::scalar(0x12345678));}assert_eq!(b.seen,if mode==7||mode==8{vec![kind]}else{vec![]});}
+  else{let value=got.expect("valid pair API returns");assert_eq!(value,CrtValue::Scalar{bits:0,known:0});assert!(c.returned);let bits=if kind==0{b.time}else{b.counter};assert_eq!(rt.load(p,32).unwrap(),CrtValue::scalar(bits as u32));assert_eq!(rt.load(q,32).unwrap(),CrtValue::scalar((bits>>32)as u32));assert_eq!(b.seen,vec![kind]);assert!(entropy_api(&mut rt,&mut c,&inputs,&mut b,kind).is_err());assert_eq!(b.seen,vec![kind]);}
+ }
+}
 fn canonical_startup_storage(){
  let path=std::env::var("W2L_PE_MAPPING_INPUT").expect("unchanged authored input required");let file=std::fs::read(path).unwrap();
  for mode in 0..8{
@@ -2068,7 +2137,7 @@ fn canonical_startup_storage(){
  }
 
 }
-fn main(){match std::env::args().nth(1).unwrap().as_str(){"canonical-startup"=>canonical_startup_storage(),"inline-exit"=>{inline_exit_cases();inline_exit_delivery();inline_exit_image()},"abort-locked"=>abort_locked_cases(),"registered-errno"=>registered_errno_cases(),"ordered-search"=>ordered_search_cases(),"live-return"=>live_return_cases(),"chain-effect-lifetime"=>chain_effect_lifetime(),"shared-chain"=>{shared_chain_cases();shared_chain_nested();shared_chain_delivery()},"chain-ownership-gap"=>chain_ownership_gap(),"bound-cxx-invocation"=>bound_invocation(),"prefix-delivery-unwind"=>dispatcher_delivery_unwind(true),"dispatcher-delivery-unwind"=>dispatcher_delivery_unwind(false),"delivery-cached-unwind"=>delivery_cached_unwind(),"delivery-children"=>delivery_children(),"cxx-cached-unwind"=>cxx_cached_unwind(),"cxx-unwind"=>cxx_registered_unwind(),"manager-inherited"=>inherited_registered_manager(),"manager"=>manager_registered(),"live-finally"=>live_finally_cases(),"owned-loop"=>owned_loop_cases(),"owned-local"=>owned_local_cases(),"owned"=>{main_initial_rejections();initial_raise_rejections();owned_main_cases()},"path-edges"=>path_edges(),"live"=>live_dispatch(),"objects"=>captured_objects(),"handler"=>pending_handler_activation(),"pending"=>pending_normal_exception(),"pending-reject"=>reject_normal_exception(),"file"=>file_scope_normal(),"file-failure"=>file_scope_failure(),"nested"=>nested_actual(),"mutations"=>mutations(),"consumed"=>consumed_mutation(),"failure"=>body_failure(),"certificate"=>wrong_certificate(),"observed"=>observed(),_=>panic!("case")}}
+fn main(){match std::env::args().nth(1).unwrap().as_str(){"canonical-startup"=>{canonical_startup_storage();canonical_cookie_entropy();entropy_api_boundaries()},"inline-exit"=>{inline_exit_cases();inline_exit_delivery();inline_exit_image()},"abort-locked"=>abort_locked_cases(),"registered-errno"=>registered_errno_cases(),"ordered-search"=>ordered_search_cases(),"live-return"=>live_return_cases(),"chain-effect-lifetime"=>chain_effect_lifetime(),"shared-chain"=>{shared_chain_cases();shared_chain_nested();shared_chain_delivery()},"chain-ownership-gap"=>chain_ownership_gap(),"bound-cxx-invocation"=>bound_invocation(),"prefix-delivery-unwind"=>dispatcher_delivery_unwind(true),"dispatcher-delivery-unwind"=>dispatcher_delivery_unwind(false),"delivery-cached-unwind"=>delivery_cached_unwind(),"delivery-children"=>delivery_children(),"cxx-cached-unwind"=>cxx_cached_unwind(),"cxx-unwind"=>cxx_registered_unwind(),"manager-inherited"=>inherited_registered_manager(),"manager"=>manager_registered(),"live-finally"=>live_finally_cases(),"owned-loop"=>owned_loop_cases(),"owned-local"=>owned_local_cases(),"owned"=>{main_initial_rejections();initial_raise_rejections();owned_main_cases()},"path-edges"=>path_edges(),"live"=>live_dispatch(),"objects"=>captured_objects(),"handler"=>pending_handler_activation(),"pending"=>pending_normal_exception(),"pending-reject"=>reject_normal_exception(),"file"=>file_scope_normal(),"file-failure"=>file_scope_failure(),"nested"=>nested_actual(),"mutations"=>mutations(),"consumed"=>consumed_mutation(),"failure"=>body_failure(),"certificate"=>wrong_certificate(),"observed"=>observed(),_=>panic!("case")}}
 "#;
 
 fn run(case: &str) {
@@ -2463,12 +2532,19 @@ if fault==1{{cpu.condition(0)?;}}
         let cxx_data=format!("fn abort_scope_bytes()->Vec<u8>{{vec!{:?}}}fn cxx_meta_bytes()->Vec<u8>{{vec!{:?}}}fn cxx_map_bytes()->Vec<u8>{{vec!{:?}}}fn cxx_scope_bytes()->Vec<u8>{{vec!{:?}}}",bytes_hex(crate::crt_abort::SCOPE),bytes_hex(crate::crt_cxx_record::METADATA),bytes_hex(crate::crt_cxx_record::UNWIND_MAP),bytes_hex(crate::crt_cxx_unwind::SCOPE));
         let cookie_code=handler_bytes("cookie-initializer.bin",crate::crt_cookie_init::CODE);
         let cookie_source=crate::crt_cookie_init::source(&cookie_code).unwrap();
+        let entropy_code=handler_bytes("cookie-entropy.bin",crate::crt_cookie_init::ENTROPY_CODE);
+        let entropy_imports:Vec<(u32,String,String)>=if let Ok(path)=std::env::var("W2L_EH4_CODE"){
+            std::fs::read_to_string(std::path::Path::new(&path).join("cookie-imports.txt")).unwrap().lines().map(|line|{let parts:Vec<_>=line.split_whitespace().collect();assert_eq!(parts.len(),3);(u32::from_str_radix(parts[0],16).unwrap(),parts[1].into(),parts[2].into())}).collect()
+        }else{crate::crt_cookie_init::IMPORTS.iter().map(|(at,name)|(*at,"kernel32.dll".into(),(*name).into())).collect()};
+        let cookie_connected=crate::crt_cookie_init::connected_source(&cookie_code).unwrap();
+        let entropy_source=crate::crt_cookie_init::entropy_source(&entropy_code,&entropy_imports).unwrap();
+
         let source = format!("#![allow(dead_code)]\nmod guest_memory{{{memory}}}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{fixture}\n{printf_native}\n{printf_entry_native}\n{printf_native_map}\n{completion_live}\n{main_initial_live}\n{main_initial_map}\n{initial_raise_types}\n{initial_raise_init}\n{initial_raise}\n{initial_raise_map}\n{file_scope}\n{context_types}\n{context_check}\n{scope_store}\n{permuted_store}\n{install}\n{handler_prolog}\n{filter_source}\n{false_filter_source}\n{normalizer_source}\n{guard_source}\n{header_source}\n{prefix_normalizer}\n{prefix_front}\n{guard_prefix}\n{prefix_caller}\n{bridge_native}\n{local_types}\n{owned_types}\n{local_source}\n{callback_source}\n{finally_source}\n{finally_cases}\n{original_local_store}\n{main_init}\n{inner_init}\n{owned_filter}\n{owned_bridge}\n{main_filter_bytes}\n{activation}\n{owned_prolog}\n{owned_prefix}\n{delivery_prefix}
 {inner_data}
 {unwind_caller}
 {stack_source}
 {native_loop}\n{owned_header}\n{owned_scope_store}\n{owned_permuted_store}\n{global_source}\n{delivery_source}\n{tail_source}\n{owned_search}
-{live_return}\n{live_return_map}\n{post_global}\n{code_data}\n{path_edges}\n{prefix_metadata}\nfn raise_site()->CrtNormalRaiseSite{{{{{raise}}}}}\n{allocator_native}\n{manager_native}\n{inherited_registered}\n{cxx_unwind}\n{cxx_cached}\n{cxx_action}\n{cxx_state}\n{cxx_record}\n{cxx_owner}\n{cxx_data}\n{cookie_source}\n{CASES}",
+{live_return}\n{live_return_map}\n{post_global}\n{code_data}\n{path_edges}\n{prefix_metadata}\nfn raise_site()->CrtNormalRaiseSite{{{{{raise}}}}}\n{allocator_native}\n{manager_native}\n{inherited_registered}\n{cxx_unwind}\n{cxx_cached}\n{cxx_action}\n{cxx_state}\n{cxx_record}\n{cxx_owner}\n{cxx_data}\n{cookie_source}\n{cookie_connected}\n{entropy_source}\n{CASES}",
             include_str!("linker/unwind_runtime.rs").replace("//!", "//"),
             emitted_literal(include_str!("frame_proof.rs")),emitted_literal(include_str!("thread_registry.rs")),
             crate::crt_stream_runtime::EMITTED_TYPES,crate::crt_stream_cpu::EMITTED_TYPES,

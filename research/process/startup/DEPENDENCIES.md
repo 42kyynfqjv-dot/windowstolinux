@@ -503,3 +503,17 @@ cookie explicitly. Actual default input still rejects at entropy helper401b24,
 whose four OS acquisition effects and stack-local identity are not implemented.
 The next gate is that real producer, followed by startup40161f; no recorded entropy
 or initializer success is inferred. [Exact evidence and next contract](CAPTURE-ACQUISITION.md#cookie-stores-and-original-record-initialization-share-mapped-data).
+
+### Default-cookie helper execution connected; acquisition still supplied
+
+The original 77-byte helper401b24 now executes through shared SIMD/scalar lowering,
+protected calls, checked eight-byte local writes and original cookie repair/stores.
+Successful cases feed the produced cookie into the original registered normal
+record lifecycle without overwriting the produced value.
+Actual PE bytes/imports bind the component. 16 helper/initializer cases and nine
+API boundary cases check strict results; 33 independent vector cases check flags,
+unknown bits, register choices and whole-store preflight. Numeric process/thread
+IDs and individual time/counter observations remain supplied contract inputs.
+No native acquisition, fresh Windows entropy pair or full startup is claimed.
+Next replace those inputs with justified live producers and connect40161f; see
+[contract and primary sources](CAPTURE-ACQUISITION.md#default-cookie-helper-executes-under-explicit-acquisition-inputs).

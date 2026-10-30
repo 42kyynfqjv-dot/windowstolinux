@@ -1193,3 +1193,83 @@ Do not replace them with recorded entropy. Original startup `0x40161f`, manager
 `0x406cfa`, managed termination and delivery/exit gates remain. A bounded Astra
 semantic pass is useful for those acquisition/identity contracts; routine review
 and CI can stay on Sol. Full startup/rcedit is still unsupported.
+
+## Default cookie helper executes under explicit acquisition inputs
+
+The 77 original bytes at `0x401b24..0x401b70` now lower through the shared graph,
+CALL/RET machinery and canonical mapped stack/image storage. The connected
+initializer calls this body, executes its XOR/mixing instructions and repair
+branches, then writes the original cookie and complement cells. Each successful component
+case feeds those same bytes into the original registered normal-frame prolog,
+checked epilog and retirement; it does not replace the cookie before that cycle.
+No expected
+cookie, observed process result, or helper-answer callback is emitted.
+
+The bounded SIMD addition is legacy same-register XORPS and memory-store MOVLPD.
+XORPS defines all 128 bits without changing flags; MOVLPD writes the low 64 bits
+and leaves the register unchanged. Unknown XMM bits stay unknown, calls carry
+actual XMM state, and bound external API calls clobber volatile XMM state. This
+execution cut presumes enabled SSE/SSE2 and committed, fault-free owned stack;
+it does not certify OS exception behavior for a disabled SIMD facility. Complete
+range, permission, tag and ownership preflight precedes either 32-bit word write.
+The store cannot overwrite a protected word in the upper half after changing the
+lower half, or carry pointer authority through vector bits.
+
+The API adapter validates a live initialization token, canonical process image,
+process/thread owner and complete local output range before requesting data.
+FILETIME and counter outputs must be eight-byte scalar pairs below the original
+saved EBP and above the active call arguments/return. A callback cannot turn an
+invalid output pointer into a successful observation. The original saved EBP,
+callee-saved registers, return token and stack cleanup still have to validate.
+
+The four import identities are extracted from the unchanged PE, compared to the
+bound targets, and included in cross-host provenance. Primary Microsoft contracts
+were read on 2026-10-30:
+
+* [GetSystemTimeAsFileTime](https://learn.microsoft.com/en-us/windows/win32/api/sysinfoapi/nf-sysinfoapi-getsystemtimeasfiletime): writes a FILETIME UTC value; no return value.
+* [GetCurrentThreadId](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-getcurrentthreadid): thread identifier remains unique system-wide during that thread's lifetime.
+* [GetCurrentProcessId](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-getcurrentprocessid): corresponding process-lifetime uniqueness.
+* [QueryPerformanceCounter](https://learn.microsoft.com/en-us/windows/win32/api/profileapi/nf-profileapi-queryperformancecounter): writes the counter on success and returns nonzero; documented XP-or-later valid-parameter calls always succeed. This is a contract premise, not XP compatibility evidence.
+
+The QPC contract does **not** promise the exact BOOL value 1. Its return bits stay
+unknown in this domain; the original helper overwrites EAX before reading it.
+The API's undocumented LastError effects also stay unknown. An acquisition error
+rejects this bounded component; it is not an emulation of Windows FALSE with an
+invented initialized counter. Earlier original writes remain visible: FILETIME
+is zeroed by original MOVLPD before time acquisition, and a later counter failure
+retains the time and mixed-ID local while the counter words remain uninitialized.
+
+**Acquisition remains an explicit input boundary.** `CrtEntropyInputs` validates
+ownership of supplied numeric process/thread IDs, but does not prove their OS
+provenance or system-wide uniqueness. The backend supplies individual FILETIME
+and counter observations; no native clock/ID producer or fresh Windows entropy
+observation is claimed. This closes the connected original helper execution and
+buffer effects, not the actual production acquisition contract. The earlier
+unbound entry still rejects default-cookie initialization; only the explicitly
+parameterized component can execute this path. Full startup/rcedit remains
+unsupported.
+
+Validation adds 16 original-helper/initializer cases, nine output API boundary
+cases, and 33 independent vector-register/payload/permission/partial-initialization cases.
+Every one of the 77 helper bytes and twelve import identity mutations rejects.
+Inputs cover both cookie repair branches, multiple stack addresses, upper/lower
+64-bit contributions, acquisition failures, cross-runtime/thread identity,
+expired initialization, released storage, replay and argument aliasing. Five
+recorded Windows wrapper comparisons remain component evidence; there are no new
+Windows entropy observations or whole-PE pairs.
+
+The existing nonlocal context certificates do not include SIMD state; these new
+instructions do not grant exception-path or SIMD context-restoration admission.
+
+Next establish an actual runtime process/thread ID binding and runtime time/counter
+acquisition, with independent conformance evidence and a declared target profile.
+Do not cast internal capability IDs to Windows identifiers or hard-code samples.
+Then connect startup `0x40161f` to this producer and the registered manager. Actual
+loader, delivery/collided-unwind and physical-exit contracts remain open. Sol can
+review this slice and its checks; producer identity/clock provenance is the next
+bounded semantic question if escalation is needed.
+
+Independent mutation removed complete-pair preflight while preserving the later
+word-store checks. The baseline rejected without changing the low word; the
+mutant rejected only after changing it, and the independent nonmutation assertion
+failed. Logs and source hashes are retained in cookie-entropy review evidence.

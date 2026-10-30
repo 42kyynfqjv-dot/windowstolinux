@@ -8,9 +8,9 @@ impl CrtFlags{fn unknown()->Self{Self{cf:None,zf:None,sf:None,of:None}}}
 /// including DF=0. It is not a capture of unknown Windows thread flags.
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 enum CrtAbi{Cdecl32Forward}
-struct CrtCpu{abi:CrtAbi,r:[CrtValue;8],entry:[CrtValue;8],flags:CrtFlags,return_id:u64,steps:u32,returned:bool,return_pop:u16}
+struct CrtCpu{abi:CrtAbi,r:[CrtValue;8],xmm:[[CrtValue;4];8],entry:[CrtValue;8],flags:CrtFlags,return_id:u64,steps:u32,returned:bool,return_pop:u16}
 impl CrtCpu{
- fn new(sp:CrtPointer,return_id:u64)->Result<Self,&'static str>{if sp.kind!=CrtRegionKind::Stack||return_id==0{return Err("CRT cpu entry authority");}let mut r=std::array::from_fn(|i|CrtValue::OpaqueSaved(i as u8));r[4]=CrtValue::Pointer(sp);Ok(Self{abi:CrtAbi::Cdecl32Forward,r,entry:r,flags:CrtFlags::unknown(),return_id,steps:0,returned:false,return_pop:0})}
+ fn new(sp:CrtPointer,return_id:u64)->Result<Self,&'static str>{if sp.kind!=CrtRegionKind::Stack||return_id==0{return Err("CRT cpu entry authority");}let mut r=std::array::from_fn(|i|CrtValue::OpaqueSaved(i as u8));r[4]=CrtValue::Pointer(sp);Ok(Self{abi:CrtAbi::Cdecl32Forward,r,xmm:[[CrtValue::Scalar{bits:0,known:0};4];8],entry:r,flags:CrtFlags::unknown(),return_id,steps:0,returned:false,return_pop:0})}
  fn tick(&mut self,budget:u32)->Result<(),&'static str>{self.steps=self.steps.checked_add(1).ok_or("CRT instruction counter overflow")?;if self.steps>budget{return Err("CRT certified instruction bound exceeded");}Ok(())}
  fn bits(v:CrtValue)->Result<(u32,u32),&'static str>{match v{CrtValue::Module(m)=>Ok((m.handle,u32::MAX)),CrtValue::Function(f)=>Ok((f.address,u32::MAX)),CrtValue::Scalar{bits,known}=>Ok((bits,known)),CrtValue::Pointer(p)=>Ok((p.address(),u32::MAX)),CrtValue::Handle(h)=>Ok((h.handle,u32::MAX)),CrtValue::OpaqueSaved(_)=>Ok((0,0)),CrtValue::Heap(_)|CrtValue::Dispatcher(_)|CrtValue::ProtectedReturn(_)|CrtValue::ThreadHead(_)=>Err("CRT protected control bits")}}
  fn number(v:CrtValue)->Result<u32,&'static str>{let(b,k)=Self::bits(v)?;if k!=u32::MAX{return Err("CRT unknown scalar bits observed");}Ok(b)}
@@ -88,9 +88,9 @@ impl CrtCpu{
   let identity=generation|(1u64<<63);
   if rt.tags.values().any(|v|*v==CrtValue::ProtectedReturn(identity)){return Err("CRT call identity collision");}
   rt.generation=generation;self.push(rt,CrtValue::ProtectedReturn(identity))?;
-  let mut child=Self{abi:self.abi,r:self.r,entry:self.r,flags:self.flags,return_id:identity,steps:self.steps,returned:false,return_pop};
+  let mut child=Self{abi:self.abi,r:self.r,xmm:self.xmm,entry:self.r,flags:self.flags,return_id:identity,steps:self.steps,returned:false,return_pop};
   let result=callee(rt,&mut child);
-  self.r=child.r;self.flags=child.flags;self.steps=child.steps;
+  self.r=child.r;self.xmm=child.xmm;self.flags=child.flags;self.steps=child.steps;
   let value=result?;
   if !child.returned||self.r[4]!=CrtValue::Pointer(expected_after)||value!=self.r[0]||rt.tags.values().any(|v|*v==CrtValue::ProtectedReturn(identity)){return Err("CRT callee missing exact protected RET");}
   Ok(value)
@@ -151,6 +151,6 @@ impl CrtCpu{
  fn shift(&mut self,value:CrtValue,count:u8,kind:u8,width:u8)->Result<CrtValue,&'static str>{let mask=Self::mask(width)?;let x=Self::number(value)?&mask;let count=count&31;if count==0{return Ok(value);}let sign=1u32<<(width-1);let result=match kind{0=>x.wrapping_shl(u32::from(count))&mask,1=>x.wrapping_shr(u32::from(count)),2=>((((x<<(32-width))as i32)>>(32-width))>>count)as u32&mask,_=>return Err("CRT shift kind")};
   let cf=if kind==2&&count>=width{Some(x&sign!=0)}else if count<width{Some(if kind==0{x&(1<<(width-count))!=0}else{x&(1<<(count-1))!=0})}else{None};let of=if count==1{match kind{0=>cf.map(|c|(result&sign!=0)^c),1=>Some(x&sign!=0),2=>Some(false),_=>None}}else{None};self.flags=CrtFlags{cf,zf:Some(result==0),sf:Some(result&sign!=0),of};Ok(CrtValue::scalar(result))}
  fn multiply(&mut self,value:CrtValue,factor:u32)->Result<CrtValue,&'static str>{let x=Self::number(value)?;let product=i64::from(x as i32)*i64::from(factor as i32);let result=product as u32;let overflow=product!=i64::from(result as i32);self.flags=CrtFlags{cf:Some(overflow),of:Some(overflow),zf:None,sf:None};Ok(CrtValue::scalar(result))}
- fn clobber(&mut self,result:CrtValue){self.r[0]=result;self.r[1]=CrtValue::Scalar{bits:0,known:0};self.r[2]=CrtValue::Scalar{bits:0,known:0};self.flags=CrtFlags::unknown();}
+ fn clobber(&mut self,result:CrtValue){self.xmm=[[CrtValue::Scalar{bits:0,known:0};4];8];self.r[0]=result;self.r[1]=CrtValue::Scalar{bits:0,known:0};self.r[2]=CrtValue::Scalar{bits:0,known:0};self.flags=CrtFlags::unknown();}
 }
 "#;

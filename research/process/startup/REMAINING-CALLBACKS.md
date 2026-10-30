@@ -375,3 +375,14 @@ GetSystemTimeAsFileTime, GetCurrentThreadId, GetCurrentProcessId,
 QueryPerformanceCounter, local initialization and guest stack address effects.
 This is an actual unresolved call, not a success callback. Startup40161f and later
 initializer/manager/termination effects remain separate mandatory gates.
+
+### Default-cookie helper acquisition boundary
+
+Original401b24 now executes its own zeroing, four imported calls, XORs and return;
+connected401b71 performs repair and canonical stores. Complete output pairs are
+checked before mutation, and acquisition failure preserves earlier writes. The
+runtime process/thread numeric ID provenance and individual FILETIME/QPC values
+are still explicit inputs. Their ownership check does not manufacture OS
+acquisition or uniqueness. No new Windows/whole-PE pairs. The next producer gate
+is live identity/time/counter acquisition, then original40161f composition; older
+loader, delivery and exit gaps remain.

@@ -500,6 +500,18 @@ impl CrtStreamRuntime {
   }
   Ok(CrtValue::Scalar{bits,known:if width==32{known}else{known|(!0u32<<width)}})
  }
+ /// Preflight the complete scalar pair before either word changes. This
+ /// bounded store cannot expose, overwrite or manufacture typed authority.
+ fn validate_stack_pair(&self,p:CrtPointer)->Result<(),&'static str>{
+  self.valid(p,8)?;
+  if p.kind!=CrtRegionKind::Stack||!self.overlapping_tags(p.address(),8).is_empty()||self.unobserved_contexts.iter().any(|(q,_)|q.cap==p.cap){return Err("CRT scalar pair role/typed alias");}
+  self.memory.validate_writable(p.cap,p.owner,p.address(),8).map_err(|_|"CRT scalar pair permission")?;Ok(())
+ }
+ fn store_stack_pair(&mut self,p:CrtPointer,words:[CrtValue;2])->Result<(),&'static str>{
+  self.validate_stack_pair(p)?;
+  if !words.iter().all(|v|matches!(v,CrtValue::Scalar{..})){return Err("CRT scalar pair value type");}
+  let high=self.offset(p,4)?;self.store(p,32,words[0])?;self.store(high,32,words[1])
+ }
  fn store(&mut self,p:CrtPointer,width:u8,value:CrtValue)->Result<(),&'static str>{
   if self.unobserved_contexts.iter().any(|(q,_)|q.cap==p.cap){return Err("unobserved context write requires effect proof");}
   let size=match width{8=>1,16=>2,32=>4,_=>return Err("CRT store width")};self.valid(p,size)?;self.ordinary_file_bytes(p,size)?;
