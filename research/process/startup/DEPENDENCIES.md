@@ -1,5 +1,28 @@
 # Remaining entry-to-exit dependencies
 
+## Current executable checkpoint: protected second-resolver publication
+
+Under the explicitly enabled `w2l-native-second-fiber-20348-2398cc6a-v1`
+extension, unchanged entry now executes indexed lock CALL `0x407e92 -> 0x40bdcf`,
+original VirtualProtect RW, cache XCHG `0x407ec8`, RO restoration and matching
+release `0x407ede -> 0x40be17`. Logical lock14 resolves by its checked address to
+owned slot15 in this entry; independent permuted storage resolves it to slot5.
+No slot number is substituted into guest registers or original address arithmetic.
+
+The selector returns, its original flag store executes, and the original allocation
+wrapper allocates **second process FLS index1**, callback `0x40a100`, publishing
+index1 to `0x41c170`. The earlier index0/value remain intact. The exact next stop
+is CALL `0x40a428 -> 0x40a332`, registered PTD acquisition context unbound, before
+producing its PTD or completing callback7. `0x41e00c` is the original missing-export
+sentinel `0xffffffff`, its page is read-only, and the cache lock is released.
+
+[Contract, failure ordering and independent cases](CACHE-PUBLICATION.md).
+Default admission still rejects `0x402b00`; no new Windows/ELF or whole-PE pair.
+Next connect the actual registered PTD getter using the live startup registry and
+existing lazy producer, retaining process-slot/fiber-value/allocation identities.
+Sol can review and attempt this connection; escalate only a reproduced ownership
+or continuation ambiguity. Older checkpoints below retain historical evidence.
+
 Current checkpoint: explicit extension `w2l-native-second-fiber-20348-2398cc6a-v1`
 uses verified x86 KernelBase identity and missing FlsGetValue2/error127. Unchanged
 entry publishes the owned module and executes lookup, then rejects indexed lock

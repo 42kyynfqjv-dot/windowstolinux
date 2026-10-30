@@ -55,7 +55,7 @@ impl Proof {
                     return Err("global lock import disagreement".into());
                 }
                 let next = pc + self.graph.nodes[&pc].length;
-                Ok(format!("cpu.call_activation(rt,{next},4,|rt,child|{{let sp=CrtCpu::pointer(child.r[4])?;let bp=CrtCpu::pointer(child.r[5])?;let index=rt.load(rt.offset(bp,8)?,32)?.known_scalar()?;let argument=rt.load(rt.offset(sp,4)?,32)?.known_scalar()?;rt.check_global_address(index,{},argument)?;effect(rt,index)?;child.clobber(CrtValue::Scalar{{bits:0,known:0}});child.finish_pop(rt,4)}})?;",self.table))
+                Ok(format!("cpu.call_activation(rt,{next},4,|rt,child|{{let sp=CrtCpu::pointer(child.r[4])?;let bp=CrtCpu::pointer(child.r[5])?;let index=rt.load(rt.offset(bp,8)?,32)?.known_scalar()?;let argument=rt.load(rt.offset(sp,4)?,32)?.known_scalar()?;let owned_slot=rt.check_global_address(index,{},argument)?;effect(rt,owned_slot)?;child.clobber(CrtValue::Scalar{{bits:0,known:0}});child.finish_pop(rt,4)}})?;",self.table))
             },
             &Default::default(),
             32,

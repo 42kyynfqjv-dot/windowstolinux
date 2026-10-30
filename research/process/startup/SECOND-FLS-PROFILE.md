@@ -47,7 +47,12 @@ Rust initialization contract; Windows DLL entry points are not copied or execute
 Loaded and export-target authority retain their earlier lifetime rules. Successful
 load LastError is left unknown; only the verified failed lookup supplies127.
 
-## Connected original execution
+## Historical checkpoint before cache-lock integration
+
+Superseded by [CACHE-PUBLICATION.md](CACHE-PUBLICATION.md); the statements in this
+section record the prior boundary.
+
+### Connected original execution
 
 With this extension, actual unchanged entry executes LoadLibraryExW at0x407f1d,
 the module-cache XCHG at0x407eed and the GetProcAddress call at0x407efe. The real

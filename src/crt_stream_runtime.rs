@@ -673,19 +673,20 @@ impl CrtStreamRuntime {
  }
  /// An integer produced by a certified helper does not itself grant memory
  /// authority. Bind it to the live module object for the exact table/index.
- fn check_global_address(&self,index:u32,table:u32,address:u32)->Result<(),&'static str>{
-  if index>=32||table.checked_add(index*24)!=Some(address){return Err("CRT global index/address overflow");}
-  let p=*self.global_objects.get(&index).ok_or("CRT unconstructed indexed lock")?;
-  if p.address!=address||p.kind!=CrtRegionKind::Module{return Err("CRT global table/object mismatch");}self.identity_range(p,24)
+ fn check_global_address(&self,index:u32,table:u32,address:u32)->Result<u32,&'static str>{
+  if index>=32||table==0||table%4!=0||table.checked_add(index*24)!=Some(address){return Err("CRT global index/address overflow");}
+  let mut matches=(0..32).filter(|slot|self.global_objects.get(slot).is_some_and(|p|p.address==address&&p.kind==CrtRegionKind::Module));
+  let slot=matches.next().ok_or(if self.global_objects.contains_key(&index){"CRT global table/object mismatch"}else{"CRT unconstructed indexed lock"})?;if matches.next().is_some(){return Err("CRT ambiguous indexed lock");}
+  let p=*self.global_objects.get(&slot).unwrap();self.identity_range(p,24)?;self.memory.validate_writable(p.cap,p.owner,p.address,24).map_err(|_|"CRT global lock permission")?;Ok(slot)
  }
  fn lock_global(&mut self,thread:u64,index:u32)->Result<CrtGlobalLock,&'static str>{
-  let p=*self.global_objects.get(&index).ok_or("CRT unconstructed global lock")?;self.identity_range(p,24)?;
+  let p=*self.global_objects.get(&index).ok_or("CRT unconstructed global lock")?;self.identity_range(p,24)?;self.memory.validate_writable(p.cap,p.owner,p.address,24).map_err(|_|"CRT global lock permission")?;
   if self.closed||thread!=self.thread||self.global_locks.len()>=32{return Err("CRT global lock thread/budget");}
   let serial=self.serial.checked_add(1).ok_or("CRT global lock serial")?;
   let token=CrtGlobalLock{anchor:self.anchor,thread,serial,depth:self.global_locks.len(),index,storage:p};self.global_locks.push(token);self.serial=serial;Ok(token)
  }
  fn check_global(&self,token:CrtGlobalLock)->Result<(),&'static str>{
-  if self.closed||token.anchor!=self.anchor||token.thread!=self.thread||self.global_locks.last()!=Some(&token)||self.global_objects.get(&token.index)!=Some(&token.storage){return Err("CRT stale/foreign/unordered global lock");}self.identity_range(token.storage,24)
+  if self.closed||token.anchor!=self.anchor||token.thread!=self.thread||self.global_locks.last()!=Some(&token)||self.global_objects.get(&token.index)!=Some(&token.storage){return Err("CRT stale/foreign/unordered global lock");}self.identity_range(token.storage,24)?;self.memory.validate_writable(token.storage.cap,token.storage.owner,token.storage.address,24).map_err(|_|"CRT global lock permission")
  }
  fn unlock_global(&mut self,token:CrtGlobalLock)->Result<(),&'static str>{self.check_global(token)?;self.global_locks.pop();Ok(())}
  fn destroy_global_lock(&mut self,token:CrtInitialization,index:u32)->Result<(),&'static str>{

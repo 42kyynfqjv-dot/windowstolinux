@@ -54,7 +54,7 @@ fn startup_second_bind(rt:&mut CrtStreamRuntime,c:&CrtCpu,i:&CrtEntropyInputs)->
  Target::Direct(0x40803c)=>return Ok(format!("cpu.call_activation(rt,{next},4,|rt,c|startup_second_thunk(rt,c,inputs,platform,effect,0x40803c,0x41509c))?;")),
  Target::Direct(0x408048)=>return Ok(format!("cpu.call_activation(rt,{next},4,|rt,c|startup_second_thunk(rt,c,inputs,platform,effect,0x408048,0x4150a8))?;")),
  Target::Direct(0x40a332)=>return Ok("return Err(\"startup registered PTD acquisition context unbound at 0x40a428\");".into()),
- Target::Direct(0x40bdcf)|Target::Direct(0x40be17)=>return Ok("return Err(\"startup second resolver indexed-lock ownership unbound\");".into()),
+ Target::Direct(0x40bdcf)|Target::Direct(0x40be17)=>return Ok(format!("cpu.call_activation(rt,{next},0,|rt,c|startup_second_lock(rt,c,inputs,{},&mut cache_lease))?;",t==Target::Direct(0x40bdcf))),
  Target::Direct(0x4078e0)=>return Ok("return Err(\"startup second resolver retry comparison unbound\");".into()),
  Target::Direct(0x4077ff)=>return Ok("return Err(\"startup second resolver abort effect unbound\");".into()),
  Target::Import(iat)=>{let (pop,symbol)=match iat{0x415074=>(12,"LoadLibraryExW"),0x415070=>(8,"GetProcAddress"),0x41506c=>(4,"FreeLibrary"),0x415044=>(0,"GetLastError"),0x4150b0=>(16,"VirtualProtect"),_=>return Err("second resolver import".into())};return Ok(format!("rt.process_image_import(inputs.image,{iat},\"kernel32.dll\",\"{symbol}\")?;cpu.call_activation(rt,{next},{pop},|rt,c|effect(rt,c,inputs,platform,{iat}))?;"));},
@@ -64,8 +64,24 @@ fn startup_second_bind(rt:&mut CrtStreamRuntime,c:&CrtCpu,i:&CrtEntropyInputs)->
             &roles,
             4096,
             |_, _| Err("second FLS thread effect".into()),
-            |_, _| Ok(String::new()),
-            |_, _| Ok(None),
+            |pc, _| {
+                Ok(
+                    if name == "startup_fiber_resolve"
+                        && matches!(pc, 0x407eaa | 0x407ec8 | 0x407ed2 | 0x407ede)
+                    {
+                        format!("let token=cache_lease.ok_or(\"resolver cache lock missing\")?;rt.check_global(token)?;{}",if pc==0x407ede{"let cache=rt.process_image_pointer(inputs.image,0x41e000,128)?;rt.memory.validate_immutable(cache.cap,cache.owner,cache.address(),128).map_err(|_|\"resolver cache not restored read-only\")?;"}else{""})
+                    } else {
+                        String::new()
+                    },
+                )
+            },
+            |_, _| {
+                Ok(if name == "startup_fiber_resolve" {
+                    Some("if cache_lease.is_some(){return Err(\"resolver return with live cache lock\");}return cpu.finish(rt);".into())
+                } else {
+                    None
+                })
+            },
             exit,
         )?;
         if let Some(exit) = exit {
@@ -79,7 +95,7 @@ fn startup_second_bind(rt:&mut CrtStreamRuntime,c:&CrtCpu,i:&CrtEntropyInputs)->
             );
         }
         let bind = if name == "startup_fiber_resolve" {
-            "startup_second_bind(rt,cpu,inputs)?;"
+            "startup_second_bind(rt,cpu,inputs)?;let mut cache_lease:Option<CrtGlobalLock>=None;"
         } else if name == "startup_fiber_load" {
             "let sp=CrtCpu::pointer(cpu.r[4])?;let arg=rt.load(rt.offset(sp,4)?,32)?;let p=match arg{CrtValue::Scalar{bits,known:u32::MAX}=>rt.process_image_pointer(inputs.image,bits,2)?,CrtValue::Pointer(p)=>{rt.valid(p,2)?;p},_=>return Err(\"second resolver module name authority\")};rt.store(rt.offset(sp,4)?,32,CrtValue::Pointer(p))?;"
         } else {
@@ -87,6 +103,28 @@ fn startup_second_bind(rt:&mut CrtStreamRuntime,c:&CrtCpu,i:&CrtEntropyInputs)->
         };
         out.push_str(&format!("fn {name}(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:Option<&CrtNativePlatform>,effect:&mut impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu,&CrtEntropyInputs,Option<&CrtNativePlatform>,u32)->Result<CrtValue,&'static str>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;let p=rt.process_image_code(inputs.image,{origin},{})?;if rt.memory.read(p.address(),{}).map_err(|_|\"second FLS code read\")?!=&{bytes:?}{{return Err(\"second FLS code changed\");}}{bind}{body}}}",bytes.len(),bytes.len()));
     }
+    for (name, origin, iat) in [
+        ("startup_second_enter_body", 0x40bdcf, 0x41504cu32),
+        ("startup_second_leave_body", 0x40be17, 0x415050),
+    ] {
+        let mut bytes = vec![0x8b, 0xff, 0x55, 0x8b, 0xec, 0x6b, 0x45, 0x08, 0x18, 0x05];
+        bytes.extend(0x41d150u32.to_le_bytes());
+        bytes.extend([0x50, 0xff, 0x15]);
+        bytes.extend(iat.to_le_bytes());
+        bytes.extend([0x5d, 0xc3]);
+        out.push_str(
+            &crate::crt_global_lock::Proof::prove(&bytes, origin, 0x41d150, iat)?.emit(name)?,
+        );
+    }
+    out.push_str(r#"
+fn startup_second_lock(rt:&mut CrtStreamRuntime,c:&mut CrtCpu,i:&CrtEntropyInputs,enter:bool,lease:&mut Option<CrtGlobalLock>)->Result<CrtValue,&'static str>{
+ i.validate(rt)?;c.validate_active(rt)?;let(origin,iat,symbol)=if enter{(0x40bdcf,0x41504cu32,"EnterCriticalSection")}else{(0x40be17,0x415050u32,"LeaveCriticalSection")};
+ let p=rt.process_image_code(i.image,origin,23)?;let mut code=[0x8b,0xff,0x55,0x8b,0xec,0x6b,0x45,0x08,0x18,0x05,0x50,0xd1,0x41,0,0x50,0xff,0x15,0,0,0,0,0x5d,0xc3];code[17..21].copy_from_slice(&iat.to_le_bytes());
+ if rt.memory.read(p.address(),23).map_err(|_|"indexed lock helper read")?!=code{return Err("indexed lock helper changed");}rt.process_image_import(i.image,iat,"kernel32.dll",symbol)?;
+ if enter{if lease.is_some(){return Err("resolver duplicate lock acquisition");}startup_second_enter_body(rt,c,|rt,slot|{*lease=Some(rt.lock_global(rt.thread,slot)?);Ok(())})}
+ else{startup_second_leave_body(rt,c,|rt,slot|{let token=lease.ok_or("resolver release without acquisition")?;if token.index!=slot{return Err("resolver release wrong owned slot");}rt.unlock_global(token)?;*lease=None;Ok(())})}
+}
+"#);
     out.push_str(r#"
 fn startup_second_thunk(rt:&mut CrtStreamRuntime,c:&mut CrtCpu,i:&CrtEntropyInputs,platform:Option<&CrtNativePlatform>,effect:&mut impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu,&CrtEntropyInputs,Option<&CrtNativePlatform>,u32)->Result<CrtValue,&'static str>,origin:u32,iat:u32)->Result<CrtValue,&'static str>{
  let p=rt.process_image_code(i.image,origin,12)?;let mut expected=[0x8b,0xff,0x55,0x8b,0xec,0x5d,0xff,0x25,0,0,0,0];expected[8..12].copy_from_slice(&iat.to_le_bytes());if rt.memory.read(p.address(),12).map_err(|_|"second thunk read")?!=expected{return Err("second FLS thunk changed");}
