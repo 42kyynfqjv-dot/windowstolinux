@@ -1,5 +1,10 @@
 # Connected startup UCRT getter and native FLS acquisition
 
+Later checkpoint: [UCRT allocation and initializer prefix](UCRT-ALLOCATION.md)
+continues beyond this getter boundary. The evidence below remains the historical
+getter/FLS-read result, not full initialization.
+
+
 ## Original execution and supported contract
 
 This connects the existing shared registered PTD getter to original startup.

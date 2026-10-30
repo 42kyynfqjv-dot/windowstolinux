@@ -254,6 +254,38 @@ fn extended(i: &Instruction, raw: &[u8], tables: &[JumpTable<'_>]) -> Result<Op,
             Operand::Immediate(i.immediate8to16() as u16 as u32),
         )));
     }
+    // Word stores preserve flags and upper source bits. Only a memory
+    // destination is admitted here; this does not add partial register writes.
+    if i.code() == Code::Mov_rm16_r16
+        && raw.starts_with(&[0x66, 0x89])
+        && i.op0_kind() == OpKind::Memory
+        && !i.has_lock_prefix()
+        && i.segment_prefix() == Register::None
+    {
+        let index = match i.op1_register() {
+            Register::AX => 0,
+            Register::CX => 1,
+            Register::DX => 2,
+            Register::BX => 3,
+            Register::SP => 4,
+            Register::BP => 5,
+            Register::SI => 6,
+            Register::DI => 7,
+            _ => return Err("CRT word store source".into()),
+        };
+        let Operand::Memory(address, _) = operand_from_move(i, 0)? else {
+            return Err("CRT word store destination".into());
+        };
+        return Ok(Op::Ordinary(Operation::Binary(
+            Binary::Move,
+            Operand::Memory(address, 16),
+            Operand::Reg(Reg {
+                index,
+                width: 16,
+                shift: 0,
+            }),
+        )));
+    }
     // Word TEST/CMP forms used by bounded UTF-16 traversal. Decode only;
     // live initialized read authority remains an execution obligation.
     if matches!(

@@ -1,0 +1,270 @@
+{
+  "kind": "Original UCRT allocation/publication/initializer prefix; explicit-profile component only",
+  "reviewed_parent": "783be2680587064b1bc01dbed731c26ae0b22abb",
+  "source_sha256": {
+    "examples/crt_stream.rs": "aabccea888b61af03719165fbbc63122f899451e0fcaf5f13000455d91ff3a95",
+    "src/crt_stream_runtime.rs": "c1074f8332d8f1f75bc7d48215aaa23ca44970168028ae51c29492c17ddd9683",
+    "src/crt_stream_ir.rs": "70251f643463ab15067922cb67fe56fdbdbd46cd76fe13a9d9425e4602cff914",
+    "src/crt_stream_cpu.rs": "ea1ff228238c2eca7fccff4f4adb70ff9a6273cbd517beafe20dfa038c8ffacf",
+    "src/crt_ptd.rs": "22473fab6deb34dd45e8cc7dd1dffdae51e60223a6b44d6f61187dc54b9c3c0a",
+    "src/crt_ucrt_ptd.rs": "c80c9954be2daef3b12e4a9532464be51a5a0b730a33134cd5cc1da32121ebfa",
+    "src/crt_startup_fiber.rs": "43233f882d97cb81b3aa702fd22bcfca48705b85a8e5a14d90cb50459f40769b",
+    "src/crt_resident_loader.rs": "2d64f663e245ed5b62aef9f77c8b5b658a449aa32fee32130f54116cc8c8d175",
+    "src/crt_normal_frame_tests.rs": "30d77fbc1a7a3b697ff05a2c1db37da3658b5f94acfc94d7efee2214f87f9d90",
+    "src/crt_standard_handles_tests.rs": "3c50d18c33c064cfd57a16ac3f44c656b452a963effb1b2979155cf15b07e15f",
+    "research/process/startup/check_normal_wrapper.py": "1adbb0d91c7df41d1403607c9807ec708a48aa447197d7678538e4f4b3c3cd63"
+  },
+  "primary_contract": "https://learn.microsoft.com/en-us/windows/win32/api/heapapi/nf-heapapi-heapalloc",
+  "contract_checked": "2026-10-30",
+  "validation": {
+    "crt_passed": 289,
+    "ignored_in_full": 2,
+    "independent_layout_cases": 21,
+    "independent_word_store_cases": 30,
+    "additional_original_pe_mutations": 4,
+    "python_run": 76,
+    "python_skip": 1,
+    "clippy_all_targets": "passed",
+    "format": "passed",
+    "artifact_replay": "completed; both artifact-dependent tests and five recorded Windows wrapper comparisons passed",
+    "repeated_generation": "identical Rust across separate later emissions"
+  },
+  "component": {
+    "profile": "w2l-native-second-fiber-20348-2398cc6a-v1",
+    "allocated_bytes": 868,
+    "heap_identity": "same canonical process heap",
+    "ptd_layout": "UCRT, legacy 40-byte VCRUNTIME accessor remains strict",
+    "fls_publication": "same current-fiber allocation pointer, after original sentinel/calloc",
+    "executed_initializer_fields": [
+      "18:u32=1",
+      "0:u32=415ef0",
+      "350:u32=1",
+      "48:u32=41c240",
+      "6c:u16=43",
+      "172:u16=43",
+      "34c:u32=0"
+    ],
+    "next_boundary": "CALL 40a0d0 -> 409efb; locale reference helper unbound",
+    "retained_at_rejection": [
+      "published allocation",
+      "prior initializer writes",
+      "live getter C++ registry record",
+      "prior startup/cache/lock/FLS effects"
+    ],
+    "default_admission": "402b00 blocked"
+  },
+  "original_regions": {
+    "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+    "regions": [
+      {
+        "name": "lazy",
+        "start": "0x40a1ee",
+        "end": "0x40a296",
+        "sha256": "4efd1b30192682ffdca4a30b4b801bd7bebccd1dec4ebf8cbbf62ed135fd30d2",
+        "calls": [
+          "40a1f1:\tff 15 44 50 41 00    \tcall   DWORD PTR ds:0x415044",
+          "40a201:\te8 67 de ff ff       \tcall   0x40806d",
+          "40a20b:\tff 15 48 50 41 00    \tcall   DWORD PTR ds:0x415048",
+          "40a21e:\te8 cd da ff ff       \tcall   0x407cf0",
+          "40a234:\te8 34 de ff ff       \tcall   0x40806d",
+          "40a23a:\te8 11 db ff ff       \tcall   0x407d50",
+          "40a241:\tff 15 48 50 41 00    \tcall   DWORD PTR ds:0x415048",
+          "40a252:\te8 16 de ff ff       \tcall   0x40806d",
+          "40a264:\te8 04 de ff ff       \tcall   0x40806d",
+          "40a26a:\te8 e1 da ff ff       \tcall   0x407d50",
+          "40a278:\te8 ea fd ff ff       \tcall   0x40a067",
+          "40a27f:\te8 cc da ff ff       \tcall   0x407d50",
+          "40a28a:\tff 15 48 50 41 00    \tcall   DWORD PTR ds:0x415048"
+        ]
+      },
+      {
+        "name": "calloc",
+        "start": "0x407cf0",
+        "end": "0x407d50",
+        "sha256": "6ffc612ae6e4e97d1cd27f395e35733f077fbd2d65ceaadd2c9d9638c98d9555",
+        "calls": [
+          "407d17:\te8 a4 f4 ff ff       \tcall   0x4071c0",
+          "407d21:\te8 9a 4c 00 00       \tcall   0x40c9c0",
+          "407d34:\tff 15 94 50 41 00    \tcall   DWORD PTR ds:0x415094",
+          "407d40:\te8 88 ff ff ff       \tcall   0x407ccd"
+        ]
+      },
+      {
+        "name": "initializer",
+        "start": "0x40a067",
+        "end": "0x40a100",
+        "sha256": "ecbf446182689495a296249dae12ccb1ea5d803533f74f08be7ef1baeace01f7",
+        "calls": [
+          "40a0d0:\te8 26 fe ff ff       \tcall   0x409efb",
+          "40a0f9:\te8 0f ff ff ff       \tcall   0x40a00d"
+        ]
+      },
+      {
+        "name": "mb_acquire",
+        "start": "0x409efb",
+        "end": "0x409f4d",
+        "sha256": "889d74fe93b72a5069c4c051ec2007d952db6fea3b55617dfd111b14b46011d9",
+        "calls": [
+          "409f02:\te8 59 7f ff ff       \tcall   0x401e60",
+          "409f0c:\te8 be 1e 00 00       \tcall   0x40bdcf",
+          "409f2a:\te8 12 00 00 00       \tcall   0x409f41",
+          "409f46:\te8 cc 1e 00 00       \tcall   0x40be17"
+        ]
+      },
+      {
+        "name": "mb_release",
+        "start": "0x409f4d",
+        "end": "0x409fb8",
+        "sha256": "59ba6c1522afd79f0df6cc46aec1be9a06e1c9deae9e9ca5bf5ea5730db936b6",
+        "calls": [
+          "409f54:\te8 07 7f ff ff       \tcall   0x401e60",
+          "409f5e:\te8 6c 1e 00 00       \tcall   0x40bdcf",
+          "409f88:\te8 c3 dd ff ff       \tcall   0x407d50",
+          "409f95:\te8 12 00 00 00       \tcall   0x409fac",
+          "409fb1:\te8 61 1e 00 00       \tcall   0x40be17"
+        ]
+      },
+      {
+        "name": "locale_release",
+        "start": "0x409fb8",
+        "end": "0x40a00d",
+        "sha256": "480b179713c2c993ae69239eab8f4068988d37b688b5aa7fbd940bc91a73fe14",
+        "calls": [
+          "409fbf:\te8 9c 7e ff ff       \tcall   0x401e60",
+          "409fc9:\te8 01 1e 00 00       \tcall   0x40bdcf",
+          "409fdc:\te8 b5 02 00 00       \tcall   0x40a296",
+          "409fea:\te8 12 00 00 00       \tcall   0x40a001",
+          "40a006:\te8 0c 1e 00 00       \tcall   0x40be17"
+        ]
+      },
+      {
+        "name": "locale_publish",
+        "start": "0x40a00d",
+        "end": "0x40a067",
+        "sha256": "d87a8c9456d9e26620479d857649afe3425dd486168412ac036a95357f692181",
+        "calls": [
+          "40a014:\te8 47 7e ff ff       \tcall   0x401e60",
+          "40a01e:\te8 ac 1d 00 00       \tcall   0x40bdcf",
+          "40a036:\te8 5b 02 00 00       \tcall   0x40a296",
+          "40a044:\te8 12 00 00 00       \tcall   0x40a05b",
+          "40a060:\te8 b2 1d 00 00       \tcall   0x40be17"
+        ]
+      },
+      {
+        "name": "fls_callback",
+        "start": "0x40a100",
+        "end": "0x40a121",
+        "sha256": "2403f510fb55547ea35ea38bab166d6906f5480637d9f13d06bb6670801bec83",
+        "calls": [
+          "40a10e:\te8 0e 00 00 00       \tcall   0x40a121",
+          "40a116:\te8 35 dc ff ff       \tcall   0x407d50"
+        ]
+      },
+      {
+        "name": "object_cleanup",
+        "start": "0x40a121",
+        "end": "0x40a1ee",
+        "sha256": "e0b5b632311a3758e18503c484c90240675dae8467b97591a595ebcc9d17929d",
+        "calls": [
+          "40a137:\te8 14 dc ff ff       \tcall   0x407d50",
+          "40a143:\te8 08 dc ff ff       \tcall   0x407d50",
+          "40a14e:\te8 fd db ff ff       \tcall   0x407d50",
+          "40a159:\te8 f2 db ff ff       \tcall   0x407d50",
+          "40a164:\te8 e7 db ff ff       \tcall   0x407d50",
+          "40a16f:\te8 dc db ff ff       \tcall   0x407d50",
+          "40a17a:\te8 d1 db ff ff       \tcall   0x407d50",
+          "40a185:\te8 c6 db ff ff       \tcall   0x407d50",
+          "40a190:\te8 bb db ff ff       \tcall   0x407d50",
+          "40a19e:\te8 ad db ff ff       \tcall   0x407d50",
+          "40a1c4:\te8 84 fd ff ff       \tcall   0x409f4d",
+          "40a1e7:\te8 cc fd ff ff       \tcall   0x409fb8"
+        ]
+      },
+      {
+        "name": "locale_replace",
+        "start": "0x40a296",
+        "end": "0x40a2e1",
+        "sha256": "5bd0fa939c7589d7aad13d4b27fd3775a24ba3fe90c39801fb0898538bb2461c",
+        "calls": [
+          "40a2a8:\te8 48 24 00 00       \tcall   0x40c6f5",
+          "40a2c7:\te8 5e 22 00 00       \tcall   0x40c52a",
+          "40a2d9:\te8 cf 21 00 00       \tcall   0x40c4ad"
+        ]
+      },
+      {
+        "name": "locale_addrefs",
+        "start": "0x40c4ad",
+        "end": "0x40c52a",
+        "sha256": "ab935c75a8ce13fa83188328bd2b3bed3574cac33ab0b26100c4d01c5ad71ca4",
+        "calls": [
+          "40c522:\te8 4b 01 00 00       \tcall   0x40c672"
+        ]
+      }
+    ]
+  },
+  "evidence": {
+    "new_windows_elf_pairs": 0,
+    "whole_pe_pairs": 0,
+    "new_original_windows_observations": 0,
+    "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+    "rust_sha256": "530b910466976d99cccf0a0a15d5bcdf98d3e1389065080d3d010fa14e7292d4",
+    "report_sha256": "6179b044f10175ad603cd6185914e489dc36d15a2830ee445708cd7ccbf7d37e",
+    "recorded_windows_wrapper_comparisons": 5
+  },
+  "review_fixes": [
+    "Kept legacy VCRUNTIME view accessor layout-specific; UCRT uses explicit layout validation",
+    "Updated obsolete universal word-store rejection to preserve negatives for unsupported destinations/prefixes"
+  ],
+  "retained_attempts": {
+    "pre-review-full.log": "288 passed, one obsolete word-store rejection expectation failed; actual word-store contract now has independent execution coverage",
+    "word-oracle-initial.log": "Test oracle corrected for existing upper-zero knowledge and numeric pointer truncation; execution rules preserved"
+  },
+  "prior_ci_failure": {
+    "run": 41107853543,
+    "job": 124242290134,
+    "original_case": 19,
+    "artifact": 13002965454,
+    "cause": "unresolved original Windows 15-second process.wait timeout; no retry or threshold change"
+  },
+  "next_gate": [
+    "Bind original EH4 scopes 41b5e0/41b600 to the same live startup registry",
+    "Checked locale pointer-bearing field authority and indexed locks 5/4",
+    "Actual LOCK INC/XADD reference effects, wrapping/flags and shared lifetime",
+    "Original locale replacement/reference helper branches and matching cleanup/RET12",
+    "Original publication/free/errno failure paths and callback40a100 teardown before root retirement"
+  ],
+  "limits": [
+    "No complete initialization, cleanup, original getter return or startup return",
+    "No default admission, full rcedit or XP/7 claim",
+    "Native resource failure rejects; Windows NULL/exception/errno equivalence unproved",
+    "Actual delivery/unwind and prior historical timeout causes remain unresolved"
+  ],
+  "predecessor_ci": [
+    {
+      "run": 41110024324,
+      "conclusion": "success",
+      "head": "783be2680587064b1bc01dbed731c26ae0b22abb"
+    },
+    {
+      "run": 41110013482,
+      "conclusion": "success",
+      "head": "783be2680587064b1bc01dbed731c26ae0b22abb"
+    },
+    {
+      "run": 41110013323,
+      "conclusion": "success",
+      "head": "783be2680587064b1bc01dbed731c26ae0b22abb"
+    }
+  ],
+  "log_sha256": {
+    "pre-review-full.log": "15a210b5e9db46c40657e2a27e69b3b315d7f5b806ecca15fdb001d25d3ab414",
+    "replay.log": "b869748bab8832ffb37cbb12337b379f09d3fbd3cdaed0094bff35a3fed2b2fa",
+    "unit.log": "b8142eb66b99c099cfd9e13cd68ff939c846d534f187cfbfcdc8dda3b8519ea1",
+    "full.log": "5d067092d7971363a9585d9d222b4401877c4904e36056e3c030248fff89888c",
+    "entry.log": "5b4ca5bb44cff8959eda74d6f861b6042726df988a5868ac92c86a743cc102d9",
+    "clippy.log": "736e2582f563605dd272e5fb977840b0c0767377d27b6940c440caf75eec7157",
+    "word-oracle-initial.log": "87e646d81418b59dafc3e8fe3d537f2e8539551e2f05120dc9989fd6c86c53ae",
+    "python.log": "ac7f701eccde55cac1a7685589da41a542ce202487e79a2c4e2593d67951641c",
+    "fmt.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}

@@ -1,5 +1,20 @@
 # Remaining entry-to-exit dependencies
 
+## Current executable checkpoint: owned UCRT allocation and initializer prefix
+
+Original entry under the explicit second-fiber profile now executes lazy sentinel
+publication, original calloc(1, 868), checked native heap allocation and publication
+of the same allocation to the current fiber. The original initializer's scalar and
+word writes execute. It rejects at **CALL `0x40a0d0 -> 0x409efb`**, before locale
+reference acquisition; the published object, prior writes and getter registry
+record remain live. The 40-byte VCRUNTIME view stays distinct and cannot accept it.
+
+[Contract, evidence and connected locale/cleanup gate](UCRT-ALLOCATION.md).
+Native allocation/resource rejection is not a proven Windows allocation-failure
+result. Original retry/errno, failed publication, locale helpers, ordered destructor
+and normal return remain open. Default/full startup/rcedit remain unsupported;
+no new Windows/ELF pair. The following checkpoints are historical.
+
 ## Current executable checkpoint: registered UCRT getter and native FLS read
 
 The explicit second-fiber profile now carries the actual live `NormalCallEpoch`

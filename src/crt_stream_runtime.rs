@@ -81,7 +81,10 @@ impl<T:Copy> CrtFlsTable<T> {
 /// Object view only: the allocation capability, Buffer role and every alias
 /// remain unchanged. The view never promises that later writes preserve zeros.
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
-struct CrtHeapPtdView {pointer:CrtPointer,slot:CrtFlsSlot}
+enum CrtPtdLayout {Vcruntime,Ucrt}
+impl CrtPtdLayout{fn size(self)->u32{match self{Self::Vcruntime=>40,Self::Ucrt=>868}}}
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+struct CrtHeapPtdView {pointer:CrtPointer,slot:CrtFlsSlot,layout:CrtPtdLayout}
 /// Non-Clone, consumed after the protected allocation return. A caller cannot
 /// supply its own before-set or transfer the ticket to another runtime/slot.
 struct CrtHeapPtdAllocation {anchor:guest_memory::Capability,slot:CrtFlsSlot,before:Vec<guest_memory::Capability>}
@@ -509,29 +512,34 @@ impl CrtStreamRuntime {
  }
  /// Consume only after the protected allocation continuation has returned.
  /// Existing roots cannot gain a new role by copying their bytes.
- fn bind_heap_ptd_return(&mut self,ticket:CrtHeapPtdAllocation,p:CrtPointer)->Result<(),&'static str>{
+ fn bind_heap_ptd_return(&mut self,ticket:CrtHeapPtdAllocation,p:CrtPointer)->Result<(),&'static str>{self.bind_heap_ptd_layout(ticket,p,CrtPtdLayout::Vcruntime)}
+ fn bind_heap_ptd_layout(&mut self,ticket:CrtHeapPtdAllocation,p:CrtPointer,layout:CrtPtdLayout)->Result<(),&'static str>{
+  let size=layout.size();
   if ticket.anchor!=self.anchor{return Err("CRT PTD allocation foreign ticket");}let slot=ticket.slot;let f=slot.fiber;let before=&ticket.before;
-  self.check_fiber(f)?;self.valid(p,40)?;
+  self.check_fiber(f)?;self.valid(p,size)?;
   if slot.fiber!=f||self.fls.get(&slot.index).map(|x|x.0)!=Some(slot){return Err("CRT PTD allocation slot lifetime");}self.fls_index(slot.allocation)?;
   if self.fls.get(&slot.index).map(|x|x.1)!=Some(CrtValue::scalar(u32::MAX)){return Err("CRT PTD allocation missing sentinel");}
-  if p.kind!=CrtRegionKind::Buffer||p.address!=p.base||p.size!=40||before.contains(&p.cap)||self.heap_ptds.iter().any(|v|v.pointer.cap==p.cap)
+  if p.kind!=CrtRegionKind::Buffer||p.address!=p.base||p.size!=size||before.contains(&p.cap)||self.heap_ptds.iter().any(|v|v.pointer.cap==p.cap)
    ||!self.regions.iter().any(|r|r.pointer==p&&r.heap&&r.file_owner.is_none()){return Err("CRT PTD allocation fresh root/role");}
-  for offset in (0..40).step_by(4){if self.load(self.offset(p,offset)?,32)?!=CrtValue::scalar(0){return Err("CRT PTD allocation zero initialization");}}
-  self.heap_ptds.push(CrtHeapPtdView{pointer:p,slot});Ok(())
+  for offset in (0..size).step_by(4){if self.load(self.offset(p,i64::from(offset))?,32)?!=CrtValue::scalar(0){return Err("CRT PTD allocation zero initialization");}}
+  self.heap_ptds.push(CrtHeapPtdView{pointer:p,slot,layout});Ok(())
  }
- fn heap_ptd_view(&self,p:CrtPointer,slot:CrtFlsSlot)->Result<(),&'static str>{
-  self.check_fiber(slot.fiber)?;self.fls_index(slot.allocation)?;self.valid(p,40)?;
+ fn heap_ptd_view(&self,p:CrtPointer,slot:CrtFlsSlot)->Result<(),&'static str>{self.heap_ptd_layout_view(p,slot,CrtPtdLayout::Vcruntime)}
+ fn heap_ptd_layout_view(&self,p:CrtPointer,slot:CrtFlsSlot,layout:CrtPtdLayout)->Result<(),&'static str>{
+  self.check_fiber(slot.fiber)?;self.fls_index(slot.allocation)?;
+  let view=self.heap_ptds.iter().find(|v|v.pointer==p&&v.slot==slot&&v.layout==layout).ok_or("CRT PTD view owner/slot/lifetime")?;
+  self.valid(p,view.layout.size())?;if p.size!=view.layout.size(){return Err("CRT PTD view layout extent");}
   if self.fls.get(&slot.index).map(|x|x.0)!=Some(slot)||!self.heap_ptds.iter().any(|v|v.pointer==p&&v.slot==slot)
    ||!self.regions.iter().any(|r|r.pointer==p&&r.heap&&r.file_owner.is_none()){return Err("CRT PTD view owner/slot/lifetime");}Ok(())
  }
  fn fls_value_for(&self,slot:CrtFlsSlot,v:CrtValue)->Result<(),&'static str>{
   if matches!(v,CrtValue::Scalar{known:u32::MAX,..})&&self.fls_indices.get(&slot.index).is_some_and(|e|e.native&&e.id==slot.allocation){return Ok(());}
-  if let CrtValue::Pointer(p)=v{if p.kind==CrtRegionKind::Buffer&&self.heap_ptds.iter().any(|v|v.pointer.cap==p.cap){return self.heap_ptd_view(p,slot);}}self.fls_value(v)
+  if let CrtValue::Pointer(p)=v{if p.kind==CrtRegionKind::Buffer{if let Some(view)=self.heap_ptds.iter().find(|v|v.pointer.cap==p.cap){return self.heap_ptd_layout_view(p,slot,view.layout);}}}self.fls_value(v)
  }
  fn dispatcher_ptd(&self,p:CrtPointer)->Result<(),&'static str>{
   self.valid(p,40)?;
   if p.kind==CrtRegionKind::ThreadData&&p.address==p.base&&self.regions.iter().any(|r|r.pointer==p){return Ok(());}
-  let view=self.heap_ptds.iter().find(|v|v.pointer==p).ok_or("C++ PTD root provenance")?;self.heap_ptd_view(p,view.slot)?;
+  let view=self.heap_ptds.iter().find(|v|v.pointer==p&&v.layout==CrtPtdLayout::Vcruntime).ok_or("C++ PTD root provenance")?;self.heap_ptd_view(p,view.slot)?;
   if self.fls.get(&view.slot.index).map(|x|x.1)!=Some(CrtValue::Pointer(p)){return Err("CRT PTD view not published");}Ok(())
  }
  fn fls_value(&self,v:CrtValue)->Result<(),&'static str>{match v{
@@ -951,6 +959,14 @@ impl CrtStreamRuntime {
   self.heap_identity(heap)?;
   if heap.exceptions!=Some(false)||flags!=8||size==0{return Err("CRT live allocation flags/exception/zero request");}
   let result=self.allocate(size,true,available)?;if result.is_some(){self.last_os_error=None;}Ok(result)
+ }
+ /// Execute a bounded successful allocation in the explicit native domain.
+ /// Budget/host allocation failure is rejection, never guest NULL or a guessed
+ /// exception policy. The existing process heap and allocation identity survive.
+ fn native_heap_allocate(&mut self,init:CrtInitialization,heap:CrtHeap,flags:u32,size:u32)->Result<CrtPointer,&'static str>{
+  self.initialization(init)?;self.heap_identity(heap)?;
+  if flags!=8||size==0{return Err("CRT native heap flags/size domain");}
+  let p=self.allocate(size,true,true)?.ok_or("CRT native heap allocation unavailable")?;self.last_os_error=None;Ok(p)
  }
  /// Select the allocation role before any pointer escapes; no Buffer alias
  /// is relabelled or allowed to bypass record locks.
