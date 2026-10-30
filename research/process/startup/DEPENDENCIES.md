@@ -406,3 +406,13 @@ Initial UCRT PTD/FLS creation, null-slot lazy initialization, dynamic getter,
 actual OS delivery and termination effects are still supplied or unbound.
 See [contract and remaining executable gate](CAPTURE-ACQUISITION.md#registered-ucrt-errno-acquisition)
 and [evidence](evidence/registered-ucrt.json). This adds no whole-image support.
+
+## Connected required-PTD abort entry
+
+The null-PTD failure now follows original abort entry4077ff → signal-query caller
+40cbcf → explicit rejection at locked helper40cafd. Complete original caller
+arguments and RET12 semantics are executed; query results are supplied only in
+separately labeled conformance tests. Next bind helper40cafd's actual EH4 frame,
+lock3, encoded signal cell/cookie and finally unlock before extending dispatch,
+fast-fail/reporting or exit. This is component progress, with no new whole-PE
+acceptance. [Evidence and exact next gate](CAPTURE-ACQUISITION.md#reviewed-registry-and-connected-abort-caller).

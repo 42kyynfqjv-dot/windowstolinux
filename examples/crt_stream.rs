@@ -305,3 +305,7 @@ mod crt_cxx_unwind;
 #[cfg(test)]
 #[path = "../src/crt_heap_free.rs"]
 mod crt_heap_free;
+
+#[cfg(test)]
+#[path = "../src/crt_abort.rs"]
+mod crt_abort;

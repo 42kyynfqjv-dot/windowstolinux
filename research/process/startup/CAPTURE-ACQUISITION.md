@@ -738,3 +738,52 @@ Validation and hashes are recorded in [registered UCRT evidence](evidence/regist
 All new cases are native component checks, with no new Windows observations or
 whole-PE pairs. Full startup/rcedit remains unsupported and historical Windows
 timeouts remain unresolved.
+
+### Reviewed registry and connected abort caller
+
+Independent review of `7f206c2` checked canonical-head preparation before data
+reuse, actual prolog/epilog effects, epoch forwarding and all sixteen strict
+ownership cases. No defect was found in the admitted cached UCRT lookup domain.
+Its initial PTD/FLS state and Windows delivery remain supplied. All three
+`abb3744` workflows completed successfully; the `7f206c2` original-Windows jobs
+passed while its Linux jobs were still running at this checkpoint.
+
+Pending required-PTD failure now executes the original CALL at `0x4077ff` and
+complete signal-query caller `0x40cbcf..0x40cbf6`. These bytes are checked against
+the retained unchanged PE before replay. At `0x40cbef` the caller passes two
+initialized lock-index words (both 3), a pointer to a genuinely unknown byte,
+and ECX pointing to that byte. The callee uses RET 12. Original LEAVE/RET and
+protected CALL handling retain the observed argument cleanup and saved state.
+No unknown byte or callback address is replaced by zero.
+
+The connected pending path rejects at the actual target `0x40cafd`. Eight native
+component scenarios independently exercise zero, nonzero and unknown query
+results, prior writes before failure, protected-frame corruption, wrong RET
+cleanup, missing protected return and the real entry-to-query rejection. Positive
+cases require actual return and saved-state restoration; failures require exact
+errors and preserved prior byte writes. Query outcomes in these standalone cases
+are explicitly supplied test callbacks, not an implementation of the locked
+query. The production pending adapter supplies only a rejecting query boundary.
+Entry/query byte mutations reject; no generic decoder policy was expanded.
+
+The next connected helper is now precisely `0x40cafd`: original EH4 registration
+(allocation 12, scope `0x41b740`), global lock acquire `0x40bdcf` with index 3,
+module cookie and encoded signal cell `0x41d2d8`, ROR decoding, finally/unlock
+`0x40cb59` → `0x40be17`, and original RET 12. The initialized lock words are not
+proof that the lock ran. After that, signal dispatch `0x40cc14`, abort flags
+`0x41c128`, processor-feature/fast-fail/reporting and exit status 3/mode 2 still
+need explicit contracts. No POSIX signal or normal flush behavior is substituted.
+Sol can inspect/implement the bounded registration/lock/query path; escalate only
+a demonstrated ownership or exception-effect uncertainty.
+
+This adds no Windows observations or whole-PE pairs. Full startup/rcedit remains
+unsupported; historical process timeouts remain unresolved. See
+[review and abort caller evidence](evidence/abort-query-review.json).
+
+Code-level prerequisite for that one cohesive helper: instruction `D3 CE` at
+`0x40cb31` is ROR ESI,CL. The current scalar IR/emitter has no rotate operation.
+Add reusable x86 rotate semantics (masked count, count-zero flag preservation,
+CF and count-one OF rules), with independent bit-pattern/count tests, alongside
+the helper's checked lock/EH4 lifetime. Decoded numeric bits alone must not grant
+function-pointer authority. This is a bounded Sol implementation question; it
+needs Astra only if a concrete ownership/exception composition uncertainty arises.

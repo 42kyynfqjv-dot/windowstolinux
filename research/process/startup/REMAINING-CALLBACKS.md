@@ -315,3 +315,9 @@ required-PTD termination, new-handler/recursive allocation and exceptional unwin
 remain explicit cuts. Allocation failure now reaches original sentinel cleanup
 and then required termination `0x4077ff`. See
 [the current producer and next gate](CAPTURE-ACQUISITION.md#registered-ucrt-errno-acquisition).
+
+Required-PTD failure now executes abort4077ff's first CALL and the complete
+original query caller40cbcf. Its locked callee40cafd remains the explicit runtime
+rejection in this component; standalone tests label supplied query outcomes.
+The next cut is EH4/lock3/cookie-decoded signal query plus finally unlock, followed
+by signal dispatch/fast-fail/report/exit. No normal return or shutdown is implied.
