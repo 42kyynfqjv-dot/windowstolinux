@@ -548,3 +548,9 @@ unresolved.
 proof to ignore unknown bits. It must compile and fail the exact assertion that
 an ambiguous capture was admitted; unrelated build/runtime failure does not count.
 This is native adversarial evidence, not a new original-Windows observation.
+
+Independent review adds cases 47 and 48: ambiguity against the C++ stack region
+must reject despite valid outer thread bounds; changing only the knowledge mask
+must invalidate the live snapshot and receipt. All 49 ordered cases retain strict
+expected outcomes. The bounded next producer, observation certificate and event
+lifecycle integration is specified in [CAPTURE-ACQUISITION.md](CAPTURE-ACQUISITION.md).

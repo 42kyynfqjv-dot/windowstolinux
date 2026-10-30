@@ -238,3 +238,17 @@ pairs are claimed. The compiled upper-bound mutant was caught by the intended
 unexpected-admission assertion. Current PE, harness, unwind and mutation hashes
 are retained in evidence/cxx-unwind-component.json. No historical timeout cause
 was established.
+
+Independent review of 2cc9c77 found no runtime authority defect. Two added strict
+cases cover knowledge-mask-only changes and the narrower C++ stack region, raising
+the ordered selector to 49 cases. The precise producer/certificate/lifecycle work
+needed to remove supplied capture knowledge is specified in
+[CAPTURE-ACQUISITION.md](CAPTURE-ACQUISITION.md). Bit-range predicates alone do not
+provide that authority; unknown raw capture and unproved effects still reject.
+
+Sol review reproduced six context-proof tests, all 49 ordered native cases and
+the full retained-artifact replay with five recorded wrapper comparisons. The
+updated capture mutant compiled and failed its intended assertion. There are
+zero fresh Windows observations or whole-PE pairs. The reviewed base's 223 CRT
+and 175 root tests remain base evidence; this review changes tests and documents,
+not runtime semantics. Current harness and mutant hashes are in the evidence JSON.

@@ -1490,7 +1490,7 @@ fn bound_invocation(){for delivery_mode in 0..34{let prefix=true;let mode=0;
   checked=true;Err::<(),_>("original child unwind completion is not OS delivery/restoration")
  });assert!(result.is_err());assert!(checked,"invocation case {} failed before its assertions",delivery_mode);assert_eq!(rt.initialization,None);assert_eq!(rt.module_references.len(),refs);assert_eq!(rt.memory.read(cache.address(),4).unwrap(),cache_before);assert_eq!(rt.last_os_error,saved_error);
 }}
-fn ordered_search_cases(){for mode in 0..47{
+fn ordered_search_cases(){for mode in 0..49{
  let(m,mut r,main,mut permit)=fixture_with_extra(&[(0x410000,0x420000)]);let mut rt=runtime(&r);let mut checked=false;
  let selected=if mode>=21{
   let(mut next,init)=CrtStreamRuntime::new_initializing(r.identity.owner,r.identity.instance,0x8000,65536).unwrap();
@@ -1535,6 +1535,7 @@ fn ordered_search_cases(){for mode in 0..47{
    38=>CrtValue::Scalar{bits:0,known:0},
    39=>CrtValue::Scalar{bits:0,known:0xffffefff},
    40=>CrtValue::Scalar{bits:0xe000,known:0xffffefff},
+   47=>CrtValue::Scalar{bits:0x8000,known:0xffffefff},
    41=>CrtValue::Scalar{bits:0x10000,known:0xfffffffe},
    _=>CrtValue::Scalar{bits:0x9500,known:0xfffffff0}
   }}else{CrtValue::scalar(0x9500)};
@@ -1578,7 +1579,7 @@ fn ordered_search_cases(){for mode in 0..47{
    _=>{}
   }
   let taken=original_live_search_return_advance(&mut search,returned,&mut event,&objects,&rt,&c,e,&b);
-  if matches!(mode,0|5|19|21..=46){assert_eq!(taken,Ok(predecessor));assert_eq!(search.current,predecessor);assert_eq!(e.registry.head,RegistryHead::Normal(event.frame));assert_eq!(event.delivery,CrtNormalDelivery::ResultTaken);assert_eq!(c.r,saved);
+  if matches!(mode,0|5|19|21..=48){assert_eq!(taken,Ok(predecessor));assert_eq!(search.current,predecessor);assert_eq!(e.registry.head,RegistryHead::Normal(event.frame));assert_eq!(event.delivery,CrtNormalDelivery::ResultTaken);assert_eq!(c.r,saved);
    if let Some((fiber,slot))=selected{
     rt.map_region(0x41b42c,36,CrtRegionKind::Module,Some(&cxx_meta_bytes()))?;rt.map_region(0x41b41c,16,CrtRegionKind::Module,Some(&cxx_map_bytes()))?;
     let rec=cxx_bind(&rt,&ancestor,&af)?;let stack=rt.resolve_absolute(0x9000,CrtRegionKind::Stack)?;
@@ -1588,7 +1589,7 @@ fn ordered_search_cases(){for mode in 0..47{
     if mode==24{rt.store(rt.offset(context,0xc4)?,32,CrtValue::scalar(0x9600))?;}
     if mode==25{rt.store(rt.offset(af.bp,-8)?,32,CrtValue::scalar(0x414ad7))?;}
     let result=cxx_invoke_selected_search(&mut search,&mut event,&objects,&mut rt,&c,e,&b,&mut d,&ancestor,&af,&rec,stack,fiber,slot,0x401900);
-    if mode==21||mode>=26{
+    if mode==21||(mode>=26&&mode!=47){
      let mut receipt=result.expect("selected original C++ search must return");assert_eq!(receipt.receipt.value,CrtValue::scalar(1));
      if mode==26{receipt.registration.generation+=1;}
      if mode==27{receipt.serial+=1;}
@@ -1607,15 +1608,16 @@ fn ordered_search_cases(){for mode in 0..47{
      if mode==44{event.generation+=1;}
      if mode==45{rt.memory.release(context.cap,context.owner).map_err(|_|"test partial capture retirement")?;}
      if mode==46{let other=rt.map_region(0x55000,716,CrtRegionKind::Context,None)?;rt.store(rt.offset(other,0xc4)?,32,capture)?;objects=CrtNormalObjects::bind(&event,&rt,e,record,other)?;}
+     if mode==48{rt.store(rt.offset(context,0xc4)?,32,CrtValue::Scalar{bits:0x9500,known:0xffffffe0})?;}
      let got=cxx_take_selected_search(&mut search,&mut event,&objects,receipt,&rt,&c,e,&b,&ancestor,&af,&rec);
-     if matches!(mode,26|27|28|31|32|33|34|35|36|42|44|45|46){assert_eq!(got,Err(match mode{28=>"C++ metadata mutated/unknown",31=>"ordered search incoming owned predecessor unlinked",32=>"ordered search stale source/order/children",33=>"normal record producer object mismatch",34|35=>"ordered search incoming root authority changed",36=>"registry stale frame",42=>"normal exception captured ESP input changed",44=>"normal exception stale/foreign ownership",45=>"CRT pointer lifetime",46=>"ordered search stale source/order/children",_=>"selected C++ foreign/replayed executed receipt"}));}
+     if matches!(mode,26|27|28|31|32|33|34|35|36|42|44|45|46|48){assert_eq!(got,Err(match mode{28=>"C++ metadata mutated/unknown",31=>"ordered search incoming owned predecessor unlinked",32=>"ordered search stale source/order/children",33=>"normal record producer object mismatch",34|35=>"ordered search incoming root authority changed",36=>"registry stale frame",42|48=>"normal exception captured ESP input changed",44=>"normal exception stale/foreign ownership",45=>"CRT pointer lifetime",46=>"ordered search stale source/order/children",_=>"selected C++ foreign/replayed executed receipt"}));}
      else{assert_eq!(got,Ok(1));assert_eq!(search.phase,5);assert_eq!(search.current,e.registry.cxx[0].previous);assert_eq!(event.delivery,CrtNormalDelivery::ResultTaken);}
      if let Some(replay)=replay{assert_eq!(cxx_take_selected_search(&mut search,&mut event,&objects,replay,&rt,&c,e,&b,&ancestor,&af,&rec),Err("ordered search stale source/order/children"));}
     }else{
      let error=result.err().expect("invalid selected registration must reject");
-     assert_eq!(error,match mode{22=>"ordered search stale source/order/children",23=>"PTD frame owner/caller lifetime",24=>"normal exception captured ESP input changed",25=>"ordered search expired predecessor storage",_=>unreachable!()},"selected case {mode}");assert_eq!(search.phase,3);
+     assert_eq!(error,match mode{22=>"ordered search stale source/order/children",23=>"PTD frame owner/caller lifetime",24=>"normal exception captured ESP input changed",25=>"ordered search expired predecessor storage",47=>"captured stack comparison unknown",_=>unreachable!()},"selected case {mode}");assert_eq!(search.phase,3);
     }
-    assert_eq!(c.r,saved);if mode!=45{assert_eq!(rt.load(rt.offset(context,0xc4)?,32)?,if mode==24{CrtValue::scalar(0x9600)}else if mode==42{CrtValue::Scalar{bits:0x9510,known:0xfffffff0}}else{capture});}
+    assert_eq!(c.r,saved);if mode!=45{assert_eq!(rt.load(rt.offset(context,0xc4)?,32)?,if mode==24{CrtValue::scalar(0x9600)}else if mode==42{CrtValue::Scalar{bits:0x9510,known:0xfffffff0}}else if mode==48{CrtValue::Scalar{bits:0x9500,known:0xffffffe0}}else{capture});}
     checked=true;return Err("ordered rejection checked");
    }
    if let Some(replay)=replay{assert_eq!(original_live_search_return_advance(&mut search,replay,&mut event,&objects,&rt,&c,e,&b),Err("ordered search stale source/order/children"));}

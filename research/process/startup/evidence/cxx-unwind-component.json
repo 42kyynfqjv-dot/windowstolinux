@@ -1,6 +1,6 @@
 {
   "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
-  "rust_sha256": "004527ac75525f63696f79bacc410dcff3ab6823bc46e1caa4dc1b22a06fab70",
+  "rust_sha256": "8f32a1b51989e531b6e50809461763aad6ae3cd80bd46bf8ff2ccb84269ec21b",
   "unwind_binding_source_sha256": "ed612ca9d8a6db43e5b52a6644bea91f2b1a00a494a47f5a3a7f15506e357675",
   "unwind_native_cases": 24,
   "unwind_new_windows_pairs": 0,
@@ -90,7 +90,7 @@
     "ordered_advance": false
   },
   "ordered_dispatch_gate": "First source return/advance implemented. Next: derive selected C++ owner from the actual registration and invoke its original search path under the same pending source; supplied-owner unwind receipts do not authorize that selection.",
-  "ordered_search_native_cases": 47,
+  "ordered_search_native_cases": 49,
   "original_empty_search_native_cases": 1,
   "ordered_search_new_windows_pairs": 0,
   "return_path_integration": {
@@ -211,5 +211,29 @@
       ],
       "conclusion": "success"
     }
+  },
+  "capture_view_review": {
+    "reviewed": "2cc9c7748a05c265a25b9f5b9e055bdc93e224e2",
+    "runtime_defects_found": 0,
+    "coverage_gaps_closed": [
+      "mask-only mutation must invalidate receipt",
+      "outer thread bounds cannot substitute narrower C++ stack bounds"
+    ],
+    "ordered_cases": 49,
+    "context_proof_tests": 6,
+    "recorded_windows_wrapper_comparisons": 5,
+    "fresh_windows_observations": 0,
+    "whole_pe_pairs": 0,
+    "capture_mutation": {
+      "kind": "capture proof mutation; native component only",
+      "source_sha256": "8f32a1b51989e531b6e50809461763aad6ae3cd80bd46bf8ff2ccb84269ec21b",
+      "mutant_sha256": "27f5b2a3a7fd24f4970af31058f5f76c09b1bcbfd1413fe2634849edf6ddb7f3",
+      "returncode": 101,
+      "observed": "ambiguous upper-bound capture admitted after ignoring unknown bits",
+      "whole_pe_pairs": 0,
+      "new_windows_observations": 0
+    },
+    "next_gate": "CAPTURE-ACQUISITION.md; normal pending-event certificate and predicate-only lifetime, no numeric witness",
+    "crt_223_and_root_175": "verified reviewed-base evidence; no runtime source changed in this review"
   }
 }
