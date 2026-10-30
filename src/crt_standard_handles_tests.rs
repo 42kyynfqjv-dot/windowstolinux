@@ -273,6 +273,11 @@ pub(super) fn allocator_source_with_errno(accessor: Option<&str>) -> String {
 pub(super) fn live_allocator_source(accessor: &str) -> String {
     allocator_source_mode(Some(accessor), true)
 }
+pub(super) fn live_allocator_with_lookup_source() -> String {
+    live_allocator_source("errno_routed_call(rt,child,&mut *lookup)")
+        .replace("expected_heap:CrtHeap,", "expected_heap:CrtHeap,lookup:&mut impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu)->Result<CrtValue,&'static str>,")
+        .replace("expected_heap,success_after", "expected_heap,lookup,success_after")
+}
 fn allocator_source_mode(accessor: Option<&str>, live: bool) -> String {
     let heap_producer: Vec<u8> = "ff15f850410085c0a3c8d241000f95c0c3"
         .as_bytes()

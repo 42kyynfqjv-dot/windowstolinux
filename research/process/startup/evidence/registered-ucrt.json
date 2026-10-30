@@ -1,0 +1,95 @@
+{
+  "reviewed_parent": "abb3744063fc5bf0b81e0a8716e0cb0967f6947b",
+  "kind": "original UCRT getter/errno execution under canonical delivery-child registry; component evidence only",
+  "new_windows_observations": 0,
+  "new_whole_pe_pairs": 0,
+  "registered_errno_native_cases": 16,
+  "ordered_search_native_cases": 85,
+  "pending_lazy_native_cases": 9,
+  "crt_suite": {
+    "passed": 235,
+    "ignored": 1,
+    "ignored_scope": "vector-dependent original wrapper test; separately exercised by retained replay"
+  },
+  "root_tests_passed": 175,
+  "python_tests": 60,
+  "python_existing_skips": 1,
+  "clippy": "passed",
+  "getter_byte_mutations_reject": 135,
+  "truncated_getter_rejects": true,
+  "review_findings": [
+    "Original getter now uses canonical registry FS installation and epilog retirement under the same delivery epoch.",
+    "UCRT FLS identity remains distinct from C++ dispatcher FLS identity; no synthetic root or shadow errno.",
+    "Ordinary stale stack data can be overwritten only for original zero-local prolog after full registry/lease extent preflight; control tokens still reject.",
+    "Pending calloc NULL must propagate as NULL; prior test callback assumed a pointer and was corrected.",
+    "Allocation failure now writes errno 12 then original sentinel reset executes before required-PTD termination rejection; reset invalidates cached errno authority without undoing the live field.",
+    "Pending HeapFree failure now reaches original UCRT lookup/errno store while uncertain allocation storage remains quarantined.",
+    "Positive paths unwrap matching receipts; negative cases assert exact errors and all cases assert reaching their designated checks.",
+    "PTD replay gate incorrectly expected seven passes after the eighth mutation test; replaced with all eight named completions and strict summary validation."
+  ],
+  "retained_local_failures": {
+    "initial_link": "linker signal 7 with workspace filesystem at 100%; output reported before tests executed",
+    "cleanup": "removed only ELF files named run/check older than two hours under w2l-build-tmp; retained generated sources, logs and original evidence",
+    "cleanup_manifest_sha256": "b786f4be3c18036aa1d48858a9d098eda3d07b626afe23f6b9561ae5ef6af6e5",
+    "first_replay": "reproduction/ptd-components.stdout records all eight passing tests; old seven-count harness rejected"
+  },
+  "remaining_gates": [
+    "initial UCRT PTD allocation/initialization and FLS acquisition",
+    "null-slot lazy UCRT producer 0x40a1ee and dynamic FlsGetValue2",
+    "required C++ PTD termination 0x4077ff and signal/lock/exit effects",
+    "new-handler/recursive errno and exceptional lazy unwind",
+    "actual OS delivery/incoming-chain/collided-unwind closure",
+    "unchanged-binary entry-to-exit startup and rcedit"
+  ],
+  "historical_windows_timeouts": "preserved and unresolved",
+  "next_review": "Sol: independently inspect registry preflight/data reuse, original getter and epoch forwarding, positive and exact negative assertions; verify final commit CI before next termination-path implementation.",
+  "replay": "passed against five retained original-Windows wrapper observations; no fresh Windows run locally",
+  "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "rust_sha256": "4318a4e89f23b060ab2c0a0a936a93d82a263faf6cf282f61dfd4e5af49cfabb",
+  "file_scope_code_sha256": {
+    "calloc_body": "6ffc612ae6e4e97d1cd27f395e35733f077fbd2d65ceaadd2c9d9638c98d9555",
+    "errno_router": "947a447e00813ad4b9d0607e25ac5204b39722858657b8633da300d6592c7e50",
+    "ptd-prolog": "4bd86fc014c6b4bc62ac075e441ebc162fabb51277692e679f58bd206520081d",
+    "ptd-epilog": "48fda296793be6b2a3465d1d3bae4cd47eb5966f166ec10c7bfd01d4318dbb48",
+    "ptd-getter": "faa3e4ab000682b51138fbc8b51753258055ea5cd96f46a51dc7a97d0303126c",
+    "ptd-fls-thunk": "6c9cde534e3bc89d09a7ad64399133317c2a2219c947afa1d4be5b5c6b4f06ad",
+    "ptd-lazy": "4efd1b30192682ffdca4a30b4b801bd7bebccd1dec4ebf8cbbf62ed135fd30d2",
+    "ptd-set-thunk": "6780c18e2873939e13c13577f44c5b91e67c641b673658ff1c863eb0190d515e",
+    "ptd-cxx-handler": "b61580e10d4983c8a533aaa4a2770d4146f2de0e445b3b868c2584ddc96ba722",
+    "ptd-cxx-metadata": "90464cfd6bf7bc9a6f4ce0a354390f8194c197a2491a54990dd8fa4f6e642a44",
+    "ptd-cxx-unwind_map": "dd42109d84842589ecaf204820e2fdf4b9a01fea8212769d04aed9b0e6066443",
+    "ptd-cxx-action": "1590eb710d6063a6402ad5c5a48772d3e14a8b24626761bb1a21c861071b2699",
+    "ptd-cxx-unwind_state_get": "f97f1c7eb7f2f697b9f5b66951f285d4a417926ef0d68334d2c1783f4a9f1c96",
+    "ptd-cxx-unwind_state_set": "bd5cd2174bbbb2668570ba8543a57a8b18911c41124ddc3664e7c2867759cadf",
+    "ptd-cxx-common": "d3b9de408d983d602e1dea6518ad5fd4e6831732cb34aa7b09606f093c23d750",
+    "ptd-cxx-dispatch_thunk": "e20bdda8db1ae8aa50523ea8d431e785cf82b497c34ce93555cba41154261bf9",
+    "ptd-cxx-dispatch_entry": "1821f2e8cb0ab16faafa538d6f14d001319b0ea80a3279a73f0418f81ff48fef",
+    "ptd-cxx-context_check": "2472c01cd9c5e286219ff8c07890ba030015dd8c4cdc62608ad79ffbd147b693",
+    "ptd-cxx-dispatch_ptd_use": "0948f7c22a37455788b4b258453c259597b6b6d39ddbe51a182e023e3aa02a90",
+    "ptd-cxx-dispatch_tail": "02d5ea267560222864ce9030100bf54f8559776b94f092a1c9500b2c94daaec7",
+    "ptd-cxx-termination": "d7f2b55285afe299a790ceb19bb67aa28df73b4483eb3d2d94d8fd4d513fa16c"
+  },
+  "local_logs_sha256": {
+    "crt-final.log": "7e4a74701295ad319ebbc886e764f36b72d55af18f975d12db69e788cdec84b5",
+    "root.log": "3d4785797e6d774e0e7238b7c32e7f79784243e96c4b6f686d09f01d048c53f1",
+    "clippy-final.log": "736e2582f563605dd272e5fb977840b0c0767377d27b6940c440caf75eec7157",
+    "python-final.log": "81565d4286451a750c6ec3c15dc122001f64b84a0c3021dc2ae898e05ac45bca"
+  },
+  "replay_report_sha256": "48a6f3ed391645452b3c363cfbc762cd4dd72d01b80d0c572af2320d151ef502",
+  "reviewed_parent_ci": {
+    "runs": [
+      41002080357,
+      41002074502,
+      41002074539
+    ],
+    "status": "in progress at 2026-10-30T04:30Z; no full success claimed",
+    "original_windows_pr_job": {
+      "id": 123888566624,
+      "conclusion": "success"
+    },
+    "remaining_pr_linux_job": {
+      "id": 123890095049,
+      "status": "in progress"
+    }
+  }
+}

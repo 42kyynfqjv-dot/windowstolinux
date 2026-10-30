@@ -179,7 +179,12 @@ pub(crate) fn delivered_lazy_source() -> Result<String, String> {
     Ok(format!("{common}\n{prefix}")
         .replace("cxx_common(", "cxx_lazy_common(")
         .replace("cxx_handler_prefix(", "cxx_handler_lazy_prefix(")
-        .replace("cxx_handler_identity(", "cxx_lazy_handler_identity("))
+        .replace("cxx_handler_identity(", "cxx_lazy_handler_identity(")
+        .replace(
+            "lookup:&mut impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu)",
+            "lookup:&mut impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu,&mut NormalCallEpoch<'_>)",
+        )
+        .replace("lookup(rt,child)?", "lookup(rt,child,epoch)?"))
 }
 fn common_source_mode(
     common: &[u8],
@@ -923,7 +928,7 @@ struct CrtLazyPtdBackend<'a>{
  fiber:CrtFiber,slot:CrtFlsSlot,
  api:&'a mut dyn FnMut(&mut CrtStreamRuntime,&mut CrtCpu,u32)->RegistryResult<CrtValue>,
  setter:&'a mut dyn FnMut(&mut CrtStreamRuntime,u32,CrtValue)->RegistryResult<(u32,Option<u32>)>,
- allocation:&'a mut dyn FnMut(&mut CrtStreamRuntime,&mut CrtCpu,u32)->RegistryResult<CrtValue>,
+ allocation:&'a mut dyn FnMut(&mut CrtStreamRuntime,&mut CrtCpu,&mut NormalCallEpoch<'_>,u32)->RegistryResult<CrtValue>,
 }
 struct CrtSelectedCxxReturn{receipt:CrtNormalHandlerReturn,serial:u64,registration:RegistrationId,handler:[u32;3],owner:u64,context:CrtCxxContext}
 /// Execute exactly the selected live C++ registration. A rejected search backend
@@ -950,7 +955,7 @@ fn cxx_invoke_selected_search_with(search:&mut CrtOrderedSearch,event:&mut CrtNo
  let context=match ready{Ok(c)=>c,Err(e)=>{search.phase=3;if let Some(lease)=&event.unobserved{lease.revoke();}return Err(e);}};
  search.phase=4;event.delivery=CrtNormalDelivery::Pending;
  let result=event.execute_child_handler(rt,interrupted,epoch,binding,dispatcher,continuation,|rt,cpu,child|{
-  if let Some(provider)=provider.as_mut(){cxx_handler_lazy_prefix(rt,cpu,owner,frame,record,&context,child,&mut|rt,c|cxx_lazy_ptd_required(rt,c,CrtResolverAccess::Cached,provider.fiber,provider.slot,&mut|rt,c,target|(provider.api)(rt,c,target),&mut|rt,index,value|(provider.setter)(rt,index,value),&mut|rt,c,target|(provider.allocation)(rt,c,target)))}
+  if let Some(provider)=provider.as_mut(){cxx_handler_lazy_prefix(rt,cpu,owner,frame,record,&context,child,&mut|rt,c,epoch|cxx_lazy_ptd_required(rt,c,CrtResolverAccess::Cached,provider.fiber,provider.slot,&mut|rt,c,target|(provider.api)(rt,c,target),&mut|rt,index,value|(provider.setter)(rt,index,value),&mut|rt,c,target|(provider.allocation)(rt,c,epoch,target)))}
   else{cxx_handler_prefix(rt,cpu,owner,frame,record,&context,child,fiber,slot)}
  });
  match result{Err(e)=>{search.phase=3;Err(e)},Ok(receipt)=>{

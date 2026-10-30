@@ -304,8 +304,16 @@ def check(original, observation, out, compare=None):
                              env=env, capture_output=True, timeout=180)
     (out/'ptd-components.stdout').write_bytes(ptd_run.stdout)
     (out/'ptd-components.stderr').write_bytes(ptd_run.stderr)
-    if ptd_run.returncode or b'7 passed' not in ptd_run.stdout:
-        raise ValueError('original PTD normal-path component check failed')
+    require_test_completions(ptd_run, [
+        b'crt_ptd::original_ptd_continuation_and_fls_normal_path',
+        b'crt_ptd::different_sized_continuations_preserve_words_and_reject_corruption',
+        b'crt_ptd::helper_certificates_reject_mutation_and_aliasing',
+        b'crt_ptd::fls_context_is_fiber_scoped_and_stale_slots_cannot_rebind_authority',
+        b'crt_ptd::original_errno_call_executes_ptd_body_and_preserves_last_error',
+        b'crt_ptd::original_lazy_setter_preserves_failure_return_and_success_sentinel',
+        b'crt_ptd::fls_mutation_invalidates_errno_and_rejects_stale_setter_before_effects',
+        b'crt_ptd::registered_getter_rejects_changed_original_bytes',
+    ])
     cxx_run = subprocess.run(['cargo','test','--locked','--example','crt_stream','crt_cxx_'],
                              env=env,capture_output=True,timeout=180)
     (out/'cxx-record-components.stdout').write_bytes(cxx_run.stdout)
@@ -398,12 +406,12 @@ def check(original, observation, out, compare=None):
         ('chain-effect-lifetime', 'shared_chain_rechecks_owner_at_original_fs_effect'),
         ('live-return', 'original_empty_search_executes_guard_and_protected_return'),
         ('ordered-search', 'original_return_receipt_advances_only_matching_live_registration'),
+        ('registered-errno', 'original_ucrt_errno_registration_preserves_pending_delivery_ownership'),
     ]:
         delivery = subprocess.run(['cargo','test','--locked','--example','crt_stream',test],env=env,capture_output=True,timeout=180)
         (out/(label+'.stdout')).write_bytes(delivery.stdout)
         (out/(label+'.stderr')).write_bytes(delivery.stderr)
-        if delivery.returncode or b'1 passed' not in delivery.stdout:
-            raise ValueError(label+' ownership integration failed')
+        require_test_completions(delivery, [('crt_exception_wrapper::normal_tests::'+test).encode()])
     expected = [[w['return_eax'], w['return_flags'], w['caller_stack_delta'], *w['saved']] for w in observed]
     actual = [[int(n) for n in line.split()] for line in (out/'normal-wrapper-results.txt').read_text().splitlines()]
     if actual != expected:
@@ -428,7 +436,7 @@ def check(original, observation, out, compare=None):
                   main_scope_header_sha256=sha((out/'Main-scope-header.bin').read_bytes()),
                   locale_state_evidence=locale_state_evidence(image),
                   unwind_binding_source_sha256=sha((out/'cxx-unwind-connected.rs').read_bytes()),
-                  heap_free_native_cases=28, heap_free_new_windows_pairs=0, pending_lazy_native_cases=9, pending_lazy_new_windows_pairs=0, lazy_common_handler_native_cases=24, lazy_common_handler_new_windows_pairs=0, heap_ptd_view_native_cases=17, lazy_ptd_native_cases=20, lazy_ptd_new_windows_pairs=0, ordered_search_native_cases=85, unobserved_context_native_cases=27, unobserved_context_new_windows_pairs=0, original_empty_search_native_cases=1, ordered_search_new_windows_pairs=0, shared_chain_native_cases=24, shared_chain_effect_lifetime_cases=4, shared_chain_new_windows_pairs=0, chain_ownership_diagnostic_experiments=1, chain_ownership_new_windows_pairs=0, bound_cxx_invocation_native_cases=34, bound_cxx_invocation_new_windows_pairs=0, prefix_delivery_unwind_native_cases=14, prefix_delivery_new_windows_pairs=0, dispatcher_delivery_unwind_native_cases=8, dispatcher_delivery_new_windows_pairs=0, delivery_child_native_cases=14, delivery_cached_unwind_native_cases=4, delivery_new_windows_pairs=0,
+                  registered_errno_native_cases=16, registered_errno_new_windows_pairs=0, heap_free_native_cases=28, heap_free_new_windows_pairs=0, pending_lazy_native_cases=9, pending_lazy_new_windows_pairs=0, lazy_common_handler_native_cases=24, lazy_common_handler_new_windows_pairs=0, heap_ptd_view_native_cases=17, lazy_ptd_native_cases=20, lazy_ptd_new_windows_pairs=0, ordered_search_native_cases=85, unobserved_context_native_cases=27, unobserved_context_new_windows_pairs=0, original_empty_search_native_cases=1, ordered_search_new_windows_pairs=0, shared_chain_native_cases=24, shared_chain_effect_lifetime_cases=4, shared_chain_new_windows_pairs=0, chain_ownership_diagnostic_experiments=1, chain_ownership_new_windows_pairs=0, bound_cxx_invocation_native_cases=34, bound_cxx_invocation_new_windows_pairs=0, prefix_delivery_unwind_native_cases=14, prefix_delivery_new_windows_pairs=0, dispatcher_delivery_unwind_native_cases=8, dispatcher_delivery_new_windows_pairs=0, delivery_child_native_cases=14, delivery_cached_unwind_native_cases=4, delivery_new_windows_pairs=0,
                   unwind_native_cases=24, cached_unwind_native_cases=14, cached_unwind_new_windows_pairs=0, unwind_new_windows_pairs=0, unwind_binding_rust_tests=1,
                   unwind_state_source_sha256=sha((out/'unwind-state-live.rs').read_bytes()),
                   unwind_state_native_cases=12, unwind_state_new_windows_pairs=0,

@@ -682,3 +682,59 @@ Astra ownership question; routine verification/review can remain Sol.
 These are connected component results, with no added Windows observations or
 whole-PE pairs. Full startup/rcedit remains unsupported; historical Windows
 process timeouts are still unexplained.
+
+### Registered UCRT errno acquisition
+
+The original getter at `0x40a332` now has a registered lowering. It executes the
+same decoded getter, FLS thunk, prolog and epilog; FS writes update the live
+`NormalCallEpoch` through `CrtCxxChainBinding`. The adapter obtains its predecessor
+from the canonical registry, retains the delivery lease, installs the actual
+stack record and retires it only after the original epilog. No synthetic root or
+C++ FLS slot supplies UCRT authority. The legacy standalone getter remains an
+explicit component interface.
+
+The original pending allocator and free failure paths now call the original
+errno router and this getter. Allocation failure writes 12 to the actual UCRT
+PTD field, then the original lazy producer resets its C++ FLS sentinel to zero
+and reaches the still-unbound required-PTD termination call. Failed HeapFree
+executes the original mapping and writes 13 through the same getter. Quarantined
+allocation identity and prior effects are preserved. The subsequent setter
+invalidates cached errno authority; it does not undo the actual field write or
+create a shadow errno. These failures issue no handler success receipt.
+
+The allocator callback now receives the existing delivery epoch by mutable
+reference through the original dispatcher/provider path. It cannot create an
+epoch or substitute a returned whole-handler result. UCRT global `0x41c170`
+and slot 4 in the conformance inputs remain distinct from C++ global `0x41c060`
+and slot 3. The numeric test indices are input examples, not implementation
+constants; slot identity and the original module-cell index must agree.
+
+The connected execution exposed ordinary pointer data left in a reused stack
+word by an earlier completed call. Registered zero-local prologs may overwrite
+ordinary data only after checking the complete new extent against canonical live
+frames, delivery bounds and predecessor order. Every reused word is written by
+the original prolog before use. Protected returns, saved opaque state and thread
+head tokens still reject; legacy standalone helpers retain their stricter empty
+storage check. No unknown byte is initialized by this preflight.
+
+Sixteen independent native cases cover successful errno routing, retired/reused
+slots, cross-fiber access, retired PTD storage, wrong index, null PTD, stale epoch
+and event lease, protected-word collision, ordinary data reuse, interior aliases,
+prior writes followed by lazy failure, record corruption, replay, nested frames
+and stale nested owners. Getter-byte mutations and truncation reject at lowering.
+The replay harness requires named successful test completions and a consistent
+summary for this and the existing delivery tests.
+
+Remaining supplied inputs: initial UCRT PTD allocation/initialization and FLS
+binding, loader/module effects, physical API outcomes and actual Windows delivery.
+A null UCRT slot still reaches unbound `0x40a1ee`; dynamic FlsGetValue2 remains
+unbound. Required C++ PTD termination at `0x4077ff`, new-handler/recursive errno,
+exceptional lazy unwind and whole startup remain separate gates. The next
+connected executable boundary is the original required-PTD termination path,
+with signal/lock/exit effects explicitly proved or rejected. Sol can independently
+review this integration and inventory that path before any further escalation.
+
+Validation and hashes are recorded in [registered UCRT evidence](evidence/registered-ucrt.json).
+All new cases are native component checks, with no new Windows observations or
+whole-PE pairs. Full startup/rcedit remains unsupported and historical Windows
+timeouts remain unresolved.

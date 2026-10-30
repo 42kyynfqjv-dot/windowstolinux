@@ -96,7 +96,26 @@ pub(crate) fn source() -> String {
     let mut source =
         helper_source(&raw(PROLOG), 0x414268, &raw(EPILOG), 0x414254, 0x41c000).unwrap();
     source.push_str(&fls_thunk_source(&raw(FLS_THUNK), 0x408061, 0x4150a0).unwrap());
-    let graph = Graph::decode(&raw(GETTER), 0x40a332).unwrap();
+    source.push_str(&getter_source(&raw(GETTER), false).unwrap());
+    source
+}
+
+/// Same original getter, with FS writes committed to the live epoch registry.
+/// Helper definitions and the shared-chain adapter must be supplied by the caller.
+pub(crate) fn registered_source(bytes: &[u8]) -> Result<String, String> {
+    Ok(format!(
+        "{}{}",
+        fls_thunk_source(&raw(FLS_THUNK), 0x408061, 0x4150a0)?,
+        getter_source(bytes, true)?
+    ))
+}
+fn getter_source(bytes: &[u8], registered: bool) -> Result<String, String> {
+    if bytes != raw(GETTER) {
+        return Err("PTD getter code binding".into());
+    }
+    let mut source = String::new();
+    let graph = Graph::decode(bytes, 0x40a332)?;
+
     let roles = BTreeMap::from([
         (0x41d130, "CrtRegionKind::Module".into()),
         (0x41c170, "CrtRegionKind::Module".into()),
@@ -104,6 +123,8 @@ pub(crate) fn source() -> String {
     let body=crt_stream_emit::emit_body_with_hooks(&graph,|pc,target|{
   let next=pc+graph.nodes[&pc].length;
   Ok(match target{
+   Target::Direct(0x414268) if registered=>"binding=Some(CrtCxxChainBinding::bind(rt,cpu,epoch)?);binding.as_ref().unwrap().prepare(rt,cpu,epoch)?;frame=Some(CrtPtdFrame::new_mode(rt,cpu,binding.as_ref().unwrap().token,0x414ad6,0x41c000,true)?);ptd_prolog_registered(rt,cpu,epoch,frame.as_mut().unwrap(),binding.as_mut().unwrap(),0x40a33e)?;".into(),
+   Target::Direct(0x414254) if registered=>"ptd_epilog_registered(rt,cpu,epoch,frame.as_mut().ok_or(\"PTD missing frame\")?,binding.as_mut().ok_or(\"PTD missing registry binding\")?,0x40a3b8)?;".into(),
    Target::Direct(0x414268)=>"frame=Some(CrtPtdFrame::new(rt,cpu,previous,0x414ad6,0x41c000)?);ptd_prolog(rt,cpu,frame.as_mut().unwrap(),0x40a33e)?;".into(),
    Target::Direct(0x414254)=>"ptd_epilog(rt,cpu,frame.as_mut().ok_or(\"PTD missing frame\")?,0x40a3b8)?;".into(),
    Target::Import(0x415044)=>format!("cpu.call_activation(rt,{next},0,|rt,child|{{let value=rt.last_os_error.map(CrtValue::scalar).unwrap_or(CrtValue::Scalar{{bits:0,known:0}});child.clobber(value);child.finish(rt)}})?;"),
@@ -115,17 +136,29 @@ pub(crate) fn source() -> String {
  },&roles,4096,|_,_|Err("PTD getter direct FS unbound".into()),|_,_|Ok(String::new()),|_,pop|{if pop!=0{return Err("PTD getter RET cleanup".into());}Ok(Some("if !frame.as_ref().is_some_and(|f|f.phase==2){return Err(\"PTD incomplete epilog\");}return cpu.finish(rt);".into()))}).unwrap();
     source.push_str(&format!("fn ptd_get_with_lazy(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,previous:CrtThreadHead,fiber:CrtFiber,slot:CrtFlsSlot,mut lazy:impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu)->Result<CrtValue,&'static str>)->Result<CrtValue,&'static str>{{rt.check_fiber(fiber)?;rt.validate_thread_head(previous)?;let mut frame:Option<CrtPtdFrame>=None;{body}}}"));
     source.push_str("fn ptd_get(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,previous:CrtThreadHead,fiber:CrtFiber,slot:CrtFlsSlot)->Result<CrtValue,&'static str>{ptd_get_with_lazy(rt,cpu,previous,fiber,slot,|_,_|Err(\"PTD lazy acquisition/recursive errno unbound\"))}");
-    source
+    if registered {
+        source=source.replace("ptd_get_with_lazy(","ptd_get_registered_with_lazy(").replace("ptd_get(","ptd_get_registered(")
+          .replace("previous:CrtThreadHead,", "epoch:&mut NormalCallEpoch<'_>,")
+          .replace("rt.validate_thread_head(previous)?;", "cpu.validate_active(rt)?;epoch.state()?;CrtNormalBinding::validate_cxx_head(rt,epoch)?;let mut binding:Option<CrtCxxChainBinding>=None;")
+          .replace("rt,cpu,previous,fiber,slot", "rt,cpu,epoch,fiber,slot");
+    }
+    Ok(source)
 }
 
 const TYPES: &str = r#"
 struct CrtPtdFrame{anchor:guest_memory::Capability,thread:u64,outer:u64,entry:[CrtValue;8],bp:CrtPointer,low:CrtPointer,previous:CrtValue,current:CrtValue,handler:u32,cookie:u32,phase:u8}
 impl CrtPtdFrame{
  fn new(rt:&CrtStreamRuntime,cpu:&CrtCpu,previous:CrtThreadHead,handler:u32,cookie_address:u32)->Result<Self,&'static str>{
+  Self::new_mode(rt,cpu,previous,handler,cookie_address,false)
+ }
+ fn new_mode(rt:&CrtStreamRuntime,cpu:&CrtCpu,previous:CrtThreadHead,handler:u32,cookie_address:u32,reuse:bool)->Result<Self,&'static str>{
   cpu.validate_active(rt)?;rt.validate_thread_head(previous)?;let bp=CrtCpu::pointer(cpu.r[4])?;let n=rt.load(bp,32)?.known_scalar()?;
   if n>256||n%4!=0||cpu.r[0]!=CrtValue::scalar(handler)||bp!=rt.offset(CrtCpu::pointer(cpu.entry[4])?,-4)?{return Err("PTD helper input/allocation");}
   let low=rt.offset(bp,-28-i64::from(n))?;let bottom=rt.offset(low,-4)?;rt.valid(bottom,n+32)?;
-  if !rt.overlapping_tags(bottom.address(),n+32).is_empty(){return Err("PTD frame overlaps protected/typed storage");}
+  // Registered zero-local frames may overwrite ordinary data in their checked
+  // child extent. Every word is written by the original prolog before use.
+  // Control authority is never reusable data, and legacy callers stay strict.
+  if rt.overlapping_tags(bottom.address(),n+32).iter().any(|(_,v)|!reuse||n!=0||matches!(v,CrtValue::ProtectedReturn(_)|CrtValue::OpaqueSaved(_)|CrtValue::ThreadHead(_))){return Err("PTD frame overlaps protected/typed storage");}
   let cookie=rt.load(rt.resolve_absolute(cookie_address,CrtRegionKind::Module)?,32)?.known_scalar()?;
   Ok(Self{anchor:rt.anchor,thread:rt.thread,outer:cpu.return_id,entry:cpu.entry,bp,low,previous:CrtValue::ThreadHead(previous),current:CrtValue::ThreadHead(previous),handler,cookie,phase:0})
  }
@@ -353,6 +386,23 @@ impl CrtCxxChainBinding {
   let token=rt.thread_head(epoch.registry.identity.instance,state.generation,CrtNormalBinding::head_bits(previous))?;
   Ok(Self{anchor:rt.anchor,identity:epoch.registry.identity,epoch:state.generation,lease:epoch.delivery,previous,token,bp,owner:cpu.return_id,id:None,done:false})
  }
+ fn prepare(&self,rt:&CrtStreamRuntime,cpu:&CrtCpu,epoch:&NormalCallEpoch<'_>)->RegistryResult<()>{
+  cpu.validate_active(rt)?;let state=epoch.state()?;CrtNormalBinding::validate_cxx_head(rt,epoch)?;
+  if self.done||self.id.is_some()||self.anchor!=rt.anchor||self.identity!=epoch.registry.identity||self.epoch!=state.generation||self.lease!=epoch.delivery||self.owner!=cpu.return_id||self.bp!=CrtCpu::pointer(cpu.r[4])?||epoch.head()?!=self.previous{return Err("PTD registry preparation identity");}
+  if rt.load(self.bp,32)?!=CrtValue::scalar(0){return Err("PTD reused frame requires zero locals");}
+  let low=rt.offset(self.bp,-32)?.address();let high=u64::from(CrtCpu::pointer(cpu.entry[4])?.address())+4;
+  epoch.registry.range(low,high)?;epoch.delivery_range(low,high)?;
+  if epoch.registry.cxx.iter().any(|f|u64::from(low)<f.high&&u64::from(f.low)<high)
+   ||epoch.registry.frames.iter().any(|f|f.live&&u64::from(low)<f.high&&u64::from(f.low)<high)
+   ||state.frames.iter().any(|f|u64::from(low)<f.high&&u64::from(f.low)<high){return Err("PTD registry preparation overlap");}
+  let parent_low=match self.previous{
+   RegistryHead::Cxx(id)=>epoch.registry.cxx.iter().find(|f|f.id==id&&f.linked).ok_or("C++ chain stale predecessor")?.low,
+   RegistryHead::Normal(id)=>state.frames.iter().find(|f|f.id==id&&f.installed&&!f.unlinked).ok_or("C++ chain stale normal predecessor")?.low,
+   RegistryHead::Owned(id)=>epoch.registry.frames[epoch.registry.frame_index(id)?].low,
+   _=>return Err("C++ chain borrowed predecessor not contained"),
+  };
+  if high>u64::from(parent_low){return Err("C++ chain outside caller stack");}Ok(())
+ }
  fn identity(&self,rt:&CrtStreamRuntime,epoch:&NormalCallEpoch<'_>,frame:&CrtPtdFrame)->RegistryResult<()>{
   epoch.state()?;rt.valid(self.bp,4)?;
   if self.done||self.anchor!=rt.anchor||self.identity!=epoch.registry.identity||self.epoch!=epoch.generation||self.lease!=epoch.delivery
@@ -403,3 +453,15 @@ fn ptd_epilog_registered(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,epoch:&mut Nor
  match result{Ok(())=>Ok(()),Err(e)=>epoch.fail(e)}
 }
 "#;
+
+#[test]
+fn registered_getter_rejects_changed_original_bytes() {
+    let original = raw(GETTER);
+    assert!(registered_source(&original).is_ok());
+    for i in 0..original.len() {
+        let mut changed = original.clone();
+        changed[i] ^= 1;
+        assert!(registered_source(&changed).is_err(), "byte {i}");
+    }
+    assert!(registered_source(&original[..original.len() - 1]).is_err());
+}

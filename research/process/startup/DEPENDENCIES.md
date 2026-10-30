@@ -393,3 +393,16 @@ Next connect UCRT getter 0x40a332's prolog/epilog to the canonical delivery-chil
 registry head. Its current local FS view cannot stand in for that ownership;
 UCRT and C++ FLS slots remain distinct. Then route both calloc and free errno
 access through this producer. See [the exact gate](CAPTURE-ACQUISITION.md#exact-remaining-errno-producer-integration).
+
+## Registered UCRT errno producer (current)
+
+The earlier canonical-registry gate is now connected for a live, already bound
+UCRT PTD/FLS slot. Original calloc/free failure → errno router → getter/prolog →
+FLS lookup → epilog → field store execute under the same delivery child epoch.
+The suspended parent, predecessor order and actual allocation identity survive.
+The allocation-failure path now proceeds through sentinel reset to the explicit
+required-PTD termination rejection, rather than stopping at an errno callback.
+Initial UCRT PTD/FLS creation, null-slot lazy initialization, dynamic getter,
+actual OS delivery and termination effects are still supplied or unbound.
+See [contract and remaining executable gate](CAPTURE-ACQUISITION.md#registered-ucrt-errno-acquisition)
+and [evidence](evidence/registered-ucrt.json). This adds no whole-image support.

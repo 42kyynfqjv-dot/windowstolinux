@@ -306,3 +306,12 @@ The pending errno call still rejects until the actual UCRT getter's registration
 and epilog are bound to the canonical child-delivery chain; its local-only FS
 view is insufficient. UCRT/C++ slots must stay distinct. See
 [the concrete registry gate](CAPTURE-ACQUISITION.md#exact-remaining-errno-producer-integration).
+
+The registered UCRT integration supersedes the local-FS rejection above for an
+already bound live UCRT slot. Both pending calloc errno and original HeapFree
+failure errno now execute the original getter against the canonical delivery
+registry. Initial UCRT state is still supplied; null-slot/dynamic acquisition,
+required-PTD termination, new-handler/recursive allocation and exceptional unwind
+remain explicit cuts. Allocation failure now reaches original sentinel cleanup
+and then required termination `0x4077ff`. See
+[the current producer and next gate](CAPTURE-ACQUISITION.md#registered-ucrt-errno-acquisition).
