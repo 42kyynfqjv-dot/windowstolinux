@@ -164,3 +164,25 @@ r.native_sync_delete(i,f,3,p).unwrap();r.provider_destroy(i,m).unwrap();
         "native-sync-stdcall",
     );
 }
+
+#[test]
+fn native_sync_conformance_spins() {
+    native(
+        "",
+        r#"
+for spin in [0u32,4000] {
+ let(mut r,i)=CrtStreamRuntime::new_initializing(2,3,0x8000,65536).unwrap();
+ let t=r.provider_begin(i,"ConformanceSynchronization",0x700000,1).unwrap();let m=r.provider_publish(i,&t).unwrap();let d=r.provider_export(i,m,m,"InitializeCriticalSectionEx",0x701000).unwrap();let f=r.bind_native_sync(i,d).unwrap();
+ let region=r.map_region(0x9000,32,CrtRegionKind::Module,Some(&[0;32])).unwrap();let lock=r.offset(region,4).unwrap();r.store(region,32,CrtValue::scalar(0x13579bdf)).unwrap();let tail=r.offset(region,28).unwrap();r.store(tail,32,CrtValue::scalar(0x2468ace0)).unwrap();
+ let mut events=Vec::new();assert_ne!(r.native_sync_initialize(i,f,3,lock,spin,0).unwrap(),0);events.push(1);
+ let a=r.lock_global(3,3).unwrap();events.push(2);let b=r.lock_global(3,3).unwrap();events.push(2);let c=r.lock_global(3,3).unwrap();events.push(3);
+ r.unlock_global(c).unwrap();events.push(4);r.unlock_global(b).unwrap();events.push(4);r.unlock_global(a).unwrap();events.push(4);r.native_sync_delete(i,f,3,lock).unwrap();events.push(5);
+ assert_ne!(r.native_sync_initialize(i,f,3,lock,spin,0).unwrap(),0);events.push(1);r.native_sync_delete(i,f,3,lock).unwrap();events.push(5);
+ let canaries=r.load(region,32).unwrap()==CrtValue::scalar(0x13579bdf)&&r.load(tail,32).unwrap()==CrtValue::scalar(0x2468ace0);assert!(canaries);assert_eq!(events,vec![1,2,2,3,4,4,4,5,1,5]);
+ if let Ok(out)=std::env::var("W2L_SYNC_OUTPUT"){std::fs::write(std::path::Path::new(&out).join(format!("native-{spin}.json")),format!("{{\"initialized\":true,\"events\":{events:?},\"reinitialized\":true,\"canaries\":{canaries}}}")).unwrap();}
+ r.provider_destroy(i,m).unwrap();
+}
+"#,
+        "native-sync-conformance",
+    );
+}

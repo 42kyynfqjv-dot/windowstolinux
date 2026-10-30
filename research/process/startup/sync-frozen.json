@@ -1,0 +1,26 @@
+{
+  "source_sha256": "65d78f954866e96bf1db08f5f4eaa206d3bb96b28448d69b2138017490bb69e1",
+  "spins": [
+    0,
+    4000
+  ],
+  "expected": {
+    "initialized": true,
+    "events": [
+      1,
+      2,
+      2,
+      3,
+      4,
+      4,
+      4,
+      5,
+      1,
+      5
+    ],
+    "reinitialized": true,
+    "canaries": true
+  },
+  "allocation_failure": "not forced or inferred; success LastError observed but unconstrained",
+  "target": "x86 Windows Server 2022; actual build and compiler recorded per run"
+}

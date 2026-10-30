@@ -457,3 +457,9 @@ and a specific callable issuer, with protected stdcall transport. Other provider
 descriptors remain noncallable. Actual API-set mapping/initial state, resource
 failure/error results, general contention and shutdown remain open; original
 entry still rejects402b00. See [NATIVE-SYNCHRONIZATION.md](NATIVE-SYNCHRONIZATION.md).
+
+The frozen critical-section Windows/native conformance gate measures only valid
+successful operations. Allocation-failure BOOL/LastError and loader initial state
+still need a reviewed resource/effect contract; forcing synthetic allocator failure
+would be native test evidence, not an observed Windows allocation failure.
+[SYNC-CONFORMANCE.md](SYNC-CONFORMANCE.md) records this next decision.

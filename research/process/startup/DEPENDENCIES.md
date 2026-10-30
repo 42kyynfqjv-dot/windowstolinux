@@ -633,3 +633,12 @@ and provider lifetime are tested. Resource-failure BOOL/LastError effects and
 full API-set/system-provider initialization remain unclosed at402b00. See
 [NATIVE-SYNCHRONIZATION.md](NATIVE-SYNCHRONIZATION.md); no new Windows pairs or
 whole-image admission follow from these component tests.
+
+### Independent critical-section conformance gate
+
+A frozen authored x86 Windows observer and native operation trace now cover two
+spin configurations, recursion, deletion/reinitialization and adjacent bytes.
+Fresh Windows/native component comparison is a separate CI gate; no runtime
+support widening occurs. It cannot close allocation-failure error behavior or
+API-set initialization at402b00. See [SYNC-CONFORMANCE.md](SYNC-CONFORMANCE.md)
+for the explicit resource-contract decision required before admission.
