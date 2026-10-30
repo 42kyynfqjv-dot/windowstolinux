@@ -14,7 +14,7 @@ impl CrtCpu{
  /// Bound stdcall adapter; index is the proven native global-object slot,
  /// not an extra guest argument. Original code/target binding remains required.
  fn native_sync_call(&mut self,rt:&mut CrtStreamRuntime,init:CrtInitialization,function:CrtFunction,index:u32)->Result<CrtValue,&'static str>{
-  self.validate_active(rt)?;if self.return_pop!=12||self.r[4]!=self.entry[4]{return Err("CRT synchronization stdcall frame");}
+  self.validate_active(rt)?;if self.return_pop!=12||self.r[4]!=self.entry[4]||[3,5,6,7].iter().any(|&i|self.r[i]!=self.entry[i]){return Err("CRT synchronization stdcall frame");}
   let sp=Self::pointer(self.r[4])?;let p=Self::pointer(rt.load(rt.offset(sp,4)?,32)?)?;
   let spin=rt.load(rt.offset(sp,8)?,32)?.known_scalar()?;let flags=rt.load(rt.offset(sp,12)?,32)?.known_scalar()?;
   let result=rt.native_sync_initialize(init,function,index,p,spin,flags)?;self.clobber(CrtValue::scalar(result));self.finish_pop(rt,12)

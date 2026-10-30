@@ -1,5 +1,7 @@
 # Original constructor tail and checked indirect-call boundary
 
+Historical checkpoint: the follow-up [native-profile synchronization connection](PROFILE-SYNC-CALL.md) now executes the original constructor return and count publication. The resource-equivalence limitation below remains open for Windows compatibility claims.
+
 The explicit native profile now runs original constructor402c2d..402c73 through
 its indirect CALL402c61. Original MOV402c47 preserves the returned function in ESI;
 ADD402c49 removes the four resolver arguments; TEST selects the non-null branch;

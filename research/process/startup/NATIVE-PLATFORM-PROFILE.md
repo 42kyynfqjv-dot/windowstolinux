@@ -1,5 +1,7 @@
 # Declared native synchronization profile and original load call
 
+Current follow-up: named export/cache publication and bounded native lock construction now execute, including the original constructor return and lock-count write. The next explicit-profile boundary is FLS acquisition `0x4024d6 -> 0x402963`. The earlier load-only checkpoint below is retained as history. [Current contract and unresolved Windows failure relation](PROFILE-SYNC-CALL.md).
+
 The component now accepts an explicit `w2l-native-sync-20348-v1` environment.
 This is a bounded native replacement profile, not a claim that a Linux process
 has the complete Windows 10.0.20348 loader state. The versioned mapping comes from

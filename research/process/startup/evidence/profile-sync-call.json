@@ -1,0 +1,96 @@
+{
+  "kind": "Bounded explicit native-profile lock construction; component only",
+  "reviewed_commit": "128598e29ab7fb631deadc238106f838a63cf283",
+  "source_sha256": {
+    "src/crt_resident_loader.rs": "a64f87047055e331fa7f435cb08b7091245e011210beb7eb23ec97a188475aae",
+    "src/crt_stream_cpu.rs": "0098f4e8b4b58aa0af08195c4c86acc0f4fb9f8d899ff1bb507aa32930b9587c",
+    "src/crt_startup_modules.rs": "424e9dbf4765c2db95947a29d14a9a4101428a4302757c7df46a6eaac3eeb547",
+    "src/crt_normal_frame_tests.rs": "49627843f118ceeccff6b966847b2ea0e78d0cb01f3906fd5107baf1a6705dad",
+    "research/process/startup/check_normal_wrapper.py": "5223279f8d7545a17232da95c66385a5fa2889a3e64d64321dfd28009bd61a44"
+  },
+  "validation": {
+    "crt_passed": 280,
+    "ignored_in_full": 2,
+    "artifact_tests": "both passed in replay",
+    "native_profile_cases": 12,
+    "constructor_guard_cases": 10,
+    "python_run": 75,
+    "python_skip": 1,
+    "clippy": "passed",
+    "format": "passed"
+  },
+  "boundaries": {
+    "default": "LoadLibraryExW at 0x402b00 remains rejected",
+    "explicit_profile": "FLS acquisition 0x4024d6 -> 0x402963",
+    "constructed_lock_count": 1,
+    "object": "0x41ccec",
+    "count_cell": "0x41cd04",
+    "constructor_ret_executed": true,
+    "indirect_stdcall_cleanup": 12,
+    "actual_fls_publication": false
+  },
+  "failure_contract": {
+    "native_capacity": "32 objects and 32 recursive leases; exhaustion rejects domain, not Windows BOOL failure",
+    "original_windows_resource_failure": "unclosed; native free capacity does not imply Windows allocation success",
+    "admission": "default unchanged; no whole-program admission"
+  },
+  "regression": {
+    "defect": "callee-saved corruption was checked only after lock construction",
+    "fix": "validate callee-saved registers before native synchronization effect",
+    "before_log_sha256": "dca10e2f13cac440b19315a9132fd867ad915bea56752740cd377b3ae53f88dd",
+    "after_strict_log_sha256": "48f514e88577c3ed380fe2507e9815941875eda76ec464b7e95b6863de2d4b5f"
+  },
+  "replay": {
+    "kind": "original prolog/epilog component comparison with explicit unexecuted body boundary",
+    "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+    "rust_sha256": "467b885d1038737a42a6fe333ab48c75394eb880eecad4aa5b4e051ad171fa34",
+    "comparisons": 5,
+    "scope": "Live registry fixture; body EAX/flags inputs; original stack/FS/saved-state restoration only",
+    "whole_pe_translation_pairs": 0
+  },
+  "report_sha256": "ba19022f1e930fccefdc36a6f07932ccc290ff68298388c0e914205d4f23962b",
+  "logs": {
+    "full.log": "23d5f0b5024b51b32c30b65d4fe881ce81936c1708f71d6dfa53f3c84b1b2029",
+    "canonical-fixed.log": "4d3396e02af2b4cbafb345e20fb5b4f1fdaaef48e048f32ddd7f555ad27dbcdb",
+    "preflight-after.log": "6b9b22a2e98e9d7b6e92668d287ab50600d773b6f82a0c62b7466a5c3014f719",
+    "preflight-strict.log": "48f514e88577c3ed380fe2507e9815941875eda76ec464b7e95b6863de2d4b5f",
+    "clippy.log": "426158b8abedd8a8828d02e4c8ca0d87221468e3d5e73eb04255008ba964fb0f",
+    "format.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "python.log": "acc56e1a3a01a9702bb81ee8e5b00c47b65c681f89b56975c276c9ee4067567f"
+  },
+  "new_windows_observations": 0,
+  "new_whole_pe_pairs": 0,
+  "predecessor_ci": [
+    {
+      "run": 41059104174,
+      "conclusion": "success"
+    },
+    {
+      "run": 41059094604,
+      "conclusion": "success"
+    },
+    {
+      "run": 41059094730,
+      "conclusion": "success"
+    }
+  ],
+  "earlier_ci": [
+    {
+      "run": 41057500037,
+      "conclusion": "success"
+    },
+    {
+      "run": 41057487928,
+      "conclusion": "success"
+    },
+    {
+      "run": 41057488149,
+      "conclusion": "success"
+    }
+  ],
+  "next_inner_boundaries": [
+    "FLS allocation 0x402968 -> 0x402b3e; callback 0x4028a7",
+    "FLS publication 0x402981 -> 0x402bef"
+  ],
+  "historical_windows_timeouts": "unresolved; retained"
+}

@@ -1,5 +1,18 @@
 # Remaining entry-to-exit dependencies
 
+## Latest executable checkpoint: native-profile lock construction
+
+The explicit native profile executes the original guard, indirect synchronization
+call, constructor RET and lock-count publication. The mapped lock remains live
+with count1 when original FLS acquisition `0x4024d6 -> 0x402963` rejects. Default
+admission remains blocked at `0x402b00`. Native fixed storage and checked ABI are
+implemented; arbitrary Windows resource-failure correspondence is still unproved.
+This is component execution, not whole-PE support. See
+[contract, review defect and next scope](PROFILE-SYNC-CALL.md).
+
+The entries below retain earlier checkpoints and remaining independent paths;
+older exact stopping addresses are historical, superseded by this checkpoint.
+
 Target: the retained, unchanged authored MSVC `unwind.exe` used by
 [ENTRY-TO-EXIT.md](ENTRY-TO-EXIT.md), PE SHA256
 `1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4`.

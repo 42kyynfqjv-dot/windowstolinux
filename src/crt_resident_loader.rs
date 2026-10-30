@@ -63,6 +63,13 @@ impl CrtNativePlatform {
   let owned=rt.native_provider_acquire(init,self.function)?;
   rt.last_os_error=None;Ok(owned.reference.module)
  }
+ /// Execute the declared bounded native operation. Invalid state/resource
+ /// domains reject; no internal error is fabricated as a Windows BOOL failure.
+ fn sync_call(&self,rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,init:CrtInitialization,function:CrtFunction,index:u32)->Result<CrtValue,&'static str>{
+  self.validate(rt,init)?;if function!=self.function{return Err("native platform synchronization target");}
+  if rt.native_named_export(init,function.module,"InitializeCriticalSectionEx")?!=function{return Err("native platform synchronization publication");}
+  cpu.native_sync_call(rt,init,function,index)
+ }
  fn call(&self,rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,init:CrtInitialization,iat:u32)->Result<CrtValue,&'static str>{
   cpu.validate_active(rt)?;self.validate(rt,init)?;
   if iat==0x415070{
@@ -126,5 +133,61 @@ r.provider_destroy(i,m).unwrap();assert_eq!(p.load(&mut r,i,CrtNativePlatform::C
 let new=CrtNativePlatform::prepare(&mut r,i,CrtNativePlatform::PROFILE,0x700000,0x701000).unwrap();assert_ne!(new.function,p.function);assert_eq!(p.load(&mut r,i,CrtNativePlatform::CONTRACT,0,0x800),Err("CRT module owner/generation/lifetime"));new.validate(&r,i).unwrap();
 "#,
         "native-platform-profile",
+    );
+}
+
+#[test]
+fn native_profile_sync_preserves_failure_state_and_checked_abi() {
+    crate::crt_stream_callees_tests::native(
+        TYPES,
+        r#"
+for mode in 0..12 {
+ let(mut r,i)=CrtStreamRuntime::new_initializing(17,23,0x8000,65536).unwrap();
+ let platform=CrtNativePlatform::prepare(&mut r,i,CrtNativePlatform::PROFILE,0x700000,0x701000).unwrap();
+ let mut function=platform.function;let mut index=3;
+ let object=r.map_region(0x9000,48,CrtRegionKind::Module,Some(&[71;48])).unwrap();
+ let p=r.subrange(object,24).unwrap();
+ let sp=r.map_region(0xa000,64,CrtRegionKind::Stack,None).unwrap();
+ r.store(sp,32,CrtValue::ProtectedReturn(77)).unwrap();
+ r.store(r.offset(sp,4).unwrap(),32,CrtValue::Pointer(p)).unwrap();
+ r.store(r.offset(sp,8).unwrap(),32,CrtValue::scalar(4000)).unwrap();
+ r.store(r.offset(sp,12).unwrap(),32,CrtValue::scalar(0)).unwrap();
+ let mut c=CrtCpu::new(sp,77).unwrap();c.return_pop=12;
+ match mode {
+  1=>{function.address+=4;},
+  2=>{index=32;},
+  3=>{r.store(r.offset(sp,12).unwrap(),32,CrtValue::scalar(1)).unwrap();},
+  4=>{c.return_pop=8;},
+  5=>{c.return_id=78;},
+  6=>{c.r[3]=CrtValue::scalar(99);},
+  7=>{r.provider_destroy(i,function.module).unwrap();},
+  8=>{r.providers.get_mut(&function.module.handle).unwrap().exports.clear();},
+  9=>{r.thread+=1;},
+  10=>{r.native_sync_initialize(i,function,3,r.offset(object,24).unwrap(),0,0).unwrap();},
+  11=>{r.store(p,32,CrtValue::Pointer(r.file())).unwrap();},
+  _=>{}
+ }
+ r.last_os_error=Some(1114);let before=r.load(p,32).unwrap();let serial=r.serial;
+ let result=platform.sync_call(&mut r,&mut c,i,function,index);
+ if mode==0 {
+  assert_eq!(result,Ok(CrtValue::scalar(1)));assert!(c.returned);
+  assert_eq!(CrtCpu::pointer(c.r[4]).unwrap().address(),0xa010);assert_eq!(r.last_os_error,None);
+  assert!(platform.sync_call(&mut r,&mut c,i,function,index).is_err());
+  let first=r.lock_global(23,3).unwrap();let second=r.lock_global(23,3).unwrap();
+  assert!(r.native_sync_delete(i,function,3,p).is_err());
+  r.unlock_global(second).unwrap();r.unlock_global(first).unwrap();
+  r.native_sync_delete(i,function,3,p).unwrap();assert!(r.native_sync_delete(i,function,3,p).is_err());
+  assert_eq!(r.native_sync_initialize(i,function,3,p,0,0),Ok(1));
+ } else {
+  assert_eq!(result,Err(match mode{1=>"native platform synchronization target",2|3|10|11=>"CRT synchronization flags/object domain",4|6=>"CRT synchronization stdcall frame",5=>"CRT active caller lifetime/return authority",7=>"CRT unloaded module",8=>"CRT native named export publication incomplete",9=>"CRT initialization owner/lifetime",_=>unreachable!()}),"mode {mode}");assert!(!c.returned);
+  assert_eq!(c.r[4],CrtValue::Pointer(sp));assert_eq!(r.load(sp,32).unwrap(),CrtValue::ProtectedReturn(77));
+  assert_eq!(r.load(p,32).unwrap(),before,"mode {mode}: effect before rejection");
+  assert_eq!(r.last_os_error,Some(1114));assert_eq!(r.serial,serial);
+  if mode==10{assert_eq!(r.global_objects.values().count(),1);assert_eq!(r.global_objects.get(&3).unwrap().address(),0x9018);}
+  else{assert!(r.global_objects.is_empty());assert!(r.native_sync.is_empty());}
+ }
+}
+"#,
+        "native-profile-sync-boundary",
     );
 }

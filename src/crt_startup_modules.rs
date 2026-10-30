@@ -123,14 +123,20 @@ fn startup_constructor_guard(rt:&mut CrtStreamRuntime,c:&mut CrtCpu,inputs:&CrtE
  if c.r[6]!=CrtValue::Function(f)||rt.native_named_export(inputs.init,f.module,"InitializeCriticalSectionEx")?!=f{return Err("startup guard export mismatch");}
  c.call_activation(rt,0x402c61,0,startup_original_guard)?;Ok(())
 }
-fn startup_constructor_api_boundary(rt:&mut CrtStreamRuntime,c:&mut CrtCpu,inputs:&CrtEntropyInputs,address:u32)->Result<CrtValue,&'static str>{
+fn startup_constructor_api_boundary(rt:&mut CrtStreamRuntime,c:&mut CrtCpu,inputs:&CrtEntropyInputs,address:u32,platform:&CrtNativePlatform)->Result<CrtValue,&'static str>{
  c.validate_active(rt)?;let CrtValue::Function(f)=c.r[6] else{return Err("startup constructor callable provenance");};
  if f.address!=address||rt.native_named_export(inputs.init,f.module,"InitializeCriticalSectionEx")?!=f{return Err("startup constructor callable changed");}
  let sp=CrtCpu::pointer(c.r[4])?;let raw=rt.load(rt.offset(sp,4)?,32)?;let p=match raw{CrtValue::Pointer(p)=>{rt.identity_range(p,24)?;p},CrtValue::Scalar{bits,known:u32::MAX}=>rt.process_image_pointer(inputs.image,bits,24)?,_=>return Err("startup constructor object provenance")};
  if p.kind!=CrtRegionKind::Module||p.address()%4!=0{return Err("startup constructor object bounds");}
  rt.memory.validate_writable(p.cap,p.owner,p.address(),24).map_err(|_|"startup constructor object permissions")?;
  let _spin=rt.load(rt.offset(sp,8)?,32)?.known_scalar()?;if rt.load(rt.offset(sp,12)?,32)?.known_scalar()?!=0{return Err("startup constructor flags unsupported");}
- Err("startup synchronization failure contract unbound at 0x402c61")
+ // The original loop constructs one24-byte entry at41ccec. Its index is0;
+ // derive this role from the actual image view, not a fresh allocation/tag.
+ let object=rt.process_image_pointer(inputs.image,0x41ccec,24)?;
+ if p.cap!=object.cap||p.owner!=object.owner||p.address()!=object.address(){return Err("startup synchronization table/index ownership");}
+ if rt.load(rt.process_image_pointer(inputs.image,0x41cd04,4)?,32)?.known_scalar()?!=0{return Err("startup synchronization count precondition");}
+ rt.store(rt.offset(sp,4)?,32,CrtValue::Pointer(p))?;
+ platform.sync_call(rt,c,inputs.init,f,0)
 }
 // Resolve only image-owned arguments. Numeric values alone confer no export
 // authority. The shared resolver still executes each load, branch and XCHG.
@@ -163,8 +169,9 @@ fn startup_modules_default(rt:&mut CrtStreamRuntime,c:&mut CrtCpu,inputs:&CrtEnt
 fn startup_modules_platform(rt:&mut CrtStreamRuntime,c:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:Option<&CrtNativePlatform>)->Result<CrtValue,&'static str>{
  startup_modules(rt,c,inputs,&mut |rt,c,pc,target|match(pc,target){
  (0x4024ca,0x4029b4)=>startup_locks(rt,c,inputs,&mut |rt,c,pc,target|match(pc,target){
- (0x4029c5,0x402c2d)=>startup_constructor_prefix(rt,c,inputs,&mut |rt,c,pc,target|{if pc==0x402c61{return startup_constructor_api_boundary(rt,c,inputs,target);}if(pc,target)!=(0x402c42,0x402a53){return Err("startup constructor fallback effect unbound");}startup_resolver(rt,c,inputs,&mut |rt,c,iat|if let Some(p)=platform{p.call(rt,c,inputs.init,iat)}else{Err(match iat{0x415074=>"startup LoadLibraryExW effects unbound at 0x402b00",_=>"startup loader effects unbound"})})}),
+ (0x4029c5,0x402c2d)=>startup_constructor_prefix(rt,c,inputs,&mut |rt,c,pc,target|{if pc==0x402c61{return startup_constructor_api_boundary(rt,c,inputs,target,platform.ok_or("startup native synchronization profile missing")?);}if(pc,target)!=(0x402c42,0x402a53){return Err("startup constructor fallback effect unbound");}startup_resolver(rt,c,inputs,&mut |rt,c,iat|if let Some(p)=platform{p.call(rt,c,inputs.init,iat)}else{Err(match iat{0x415074=>"startup LoadLibraryExW effects unbound at 0x402b00",_=>"startup loader effects unbound"})})}),
  _=>Err("startup lock effect unbound")}),
+ (0x4024d6,0x402963)=>Err("startup FLS acquisition unbound at 0x4024d6"),
  _=>Err("startup module effect unbound")})
 }
 "#);
