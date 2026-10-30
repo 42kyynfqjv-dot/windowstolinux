@@ -117,3 +117,11 @@ Verified locally: 286 CRT tests, both artifact tests in the reviewed replay,
 emitted-frame vectors, Clippy and formatting. All three predecessor workflows
 completed successfully. New commit CI and the fresh Windows candidate observations
 remain separate gates.
+
+Follow-up review: the first availability report from run41094560132/job124196834719
+observed both loads succeeding and FlsGetValue2 missing/error127 on20348. The report
+and source hash are preserved in evidence/second-fiber-windows-20348-v1.json. It did
+not establish loaded-module identity. A separate version2 observer now records the
+file-handle-resolved x86 module path and hashes that exact file; the old source,
+freeze and observations remain intact. No mapping is admitted from equal missing
+export results alone.

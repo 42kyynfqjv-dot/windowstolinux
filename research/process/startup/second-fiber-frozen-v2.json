@@ -1,0 +1,17 @@
+{
+  "kind": "Original Windows second-FLS candidate identity and availability; zero translations",
+  "source_sha256": "7af33cfabca169032911c35d17cf5dbb219e2d002f0fb4cecf764f0add9f227d",
+  "flags": [
+    "/nologo",
+    "/W4",
+    "/O2",
+    "/GS"
+  ],
+  "candidates": [
+    "api-ms-win-core-fibers-l1-1-2",
+    "kernelbase"
+  ],
+  "symbol": "FlsGetValue2",
+  "availability": "unmeasured; do not assume loaded/missing/supported",
+  "identity": "x86 file-handle-resolved module path and file hash, observed not assumed"
+}
