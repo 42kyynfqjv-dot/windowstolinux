@@ -183,6 +183,9 @@ impl CrtStreamRuntime {
   self.process_image(token)?;let p=self.main_image_regions.iter().find(|p|address>=p.base&&address.checked_add(size).is_some_and(|end|end<=p.base+p.size)).ok_or("CRT process image section range")?;
   if size==0{return Err("CRT process image empty range");}Ok(CrtPointer{address,..*p})
  }
+ fn process_image_code(&self,token:CrtProcessImage,address:u32,size:u32)->Result<CrtPointer,&'static str>{
+  let p=self.process_image_pointer(token,address,size)?;self.memory.validate_executable(p.cap,p.owner,address,size).map_err(|_|"CRT process image code permission")?;Ok(p)
+ }
  fn process_image(&self,token:CrtProcessImage)->Result<CrtPointer,&'static str>{
   if self.closed||token.anchor!=self.anchor||token.owner!=self.owner||self.main_image!=Some(token){return Err("CRT process image owner/lifetime");}
   for p in &self.main_image_regions{self.identity_range(*p,p.size)?;}self.identity_range(token.root,token.root.size)?;Ok(token.root)

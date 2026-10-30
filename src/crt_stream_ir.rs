@@ -38,6 +38,8 @@ pub(crate) enum Op {
     FsWrite(Reg),
     FsPush,
     SignDividend,
+    CpuId,
+    ReadXcr,
     XmmZero(u8),
     XmmStoreLow64 {
         source: u8,
@@ -203,6 +205,12 @@ fn extended(i: &Instruction, raw: &[u8], tables: &[JumpTable<'_>]) -> Result<Op,
             destination,
             source,
         });
+    }
+    if raw == [0x0f, 0xa2] && i.code() == Code::Cpuid {
+        return Ok(Op::CpuId);
+    }
+    if raw == [0x0f, 0x01, 0xd0] && i.code() == Code::Xgetbv {
+        return Ok(Op::ReadXcr);
     }
     // Only legacy, non-faulting SSE/SSE2 forms under an explicit enabled-SSE
     // execution premise. No general SIMD or floating-point contract follows.
@@ -591,6 +599,8 @@ impl Graph {
                 || matches!(
                     node.op,
                     Op::Call(_)
+                        | Op::CpuId
+                        | Op::ReadXcr
                         | Op::IndirectCall(_)
                         | Op::FsRead(_)
                         | Op::FsWrite(_)

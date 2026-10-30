@@ -551,3 +551,19 @@ mutants protect binding/lifetime/failure behavior. Next unify CPUID (five sites)
 XGETBV (one site), enabled OS/SIMD state and scalar feature-cache semantics for
 401ea5..4021be before binding feature-query results. Full utility support remains
 blocked by later initializer, loader, delivery and exit gates.
+
+### CPU observation and classifier return to40195a
+
+- Executed: original entry/cookie/EH4 startup/401945/401ea5, all reachable scalar
+  CPUID/XGETBV classifier branches and original RET under checked observations.
+- Actual producers: Linux x86-64 CPU/OS queries and prior native IDs/clocks in a
+  connected component case. Synthetic CPU profiles remain independently labeled.
+- Support boundary: observations are confined to this closed classifier. They
+  cannot enable unsupported instructions or authorize later feature-selected
+  library paths. Default emitters still reject CPU-query effects without binding.
+- First unsupported call:40195a→4024ca, before its lock construction4029b4 and
+  FLS acquisition/publication402963. Preserve count/slot/cleanup order when
+  connecting these existing ownership components to actual startup producers.
+- Still supplied/unproved: root activation/incoming chain, OS delivery and
+  containment, later locale/FILE initialization, full formatting and physical
+  exit. No full startup/rcedit claim. See [CPU-FEATURES.md](CPU-FEATURES.md).

@@ -404,3 +404,10 @@ First unbound call: IsProcessorFeaturePresent(10) at401ebe (IAT41501c), followed
 by currently unimplemented CPUID/XGETBV feature discovery if that call could
 return. No success callback supplies that result. Original incoming-chain/root
 activation, later initialization and full exit remain unresolved contracts.
+
+CPU classifier update: original401ea5..4021be now executes through its RET with
+bounded checked CPU/OS observations. Its host feature bits do not grant general
+SIMD or whole-program admission. The next call40195a→4024ca is still rejected;
+4029b4 lock construction and402963 FLS publication must supply their actual
+ownership/effects. Earlier no-contract401ebe rejection remains covered. See
+[CPU-FEATURES.md](CPU-FEATURES.md) for native versus synthetic evidence and limits.

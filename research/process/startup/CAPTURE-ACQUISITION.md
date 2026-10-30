@@ -1380,3 +1380,21 @@ Primary ABI reference for the unbound boundary:
 [IsProcessorFeaturePresent](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-isprocessorfeaturepresent)
 accepts one DWORD and returns BOOL. This justifies argument transport/cleanup,
 not any supplied feature result or proof that the remaining CPU graph is closed.
+
+## CPU classifier observation scope
+
+The next connected boundary is now original CALL40195a to4024ca. The actual
+401ea5..4021be classifier executes with coherent checked CPUID/XGETBV observations,
+canonical mapped writes and its original RET. See [CPU-FEATURES.md](CPU-FEATURES.md)
+for the narrow contract: host observations grant no SIMD instruction admission,
+and the production converter still rejects full startup. The prior no-contract
+401ebe rejection remains a tested case. Fresh native Linux CPU observations and
+native cookie acquisition execute together in one component case; synthetic
+feature combinations and five older Windows comparisons are labeled separately.
+
+Review added supported-XSTATE mask validation and explicit code execute-permission
+checks. An early generated test used the wrong owner type for a released mapping;
+that compile failure is retained. A strict negative expectation was corrected
+from the later XCR dependency check to the earlier unsupported-state check;
+no production check was weakened. Final evidence records the verified counts,
+hashes and limitations. Historical Windows timeout causes remain unresolved.
