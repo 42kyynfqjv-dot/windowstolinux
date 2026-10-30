@@ -1,5 +1,8 @@
 # Original UCRT reference acquisition and normal EH4 cleanup
 
+Later checkpoint: [locale publication and original UCRT return](UCRT-LOCALE-PUBLICATION.md) continues beyond this historical first-reference boundary.
+
+
 The explicit second-fiber native-profile component now executes original helper
 `0x409efb`, entered by CALL `0x40a0d0`. Its original EH4 prolog installs a nested
 record into the same live startup registry, beneath the current UCRT getter call.

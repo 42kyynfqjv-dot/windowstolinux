@@ -962,6 +962,9 @@ impl CrtStreamRuntime {
  }
  /// Serialized startup-only module-word update under a live indexed lease.
  /// No callback/interleaving occurs between the checked read and write.
+ fn module_word_pointer(&self,image:CrtProcessImage,value:CrtValue)->Result<CrtPointer,&'static str>{
+  match value{CrtValue::Scalar{bits,known:u32::MAX}=>self.process_image_pointer(image,bits,4),CrtValue::Pointer(p)=>{if self.process_image_pointer(image,p.address(),4)?!=p{return Err("CRT module word alias");}Ok(p)},_=>Err("CRT module word address knowledge")}
+ }
  fn increment_module_reference(&mut self,init:CrtInitialization,image:CrtProcessImage,lease:CrtGlobalLock,p:CrtPointer)->Result<u32,&'static str>{
   self.initialization(init)?;self.check_global(lease)?;
   if p.kind!=CrtRegionKind::Module||p.address%4!=0||self.process_image_pointer(image,p.address,4)?!=p{return Err("CRT module reference identity/alignment");}

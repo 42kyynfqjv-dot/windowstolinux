@@ -1,5 +1,21 @@
 # Remaining entry-to-exit dependencies
 
+## Current executable checkpoint: locale publication and original UCRT return
+
+Original helper `0x40a00d`, replacement, module reference walker, guarded static
+child, cleanup and RET12 now execute under the live startup registry. The original
+null-free branch and LastError restoration execute; the original getter returns
+and its C++ record retires. Callback7 completes, leaving the same868-byte allocation
+published to the current fiber and both helper leases released.
+
+The next boundary is **indirect CALL `0x40c946 -> 0x408697`, callback8**. Its lock7
+EH4/descriptor/standard-handle initialization remains unbound. Reuse existing
+manager/standard-handle components with the actual producer state and epoch.
+[Contract, partial effects, limits and next integration gate](UCRT-LOCALE-PUBLICATION.md).
+Dynamic prior-reference release, XADD, nonnull free and exceptional containment
+remain rejected. Default/full startup/rcedit are unproved; no new Windows/ELF pair.
+Earlier checkpoints below are historical.
+
 ## Current executable checkpoint: first locale reference and normal EH4 cleanup
 
 The explicit-profile original entry now executes helper `0x409efb`, including its

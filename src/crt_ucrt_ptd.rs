@@ -31,10 +31,10 @@ pub(crate) fn source() -> Result<String, String> {
                 Target::Direct(0x407cf0) => format!("let fiber=rt.fiber.ok_or(\"UCRT current fiber absent\")?;let index=rt.load(rt.process_image_pointer(inputs.image,0x41c170,4)?,32)?.known_scalar()?;let slot=rt.fls.get(&index).ok_or(\"UCRT sentinel slot missing\")?.0;let ticket=rt.begin_heap_ptd_allocation(fiber,slot)?;let v=cpu.call_activation(rt,{next},0,|rt,c|ucrt_calloc_native(rt,c,inputs,platform,epoch))?;match v{{CrtValue::Pointer(p)=>rt.bind_heap_ptd_layout(ticket,p,CrtPtdLayout::Ucrt)?,CrtValue::Scalar{{bits:0,known:u32::MAX}}=>{{}},_=>return Err(\"UCRT allocation return authority\")}};"),
                 Target::Import(0x415094) => format!("rt.process_image_import(inputs.image,0x415094,\"kernel32.dll\",\"HeapAlloc\")?;cpu.call_activation(rt,{next},12,|rt,c|{{c.validate_active(rt)?;if c.r[4]!=c.entry[4]||[3,5,6,7].iter().any(|&n|c.r[n]!=c.entry[n]){{return Err(\"UCRT HeapAlloc saved frame\");}}let sp=CrtCpu::pointer(c.r[4])?;rt.offset(sp,16)?;rt.memory.validate_writable(sp.cap,sp.owner,sp.address(),16).map_err(|_|\"UCRT HeapAlloc stack permission\")?;let CrtValue::Heap(heap)=rt.load(rt.offset(sp,4)?,32)?else{{return Err(\"UCRT HeapAlloc canonical heap\")}};let flags=rt.load(rt.offset(sp,8)?,32)?.known_scalar()?;let size=rt.load(rt.offset(sp,12)?,32)?.known_scalar()?;let p=rt.native_heap_allocate(inputs.init,heap,flags,size)?;c.clobber(CrtValue::Pointer(p));c.finish_pop(rt,12)}})?;"),
                 Target::Direct(0x4071c0) | Target::Direct(0x40c9c0) | Target::Direct(0x407ccd) => "return Err(\"UCRT allocation retry/errno contract unbound\");".into(),
-                Target::Direct(0x407d50) => "return Err(\"UCRT original free/error closure unbound\");".into(),
+                Target::Direct(0x407d50) => format!("cpu.call_activation(rt,{next},0,|rt,c|ucrt_free_null(rt,c,inputs))?;"),
                 Target::Direct(0x40a067) => format!("cpu.call_activation(rt,{next},0,|rt,c|ucrt_initialize_native(rt,c,inputs,platform,epoch))?;"),
                 Target::Direct(0x409efb) => format!("cpu.call_activation(rt,{next},12,|rt,c|ucrt_mb_acquire(rt,c,inputs,epoch))?;"),
-                Target::Direct(0x40a00d) => "return Err(\"UCRT locale publication helper unbound\");".into(),
+                Target::Direct(0x40a00d) => format!("cpu.call_activation(rt,{next},12,|rt,c|ucrt_locale_acquire(rt,c,inputs,epoch))?;"),
                 _ => return Err(format!("UCRT unexpected original call at {pc:#x}: {target:?}")),
             })
             },
@@ -51,6 +51,16 @@ pub(crate) fn source() -> Result<String, String> {
         out.push_str(&format!("fn {name}(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:&CrtNativePlatform,epoch:&mut NormalCallEpoch<'_>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;platform.validate(rt,inputs.init)?;cpu.validate_active(rt)?;let code=rt.process_image_code(inputs.image,{origin},{})?;if rt.memory.read(code.address(),{}).map_err(|_|\"UCRT original code read\")?!=&{bytes:?}{{return Err(\"UCRT original code changed\");}}{bind}{body}}}\n",bytes.len(),bytes.len()));
     }
     out.push_str(&crate::crt_ucrt_locale::source()?);
+    out.push_str(&crate::crt_ucrt_locale_replace::source()?);
+    let free=crate::crt_ptd::raw("8bff558bec837d0800742dff75086a00ff35c8d24100ff159850410085c0751856ff154450410050e895feffff598bf0e848ffffff89305e5dc3");
+    let g = Graph::decode(&free, 0x407d50)?;
+    let body = crate::crt_stream_emit::emit_body(
+        &g,
+        |_, _| Ok("return Err(\"UCRT nonnull free/errno contract unbound\");".into()),
+        &std::collections::BTreeMap::from([(0x41d2c8, "CrtRegionKind::Module".into())]),
+        128,
+    )?;
+    out.push_str(&format!("fn ucrt_free_null(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;let p=rt.process_image_code(inputs.image,0x407d50,{})?;if rt.memory.read(p.address(),{}).map_err(|_|\"UCRT free code read\")?!=&{free:?}{{return Err(\"UCRT free code changed\");}}{body}}}",free.len(),free.len()));
     Ok(out)
 }
 

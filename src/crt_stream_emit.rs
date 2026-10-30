@@ -13,7 +13,7 @@ fn condition(c: Condition) -> u8 {
         Condition::AboveEqual => 5,
     }
 }
-fn address(a: &Address, roles: &BTreeMap<u32, String>) -> Result<String, String> {
+pub(crate) fn address(a: &Address, roles: &BTreeMap<u32, String>) -> Result<String, String> {
     let role = if let Some(role) = roles.get(&a.displacement) {
         format!("Some({role})")
     } else if a.base.is_none() {

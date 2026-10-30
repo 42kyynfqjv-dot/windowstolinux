@@ -46,7 +46,7 @@ pub(crate) fn source() -> Result<String, String> {
         &Default::default(),
         64,
     )?;
-    out.push_str(&format!("fn ucrt_mb_cleanup(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,held:&mut Option<CrtGlobalLock>)->Result<CrtValue,&'static str>{{let q=rt.process_image_code(inputs.image,0x409f41,{})?;if rt.memory.read(q.address(),{}).map_err(|_|\"locale cleanup code read\")?!=&{cleanup:?}{{return Err(\"locale cleanup code changed\");}}{cb}}}",cleanup.len(),cleanup.len()));
+    out.push_str(&format!("fn ucrt_mb_cleanup(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,held:&mut Option<CrtGlobalLock>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;let q=rt.process_image_code(inputs.image,0x409f41,{})?;if rt.memory.read(q.address(),{}).map_err(|_|\"locale cleanup code read\")?!=&{cleanup:?}{{return Err(\"locale cleanup code changed\");}}{cb}}}",cleanup.len(),cleanup.len()));
     let bytes = raw(BODY);
     let mut decoder =
         iced_x86::Decoder::with_ip(32, &bytes, 0x409efb, iced_x86::DecoderOptions::NONE);

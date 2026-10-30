@@ -288,6 +288,9 @@ mod crt_ptd;
 #[path = "../src/crt_ucrt_locale.rs"]
 mod crt_ucrt_locale;
 #[allow(dead_code)]
+#[path = "../src/crt_ucrt_locale_replace.rs"]
+mod crt_ucrt_locale_replace;
+#[allow(dead_code)]
 #[path = "../src/crt_ucrt_ptd.rs"]
 mod crt_ucrt_ptd;
 
