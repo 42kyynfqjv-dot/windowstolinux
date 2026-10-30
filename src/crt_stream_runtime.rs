@@ -980,6 +980,17 @@ impl CrtStreamRuntime {
   if flags!=8||size==0{return Err("CRT native heap flags/size domain");}
   let p=self.allocate(size,true,true)?.ok_or("CRT native heap allocation unavailable")?;self.last_os_error=None;Ok(p)
  }
+ fn native_descriptor_allocate(&mut self,init:CrtInitialization,heap:CrtHeap,flags:u32,size:u32)->Result<CrtPointer,&'static str>{
+  if size==0||size%56!=0||size/56>64{return Err("CRT native descriptor allocation extent");}
+  let p=self.native_heap_allocate(init,heap,flags,size)?;let q=CrtPointer{kind:CrtRegionKind::Descriptor,..p};
+  let r=self.regions.last_mut().ok_or("CRT native descriptor allocation identity")?;if r.pointer!=p||!r.heap||r.file_owner.is_some(){return Err("CRT native descriptor fresh allocation");}r.pointer=q;Ok(q)
+ }
+ fn native_record_initialize(&mut self,init:CrtInitialization,function:CrtFunction,p:CrtPointer,flags:u32)->Result<bool,&'static str>{
+  self.initialization(init)?;self.native_sync_identity(function)?;self.provider_ready(function.module)?;self.descriptor_slot(p)?;
+  if flags!=0||self.record_objects.len()>=8192{return Err("CRT native descriptor lock resource/flags");}
+  self.record_objects.try_reserve(1).map_err(|_|"CRT native descriptor lock storage unavailable")?;
+  self.construct_record_lock_result(init,p,flags,1)
+ }
  /// Select the allocation role before any pointer escapes; no Buffer alias
  /// is relabelled or allowed to bypass record locks.
  fn alloc_descriptor_block(&mut self,token:CrtInitialization,count:u32,available:bool)->Result<Option<CrtPointer>,&'static str>{

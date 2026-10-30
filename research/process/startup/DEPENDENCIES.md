@@ -1,5 +1,20 @@
 # Remaining entry-to-exit dependencies
 
+## Current executable checkpoint: original descriptor manager and 64 record locks
+
+Callback8 now executes its EH4 prolog/lock7 and original nested manager/constructor.
+Original calloc(64,56), 64 native record initializations, original field stores,
+block/capacity publication, manager cleanup and original epilog run on the same
+canonical process heap and live epoch. The 868-byte UCRT allocation stays distinct.
+
+Entry next rejects at **CALL `0x408543`, GetStartupInfoW, inside original `0x408537`**.
+Capacity64/block publication and all record objects remain; the nested lease is
+released while callback8 retains its outer lease and frame. Startup-info output,
+inherited/standard-handle acquisition, callback completion and rollback are unproved.
+[Contract, failure ordering and next producer gate](STARTUP-DESCRIPTORS.md).
+No new Windows/ELF pair, default admission or full startup/rcedit claim.
+Earlier checkpoints below are historical.
+
 ## Current executable checkpoint: locale publication and original UCRT return
 
 Original helper `0x40a00d`, replacement, module reference walker, guarded static

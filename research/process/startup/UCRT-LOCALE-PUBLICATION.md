@@ -1,5 +1,8 @@
 # Original locale publication and UCRT getter completion
 
+Later checkpoint: [original descriptor startup](STARTUP-DESCRIPTORS.md) continues beyond this historical callback-8 boundary.
+
+
 Under the explicit second-fiber native profile, original entry now executes the
 second helper at `0x40a00d`, its scope `0x41b600`, indexed lock-4 acquisition,
 replacement `0x40a296`, and module-backed reference walker `0x40c4ad`. Original

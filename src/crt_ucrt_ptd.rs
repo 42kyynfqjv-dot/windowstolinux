@@ -16,6 +16,7 @@ pub(crate) fn source() -> Result<String, String> {
     for (name, hex, origin) in [
         ("ucrt_lazy_native", crate::crt_ptd::LAZY, 0x40a1ee),
         ("ucrt_calloc_native", CALLOC, 0x407cf0),
+        ("startup_descriptor_calloc", CALLOC, 0x407cf0),
         ("ucrt_initialize_native", INIT, 0x40a067),
     ] {
         let bytes = crate::crt_ptd::raw(hex);
@@ -43,10 +44,15 @@ pub(crate) fn source() -> Result<String, String> {
         )?;
         let bind = if name == "ucrt_initialize_native" {
             "let sp=CrtCpu::pointer(cpu.r[4])?;let p=CrtCpu::pointer(rt.load(rt.offset(sp,4)?,32)?)?;let v=rt.heap_ptds.iter().find(|v|v.pointer==p&&v.layout==CrtPtdLayout::Ucrt).ok_or(\"UCRT initialized object layout\")?;rt.heap_ptd_layout_view(p,v.slot,CrtPtdLayout::Ucrt)?;if rt.fls.get(&v.slot.index).map(|x|x.1)!=Some(CrtValue::Pointer(p)){return Err(\"UCRT initializer unpublished object\");}"
-        } else if name == "ucrt_calloc_native" {
+        } else if matches!(name, "ucrt_calloc_native" | "startup_descriptor_calloc") {
             "let sp=CrtCpu::pointer(cpu.r[4])?;if rt.load(rt.offset(sp,4)?,32)?.known_scalar()?==0||rt.load(rt.offset(sp,8)?,32)?.known_scalar()?==0{return Err(\"UCRT zero calloc request unsupported\");}"
         } else {
             ""
+        };
+        let body = if name == "startup_descriptor_calloc" {
+            body.replace("rt.native_heap_allocate(", "rt.native_descriptor_allocate(")
+        } else {
+            body
         };
         out.push_str(&format!("fn {name}(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:&CrtNativePlatform,epoch:&mut NormalCallEpoch<'_>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;platform.validate(rt,inputs.init)?;cpu.validate_active(rt)?;let code=rt.process_image_code(inputs.image,{origin},{})?;if rt.memory.read(code.address(),{}).map_err(|_|\"UCRT original code read\")?!=&{bytes:?}{{return Err(\"UCRT original code changed\");}}{bind}{body}}}\n",bytes.len(),bytes.len()));
     }
