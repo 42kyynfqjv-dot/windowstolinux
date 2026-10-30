@@ -465,3 +465,38 @@ fn registered_getter_rejects_changed_original_bytes() {
     }
     assert!(registered_source(&original[..original.len() - 1]).is_err());
 }
+
+#[test]
+fn process_fls_index_outlives_empty_fiber_without_lending_its_value() {
+    crate::crt_stream_callees_tests::native(
+        "",
+        r#"
+let(mut rt,init)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();
+let f=rt.bind_fiber(9).unwrap();let before=rt.serial;
+assert_eq!(rt.fls_allocation_result(init,u32::MAX,None).unwrap(),None);assert_eq!(rt.serial,before);assert!(rt.fls_indices.is_empty());
+let id=rt.fls_allocation_result(init,7,None).unwrap().unwrap();let s=rt.bind_fls_fiber(f,id).unwrap();
+assert_eq!(rt.fls_get(f,s,7).unwrap(),CrtValue::scalar(0));
+assert_eq!(rt.fls_allocation_result(init,7,None),Err("CRT FLS process index/budget/alias"));
+assert_eq!(rt.bind_fls_fiber(f,id),Err("CRT FLS fiber value already bound"));
+assert_eq!(rt.retire_fls(f,s),Err("CRT allocated FLS requires callback/free closure"));
+assert_eq!(rt.fls_free_index_result(init,id,true),Err("CRT FLS free has live fiber/callback effects"));
+rt.fls_set(f,s,7,CrtValue::scalar(u32::MAX),true,None).unwrap();
+assert_eq!(rt.detach_empty_fls_fiber(f,s),Err("CRT FLS fiber detach needs live null value"));
+assert!(!rt.fls_set(f,s,7,CrtValue::scalar(0),false,Some(8)).unwrap());
+assert_eq!(rt.last_os_error,Some(8));assert_eq!(rt.fls_get(f,s,7),Err("CRT FLS unknown/forged PTD value"));
+assert_eq!(rt.detach_empty_fls_fiber(f,s),Err("CRT FLS fiber detach needs live null value"));
+rt.fls_set(f,s,7,CrtValue::scalar(0),true,None).unwrap();rt.detach_empty_fls_fiber(f,s).unwrap();rt.retire_fiber(f).unwrap();
+rt.fls_index(id).unwrap();let next=rt.bind_fiber(9).unwrap();assert_ne!(next,f);let ns=rt.bind_fls_fiber(next,id).unwrap();
+assert_eq!(rt.fls_get(next,ns,7).unwrap(),CrtValue::scalar(0));assert!(rt.fls_get(f,s,7).is_err());assert!(rt.fls_set(next,s,7,CrtValue::scalar(u32::MAX),true,None).is_err());
+let(mut other,oi)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();let of=other.bind_fiber(9).unwrap();let oid=other.fls_allocation_result(oi,7,None).unwrap().unwrap();
+assert!(other.bind_fls_fiber(of,id).is_err());assert!(rt.bind_fls_fiber(next,oid).is_err());assert!(rt.fls_get(of,ns,7).is_err());
+rt.detach_empty_fls_fiber(next,ns).unwrap();rt.fls_free_index_result(init,id,true).unwrap();assert!(rt.fls_index(id).is_err());
+let newer=rt.fls_allocation_result(init,7,None).unwrap().unwrap();assert_ne!(newer,id);assert!(rt.bind_fls_fiber(next,id).is_err());
+assert_eq!(rt.fls_free_index_result(init,newer,false),Err("CRT FLS free failure effects unclosed"));assert!(rt.bind_fls_fiber(next,newer).is_err());assert!(rt.fls_allocation_result(init,7,None).is_err());
+// Resource rejection is bounded and leaves all issued identities live.
+for i in 0..63 {other.fls_allocation_result(oi,i+100,None).unwrap().unwrap();}
+let count=other.fls_indices.len();assert_eq!(count,64);assert!(other.fls_allocation_result(oi,999,None).is_err());assert_eq!(other.fls_indices.len(),count);other.fls_index(oid).unwrap();
+"#,
+        "fls-process-index",
+    );
+}

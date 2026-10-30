@@ -171,6 +171,22 @@ fn cold_source_with_compare(
     load: &[u8],
     compare: &[u8],
 ) -> Result<String, String> {
+    cold_source_domain(resolver, load, compare, false)
+}
+pub(crate) fn mapped_source() -> Result<String, String> {
+    cold_source_domain(
+        &crate::crt_ptd::raw(COLD_FULL),
+        &crate::crt_ptd::raw(LOAD_HELPER),
+        &crate::crt_ptd::raw(WIDE_COMPARE),
+        true,
+    )
+}
+fn cold_source_domain(
+    resolver: &[u8],
+    load: &[u8],
+    compare: &[u8],
+    mapped: bool,
+) -> Result<String, String> {
     if compare != crate::crt_ptd::raw(WIDE_COMPARE) {
         return Err("C++ original prefix comparator binding".into());
     }
@@ -187,6 +203,9 @@ impl CrtResolverAccess {
 }
 "#,
     );
+    if mapped {
+        out.clear();
+    }
     for (bytes, origin, name) in [
         (resolver, 0x402a53, "cxx_cold_resolver"),
         (load, 0x402af3, "cxx_load_helper"),
@@ -198,17 +217,34 @@ impl CrtResolverAccess {
             (0x41cd08, "CrtRegionKind::Module".into()),
             (0x415c80, "CrtRegionKind::Module".into()),
         ]);
+        let helper = if mapped {
+            "cxx_load_helper_mapped"
+        } else {
+            "cxx_load_helper"
+        };
+        let compare_helper = if mapped {
+            "cxx_compare_prefix_mapped"
+        } else {
+            "cxx_compare_prefix"
+        };
+        let extra_arg = if mapped { ",inputs" } else { "" };
+        let after_effect = if mapped { "inputs.validate(rt)?;" } else { "" };
+        let prefix_pointer = if mapped {
+            "rt.process_image_pointer(inputs.image,0x415d18,14)?"
+        } else {
+            "rt.resolve_absolute(0x415d18,CrtRegionKind::Input)?"
+        };
         let body = crate::crt_stream_emit::emit_body_with_exit(
             &graph,
             |pc, target| {
                 let next = pc + graph.nodes[&pc].length;
                 Ok(match target {
-                Target::Direct(0x402af3)=>format!("cpu.call_activation(rt,{next},0,|rt,child|cxx_load_helper(rt,child,access,api))?;"),
-                Target::Direct(0x4078e0)=>format!("let sp=CrtCpu::pointer(cpu.r[4])?;let slot=rt.offset(sp,4)?;if rt.load(slot,32)?.known_scalar()?!=0x415d18{{return Err(\"C++ retry prefix address\");}}let prefix=rt.resolve_absolute(0x415d18,CrtRegionKind::Input)?;for (i,b) in [97u8,0,112,0,105,0,45,0,109,0,115,0,45,0].iter().enumerate(){{if rt.load(rt.offset(prefix,i as i64)?,8)?.known_scalar()?!=u32::from(*b){{return Err(\"C++ retry prefix bytes\");}}}}rt.store(slot,32,CrtValue::Pointer(prefix))?;cpu.call_activation(rt,{next},0,|rt,child|cxx_compare_prefix(rt,child,access,api))?;"),
+                Target::Direct(0x402af3)=>format!("cpu.call_activation(rt,{next},0,|rt,child|{helper}(rt,child,access{extra_arg},api))?;"),
+                Target::Direct(0x4078e0)=>format!("let sp=CrtCpu::pointer(cpu.r[4])?;let slot=rt.offset(sp,4)?;if rt.load(slot,32)?.known_scalar()?!=0x415d18{{return Err(\"C++ retry prefix address\");}}let prefix={prefix_pointer};for (i,b) in [97u8,0,112,0,105,0,45,0,109,0,115,0,45,0].iter().enumerate(){{if rt.load(rt.offset(prefix,i as i64)?,8)?.known_scalar()?!=u32::from(*b){{return Err(\"C++ retry prefix bytes\");}}}}rt.store(slot,32,CrtValue::Pointer(prefix))?;cpu.call_activation(rt,{next},0,|rt,child|{compare_helper}(rt,child,access{extra_arg},api))?;"),
                 Target::Import(0x415044)=>format!("cpu.call_activation(rt,{next},0,|rt,child|{{child.clobber(rt.last_os_error.map(CrtValue::scalar).unwrap_or(CrtValue::Scalar{{bits:0,known:0}}));child.finish(rt)}})?;"),
                 Target::Import(iat @ (0x415074|0x415070|0x41506c))=>{
                     let pop=match iat{0x415074=>12,0x415070=>8,_=>4};
-                    format!("cpu.call_activation(rt,{next},{pop},|rt,child|cxx_loader_effect(rt,child,access,{iat},api))?;")
+                    format!("cpu.call_activation(rt,{next},{pop},|rt,child|cxx_loader_effect(rt,child,access,{iat},api))?;{after_effect}")
                 },
                 _=>"return Err(\"C++ cold prefix comparator/loader effect unbound\");".into()
             })
@@ -217,6 +253,9 @@ impl CrtResolverAccess {
             4096,
             |_, _| Err("C++ cold thread effect".into()),
             |pc, _| {
+                if mapped && pc == 0x402a9f {
+                    return Ok("let sp=CrtCpu::pointer(cpu.r[4])?;let address=rt.load(sp,32)?.known_scalar()?;let name=rt.process_image_pointer(inputs.image,address,2)?;rt.store(sp,32,CrtValue::Pointer(name))?;".into());
+                }
                 Ok(match pc{
             0x402a78=>"access.initialization(rt)?;".into(),
             0x4078e0=>"let sp=CrtCpu::pointer(cpu.r[4])?;if rt.load(rt.offset(sp,12)?,32)?.known_scalar()?>260{return Err(\"C++ prefix comparison count bound\");}".into(),
@@ -233,7 +272,25 @@ impl CrtResolverAccess {
             },
             None,
         )?;
-        out.push_str(&format!("fn {name}(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,access:CrtResolverAccess,api:&mut impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu,u32)->Result<CrtValue,&'static str>)->Result<CrtValue,&'static str>{{access.check(rt)?;{body}}}"));
+        let name = if mapped {
+            format!("{name}_mapped")
+        } else {
+            name.to_string()
+        };
+        let parameter = if mapped {
+            ",inputs:&CrtEntropyInputs"
+        } else {
+            ""
+        };
+        let check = if mapped {
+            format!("inputs.validate(rt)?;cpu.validate_active(rt)?;let code=rt.process_image_code(inputs.image,{origin},{})?;if rt.memory.read(code.address(),{}).map_err(|_|\"startup resolver code read\")?!=&{bytes:?}{{return Err(\"startup resolver live code changed\");}}",bytes.len(),bytes.len())
+        } else {
+            String::new()
+        };
+        out.push_str(&format!("fn {name}(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,access:CrtResolverAccess{parameter},api:&mut impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu,u32)->Result<CrtValue,&'static str>)->Result<CrtValue,&'static str>{{access.check(rt)?;{check}{body}}}"));
+    }
+    if mapped {
+        return Ok(out);
     }
     out.push_str(r#"
 fn cxx_loader_effect(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,access:CrtResolverAccess,iat:u32,api:&mut impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu,u32)->Result<CrtValue,&'static str>)->Result<CrtValue,&'static str>{

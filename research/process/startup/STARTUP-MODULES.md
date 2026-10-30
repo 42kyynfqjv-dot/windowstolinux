@@ -1,5 +1,8 @@
 # Original startup lock and FLS control
 
+This records checkpoint `223786b`. The subsequent mapped resolver and process-index
+ownership integration is documented in [STARTUP-RESOLVER.md](STARTUP-RESOLVER.md).
+
 The original entry now reaches CALL402c42 to the shared resolver402a53 through
 40195a→4024ca→4029b4→402c2d. The constructor's original prolog, saved ESI and four
 resolver arguments execute. That resolver remains unbound on this entry path;

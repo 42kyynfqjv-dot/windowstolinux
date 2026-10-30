@@ -418,3 +418,12 @@ control cases retain explicitly supplied allocation/destruction observations;
 these are not actual API producers. Module-backed bootstrap object41ccc4 and
 its FLS callback lifecycle remain unsupported. It is distinct from the recursive
 FFFFFFFF marker; no heap PTD identity is granted. See STARTUP-MODULES.md.
+
+Mapped-resolver update: the entry component now reaches LoadLibraryExW at402b00
+through the original402a53 resolver. The default entry supplies no load result.
+Mapped-resolver tests explicitly supply module/export observations; they do not
+close loader initialization or API-set effects. FLS allocation observations
+now have separate process-index and fiber-value ownership, with callback-image
+lifetime and failure invalidation. Actual FlsAlloc, constructor indirect/fallback
+API effects, module-backed bootstrap PTD publication, callback execution and
+FlsFree/setter failure composition remain open. See STARTUP-RESOLVER.md.

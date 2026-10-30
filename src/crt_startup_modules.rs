@@ -15,7 +15,7 @@ pub(crate) fn source(regions: &[Vec<u8>]) -> Result<String, String> {
     let roles = std::collections::BTreeMap::from_iter(
         [0x41c060, 0x41ccc4, 0x41ccec, 0x41cd04].map(|a| (a, "CrtRegionKind::Module".into())),
     );
-    let mut out = String::new();
+    let mut out = crate::crt_cxx_lookup::mapped_source()?;
     for (i, bytes) in regions.iter().enumerate() {
         let (name, origin, literal) = REGIONS[i];
         let expected: Vec<_> = literal
@@ -83,10 +83,37 @@ pub(crate) fn source(regions: &[Vec<u8>]) -> Result<String, String> {
         out.push_str(&format!("fn startup_{name}<F>(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,effects:&mut F)->Result<CrtValue,&'static str> where F:FnMut(&mut CrtStreamRuntime,&mut CrtCpu,u32,u32)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;let p=rt.process_image_code(inputs.image,{origin},{})?;if rt.memory.read(p.address(),{}).map_err(|_|\"startup module code read\")?!=&{bytes:?}{{return Err(\"startup module live code changed\");}}{body}}}",bytes.len(),bytes.len()));
     }
     out.push_str(r#"
+// Resolve only image-owned arguments. Numeric values alone confer no export
+// authority. The shared resolver still executes each load, branch and XCHG.
+fn startup_resolver(rt:&mut CrtStreamRuntime,c:&mut CrtCpu,inputs:&CrtEntropyInputs,api:&mut impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu,u32)->Result<CrtValue,&'static str>)->Result<CrtValue,&'static str>{
+ inputs.validate(rt)?;c.validate_active(rt)?;let sp=CrtCpu::pointer(c.r[4])?;
+ let index=rt.load(rt.offset(sp,4)?,32)?.known_scalar()?;
+ // This bounded resolver admits the actual table's first five export entries;
+ // other indices must establish their table extent before using this adapter.
+ if index>=5{return Err("startup resolver function table bound");}
+ let symbol_address=rt.load(rt.offset(sp,8)?,32)?.known_scalar()?;
+ let begin=rt.load(rt.offset(sp,12)?,32)?.known_scalar()?;let end=rt.load(rt.offset(sp,16)?,32)?.known_scalar()?;
+ let size=end.checked_sub(begin).filter(|n|*n>0&&*n<=12&&*n%4==0).ok_or("startup resolver module list bound")?;
+ let list=rt.process_image_pointer(inputs.image,begin,size)?;let symbol=rt.process_image_pointer(inputs.image,symbol_address,1)?;
+ let mut name=Vec::new();let mut terminated=false;for i in 0..256{let b=rt.load(rt.offset(symbol,i)?,8)?.known_scalar()? as u8;if b==0{terminated=true;break;}name.push(b);}
+ if !terminated||name.is_empty()||!name.is_ascii(){return Err("startup resolver symbol bytes");}
+ for offset in (0..size).step_by(4){let module_index=rt.load(rt.offset(list,i64::from(offset))?,32)?.known_scalar()?;if module_index>=3{return Err("startup resolver module table bound");}let cell=rt.process_image_pointer(inputs.image,0x41cd08+module_index*4,4)?;startup_loader_cell(rt,inputs,cell,false)?;}
+ let cell=rt.process_image_pointer(inputs.image,0x41cd14+index*4,4)?;startup_loader_cell(rt,inputs,cell,true)?;
+ // Conversion of proven image addresses preserves the bytes and their owner;
+ // unrelated pointers, uninitialized values and cross-section lists reject.
+ for(offset,p)in [(8,symbol),(12,list),(16,rt.offset(list,i64::from(size))?)]{rt.store(rt.offset(sp,offset)?,32,CrtValue::Pointer(p))?;}
+ let value=cxx_cold_resolver_mapped(rt,c,CrtResolverAccess::Initializing(inputs.init),inputs,api)?;
+ if let CrtValue::Function(f)=value{rt.function_identity(f,Some(std::str::from_utf8(&name).map_err(|_|"startup symbol encoding")?))?;}
+ Ok(value)
+}
+fn startup_loader_cell(rt:&mut CrtStreamRuntime,inputs:&CrtEntropyInputs,p:CrtPointer,function:bool)->Result<(),&'static str>{
+ if let Some(&(bound,kind))=rt.loader_cells.get(&p.address()){if bound!=p||kind!=function{return Err("startup loader cell owner/kind");}rt.loader_cell_value(function,rt.load(p,32)?)?;Ok(())}
+ else{rt.bind_loader_cell(inputs.init,p,function)}
+}
 fn startup_modules_default(rt:&mut CrtStreamRuntime,c:&mut CrtCpu,inputs:&CrtEntropyInputs)->Result<CrtValue,&'static str>{
  startup_modules(rt,c,inputs,&mut |rt,c,pc,target|match(pc,target){
  (0x4024ca,0x4029b4)=>startup_locks(rt,c,inputs,&mut |rt,c,pc,target|match(pc,target){
- (0x4029c5,0x402c2d)=>startup_constructor_prefix(rt,c,inputs,&mut |_,_,_,_|Err("startup lock resolver unbound at 0x402c42")),
+ (0x4029c5,0x402c2d)=>startup_constructor_prefix(rt,c,inputs,&mut |rt,c,pc,target|{if(pc,target)!=(0x402c42,0x402a53){return Err("startup constructor resolver target");}startup_resolver(rt,c,inputs,&mut |_,_,iat|Err(match iat{0x415074=>"startup LoadLibraryExW effects unbound at 0x402b00",_=>"startup loader effects unbound"}))}),
  _=>Err("startup lock effect unbound")}),
  _=>Err("startup module effect unbound")})
 }

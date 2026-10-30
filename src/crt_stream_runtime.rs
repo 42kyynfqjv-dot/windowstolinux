@@ -30,7 +30,11 @@ struct CrtHeap {anchor:guest_memory::Capability,exceptions:Option<bool>}
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 struct CrtFiber {anchor:guest_memory::Capability,thread:u64,serial:u64}
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
-struct CrtFlsSlot {fiber:CrtFiber,index:u32,serial:u64}
+struct CrtFlsSlot {fiber:CrtFiber,index:u32,serial:u64,allocation:CrtFlsIndex}
+/// Process index authority is distinct from each fiber's value lease.
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+struct CrtFlsIndex {anchor:guest_memory::Capability,index:u32,serial:u64}
+struct CrtProcessFls {id:CrtFlsIndex,callback:Option<(CrtProcessImage,CrtPointer)>,certain:bool,input_binding:bool}
 /// Object view only: the allocation capability, Buffer role and every alias
 /// remain unchanged. The view never promises that later writes preserve zeros.
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
@@ -110,7 +114,7 @@ struct CrtRegion {pointer:CrtPointer,heap:bool,file_owner:Option<u32>}
 struct CrtDescriptor {id:CrtDescriptorId,live:bool,record:Option<CrtPointer>,record_initialized:bool}
 struct CrtStreamRuntime {
  file_view:CrtPointer,main_image:Option<CrtProcessImage>,main_image_regions:Vec<CrtPointer>,loader_cells:std::collections::BTreeMap<u32,(CrtPointer,bool)>,modules:std::collections::BTreeMap<u32,CrtLoadedModule>,module_references:std::collections::BTreeMap<u64,CrtModuleReference>,exports:std::collections::BTreeMap<u64,CrtExport>,
- uncertain_allocations:Vec<CrtPointer>,completed_failed_frees:Vec<(guest_memory::Capability,u64)>,heap_ptds:Vec<CrtHeapPtdView>,fiber:Option<CrtFiber>,fls:std::collections::BTreeMap<u32,(CrtFlsSlot,CrtValue)>,
+ uncertain_allocations:Vec<CrtPointer>,completed_failed_frees:Vec<(guest_memory::Capability,u64)>,heap_ptds:Vec<CrtHeapPtdView>,fiber:Option<CrtFiber>,fls_indices:std::collections::BTreeMap<u32,CrtProcessFls>,fls:std::collections::BTreeMap<u32,(CrtFlsSlot,CrtValue)>,
  unobserved_contexts:Vec<(CrtPointer,std::rc::Rc<std::cell::Cell<bool>>)>,heap:Option<CrtHeap>,memory:guest_memory::Space,owner:u64,thread:u64,anchor:guest_memory::Capability,
  dispatchers:std::collections::BTreeMap<u64,CrtDispatcherContext>,regions:Vec<CrtRegion>,retired:Vec<CrtPointer>,tags:std::collections::BTreeMap<u32,CrtValue>,
  partial:std::collections::BTreeMap<u32,(u8,u8)>,descriptors:Vec<CrtDescriptor>,
@@ -131,7 +135,7 @@ impl CrtStreamRuntime {
  }
  fn from_file_storage(owner:u64,thread:u64,memory:guest_memory::Space,pointer:CrtPointer)->Result<Self,&'static str>{
   let anchor=pointer.cap;
-  Ok(Self{file_view:pointer,main_image:None,main_image_regions:vec![],loader_cells:std::collections::BTreeMap::new(),modules:std::collections::BTreeMap::new(),module_references:std::collections::BTreeMap::new(),exports:std::collections::BTreeMap::new(),uncertain_allocations:vec![],completed_failed_frees:vec![],heap_ptds:vec![],fiber:None,fls:std::collections::BTreeMap::new(),unobserved_contexts:vec![],heap:None,memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],global_objects:std::collections::BTreeMap::new(),global_locks:vec![],record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,canonical_errno:false,errno_cell:None,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([pointer.base])})
+  Ok(Self{file_view:pointer,main_image:None,main_image_regions:vec![],loader_cells:std::collections::BTreeMap::new(),modules:std::collections::BTreeMap::new(),module_references:std::collections::BTreeMap::new(),exports:std::collections::BTreeMap::new(),uncertain_allocations:vec![],completed_failed_frees:vec![],heap_ptds:vec![],fiber:None,fls_indices:std::collections::BTreeMap::new(),fls:std::collections::BTreeMap::new(),unobserved_contexts:vec![],heap:None,memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],global_objects:std::collections::BTreeMap::new(),global_locks:vec![],record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,canonical_errno:false,errno_cell:None,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([pointer.base])})
  }
 
  /// Initial FILE storage is a bounded role view of the original writable
@@ -257,7 +261,7 @@ impl CrtStreamRuntime {
  /// Snapshot live allocation identities before entering the bound call.
  /// This is a checked component effect boundary, not proof of a host allocator.
  fn begin_heap_ptd_allocation(&self,f:CrtFiber,slot:CrtFlsSlot)->Result<CrtHeapPtdAllocation,&'static str>{
-  self.check_fiber(f)?;
+  self.check_fiber(f)?;self.fls_index(slot.allocation)?;
   if slot.fiber!=f||self.fls.get(&slot.index)!=Some(&(slot,CrtValue::scalar(u32::MAX))){return Err("CRT PTD allocation missing sentinel/slot");}
   Ok(CrtHeapPtdAllocation{anchor:self.anchor,slot,before:self.regions.iter().map(|r|r.pointer.cap).collect()})
  }
@@ -266,7 +270,7 @@ impl CrtStreamRuntime {
  fn bind_heap_ptd_return(&mut self,ticket:CrtHeapPtdAllocation,p:CrtPointer)->Result<(),&'static str>{
   if ticket.anchor!=self.anchor{return Err("CRT PTD allocation foreign ticket");}let slot=ticket.slot;let f=slot.fiber;let before=&ticket.before;
   self.check_fiber(f)?;self.valid(p,40)?;
-  if slot.fiber!=f||self.fls.get(&slot.index).map(|x|x.0)!=Some(slot){return Err("CRT PTD allocation slot lifetime");}
+  if slot.fiber!=f||self.fls.get(&slot.index).map(|x|x.0)!=Some(slot){return Err("CRT PTD allocation slot lifetime");}self.fls_index(slot.allocation)?;
   if self.fls.get(&slot.index).map(|x|x.1)!=Some(CrtValue::scalar(u32::MAX)){return Err("CRT PTD allocation missing sentinel");}
   if p.kind!=CrtRegionKind::Buffer||p.address!=p.base||p.size!=40||before.contains(&p.cap)||self.heap_ptds.iter().any(|v|v.pointer.cap==p.cap)
    ||!self.regions.iter().any(|r|r.pointer==p&&r.heap&&r.file_owner.is_none()){return Err("CRT PTD allocation fresh root/role");}
@@ -274,7 +278,7 @@ impl CrtStreamRuntime {
   self.heap_ptds.push(CrtHeapPtdView{pointer:p,slot});Ok(())
  }
  fn heap_ptd_view(&self,p:CrtPointer,slot:CrtFlsSlot)->Result<(),&'static str>{
-  self.check_fiber(slot.fiber)?;self.valid(p,40)?;
+  self.check_fiber(slot.fiber)?;self.fls_index(slot.allocation)?;self.valid(p,40)?;
   if self.fls.get(&slot.index).map(|x|x.0)!=Some(slot)||!self.heap_ptds.iter().any(|v|v.pointer==p&&v.slot==slot)
    ||!self.regions.iter().any(|r|r.pointer==p&&r.heap&&r.file_owner.is_none()){return Err("CRT PTD view owner/slot/lifetime");}Ok(())
  }
@@ -292,12 +296,54 @@ impl CrtStreamRuntime {
   CrtValue::Scalar{bits:0|u32::MAX,known:u32::MAX}=>{},_=>return Err("CRT FLS unknown/forged PTD value")};Ok(())}
  /// Bind independently established initial FLS state, not execute FlsAlloc.
  fn bind_fls(&mut self,f:CrtFiber,index:u32,value:CrtValue)->Result<CrtFlsSlot,&'static str>{
-  self.check_fiber(f)?;self.fls_value(value)?;if index==u32::MAX||self.fls.len()>=64||self.fls.contains_key(&index){return Err("CRT FLS index/budget/already bound");}
-  let serial=self.serial.checked_add(1).ok_or("CRT FLS serial")?;let slot=CrtFlsSlot{fiber:f,index,serial};self.serial=serial;self.fls.insert(index,(slot,value));Ok(slot)
+  self.check_fiber(f)?;self.fls_value(value)?;
+  if index==u32::MAX||self.fls_indices.len()>=64||self.fls_indices.contains_key(&index)||self.fls.contains_key(&index){return Err("CRT FLS index/budget/already bound");}
+  let serial=self.serial.checked_add(2).ok_or("CRT FLS serial")?;
+  let allocation=CrtFlsIndex{anchor:self.anchor,index,serial:serial-1};let slot=CrtFlsSlot{fiber:f,index,serial,allocation};
+  self.fls_indices.insert(index,CrtProcessFls{id:allocation,callback:None,certain:true,input_binding:true});self.serial=serial;self.fls.insert(index,(slot,value));Ok(slot)
+ }
+ /// Record a separately established allocation outcome, including its exact
+ /// callback owner. This does not invoke FlsAlloc or assert loader effects.
+ fn fls_allocation_result(&mut self,init:CrtInitialization,index:u32,callback:Option<(CrtProcessImage,CrtPointer)>)->Result<Option<CrtFlsIndex>,&'static str>{
+  self.initialization(init)?;self.fls_callback(callback)?;
+  if index==u32::MAX{return Ok(None);}
+  if self.fls_indices.len()>=64||self.fls_indices.contains_key(&index){return Err("CRT FLS process index/budget/alias");}
+  let serial=self.serial.checked_add(1).ok_or("CRT FLS serial")?;let id=CrtFlsIndex{anchor:self.anchor,index,serial};
+  self.fls_indices.insert(index,CrtProcessFls{id,callback,certain:true,input_binding:false});self.serial=serial;Ok(Some(id))
+ }
+ fn fls_callback(&self,callback:Option<(CrtProcessImage,CrtPointer)>)->Result<(),&'static str>{
+  if let Some((image,p))=callback{if self.process_image_code(image,p.address(),1)?!=p{return Err("CRT FLS callback image/alias");}}Ok(())
+ }
+ fn fls_index(&self,id:CrtFlsIndex)->Result<(),&'static str>{
+  self.memory.validate(self.anchor,self.file_view.owner).map_err(|_|"CRT FLS process storage lifetime")?;
+  let entry=self.fls_indices.get(&id.index).ok_or("CRT FLS process index retired")?;
+  if self.closed||id.anchor!=self.anchor||entry.id!=id||!entry.certain{return Err("CRT FLS process index owner/lifetime");}self.fls_callback(entry.callback)
+ }
+ /// Only a fiber with no prior value lease can receive the independently
+ /// established initial null value. Rebinding cannot reset a published value.
+ fn bind_fls_fiber(&mut self,f:CrtFiber,id:CrtFlsIndex)->Result<CrtFlsSlot,&'static str>{
+  self.check_fiber(f)?;self.fls_index(id)?;if self.fls.contains_key(&id.index){return Err("CRT FLS fiber value already bound");}
+  let serial=self.serial.checked_add(1).ok_or("CRT FLS serial")?;let slot=CrtFlsSlot{fiber:f,index:id.index,serial,allocation:id};
+  self.fls.insert(id.index,(slot,CrtValue::scalar(0)));self.serial=serial;Ok(slot)
+ }
+ /// Bounded stationary-fiber teardown: a null value has no callback work.
+ /// Nonnull or unknown values cannot be discarded to manufacture cleanup.
+ fn detach_empty_fls_fiber(&mut self,f:CrtFiber,slot:CrtFlsSlot)->Result<(),&'static str>{
+  self.check_fiber(f)?;self.fls_index(slot.allocation)?;
+  if slot.fiber!=f||self.fls.get(&slot.index)!=Some(&(slot,CrtValue::scalar(0))){return Err("CRT FLS fiber detach needs live null value");}
+  self.fls.remove(&slot.index);self.heap_ptds.retain(|v|v.slot!=slot);self.errno_cell=None;self.errno=None;Ok(())
+ }
+ /// Free outcome is applicable only after all value/callback work is closed.
+ /// On unclosed failure retain storage but revoke lifetime knowledge.
+ fn fls_free_index_result(&mut self,init:CrtInitialization,id:CrtFlsIndex,success:bool)->Result<(),&'static str>{
+  self.initialization(init)?;self.fls_index(id)?;
+  if self.fls.contains_key(&id.index){return Err("CRT FLS free has live fiber/callback effects");}
+  if !success{self.fls_indices.get_mut(&id.index).unwrap().certain=false;self.errno_cell=None;self.errno=None;return Err("CRT FLS free failure effects unclosed");}
+  self.fls_indices.remove(&id.index);Ok(())
  }
  fn fls_get(&mut self,f:CrtFiber,slot:CrtFlsSlot,index:u32)->Result<CrtValue,&'static str>{
   self.check_fiber(f)?;let &(actual,value)=self.fls.get(&index).ok_or("CRT unbound FLS index")?;
-  if slot!=actual||slot.fiber!=f||slot.index!=index{return Err("CRT FLS owner/reused index");}self.fls_value_for(slot,value)?;
+  if slot!=actual||slot.fiber!=f||slot.index!=index{return Err("CRT FLS owner/reused index");}self.fls_index(slot.allocation)?;self.fls_value_for(slot,value)?;
   // FlsGetValue's public success contract does not promise a preserved or
   // zero LastError. The original getter saves/restores it around this call.
   self.last_os_error=None;Ok(value)
@@ -305,11 +351,11 @@ impl CrtStreamRuntime {
  /// Apply an independently supplied setter outcome. Failure leaves value
  /// knowledge unknown; the public BOOL contract cannot certify atomicity.
  fn fls_set(&mut self,f:CrtFiber,slot:CrtFlsSlot,index:u32,value:CrtValue,success:bool,last_error:Option<u32>)->Result<bool,&'static str>{
-  self.check_fiber(f)?;if slot.fiber!=f||slot.index!=index||self.fls.get(&index).map(|x|x.0)!=Some(slot){return Err("CRT FLS setter owner/index/lifetime");}self.fls_value_for(slot,value)?;
+  self.check_fiber(f)?;if slot.fiber!=f||slot.index!=index||self.fls.get(&index).map(|x|x.0)!=Some(slot){return Err("CRT FLS setter owner/index/lifetime");}self.fls_index(slot.allocation)?;self.fls_value_for(slot,value)?;
   self.fls.insert(index,(slot,if success{value}else{CrtValue::Scalar{bits:0,known:0}}));self.errno_cell=None;self.errno=None;self.last_os_error=last_error;Ok(success)
  }
  fn retire_fls(&mut self,f:CrtFiber,slot:CrtFlsSlot)->Result<(),&'static str>{
-  self.check_fiber(f)?;if slot.fiber!=f||self.fls.get(&slot.index).map(|x|x.0)!=Some(slot){return Err("CRT stale FLS retirement");}self.fls.remove(&slot.index);self.heap_ptds.retain(|v|v.slot!=slot);self.errno_cell=None;self.errno=None;Ok(())
+  self.check_fiber(f)?;if slot.fiber!=f||self.fls.get(&slot.index).map(|x|x.0)!=Some(slot){return Err("CRT stale FLS retirement");}self.fls_index(slot.allocation)?;if !self.fls_indices.get(&slot.index).is_some_and(|e|e.input_binding){return Err("CRT allocated FLS requires callback/free closure");}self.fls_indices.remove(&slot.index);self.fls.remove(&slot.index);self.heap_ptds.retain(|v|v.slot!=slot);self.errno_cell=None;self.errno=None;Ok(())
  }
  fn retire_fiber(&mut self,f:CrtFiber)->Result<(),&'static str>{self.check_fiber(f)?;if !self.fls.is_empty(){return Err("CRT live FLS slots/callback effects");}self.fiber=None;self.errno_cell=None;self.errno=None;Ok(())}
  /// Separate startup-exclusive storage authority, with no preconstructed lock.

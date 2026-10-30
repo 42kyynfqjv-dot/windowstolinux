@@ -578,3 +578,16 @@ stop before unsupported publication authority. Next: shared dynamic constructor
 and FlsAlloc resolver bindings, followed by module-backed bootstrap object41ccc4
 and callback4028a7 lifecycle. This object must be distinguished from the recursive
 FFFFFFFF marker. See [STARTUP-MODULES.md](STARTUP-MODULES.md).
+
+### Mapped resolver and process-wide FLS index
+
+Original entry now executes402c42→402a53→402af3 and stops at the actual
+LoadLibraryExW call402b00/IAT415074. Live code, canonical mapped arguments,
+module/export lifetime and cache publication use the shared resolver. Actual
+load/API-set/DllMain/TLS effects remain unbound. Component allocation outcomes
+now issue a process index distinct from the current fiber value lease; the
+original control cases preserve global publication and failure order. There
+is no actual FlsAlloc/FlsSetValue producer or bootstrap-PTD publication yet.
+See [STARTUP-RESOLVER.md](STARTUP-RESOLVER.md) for evidence, stationary-fiber
+limits and the next loader/constructor/bootstrap-object gates. Full startup
+and rcedit remain unsupported.
