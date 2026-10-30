@@ -44,12 +44,13 @@ impl ContextCheckProof {
         format!(
             r#"
 impl ThreadContext {{fn original_check(&self,owner:u64,selector:u32)->Result<(),&'static str>{{{body}}}}}
+impl CapturedStackView {{fn original_check(&self,owner:u64,selector:u32)->Result<(),&'static str>{{{projection}}}}}
 impl CrtNormalObjects {{
  fn check_prefix_context(&self,frame:&CrtLiveFrame<'_,'_>)->RegistryResult<()>{{self.check_original_context(frame.event,frame.rt,frame.epoch)}}
  fn check_original_context(&self,event:&CrtNormalException,rt:&CrtStreamRuntime,epoch:&NormalCallEpoch<'_>)->RegistryResult<()>{{
   self.validate(event,rt,epoch)?;
   let selector=rt.load(rt.resolve_absolute({selector},CrtRegionKind::Module)?,32)?.known_scalar()?;
-  let captured=ThreadContext::new(self.identity.owner,epoch.registry.limit,epoch.registry.base,self.captured_esp)?;
+  let captured=self.capture_view(epoch)?;
   captured.original_check(self.identity.owner,selector)
  }}
 }}
@@ -68,6 +69,7 @@ impl CrtNormalException {{
 }}
 "#,
             body = self.body,
+            projection = self.projection_body,
             selector = self.selector_va,
             prefix = self.emit_prefix_call("context_prefix_call", false, false)
         )
@@ -143,6 +145,30 @@ impl CrtNormalException {{
 /// reject before fragment effects; no INT 29 or process termination is emulated.
 /// No Rust layout is asserted to match an external TEB/CONTEXT layout.
 pub(crate) const EMITTED_TYPES: &str = r#"
+/// Ephemeral observation view. The enclosing event/frame validates lifetime
+/// and the exact live word before constructing this view; it is not authority
+/// to acquire, write, dereference, or restore a captured register.
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+enum CapturedStackBits { Numeric(u32), Masked{bits:u32,known:u32} }
+struct CapturedStackView { owner:u64,limit:u32,base:u32,bits:CapturedStackBits }
+impl CapturedStackView {
+ fn from_bits(owner:u64,limit:u32,base:u32,bits:u32,known:u32)->Result<Self,&'static str>{
+  let bits=if known==u32::MAX{CapturedStackBits::Numeric(bits)}else{CapturedStackBits::Masked{bits:bits&known,known}};
+  let view=Self{owner,limit,base,bits};view.preflight(owner)?;Ok(view)
+ }
+ fn preflight(&self,owner:u64)->Result<(),&'static str>{
+  if owner==0||owner!=self.owner||self.limit==0||self.limit>=self.base{return Err("captured stack view owner/bounds");}Ok(())
+ }
+ fn interval(&self)->(u32,u32){match self.bits{CapturedStackBits::Numeric(n)=>(n,n),CapturedStackBits::Masked{bits,known}=>(bits&known,bits|!known)}}
+ fn captured_below_limit(&self,owner:u64)->Result<bool,&'static str>{
+  self.preflight(owner)?;let(low,high)=self.interval();
+  if high<self.limit{Ok(true)}else if low>=self.limit{Ok(false)}else{Err("captured stack comparison unknown")}
+ }
+ fn captured_at_most_base(&self,owner:u64)->Result<bool,&'static str>{
+  self.preflight(owner)?;let(low,high)=self.interval();
+  if high<=self.base{Ok(true)}else if low>self.base{Ok(false)}else{Err("captured stack comparison unknown")}
+ }
+}
 struct ThreadContext {
  owner:u64, limit:u32, base:u32, captured_esp:u32, live:bool,
 }
@@ -649,8 +675,26 @@ mod tests {
         let proof = prove_context_check(&code(), ORIGIN, SELECTOR).unwrap();
         let source = format!(
             r#"{EMITTED_TYPES}
+impl CapturedStackView {{fn check(&self,owner:u64,selector:u32)->Result<(),&'static str>{{{projection}}}}}
 impl ThreadContext {{fn check(&self,owner:u64,selector:u32)->Result<(),&'static str>{{{}}}}}
 fn main(){{
+ // Independent enumeration, not the implementation's interval formula: every
+ // concrete value consistent with each eight-bit mask must agree on a result.
+ for known in 0..=255u32{{for bits in 0..=255u32{{
+  if bits&!known!=0{{continue;}}
+  let values:Vec<u32>=(0..=255u32).filter(|v|v&known==bits).map(|v|0x1000|v).collect();
+  let view=CapturedStackView::from_bits(7,0x1040,0x10c0,0x1000|bits,0xffffff00|known).unwrap();
+  for (actual,truth) in [(view.captured_below_limit(7),values.iter().map(|v|*v<0x1040).collect::<Vec<_>>()),(view.captured_at_most_base(7),values.iter().map(|v|*v<=0x10c0).collect())]{{
+   let expected=if truth.iter().all(|b|*b){{Ok(true)}}else if truth.iter().all(|b|!*b){{Ok(false)}}else{{Err("captured stack comparison unknown")}};assert_eq!(actual,expected);
+  }}
+  assert_eq!(view.check(7,0x401bf9),Ok(()));assert_eq!(view.check(8,0x401bf9),Err("captured stack view owner/bounds"));
+ }}}}
+ // Boundary predicates retain failure order and never zero unknown bits.
+ for (bits,known,expected) in [(0xff0,0xfffffff0,Err("captured boundary would reach original INT 29 with ECX=13")),(0x1000,0xfffffff0,Ok(())),(0x2000,u32::MAX,Ok(())),(0x2000,0xfffffffe,Err("captured stack comparison unknown")),(0x2010,0xfffffff0,Err("captured boundary would reach original INT 29 with ECX=13")),(0,0,Err("captured stack comparison unknown"))]{{
+  let view=CapturedStackView::from_bits(7,0x1000,0x2000,bits,known).unwrap();assert_eq!(view.check(7,0),expected);
+ }}
+ let top=CapturedStackView::from_bits(7,1,u32::MAX,0xfffffff0,0xfffffff0).unwrap();assert_eq!(top.check(7,0),Ok(()));
+
  for esp in [0x1000,0x1001,0x1800,0x2000] {{
   let mut context=ThreadContext::new(7,0x1000,0x2000,esp).unwrap();
   for selector in [0,0x401bf9,u32::MAX] {{assert_eq!(context.check(7,selector),Ok(()));}}
@@ -665,7 +709,8 @@ fn main(){{
  assert_eq!(context.check(7,0),Ok(()));
 }}
 "#,
-            proof.body()
+            proof.body(),
+            projection = proof.projection_body()
         );
         let directory =
             std::env::temp_dir().join(format!("w2l-context-boundary-{}", std::process::id()));

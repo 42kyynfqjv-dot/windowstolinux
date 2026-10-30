@@ -1,7 +1,7 @@
 {
   "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
-  "rust_sha256": "c6d52edc1b93a4924a6a53380d1a65b0124a7de9f7d8881f9dbcd30f83ba7ac4",
-  "unwind_binding_source_sha256": "0b1ff9343211301d646e52c8a46d831fcd795ef33cf481ad97f98daa959fbfba",
+  "rust_sha256": "004527ac75525f63696f79bacc410dcff3ab6823bc46e1caa4dc1b22a06fab70",
+  "unwind_binding_source_sha256": "ed612ca9d8a6db43e5b52a6644bea91f2b1a00a494a47f5a3a7f15506e357675",
   "unwind_native_cases": 24,
   "unwind_new_windows_pairs": 0,
   "unwind_binding_rust_tests": 1,
@@ -90,7 +90,7 @@
     "ordered_advance": false
   },
   "ordered_dispatch_gate": "First source return/advance implemented. Next: derive selected C++ owner from the actual registration and invoke its original search path under the same pending source; supplied-owner unwind receipts do not authorize that selection.",
-  "ordered_search_native_cases": 37,
+  "ordered_search_native_cases": 47,
   "original_empty_search_native_cases": 1,
   "ordered_search_new_windows_pairs": 0,
   "return_path_integration": {
@@ -175,5 +175,41 @@
         "new_windows_observations": 0
       }
     ]
+  },
+  "capture_view_integration": {
+    "reviewed": "36eeb34",
+    "representation": "numeric or masked scalar snapshot; exact value and known mask retained",
+    "producer": "partial high-bit knowledge remains supplied; no Windows capture acquisition",
+    "observation": "decoded helper receives only comparisons agreed by every represented value",
+    "numeric_authority": "absent for masked captures; numeric unwind contract rejects",
+    "new_ordered_cases": 10,
+    "independent_masks": 6561,
+    "bound_predicates_per_mask": 2,
+    "existing_tests": {
+      "crt_passed": 223,
+      "root_passed": 175,
+      "clippy_all_targets": "passed",
+      "observation_test_separately_passed": true
+    },
+    "evidence_kind": "47 native component cases and five recorded Windows wrapper comparisons; zero fresh Windows observations or whole-PE pairs",
+    "mutation": {
+      "kind": "capture proof mutation; native component only",
+      "source_sha256": "004527ac75525f63696f79bacc410dcff3ab6823bc46e1caa4dc1b22a06fab70",
+      "mutant_sha256": "a88dc522a6b16d135c5ae874993cb53f442601e93e061c0647774ee2fc083a2b",
+      "returncode": 101,
+      "observed": "ambiguous upper-bound capture admitted after ignoring unknown bits",
+      "whole_pe_pairs": 0,
+      "new_windows_observations": 0
+    },
+    "remaining": "same-event opaque capture acquisition with complete observation/effect certificate; actual incoming-chain and startup closure",
+    "reviewed_ci": {
+      "commit": "36eeb3448a6bd80c175368c336c48707a3e40ba6",
+      "runs": [
+        40979161128,
+        40979155479,
+        40979155599
+      ],
+      "conclusion": "success"
+    }
   }
 }

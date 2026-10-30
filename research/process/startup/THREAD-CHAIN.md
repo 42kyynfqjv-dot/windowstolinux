@@ -499,3 +499,52 @@ same checker. Restoring the old full-known store compiled but failed the exact
 native assertion: actual known mask4294967295 versus required mask1. Both root
 and flags mutations require compilation followed by the intended assertion;
 other errors or timeouts cannot count as a detected proof defect.
+
+## Partial capture representation integration
+
+The live normal-event and ordered-search objects now retain a `CrtValue` snapshot,
+including its exact known-bit mask, instead of demanding an exact u32 ESP.
+`CapturedStackView` distinguishes numeric and masked representations. For a masked
+word, the minimum is `bits & known` and the maximum is `bits | !known`. A comparison
+returns a Boolean only when every represented value agrees; an ambiguous bound
+rejects. The view is ephemeral observation data, not independent event authority.
+The enclosing event, frame, storage and cursor still validate lifetime and the
+exact live snapshot before use or receipt consumption.
+
+The same decoded context-helper decision tree is emitted for these observations.
+Normal EH4 and selected C++ search share the view. A partially known word never
+becomes a `CrtPointer`: the C++ numeric refinement is absent, raw numeric extraction
+still rejects, and the numeric unwind contract cannot consume it. No context byte
+is filled or rewritten by this connection. Existing numeric capture behavior and
+all incoming-root/reserved-flag checks remain.
+
+The 47 ordered cases retain the earlier 37 and add two partial-value successes,
+three ambiguous-bound rejections, numeric-authority rejection, changed partial
+bits, stale event, retired context storage and replacement capture. Assertions
+require the intended outcome; an earlier unrelated failure cannot pass a case.
+The helper oracle independently enumerates all concrete values for each of 6,561
+eight-bit masks/assignments, checking both bound predicates, plus unsigned extremes,
+original failure edges, unknown comparison and owner checks even on bypass.
+
+The connected C++ path still requires the existing validated indirect-guard
+selector, which also bypasses the original context helper's numeric comparison.
+The non-bypass helper is independently exercised with the partial capture before
+that test input is installed. Setting an arbitrary guard target was rejected by
+`C++ live guard target unbound`; this work does not widen that call contract.
+
+This is a connected representation advance, **not complete capture acquisition**.
+The harness supplies partial high-bit knowledge instead of an exact ESP for its
+new successes. Windows acquisition has not established those bits. In particular,
+the older `OwnedExceptionEvent` predicate capability cannot yet authorize a normal
+pending event's raw context storage. A wholly unknown word still rejects. The next
+semantic gate must bind a predicate-only capture to the same actual source event,
+stack lifetime and a complete original-path observation/effect certificate before
+removing the remaining supplied capture cut. Raw field reads, mutation/escape,
+uncertified callbacks and incoming-handler effects cannot be inferred safe from
+this passing component. Full startup/rcedit and historical timeout causes remain
+unresolved.
+
+`check_root_guard.py --mutation capture` deliberately changes the upper-bound
+proof to ignore unknown bits. It must compile and fail the exact assertion that
+an ambiguous capture was admitted; unrelated build/runtime failure does not count.
+This is native adversarial evidence, not a new original-Windows observation.

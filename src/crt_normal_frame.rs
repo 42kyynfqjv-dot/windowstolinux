@@ -351,11 +351,12 @@ struct CrtNormalRaiseSite { instruction:u32,continuation:u32,iat:u32 }
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 enum CrtNormalDelivery { Pending,Calling,Returned,ResultTaken,Failed }
 struct CrtNormalHandlerReturn { identity:RegistryIdentity,epoch:u64,frame:NormalFrameId,generation:u64,level:i32,value:CrtValue }
-/// Explicit captured-state input cut. Construction validates supplied objects;
-/// it never creates captured registers from guest CALL state.
+/// Explicit captured-state input cut. Construction validates supplied objects
+/// and retains the exact value/knowledge mask. Predicate use never manufactures
+/// an exact ESP or creates captured registers from guest CALL state.
 struct CrtNormalObjects {
  anchor:guest_memory::Capability,identity:RegistryIdentity,epoch:u64,generation:u64,
- record:CrtPointer,context:CrtPointer,captured_esp:u32,
+ record:CrtPointer,context:CrtPointer,captured_esp:CrtValue,
 }
 impl CrtNormalObjects {
  fn bind(event:&CrtNormalException,rt:&CrtStreamRuntime,epoch:&NormalCallEpoch<'_>,record:CrtPointer,context:CrtPointer)->RegistryResult<Self>{
@@ -364,20 +365,25 @@ impl CrtNormalObjects {
    ||record.address()%4!=0||context.address()%4!=0
    ||(u64::from(record.address())<u64::from(context.address())+716&&u64::from(context.address())<u64::from(record.address())+80){return Err("normal exception object roles/alias");}
   rt.valid(record,80)?;rt.valid(context,716)?;
-  let captured_esp=rt.load(rt.offset(context,0xc4)?,32)?.known_scalar()?;
+  let captured_esp=rt.load(rt.offset(context,0xc4)?,32)?;
   let objects=Self{anchor:rt.anchor,identity:event.identity,epoch:event.epoch,generation:event.generation,record,context,captured_esp};
   objects.validate(event,rt,epoch)?;Ok(objects)
  }
  fn validate(&self,event:&CrtNormalException,rt:&CrtStreamRuntime,epoch:&NormalCallEpoch<'_>)->RegistryResult<()>{
   event.validate_pending(rt,epoch)?;
-  if rt.anchor!=self.anchor||event.identity!=self.identity||event.epoch!=self.epoch||event.generation!=self.generation
-   ||self.captured_esp<epoch.registry.limit||self.captured_esp>epoch.registry.base{return Err("normal exception captured object identity/bounds");}
+  if rt.anchor!=self.anchor||event.identity!=self.identity||event.epoch!=self.epoch||event.generation!=self.generation{return Err("normal exception captured object identity/bounds");}
   if event.produced_record.is_some_and(|p|p!=self.record){return Err("normal record producer object mismatch");}
   rt.valid(self.record,80)?;rt.valid(self.context,716)?;
   for (offset,value) in [(0,event.code),(4,u32::from(event.noncontinuable)),(8,0),(16,0)]{
    if rt.load(rt.offset(self.record,offset)?,32)?.known_scalar()?!=value{return Err("normal exception record input mismatch");}
   }
-  if rt.load(rt.offset(self.context,0xc4)?,32)?.known_scalar()?!=self.captured_esp{return Err("normal exception captured ESP input changed");}Ok(())
+  if rt.load(rt.offset(self.context,0xc4)?,32)?!=self.captured_esp{return Err("normal exception captured ESP input changed");}
+  let view=self.capture_view(epoch)?;
+  if view.captured_below_limit(self.identity.owner)?||!view.captured_at_most_base(self.identity.owner)?{return Err("normal exception captured object identity/bounds");}Ok(())
+ }
+ fn capture_view(&self,epoch:&NormalCallEpoch<'_>)->RegistryResult<CapturedStackView>{
+  let CrtValue::Scalar{bits,known}=self.captured_esp else{return Err("normal captured ESP requires scalar knowledge");};
+  CapturedStackView::from_bits(self.identity.owner,epoch.registry.limit,epoch.registry.base,bits,known)
  }
  fn check_arguments(&self,event:&CrtNormalException,rt:&CrtStreamRuntime,epoch:&NormalCallEpoch<'_>,binding:&CrtNormalBinding,dispatcher:&CrtCpu)->RegistryResult<()>{
   self.validate(event,rt,epoch)?;let sp=CrtCpu::pointer(dispatcher.r[4])?;
@@ -689,7 +695,7 @@ impl CrtNormalException {
 struct CrtOrderedSearch {
  identity:RegistryIdentity,epoch:u64,event:u64,source:NormalFrameId,serial:u64,
  current:RegistryHead,previous:RegistryHead,root:RegistryHead,handler:u32,owner:u64,
- record:CrtPointer,context:CrtPointer,captured_esp:u32,cxx:Vec<RegistryCxxFrame>,normal_count:usize,phase:u8,
+ record:CrtPointer,context:CrtPointer,captured_esp:CrtValue,cxx:Vec<RegistryCxxFrame>,normal_count:usize,phase:u8,
 }
 struct CrtOrderedReturn { serial:u64,source:NormalFrameId,previous:RegistryHead,handler:u32,receipt:CrtNormalHandlerReturn }
 impl CrtOrderedSearch {

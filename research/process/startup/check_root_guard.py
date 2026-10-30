@@ -1,4 +1,4 @@
-"""Validate root-authority and reserved-flag regressions with compiled mutants.
+"""Validate root-authority, reserved-flag, and capture-mask regressions with compiled mutants.
 
 Input is the generated authored Rust component harness, never a Windows binary.
 The mutant must compile and fail with the precise unexpected-success assertion.
@@ -25,6 +25,12 @@ def check(source: Path, output: Path, mutation="root"):
         left = b'left: Scalar { bits: 0, known: 4294967295 }'
         right = b'right: Scalar { bits: 0, known: 1 }'
         observed = 'reserved bits became known zero instead of remaining unknown'
+    if mutation == 'capture':
+        guard = 'if high<=self.base{Ok(true)}else if low>self.base'
+        replacement = 'if low<=self.base{Ok(true)}else if low>self.base'
+        left = b'left: None'
+        right = b'right: Some("captured stack comparison unknown")'
+        observed = 'ambiguous upper-bound capture admitted after ignoring unknown bits'
     if text.count(guard) != 1:
         raise ValueError('mutation source binding must be unique')
     mutant = output / 'mutant.rs'
@@ -47,6 +53,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('source', type=Path)
     parser.add_argument('output', type=Path)
-    parser.add_argument('--mutation', choices=['root', 'flags'], default='root')
+    parser.add_argument('--mutation', choices=['root', 'flags', 'capture'], default='root')
     args = parser.parse_args()
     check(args.source, args.output, args.mutation)

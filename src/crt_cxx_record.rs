@@ -74,27 +74,33 @@ fn context_source(code: &[u8]) -> Result<String, String> {
     let proof = crate::handler_context::prove_context_check(code, 0x402877, 0x415128)?;
     let types = crate::handler_context::EMITTED_TYPES;
     let body = proof.body();
+    let projection = proof.projection_body();
     Ok(format!(
         r#"{types}
 impl ThreadContext{{fn original_check(&self,owner:u64,selector:u32)->Result<(),&'static str>{{{body}}}}}
-struct CrtCxxContext{{anchor:guest_memory::Capability,thread:u64,outer:u64,bp:CrtPointer,context:CrtPointer,stack:CrtPointer,esp:CrtPointer,esp_value:CrtValue,live:bool}}
+struct CrtCxxContext{{anchor:guest_memory::Capability,thread:u64,outer:u64,bp:CrtPointer,context:CrtPointer,stack:CrtPointer,esp:Option<CrtPointer>,esp_value:CrtValue,live:bool}}
+impl CapturedStackView{{fn cxx_original_check(&self,owner:u64,selector:u32)->Result<(),&'static str>{{{projection}}}}}
 impl CrtCxxContext{{
  fn bind(rt:&CrtStreamRuntime,owner:&CrtCpu,frame:&CrtPtdFrame,context:CrtPointer,stack:CrtPointer)->Result<Self,&'static str>{{
   let esp=CrtCpu::pointer(rt.load(rt.offset(context,0xc4)?,32)?)?;
-  let token=Self{{anchor:rt.anchor,thread:rt.thread,outer:owner.return_id,bp:frame.bp,context,stack,esp,esp_value:CrtValue::Pointer(esp),live:true}};token.check(rt,owner,frame)?;Ok(token)
+  let token=Self{{anchor:rt.anchor,thread:rt.thread,outer:owner.return_id,bp:frame.bp,context,stack,esp:Some(esp),esp_value:CrtValue::Pointer(esp),live:true}};token.check(rt,owner,frame)?;Ok(token)
  }}
  fn check(&self,rt:&CrtStreamRuntime,owner:&CrtCpu,frame:&CrtPtdFrame)->Result<(),&'static str>{{
   frame.live(rt,owner)?;
   if !self.live||self.anchor!=rt.anchor||self.thread!=rt.thread||self.outer!=owner.return_id||self.bp!=frame.bp{{return Err("C++ captured context owner/lifetime");}}
-  if self.context.kind!=CrtRegionKind::Context||self.context.address()!=self.context.base||self.stack.kind!=CrtRegionKind::Stack||self.stack.address()!=self.stack.base||frame.bp.cap!=self.stack.cap||self.esp.cap!=self.stack.cap{{return Err("C++ captured context/stack role");}}
+  if self.context.kind!=CrtRegionKind::Context||self.context.address()!=self.context.base||self.stack.kind!=CrtRegionKind::Stack||self.stack.address()!=self.stack.base||frame.bp.cap!=self.stack.cap||self.esp.is_some_and(|p|p.cap!=self.stack.cap){{return Err("C++ captured context/stack role");}}
   if !rt.regions.iter().any(|r|r.pointer==self.stack)||!rt.regions.iter().any(|r|r.pointer==self.context){{return Err("C++ captured context/root extent");}}
-  rt.valid(self.context,200)?;rt.valid(self.stack,self.stack.size)?;rt.valid(self.esp,0)?;
+  rt.valid(self.context,200)?;rt.valid(self.stack,self.stack.size)?;
+  if let Some(esp)=self.esp{{rt.valid(esp,0)?;if self.esp_value!=CrtValue::Pointer(esp)&&self.esp_value!=CrtValue::scalar(esp.address()){{return Err("C++ captured numeric view mismatch");}}}}
   if rt.load(rt.offset(self.context,0xc4)?,32)?!=self.esp_value{{return Err("C++ captured ESP changed/unknown");}}
   let base=self.stack.address().checked_add(self.stack.size).ok_or("C++ stack bound overflow")?;
-  let captured=ThreadContext::new(rt.thread,self.stack.address(),base,self.esp.address())?;
+  let(bits,known)=match self.esp_value{{CrtValue::Pointer(p)if self.esp==Some(p)=>(p.address(),u32::MAX),CrtValue::Scalar{{bits,known}}=>(bits,known),_=>return Err("C++ captured representation mismatch")}};
+  let captured=CapturedStackView::from_bits(rt.thread,self.stack.address(),base,bits,known)?;
+  if captured.captured_below_limit(rt.thread)?||!captured.captured_at_most_base(rt.thread)?{{return Err("invalid captured same-thread stack boundary");}}
   let selector=rt.load(rt.resolve_absolute(0x415128,CrtRegionKind::Module)?,32)?.known_scalar()?;
-  captured.original_check(rt.thread,selector)
+  captured.cxx_original_check(rt.thread,selector)
  }}
+ fn numeric_esp(&self)->Result<CrtPointer,&'static str>{{self.esp.ok_or("C++ unwind requires numeric captured ESP")}}
  fn retire(&mut self){{self.live=false;}}
 }}
 "#
@@ -755,11 +761,12 @@ pub(crate) fn invocation_source() -> &'static str {
     INVOCATION
 }
 const INVOCATION: &str = r#"
-impl CrtCxxContext{ /// Bind the already checked normal event's scalar ESP to its declared stack.
- /// This refines authority locally; it performs no guest CONTEXT store.
+impl CrtCxxContext{ /// Preserve the checked event's exact scalar knowledge.
+ /// A partial value grants predicate observations only, never a stack pointer.
+ /// This performs no guest CONTEXT store or capture acquisition.
  fn bind_normal(rt:&CrtStreamRuntime,owner:&CrtCpu,frame:&CrtPtdFrame,objects:&CrtNormalObjects,stack:CrtPointer)->Result<Self,&'static str>{
-  let esp=rt.offset(stack,i64::from(objects.captured_esp)-i64::from(stack.address()))?;
-  let token=Self{anchor:rt.anchor,thread:rt.thread,outer:owner.return_id,bp:frame.bp,context:objects.context,stack,esp,esp_value:CrtValue::scalar(objects.captured_esp),live:true};
+  let esp=match objects.captured_esp{CrtValue::Scalar{bits,known:u32::MAX}=>Some(rt.offset(stack,i64::from(bits)-i64::from(stack.address()))?),CrtValue::Scalar{..}=>None,_=>return Err("normal captured ESP requires scalar knowledge")};
+  let token=Self{anchor:rt.anchor,thread:rt.thread,outer:owner.return_id,bp:frame.bp,context:objects.context,stack,esp,esp_value:objects.captured_esp,live:true};
   token.check(rt,owner,frame)?;Ok(token)
  }
 }
@@ -777,7 +784,7 @@ impl CrtCxxInvocation{
   event.validate_pending(rt,epoch)?;
   if event.delivery!=CrtNormalDelivery::Pending||epoch.delivery.is_some(){return Err("C++ invocation nested/active delivery unbound");}
   let value=Self{anchor:rt.anchor,identity:event.identity,epoch:event.epoch,event:event.generation,parent:event.frame,
-   owner:owner.return_id,bp:frame.bp,metadata:record.metadata,exception,context:context.context,esp:context.esp,
+   owner:owner.return_id,bp:frame.bp,metadata:record.metadata,exception,context:context.context,esp:context.numeric_esp()?,
    flags:2|u32::from(event.noncontinuable),phase:CxxInvocationPhase::Pending,lease:None,target:cxx_handler_identity()};
   value.objects(event.code,rt,owner,frame,record,context)?;Ok(value)
  }
@@ -785,7 +792,7 @@ impl CrtCxxInvocation{
   context.check(rt,owner,frame)?;record.state(rt,owner,frame)?;
   if self.target!=cxx_handler_identity()||frame.handler!=self.target[0]||record.metadata.address()!=self.target[1]{return Err("C++ invocation executed handler identity");}
   if rt.anchor!=self.anchor||rt.owner!=self.identity.owner||rt.thread!=self.identity.instance||owner.return_id!=self.owner
-   ||frame.bp!=self.bp||record.metadata!=self.metadata||context.context!=self.context||context.esp!=self.esp
+   ||frame.bp!=self.bp||record.metadata!=self.metadata||context.context!=self.context||context.esp!=Some(self.esp)
    ||self.exception.kind!=CrtRegionKind::Context||self.exception.address()%4!=0
    ||u64::from(self.exception.address())<u64::from(self.context.address())+716&&u64::from(self.context.address())<u64::from(self.exception.address())+80{
    return Err("C++ invocation foreign owner/context or alias");

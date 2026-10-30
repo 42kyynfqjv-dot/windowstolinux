@@ -175,7 +175,7 @@ remaining nonempty EH4 selection/containment and actual captured-context gate.
 | Noncontinuable flag bit | Produced from dwExceptionFlags; all reserved/system bits stay unknown until a separate delivered-flags contract |
 | Nested-record link | Explicit supplied null input for the existing non-nested domain |
 | Exception address, unused information | Unknown; never filled with zero or guessed from CALL PC |
-| Saved CONTEXT / ESP | Supplied captured object; exact identity/value/lifetime validated, no acquisition claim |
+| Saved CONTEXT / ESP | Supplied captured object; exact value/known-mask and identity/lifetime validated. Numeric or unambiguous masked bound observations; no acquisition claim |
 | Saved general registers / flags | Never copied from raised-call registers as a substitute for capture |
 | Incoming owned predecessor | Must be a live linked registration; handler storage/effects still need composition |
 | Borrowed root / dispatcher | Reject without containment proof; no default incoming handler or empty-chain assumption |
@@ -195,13 +195,19 @@ linked root. The37-case selector adds changed epoch head/selection and retired
 incoming owner, retaining record/capture/code/lifetime cases. This is root
 attribution, not authorization to run an unknown incoming handler.
 
-The concrete next capture gate is documented in THREAD-CHAIN.md: connect the
-existing event-owned predicate representation to the live numeric context path
-only under a code/effect observation certificate. The current u32 ESP and C++
-stack-pointer refinements cannot consume that capability. This is a bounded
-Astra High architecture step; choosing a numeric witness or filling context bytes
-would invent observable state. Existing valid-stack/interception premises remain
-explicit, and full startup/rcedit support remains unproven.
+The live capture representation now preserves partial known bits and derives only
+unambiguous stack comparisons. Normal EH4 and selected C++ original paths share
+that view; partial values carry no numeric stack pointer and cannot satisfy the
+numeric unwind contract. The source event, object lifetime and exact value/mask
+remain checked before effects and receipt consumption. The 47 ordered cases and
+independent exhaustive small-bit oracle are described in THREAD-CHAIN.md.
+
+Actual capture acquisition remains open: even the new partial high-bit knowledge
+is a supplied component input. The older opaque OwnedEvent predicates have a
+different source/lifetime contract. Connecting them requires a same-event,
+code/effect observation certificate, not selecting a numeric witness or asserting
+unknown high bits. A wholly unknown capture, raw numerical extraction, changed
+capture and stale storage still reject. Full startup/rcedit stays unsupported.
 
 Review correction: the argument producer's full ExceptionFlags mask was not
 justified. It now produces only known bit0; reserved/system bits stay unknown.
@@ -219,3 +225,16 @@ PE/harness/mutant hashes. New Windows observations and whole-PE pairs remain zer
 Reviewed12e0e22 pinned jobs passed; Rust runs40977516921/40977509102 each had eight
 passed jobs and final Linux123811087881/123810696537 still active at inspection.
 No failure was observed; passing checks do not explain historical timeouts.
+
+The reviewed 36eeb34 completed all three workflows successfully:
+40979161128,40979155479 and40979155599. These are exact predecessor conclusions,
+not validation of this changed capture-view head or a diagnosis of old timeouts.
+
+Capture-view validation passed all 223 CRT tests, all 175 root tests, all-target
+Clippy and the retained-artifact checker. The observation-dependent test passed
+separately. The checker retained five recorded Windows wrapper comparisons and
+executed all 47 ordered cases; zero fresh Windows observations and zero whole-PE
+pairs are claimed. The compiled upper-bound mutant was caught by the intended
+unexpected-admission assertion. Current PE, harness, unwind and mutation hashes
+are retained in evidence/cxx-unwind-component.json. No historical timeout cause
+was established.
