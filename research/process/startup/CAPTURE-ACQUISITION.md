@@ -193,7 +193,7 @@ storage seal, manufacture bytes, undo prior writes, or complete the guest event.
 The source CALL and incoming owner remain suspended/live under the prior contract.
 Limits are the existing region budget and at most 32 sealed contexts per runtime.
 
-There are 20 additional native scenarios, bringing ordered search to 69. They
+There are 21 additional native scenarios, bringing ordered search to 70. They
 cover unknown storage through both original handlers; cross-event/source mismatch;
 changed selector/helper; read/write aliases; duplicate issuance; no fabricated
 numeric ESP; stale storage; event destruction; failure with prior writes; forged
@@ -247,8 +247,41 @@ Verified local evidence: 225 CRT tests, 175 root tests and all-target Clippy pas
 the observation-dependent test passes separately against the five retained
 Windows wrapper vectors. The artifact-backed reproduction and both compiled
 mutants use generated Rust SHA256
-`29859347432ad38058fe61effcc3de216c71152239eaecdd27703a566e103d77`.
-The original PE hash remains unchanged. The 20 new lease cases are native-only
+`f806819348e74035b23aff014ac2c13ecc7b0fc8aaf27ae77e5192a3e0662e93`.
+The original PE hash remains unchanged. The 21 new lease cases are native-only
 component cases, not fresh Windows comparisons. Detailed hashes, mutation results,
 limits and the local test setup correction are in
 [unobserved-context-lease.json](evidence/unobserved-context-lease.json).
+
+## Sol review of c3be6ab
+
+Independent inspection found no runtime defect within the implemented component
+domain. All emitted scalar/string accesses use the sealed load/store route; the
+separate low-I/O memory reader checks the seal before calling its backend. Private
+`load_unsealed` use is limited to scalar loading and lease representation checks.
+The lease never initializes captured bytes or produces stack predicates, and
+normal objects revalidate event, frame, epoch and storage identity. Both actual
+handler calls must produce their original ContinueSearch receipts; failure cannot
+count as a successful positive case.
+
+The added case70 (zero-based mode69) fails the original EH4 normalizer after its
+original earlier write. It strictly checks the scalar-knowledge failure, unchanged
+interrupted registers, retained write, Failed delivery, revoked lease and sealed
+unknown storage. The initial outer expectation incorrectly expected the fixture's
+closing error; it now requires the registry's retained first scalar-knowledge error,
+matching the handler assertion and existing mode12. This changes tests only.
+
+The smallest next executable proof is a closed original ContinueSearch call graph
+summary: derive context-pointer transport and memory observations through the EH4
+prefix/normalizer/guard/context/terminal return and selected C++ prefix/common/
+dispatcher/cached getter under explicit record, metadata and PTD predicates. Walk
+every reachable branch under those predicates; reject unresolved callees, raw
+reads/writes, escapes and unproved effects. Bind the summary to original bytes,
+call targets and the RaiseException import identity, then require it at the issuer.
+Do not mint it from the runtime phase, a component result or supplied ESP.
+
+That conditional summary still needs independently justified producers for delivered
+flags/nested link, selector, metadata/PTD/FLS and incoming-chain containment before
+whole-program admission. Numeric acquisition/restoration and non-bypass observations
+remain separate proof obligations. This is the concrete Astra scope; Sol can
+verify CI and review the new proof. Full startup/rcedit stays unsupported.

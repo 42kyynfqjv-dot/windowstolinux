@@ -2,12 +2,12 @@
   "kind": "same-event no-read CONTEXT lease; connected original handler component, not capture acquisition or whole-PE translation",
   "review_base": "5615c2bc4c50d949d0a22e5bad571417a1954df8",
   "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
-  "rust_sha256": "29859347432ad38058fe61effcc3de216c71152239eaecdd27703a566e103d77",
+  "rust_sha256": "f806819348e74035b23aff014ac2c13ecc7b0fc8aaf27ae77e5192a3e0662e93",
   "original_context_helper_sha256": "2472c01cd9c5e286219ff8c07890ba030015dd8c4cdc62608ad79ffbd147b693",
   "observations_sha256": "0feb586c7170dfd7e2390cf92ce1e5efa050c3e208d6c8903312e2d054c506cc",
   "vectors_sha256": "6f9b74742366c0f207d397ccf8b1af4afc2d01b34fae21cafb68d38d71a6ec66",
-  "ordered_native_cases": 69,
-  "new_no_read_lease_cases": 20,
+  "ordered_native_cases": 70,
+  "new_no_read_lease_cases": 21,
   "recorded_windows_wrapper_comparisons": 5,
   "new_windows_observations": 0,
   "whole_pe_pairs": 0,
@@ -27,8 +27,8 @@
   "independent_compiled_mutants": {
     "unobserved-read": {
       "kind": "unobserved-read proof mutation; native component only",
-      "source_sha256": "29859347432ad38058fe61effcc3de216c71152239eaecdd27703a566e103d77",
-      "mutant_sha256": "730f0993f96820fda971e00431e598a10ea399d5081a5bd48cb4bcbe42c79555",
+      "source_sha256": "f806819348e74035b23aff014ac2c13ecc7b0fc8aaf27ae77e5192a3e0662e93",
+      "mutant_sha256": "084bb5b823a0d55ccca6e582db7ecb40d2e0338306267220034476e338036ab9",
       "returncode": 101,
       "observed": "raw CONTEXT read admitted despite the no-read lease",
       "whole_pe_pairs": 0,
@@ -36,8 +36,8 @@
     },
     "unobserved-epoch": {
       "kind": "unobserved-epoch proof mutation; native component only",
-      "source_sha256": "29859347432ad38058fe61effcc3de216c71152239eaecdd27703a566e103d77",
-      "mutant_sha256": "3b1310f3db98b4806cda2cf348aedbb2d0c6d0641f6170b2bc86b51f41d3c5f2",
+      "source_sha256": "f806819348e74035b23aff014ac2c13ecc7b0fc8aaf27ae77e5192a3e0662e93",
+      "mutant_sha256": "d831f5e8da1773f8c9c1dd21689b777db63c81aba190fe9644ed3f6458bb1d11",
       "returncode": 101,
       "observed": "retained event lease survived the failed registry epoch",
       "whole_pe_pairs": 0,
@@ -82,5 +82,19 @@
       "40983904709": "failure: original-Windows output-probe timeout; unresolved"
     }
   },
-  "historical_windows_timeouts": "unresolved; preserved separately from local test setup failure"
+  "historical_windows_timeouts": "unresolved; preserved separately from local test setup failure",
+  "prior_implementation_rust_sha256": "29859347432ad38058fe61effcc3de216c71152239eaecdd27703a566e103d77",
+  "sol_review": {
+    "base": "c3be6aba931cc1ac3b0a0e703aa3a6013cd73b41",
+    "runtime_changes": false,
+    "finding": "no runtime defect found in bounded event/epoch/access review",
+    "coverage_added": "original EH4 handler fails after actual write; assert same first error, prior write, interrupted registers, revoked lease, unknown sealed bytes, no receipt",
+    "crt_tests_passed": 225,
+    "separate_recorded_wrapper_comparisons": 5,
+    "fresh_windows_observations": 0,
+    "whole_pe_pairs": 0,
+    "clippy": "passed",
+    "initial_new_test_failure": "outer expectation did not account for registry retaining its first error; corrected to the same scalar-knowledge error already required by the handler assertion",
+    "ci": "base workflows still in progress at publication; no failure observed"
+  }
 }

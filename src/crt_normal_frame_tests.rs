@@ -1490,7 +1490,7 @@ fn bound_invocation(){for delivery_mode in 0..34{let prefix=true;let mode=0;
   checked=true;Err::<(),_>("original child unwind completion is not OS delivery/restoration")
  });assert!(result.is_err());assert!(checked,"invocation case {} failed before its assertions",delivery_mode);assert_eq!(rt.initialization,None);assert_eq!(rt.module_references.len(),refs);assert_eq!(rt.memory.read(cache.address(),4).unwrap(),cache_before);assert_eq!(rt.last_os_error,saved_error);
 }}
-fn ordered_search_cases(){for mode in 0..69{
+fn ordered_search_cases(){for mode in 0..70{
  let(m,mut r,main,mut permit)=fixture_with_extra(&[(0x410000,0x420000)]);let mut rt=runtime(&r);let mut checked=false;let mut escaped_event=None;let mut escaped_lease=None;
  let selected=if mode>=21{
   let(mut next,init)=CrtStreamRuntime::new_initializing(r.identity.owner,r.identity.instance,0x8000,65536).unwrap();
@@ -1582,15 +1582,22 @@ fn ordered_search_cases(){for mode in 0..69{
   let mut search=CrtOrderedSearch::begin(&event,&objects,&rt,&c,e,&b).expect("pending source cursor");assert_eq!(search.previous,predecessor);
   if mode==10{rt.store(rt.resolve_absolute(0x402210,CrtRegionKind::Module)?,8,CrtValue::scalar(0x90))?;}
   if mode==11{search.handler+=1;}
-  if mode==12{rt.store(rt.resolve_absolute(0x41ccb8,CrtRegionKind::Module)?,32,CrtValue::Scalar{bits:0,known:0})?;}
+  if mode==12||mode==69{rt.store(rt.resolve_absolute(0x41ccb8,CrtRegionKind::Module)?,32,CrtValue::Scalar{bits:0,known:0})?;}
   if mode==13{search.current=predecessor;}
   if mode==14{search.event+=1;}
   if mode==19{assert_eq!(CrtNormalException::issue(&mut rt,&mut c,e,&b,raise_site()).err(),Some("normal exception nested delivery contract unbound"));assert_eq!(event.delivery,CrtNormalDelivery::Pending);}
   let returned=original_live_search_return_dispatch(&mut search,&mut event,&objects,&mut rt,&c,e,&b,&mut d,0x401900);
-  if (10..=14).contains(&mode){
-   let expected=match mode{10=>"live search original code/table changed",12=>"CRT scalar knowledge/type",_=>"ordered search stale source/order/children"};
+  if (10..=14).contains(&mode)||mode==69{
+   let expected=match mode{10=>"live search original code/table changed",12|69=>"CRT scalar knowledge/type",_=>"ordered search stale source/order/children"};
    assert_eq!(returned.err(),Some(expected),"dispatch negative {mode}");
-   if mode==12{assert_eq!(c.r,saved);assert_eq!(rt.load(rt.resolve_absolute(0xbfac,CrtRegionKind::Stack)?,32)?,CrtValue::scalar(1));assert_eq!(event.delivery,CrtNormalDelivery::Failed);}
+   if mode==12||mode==69{assert_eq!(c.r,saved);assert_eq!(rt.load(rt.resolve_absolute(0xbfac,CrtRegionKind::Stack)?,32)?,CrtValue::scalar(1));assert_eq!(event.delivery,CrtNormalDelivery::Failed);}
+   if mode==69{
+    let lease=objects.unobserved.as_ref().unwrap();assert!(!lease.live.get());
+    assert_eq!(lease.validate(&rt),Err("unobserved context expired/foreign lease"));
+    assert_eq!(rt.load(context,32),Err("unobserved context raw read requires acquisition proof"));
+    assert_eq!(rt.store(context,32,CrtValue::scalar(0)),Err("unobserved context write requires effect proof"));
+    assert!((0..716).all(|i|matches!(rt.load_unsealed(rt.offset(context,i).unwrap(),8).unwrap(),CrtValue::Scalar{known,..}if known&255==0)));
+   }
    checked=true;return Err("ordered rejection checked");
   }
   let mut returned=returned.expect("receipt follows actual original prefix and terminal RET");
@@ -1669,7 +1676,7 @@ fn ordered_search_cases(){for mode in 0..69{
    assert_eq!(taken,Err(expected),"consume negative {mode}");assert_ne!(search.current,predecessor);
   }
   checked=true;Err::<(),_>("ordered rejection checked")
- });assert_eq!(result,Err(if mode==12{"CRT scalar knowledge/type"}else{"ordered rejection checked"}),"outer case {mode}");assert!(checked,"case {mode} did not reach its required assertion");
+ });assert_eq!(result,Err(if mode==12||mode==69{"CRT scalar knowledge/type"}else{"ordered rejection checked"}),"outer case {mode}");assert!(checked,"case {mode} did not reach its required assertion");
  if mode==64{let lease=escaped_lease.unwrap();assert!(lease.live.get(),"event deliberately retained outside epoch");assert!(!lease.epoch_live.get());assert_eq!(lease.validate(&rt),Err("unobserved context expired/foreign lease"));drop(escaped_event);assert!(!lease.live.get());}
 }}
 fn live_return_cases(){
