@@ -1,0 +1,20 @@
+{
+  "kind": "Freeze before original Windows evaluation; no converter tuning",
+  "sources": {
+    "provider_attach.c": "44015acd0d82e5a82daf4a1c0cf5d9bea06a0f539f32e98ca7725e1aa4792cd5",
+    "provider_load_probe.c": "f41abb8aaa83164ea448479c222087561a6ed6a1130ee5a6bd2e4e9a1ed32fc1"
+  },
+  "configuration": "MSVC14.44 x86 /O2 /MT; DLL /LD ACCEPT_ATTACH=0 or1; absolute-path flags0x900",
+  "expected": {
+    "failed_loads": 2,
+    "errors": [
+      1114,
+      1114
+    ],
+    "failed_module_absent_after_each": true,
+    "success_control_value": 7,
+    "one_release_retains": true,
+    "final_owned_release_unloads": true
+  },
+  "limits": "authored DLL only; no API-set first-load or critical-section allocation-failure conclusion"
+}

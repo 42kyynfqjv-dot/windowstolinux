@@ -653,3 +653,9 @@ not Windows Ex BOOL-zero/LastError equivalence or provider initial state. Origin
 entry still rejects LoadLibraryExW at0x402b00. See [SYNC-RESOURCES.md](SYNC-RESOURCES.md)
 for the exact resource contract and next external-effect decision; no API-set
 admission follows merely from fixed storage.
+
+Provider initialization failure evidence is now frozen independently using an
+authored rejecting DllMain and accepting control, in a separate Windows job.
+This closes no execution gate until measured; failed-load namespace rollback is
+separate from rollback of arbitrary initializer effects. Original entry remains
+0x402b00. See [PROVIDER-FAILURE.md](PROVIDER-FAILURE.md).
