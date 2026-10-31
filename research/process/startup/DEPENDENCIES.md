@@ -1,5 +1,25 @@
 # Remaining entry-to-exit dependencies
 
+## Current executable checkpoint: native launch metadata and shared handle lifetime
+
+The optional `w2l-native-startup-metadata-v1` extension defines a native launch
+without a Windows CRT serialized inheritance block. Under this additional explicit
+policy, the unchanged `0x408537` body executes GetStartupInfoW and its actual
+empty-inheritance branch, returns, and reaches **CALL `0x4086c3 -> 0x4085e7`**
+(the standard-handle initializer). That call still rejects before execution.
+The former second-fiber profile without this extension still stops at GetStartupInfoW.
+
+The 68-byte output has a known `cb`, zero `cbReserved2` and null `lpReserved2`;
+all other fields stay unknown. This is declared native launch metadata, not an
+acquisition or observation of a Windows parent's startup records. Nonempty CRT
+inheritance and actual standard handles remain unproduced. Descriptor identities
+now permit a shared handle and propagate successful or unobserved close effects
+to all aliases; numeric reuse cannot restore old authority.
+
+[Contract, independent regressions and exact next producer scope](STARTUP-METADATA.md).
+No new Windows observation/ELF pair, default admission or full startup/rcedit claim.
+Earlier checkpoints below are historical.
+
 ## Current executable checkpoint: original descriptor manager and 64 record locks
 
 Callback8 now executes its EH4 prolog/lock7 and original nested manager/constructor.

@@ -35,19 +35,35 @@ impl CrtResidentLoader {
 /// Explicit native replacement environment, not an inferred Windows loader state.
 /// Mapping revision 1 is grounded in the x86 Windows 10.0.20348 observation.
 /// Only this named domain is supported; no generic Windows version claim follows.
-struct CrtNativePlatform {anchor:guest_memory::Capability,function:CrtFunction,fls:Option<CrtFunction>,fls_set:Option<CrtFunction>,second_fiber:bool}
+struct CrtNativePlatform {anchor:guest_memory::Capability,function:CrtFunction,fls:Option<CrtFunction>,fls_set:Option<CrtFunction>,second_fiber:bool,startup_metadata:bool}
 impl CrtNativePlatform {
  const PROFILE:&'static str="w2l-native-sync-20348-v1";
  const CONTRACT:&'static str="api-ms-win-core-synch-l1-2-0";
  const SECOND_FIBER_PROFILE:&'static str="w2l-native-second-fiber-20348-2398cc6a-v1";
  fn enable_second_fiber(&mut self,rt:&CrtStreamRuntime,init:CrtInitialization,profile:&str)->Result<(),&'static str>{self.validate(rt,init)?;if profile!=Self::SECOND_FIBER_PROFILE||self.second_fiber{return Err("second fiber profile unsupported/already enabled");}self.second_fiber=true;Ok(())}
+ /// Native launch ABI v1 has no Windows CRT serialized inheritance block.
+ /// Other STARTUPINFO fields are deliberately unknown, not guessed host values.
+ const STARTUP_PROFILE:&'static str="w2l-native-startup-metadata-v1";
+ fn enable_startup_metadata(&mut self,rt:&CrtStreamRuntime,init:CrtInitialization,profile:&str)->Result<(),&'static str>{
+  self.validate(rt,init)?;if profile!=Self::STARTUP_PROFILE||!self.second_fiber||self.startup_metadata{return Err("native startup metadata profile unsupported/already enabled");}self.startup_metadata=true;Ok(())
+ }
+ fn startup_info_call(&self,rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,init:CrtInitialization)->Result<CrtValue,&'static str>{
+  self.validate(rt,init)?;if !self.startup_metadata{return Err("startup GetStartupInfoW effects unbound at 0x408543");}
+  cpu.validate_active(rt)?;
+  if cpu.return_pop!=4||cpu.r[4]!=cpu.entry[4]||[3,5,6,7].iter().any(|&r|cpu.r[r]!=cpu.entry[r]){return Err("startup info ABI");}
+  let sp=CrtCpu::pointer(cpu.r[4])?;rt.offset(sp,8)?;
+  rt.memory.validate_writable(sp.cap,sp.owner,sp.address(),8).map_err(|_|"startup info call stack permission")?;
+  let p=CrtCpu::pointer(rt.load(rt.offset(sp,4)?,32)?)?;
+  rt.native_startup_info_output(init,p)?;
+  cpu.clobber(CrtValue::Scalar{bits:0,known:0});cpu.finish_pop(rt,4)
+ }
  fn prepare(rt:&mut CrtStreamRuntime,init:CrtInitialization,profile:&str,handle:u32,address:u32)->Result<Self,&'static str>{
   rt.initialization(init)?;if profile!=Self::PROFILE{return Err("native platform profile unsupported");}
   // Native bootstrap executes before guest entry. A failed bootstrap issues no
   // guest LoadLibrary result, fabricated LastError or DLL initialization receipt.
   let ticket=rt.provider_begin(init,"kernelbase.dll",handle,1)?;
   let(_,function)=rt.provider_initialize_sync(init,&ticket,address)?;
-  Ok(Self{anchor:rt.anchor,function,fls:None,fls_set:None,second_fiber:false})
+  Ok(Self{anchor:rt.anchor,function,fls:None,fls_set:None,second_fiber:false,startup_metadata:false})
  }
  /// Explicit optional native kernel32/FLS service, prepared before entry.
  fn enable_fls(&mut self,rt:&mut CrtStreamRuntime,init:CrtInitialization,handle:u32,address:u32)->Result<(),&'static str>{
@@ -242,5 +258,33 @@ let ids=r.providers[&f.module.handle].exports.clone();r.providers.get_mut(&f.mod
 r.provider_destroy(i,f.module).unwrap();assert!(r.native_api_identity(f).is_err());assert_eq!(p.load(&mut r,i,"kernel32",0,0x800),Err("CRT unloaded module"));assert_eq!(r.fls_indices.len(),0);
 "#,
         "explicit-fls-provider",
+    );
+}
+
+#[test]
+fn startup_metadata_profile_preserves_void_abi_and_failure_ordering() {
+    crate::crt_stream_callees_tests::native(
+        TYPES,
+        r#"
+for mode in 0..10{
+ let(mut rt,init)=CrtStreamRuntime::new_initializing(7,9,0x8000,32768).unwrap();
+ let mut platform=CrtNativePlatform::prepare(&mut rt,init,CrtNativePlatform::PROFILE,0x700000,0x701000).unwrap();
+ assert!(platform.enable_startup_metadata(&rt,init,CrtNativePlatform::STARTUP_PROFILE).is_err());
+ platform.enable_second_fiber(&rt,init,CrtNativePlatform::SECOND_FIBER_PROFILE).unwrap();
+ assert!(platform.enable_startup_metadata(&rt,init,"unrecognized-launch").is_err());
+ if mode!=1{platform.enable_startup_metadata(&rt,init,CrtNativePlatform::STARTUP_PROFILE).unwrap();assert!(platform.enable_startup_metadata(&rt,init,CrtNativePlatform::STARTUP_PROFILE).is_err());}
+ let stack=rt.map_region(0xa000,512,CrtRegionKind::Stack,Some(&[0x55;512])).unwrap();let out=rt.offset(stack,64).unwrap();let sp=rt.offset(stack,384).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(700)).unwrap();let mut c=CrtCpu::new(sp,700).unwrap();
+ let argument=if mode==5{rt.offset(sp,-8).unwrap()}else{out};c.push(&mut rt,CrtValue::Pointer(argument)).unwrap();let before=rt.memory.read(out.address(),68).unwrap().to_vec();
+ if mode==6{rt.end_initialization(init).unwrap();}if mode==7{rt.provider_destroy(init,platform.function.module).unwrap();}if mode==8{rt.thread+=1;}
+ let result=c.call_activation(&mut rt,0x430000,4,|rt,c|{
+  if mode==2{c.r[3]=CrtValue::scalar(123);}if mode==3{c.return_pop=0;}if mode==4{c.return_id+=1;}
+  platform.startup_info_call(rt,c,init)
+ });
+ if mode==0||mode==9{
+  assert_eq!(result,Ok(CrtValue::Scalar{bits:0,known:0}));assert_eq!(c.r[4],CrtValue::Pointer(sp));assert!(!c.returned);assert!(c.r[0].known_scalar().is_err());assert_eq!(rt.load(out,32).unwrap(),CrtValue::scalar(68));assert_eq!(rt.load(rt.offset(out,50).unwrap(),16).unwrap(),CrtValue::scalar(0));assert_eq!(rt.memory.read(out.address()-4,4).unwrap(),&[0x55;4]);assert_eq!(rt.memory.read(out.address()+68,4).unwrap(),&[0x55;4]);
+ }else{assert!(result.is_err(),"bad call mode {mode} must reject");assert_eq!(rt.memory.read(out.address(),68).unwrap(),before,"failed preflight must preserve metadata output");}
+}
+"#,
+        "startup-metadata-native-profile-abi",
     );
 }

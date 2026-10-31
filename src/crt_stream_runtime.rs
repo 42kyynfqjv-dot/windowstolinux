@@ -8,7 +8,7 @@ enum CrtRegionKind {File,Descriptor,Module,Input,Stack,Buffer,Result,Context,Thr
 struct CrtPointer {cap:guest_memory::Capability,owner:guest_memory::Owner,base:u32,size:u32,address:u32,kind:CrtRegionKind}
 impl CrtPointer {fn address(self)->u32{self.address}}
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
-struct CrtDescriptorId {anchor:guest_memory::Capability,generation:u64,number:u32,handle:u32}
+struct CrtDescriptorId {anchor:guest_memory::Capability,generation:u64,number:u32,handle:u32,handle_generation:u64}
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 struct CrtThreadHead {anchor:guest_memory::Capability,thread:u64,registry:u64,epoch:u64,head:[u64;3]}
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
@@ -1081,10 +1081,26 @@ impl CrtStreamRuntime {
   if self.overlapping_tags(p.base,p.size).iter().any(|(_,v)|matches!(v,CrtValue::OpaqueSaved(_)|CrtValue::ProtectedReturn(_)|CrtValue::ThreadHead(_))){return Err("CRT retirement before protected restoration");}
   self.reserve_retirement()?;self.memory.release(p.cap,p.owner).map_err(|_|"CRT region release")?;self.regions.remove(index);self.retired.push(root);if self.errno_cell.is_some_and(|p|p.cap==root.cap){self.errno=None;}self.tags.retain(|&a,_|a<p.base||u64::from(a)>=u64::from(p.base)+u64::from(p.size));self.partial.retain(|&a,_|a<p.base||u64::from(a)>=u64::from(p.base)+u64::from(p.size));Ok(())
  }
+ /// Output effect for the explicitly selected native launch ABI, which has
+ /// no Windows CRT inheritance block. This is not acquisition of Windows data.
+ fn native_startup_info_output(&mut self,init:CrtInitialization,p:CrtPointer)->Result<(),&'static str>{
+  self.initialization(init)?;self.valid(p,68)?;
+  if p.kind!=CrtRegionKind::Stack||!self.overlapping_tags(p.address(),68).is_empty()||self.unobserved_contexts.iter().any(|(q,_)|q.cap==p.cap){return Err("startup info output role/protected alias");}
+  self.memory.validate_writable(p.cap,p.owner,p.address(),68).map_err(|_|"startup info output permission")?;
+  // Preflight covers every store. Unknown fields stay uninitialized even if
+  // a previous call left known bytes in this storage.
+  for offset in (0..68).step_by(4){self.store(self.offset(p,offset)?,32,CrtValue::Scalar{bits:0,known:0})?;}
+  self.store(p,32,CrtValue::scalar(68))?;
+  self.store(self.offset(p,50)?,16,CrtValue::scalar(0))?;
+  self.store(self.offset(p,52)?,32,CrtValue::scalar(0))?;Ok(())
+ }
  fn bind_descriptor(&mut self,number:u32,handle:u32)->Result<CrtDescriptorId,&'static str>{
-  if self.locks.is_empty()&&self.initialization.is_none()||number>2047||handle==0||handle==u32::MAX||self.descriptors.iter().any(|d|d.live&&(d.id.number==number||d.id.handle==handle)){return Err("CRT descriptor binding/alias");}
+  if self.locks.is_empty()&&self.initialization.is_none()||number>2047||handle==0||handle==u32::MAX||self.descriptors.iter().any(|d|d.live&&d.id.number==number){return Err("CRT descriptor binding/alias");}
   let generation=self.generation.checked_add(1).ok_or("CRT descriptor generation")?;
-  let id=CrtDescriptorId{anchor:self.anchor,generation,number,handle};self.descriptors.push(CrtDescriptor{id,live:true,record:None,record_initialized:false});self.generation=generation;Ok(id)
+  // Equal process handle values share one lifetime, while descriptor numbers
+  // retain separate lock/storage identities. A reused value gets a fresh epoch.
+  let handle_generation=self.descriptors.iter().find(|d|d.live&&d.id.handle==handle).map_or(generation,|d|d.id.handle_generation);
+  let id=CrtDescriptorId{anchor:self.anchor,generation,number,handle,handle_generation};self.descriptors.push(CrtDescriptor{id,live:true,record:None,record_initialized:false});self.generation=generation;Ok(id)
  }
  /// A descriptor lease is separate from FILE locking: low-I/O can be called
  /// without a FILE, and one FILE's lock cannot authorize another descriptor.
@@ -1144,7 +1160,10 @@ impl CrtStreamRuntime {
   if !self.overlapping_tags(p.address+0x18,0x10).is_empty(){return Err("CRT error context protected field");}Ok(())
  }
  fn close_once(&mut self,id:CrtDescriptorId,backend:&mut impl CrtBackend)->Result<bool,&'static str>{
-  self.descriptor(id)?;let closed=backend.close_once(id)?;if closed{self.descriptors.iter_mut().find(|d|d.id==id).ok_or("CRT close identity")?.live=false;}Ok(closed)
+  self.descriptor(id)?;let result=backend.close_once(id);self.last_os_error=None;
+  // An unavailable observation can follow an external effect. Revoke every
+  // cached alias rather than pretending the handle is still known live.
+  if result!=Ok(false){for d in &mut self.descriptors{if d.id.handle==id.handle&&d.id.handle_generation==id.handle_generation{d.live=false;}}}result
  }
  /// Bind the actual accessor result, without initializing the selected cell.
  fn bind_errno_cell(&mut self,p:CrtPointer)->Result<CrtPointer,&'static str>{
@@ -1428,4 +1447,65 @@ let lb=r.lock_file(9,b).unwrap();r.free_buffer(lb,q).unwrap();r.unlock(lb).unwra
 "#,
         );
     }
+}
+
+#[test]
+fn shared_descriptor_handles_close_together_without_reuse_authority() {
+    crate::crt_stream_callees_tests::native(
+        "",
+        r#"
+struct Backend{mode:u8,calls:usize}
+impl CrtBackend for Backend{
+ fn write_once(&mut self,_:CrtDescriptorId,_:&[u8])->Result<CrtWriteResult,&'static str>{panic!("unexpected write")}
+ fn close_once(&mut self,_:CrtDescriptorId)->Result<bool,&'static str>{self.calls+=1;match self.mode{0=>Ok(false),1=>Err("close observation unavailable"),_=>Ok(true)}}
+}
+let(mut rt,init)=CrtStreamRuntime::new_initializing(7,9,0x8000,32768).unwrap();
+let out=rt.bind_descriptor(1,44).expect("stdout must bind");
+let err=rt.bind_descriptor(2,44).expect("stderr may share stdout's handle");
+let duplicate=rt.bind_descriptor(3,45).expect("a duplicated OS handle has a distinct lifetime");
+assert_ne!(out,err);assert_eq!(out.handle_generation,err.handle_generation);assert_eq!(CrtCpu::bits(CrtValue::Handle(out)).unwrap(),(44,u32::MAX));assert_eq!(CrtCpu::bits(CrtValue::Handle(out)),CrtCpu::bits(CrtValue::Handle(err)));
+assert_ne!(out.handle_generation,duplicate.handle_generation);
+assert!(rt.bind_descriptor(1,45).is_err());assert!(rt.bind_descriptor(4,0).is_err());assert!(rt.bind_descriptor(4,u32::MAX).is_err());
+let a=rt.lock_descriptor(9,out).unwrap();let b=rt.lock_descriptor(9,err).unwrap();
+let slot=rt.map_region(0xa000,4,CrtRegionKind::Stack,None).unwrap();rt.store(slot,32,CrtValue::Handle(err)).unwrap();
+let mut backend=Backend{mode:0,calls:0};rt.last_os_error=Some(77);assert_eq!(rt.close_once(out,&mut backend),Ok(false));assert_eq!(rt.last_os_error,None);rt.descriptor_identity(out).unwrap();rt.descriptor_identity(err).unwrap();
+let uncertain=rt.bind_descriptor(4,46).unwrap();let uncertain_alias=rt.bind_descriptor(5,46).unwrap();backend.mode=1;rt.last_os_error=Some(88);assert_eq!(rt.close_once(uncertain,&mut backend),Err("close observation unavailable"));assert_eq!(rt.last_os_error,None);assert!(rt.descriptor_identity(uncertain).is_err());assert!(rt.descriptor_identity(uncertain_alias).is_err());rt.descriptor_identity(out).unwrap();rt.descriptor_identity(err).unwrap();
+backend.mode=2;rt.last_os_error=Some(99);assert_eq!(rt.close_once(out,&mut backend),Ok(true));assert_eq!(rt.last_os_error,None);assert_eq!(backend.calls,3);
+assert!(rt.descriptor_identity(out).is_err());assert!(rt.descriptor_identity(err).is_err());assert!(rt.load(slot,32).is_err());rt.descriptor_identity(duplicate).unwrap();
+assert!(rt.close_once(err,&mut backend).is_err());assert_eq!(backend.calls,3);
+let replacement=rt.bind_descriptor(1,44).unwrap();assert_ne!(replacement.handle_generation,out.handle_generation);assert!(rt.descriptor_identity(out).is_err());assert!(rt.descriptor_identity(err).is_err());
+let replacement_err=rt.bind_descriptor(2,44).unwrap();assert_eq!(replacement.handle_generation,replacement_err.handle_generation);
+let forged=CrtDescriptorId{handle_generation:out.handle_generation,..replacement};assert!(rt.descriptor_identity(forged).is_err());
+rt.unlock_descriptor(b).unwrap();rt.unlock_descriptor(a).unwrap();rt.end_initialization(init).unwrap();
+assert!(rt.descriptor(replacement).is_err());let a=rt.lock_descriptor(9,replacement).unwrap();rt.descriptor(replacement).unwrap();assert!(rt.descriptor(replacement_err).is_err());rt.unlock_descriptor(a).unwrap();
+"#,
+        "shared-process-handle-lifetimes",
+    );
+}
+
+#[test]
+fn native_startup_metadata_layout_unknowns_and_output_preflight() {
+    crate::crt_stream_callees_tests::native(
+        "",
+        r#"
+for mode in 0..11{
+ let(mut rt,init)=CrtStreamRuntime::new_initializing(7,9,0x8000,32768).unwrap();
+ let root=rt.map_region(0xa000,80,CrtRegionKind::Stack,Some(&[0xa5;80])).unwrap();let p=rt.offset(root,4).unwrap();
+ let output=match mode{1=>rt.offset(root,16).unwrap(),2=>{rt.retire_region(root).unwrap();p},3=>rt.map_region(0xb000,68,CrtRegionKind::Input,Some(&[0x77;68])).unwrap(),6=>{let owner=guest_memory::Owner::Stack(9);let cap=rt.memory.map(0xb000,68,owner,guest_memory::Permissions::READ,false).unwrap();let q=CrtPointer{cap,owner,base:0xb000,size:68,address:0xb000,kind:CrtRegionKind::Stack};rt.regions.push(CrtRegion{pointer:q,heap:false,file_owner:None});q},_=>p};
+ if mode==4{rt.store(rt.offset(p,8).unwrap(),32,CrtValue::ProtectedReturn(99)).unwrap();}
+ if mode==5{rt.store(rt.offset(p,8).unwrap(),32,CrtValue::Pointer(root)).unwrap();}
+ if mode==7{rt.end_initialization(init).unwrap();}
+ let token=if mode==8{let other=CrtStreamRuntime::new_initializing(7,9,0x8000,32768).unwrap();other.1}else{init};
+ if mode==9{rt.thread+=1;}
+ let before=rt.memory.read(root.address(),80).ok().map(|x|x.to_vec());let result=rt.native_startup_info_output(token,output);
+ if mode==0||mode==10{
+  assert_eq!(result,Ok(()));assert_eq!(rt.load(p,32).unwrap(),CrtValue::scalar(68));assert_eq!(rt.load(rt.offset(p,50).unwrap(),16).unwrap(),CrtValue::scalar(0));assert_eq!(rt.load(rt.offset(p,52).unwrap(),32).unwrap(),CrtValue::scalar(0));
+  for offset in [4,8,12,16,20,24,28,32,36,40,44,56,60,64]{assert!(rt.load(rt.offset(p,offset).unwrap(),32).unwrap().known_scalar().is_err(),"unobserved field {offset} must stay unknown");}
+  assert_eq!(rt.memory.read(root.address(),4).unwrap(),&[0xa5;4]);assert_eq!(rt.memory.read(root.address()+72,8).unwrap(),&[0xa5;8]);
+  if mode==10{rt.store(rt.offset(p,56).unwrap(),32,CrtValue::scalar(123)).unwrap();rt.native_startup_info_output(init,p).unwrap();assert!(rt.load(rt.offset(p,56).unwrap(),32).unwrap().known_scalar().is_err());}
+ }else{assert!(result.is_err(),"invalid output mode {mode} must reject");assert_eq!(rt.memory.read(root.address(),80).ok().map(|x|x.to_vec()),before,"preflight failure must preserve prior bytes");}
+}
+"#,
+        "native-startup-metadata-output",
+    );
 }
