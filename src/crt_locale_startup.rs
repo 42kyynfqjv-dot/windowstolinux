@@ -85,7 +85,24 @@ pub(crate) fn source() -> Result<String, String> {
         |_, _| Ok(None),
         Some(caller_graph.end),
     )?;
-    out.push_str(&format!("fn locale_aligned_prefix(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:&CrtNativePlatform,epoch:&mut NormalCallEpoch<'_>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;let p=rt.process_image_code(inputs.image,0x40b235,{})?;if rt.memory.read(p.address(),{}).map_err(|_|\"locale aligned code read\")?!=&{prefix:?}{{return Err(\"locale aligned code changed\");}}let mut aligned=CrtAlignedActivation::begin(rt,cpu)?;let _=(||->Result<CrtValue,&'static str>{{{body}}})()?;aligned.live(rt,cpu)?;cpu.tick(u32::MAX)?;cpu.call_activation(rt,0x40b25f,0,|rt,c|locale_reference_original(rt,c,inputs,epoch))?;aligned.live(rt,cpu)?;let caller=rt.process_image_code(inputs.image,0x40b25f,8)?;if rt.memory.read(caller.address(),8).map_err(|_|\"locale caller code read\")?!=[255,115,8,232,85,253,255,255]{{return Err(\"locale code-page caller changed\");}}let _=(||->Result<CrtValue,&'static str>{{{caller_body}}})()?;aligned.live(rt,cpu)?;let value=locale_selected_caller(rt,cpu,inputs,&mut aligned)?;if cpu.returned{{return Ok(value);}}aligned.live(rt,cpu)?;let value=locale_allocated_copy_original(rt,cpu,inputs,&mut aligned)?;if cpu.returned{{return Ok(value);}}aligned.live(rt,cpu)?;return Err(\"locale multibyte initializer effect unbound at 0x40b2c7\");}}",prefix.len(),prefix.len()));
+    let init_call_bytes = crate::crt_ptd::raw(crate::crt_locale_code_page::INITIALIZER_CALL);
+    let init_call_graph = crate::crt_locale_code_page::initializer_call_graph()?;
+    let init_call_body = crate::crt_stream_emit::emit_body_with_exit(
+        &init_call_graph,
+        |pc, target| {
+            if target != Target::Direct(0x40b485) {
+                return Err("locale initializer caller target".into());
+            }
+            Ok(format!("cpu.call_activation(rt,{},0,|rt,c|locale_multibyte_original(rt,c,inputs,platform))?;",pc+init_call_graph.nodes[&pc].length))
+        },
+        &Default::default(),
+        1,
+        |_, _| Err("locale initializer caller thread effect".into()),
+        |_, _| Ok(String::new()),
+        |_, _| Ok(None),
+        Some(init_call_graph.end),
+    )?;
+    out.push_str(&format!("fn locale_aligned_prefix(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:&CrtNativePlatform,epoch:&mut NormalCallEpoch<'_>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;let p=rt.process_image_code(inputs.image,0x40b235,{})?;if rt.memory.read(p.address(),{}).map_err(|_|\"locale aligned code read\")?!=&{prefix:?}{{return Err(\"locale aligned code changed\");}}let mut aligned=CrtAlignedActivation::begin(rt,cpu)?;let _=(||->Result<CrtValue,&'static str>{{{body}}})()?;aligned.live(rt,cpu)?;cpu.tick(u32::MAX)?;cpu.call_activation(rt,0x40b25f,0,|rt,c|locale_reference_original(rt,c,inputs,epoch))?;aligned.live(rt,cpu)?;let caller=rt.process_image_code(inputs.image,0x40b25f,8)?;if rt.memory.read(caller.address(),8).map_err(|_|\"locale caller code read\")?!=[255,115,8,232,85,253,255,255]{{return Err(\"locale code-page caller changed\");}}let _=(||->Result<CrtValue,&'static str>{{{caller_body}}})()?;aligned.live(rt,cpu)?;let value=locale_selected_caller(rt,cpu,inputs,&mut aligned)?;if cpu.returned{{return Ok(value);}}aligned.live(rt,cpu)?;let value=locale_allocated_copy_original(rt,cpu,inputs,&mut aligned)?;if cpu.returned{{return Ok(value);}}aligned.live(rt,cpu)?;let q=rt.process_image_code(inputs.image,0x40b2c7,5)?;if rt.memory.read(q.address(),5).map_err(|_|\"locale initializer caller read\")?!=&{init_call_bytes:?}{{return Err(\"locale initializer code changed\");}}let _=(||->Result<CrtValue,&'static str>{{{init_call_body}}})()?;return Err(\"locale initializer result continuation unbound\");}}",prefix.len(),prefix.len()));
     out.push_str(&reference_source()?);
     out.push_str(&crate::crt_locale_code_page::source()?);
     out.push_str(&crate::crt_malloc::source()?);

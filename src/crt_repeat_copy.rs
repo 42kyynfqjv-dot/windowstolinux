@@ -152,3 +152,34 @@ for mode in 0..10{
         "repeated-copy-effects",
     );
 }
+
+#[test]
+fn repeated_copy_permission_boundary_retains_progress_without_replaying_completed_words() {
+    crate::crt_stream_callees_tests::native(
+        "",
+        r#"
+ let(mut rt,_)=CrtStreamRuntime::new_initializing(7,9,0x8000,1048576).unwrap();
+ let stack=rt.map_region(0xa000,4096,CrtRegionKind::Stack,None).unwrap();
+ let sp=rt.offset(stack,2048).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(99)).unwrap();
+ let mut c=CrtCpu::new(sp,99).unwrap();
+ let src=rt.map_region(0x20000,8,CrtRegionKind::Stack,Some(&[1,0,0,0,2,0,0,0])).unwrap();
+ let region=rt.map_region(0x30000,8192,CrtRegionKind::Module,Some(&[0;8192])).unwrap();
+ let dst=rt.offset(region,4092).unwrap();let second=rt.offset(dst,4).unwrap();
+ let output=rt.map_region(0x40000,4,CrtRegionKind::Stack,Some(&[0;4])).unwrap();
+ rt.memory.protect_data_with_old((region.cap,region.owner,second.address(),4),2,(output.cap,output.owner,output.address())).unwrap();
+ c.r[1]=CrtValue::scalar(2);c.r[6]=CrtValue::Pointer(src);c.r[7]=CrtValue::Pointer(dst);
+ c.flags=CrtFlags{cf:Some(true),zf:Some(false),sf:Some(true),of:Some(false)};
+ let old=c.r;assert_eq!(c.repeat_move_dwords(&mut rt,2),Err("CRT storage write"));
+ assert_eq!(rt.load(dst,32).unwrap(),CrtValue::scalar(1));assert_eq!(rt.load(second,32).unwrap(),CrtValue::scalar(0));
+ assert_eq!(c.r[1],CrtValue::scalar(1));assert_eq!(c.r[6],CrtValue::Pointer(rt.offset(src,4).unwrap()));assert_eq!(c.r[7],CrtValue::Pointer(second));
+ for r in [0,2,3,4,5]{assert_eq!(c.r[r],old[r]);}assert_eq!((c.flags.cf,c.flags.zf,c.flags.sf,c.flags.of),(Some(true),Some(false),Some(true),Some(false)));assert!(!c.returned);
+ // This is explicit component reentry after a checked guest permission repair,
+ // not a claim that Windows exception capture/resumption has been implemented.
+ rt.memory.protect_data_with_old((region.cap,region.owner,second.address(),4),4,(output.cap,output.owner,output.address())).unwrap();
+ rt.store(src,32,CrtValue::scalar(77)).unwrap();c.repeat_move_dwords(&mut rt,2).unwrap();
+ assert_eq!(rt.load(dst,32).unwrap(),CrtValue::scalar(1));assert_eq!(rt.load(second,32).unwrap(),CrtValue::scalar(2));assert_eq!(c.r[1],CrtValue::scalar(0));
+ assert_eq!(c.r[6],CrtValue::Pointer(rt.offset(src,8).unwrap()));assert_eq!(c.r[7],CrtValue::Pointer(rt.offset(dst,8).unwrap()));
+ "#,
+        "repeated-copy-permission-progress",
+    );
+}

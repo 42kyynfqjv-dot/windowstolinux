@@ -1,0 +1,8 @@
+{
+  "toolchain": "official MSVC14.44 x86, SDK10.0.26100; Windows2022 CI",
+  "sources": {
+    "code_page_probe.c": "7e35a185e2e696e65c85007bf550c71ea16f3bf2a8e60d67de16008516d72a60",
+    "code-page-expectations.json": "209e97d6696e102b945daae1cf103fd0ae9c530aed0a22b15430961772832101"
+  },
+  "scope": "freeze before API binding/converter evaluation; original observations only; no target ACP inference"
+}

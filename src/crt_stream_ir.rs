@@ -287,6 +287,38 @@ fn extended(i: &Instruction, raw: &[u8], tables: &[JumpTable<'_>]) -> Result<Op,
             Operand::Immediate(i.immediate8to16() as u16 as u32),
         )));
     }
+    // Word loads use the same partial-register semantics as existing slices:
+    // preserve upper bits/knowledge, and never promote numeric bytes to pointers.
+    if i.code() == Code::Mov_r16_rm16
+        && raw.starts_with(&[0x66, 0x8b])
+        && i.op1_kind() == OpKind::Memory
+        && !i.has_lock_prefix()
+        && i.segment_prefix() == Register::None
+    {
+        let index = match i.op0_register() {
+            Register::AX => 0,
+            Register::CX => 1,
+            Register::DX => 2,
+            Register::BX => 3,
+            Register::SP => 4,
+            Register::BP => 5,
+            Register::SI => 6,
+            Register::DI => 7,
+            _ => return Err("CRT word load destination".into()),
+        };
+        let Operand::Memory(address, _) = operand_from_move(i, 1)? else {
+            return Err("CRT word load source".into());
+        };
+        return Ok(Op::Ordinary(Operation::Binary(
+            Binary::Move,
+            Operand::Reg(Reg {
+                index,
+                width: 16,
+                shift: 0,
+            }),
+            Operand::Memory(address, 16),
+        )));
+    }
     // Word stores preserve flags and upper source bits. Only a memory
     // destination is admitted here; this does not add partial register writes.
     if i.code() == Code::Mov_rm16_r16
@@ -517,6 +549,31 @@ fn extended(i: &Instruction, raw: &[u8], tables: &[JumpTable<'_>]) -> Result<Op,
                 && i.memory_size() == iced_x86::MemorySize::UInt32 =>
         {
             Op::DecrementMemory(operand_from_move(i, 0)?)
+        }
+        Mnemonic::Movzx if i.code() == Code::Movzx_r32_rm16 && i.op1_kind() == OpKind::Register => {
+            let index = match i.op1_register() {
+                Register::AX => 0,
+                Register::CX => 1,
+                Register::DX => 2,
+                Register::BX => 3,
+                Register::SP => 4,
+                Register::BP => 5,
+                Register::SI => 6,
+                Register::DI => 7,
+                _ => return Err("CRT word extension register".into()),
+            };
+            let dst = full(i.op0_register())?;
+            if dst.index == 4 {
+                return Err("CRT word extension stack destination".into());
+            }
+            Op::Ordinary(Operation::ZeroExtend(
+                dst,
+                Operand::Reg(Reg {
+                    index,
+                    width: 16,
+                    shift: 0,
+                }),
+            ))
         }
         Mnemonic::Movzx if i.code() == Code::Movzx_r32_rm16 && i.op1_kind() == OpKind::Memory => {
             let Operand::Memory(a, _) = operand_from_move(i, 1)? else {

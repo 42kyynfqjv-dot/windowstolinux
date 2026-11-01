@@ -1,26 +1,33 @@
 # Remaining entry-to-exit dependencies
 
-## Current executable checkpoint: original stores and repeated copies
+## Current executable checkpoint: original initializer reaches validation API
 
-Under the explicit65001 native profile, original40b289..40b2c4 stores the fresh
-allocation pointer, prepares actual stack arguments and executes both REP MOVSD
-copies through owned private stack into the544-byte buffer. Original AND initializes
-its first word; other knowledge follows only actual source reads/stores. It rejects
-at **40b2c7**, before calling initializer40b485. PTD/global references and the actual
-entry's initialized flag remain unchanged. [Contract and tests](LOCALE-REP.md).
+Under the explicit65001 profile, original CALL40b2c7 and initializer40b485 execute
+cookie/frame setup, the existing selector and five-entry table search. Execution
+now rejects at **IsValidCodePage CALL40b4e6/IAT4150cc**, before an API result.
+The caller bytes are checked before activation, and complete original initializer
+bytes before its prolog. Its real selector clears41d144; this prior write and live
+stack/cookie/argument state remain. The544-byte copied buffer has no new semantic
+role or published reference. Actual entry flag41d148 stays0; old references remain.
+[Contract, test scope and frozen conformance](LOCALE-VALIDATION.md).
 
-REP requires a dedicated consumer effect. Existing default/generic thread hooks
-reject it. Within Cdecl32Forward DF0, known bounded count and checked word accesses,
-overlap is sequential; pointer identities and unknown masks are preserved. Later
-rejection retains completed words and exact cursor/count progress, without issuing
-Windows exception/resumption authority. Control tokens cannot be cloned.
+Shared CRT word-register loads/extensions retain knowledge/flags and reject forged
+pointer authority; normalized decoding is not proof of alternate API/helper paths.
+Dedicated REP behavior remains independently checked, including later page-write
+failure and retained progress. [Preserved copy contract](LOCALE-REP.md).
 
-Next connect original initializer40b485: existing selector, five-entry table and
-IsValidCodePage4150cc at40b4e6, UTF8 stores, helper40b090 built-in table loops and
-cookie epilogs, then original reference/publication/cleanup. Actual65001 branches
-bypass GetCPInfo/NLS calls; other code pages remain separate unproved domains.
-Target Windows ACP still needs matched-environment evidence; the manifest observer
-is not that evidence. Heap reference freeing and exceptional cleanup stay unbound.
+Next: measure/bind supported IsValidCodePage behavior without inventing invalid
+results for unsupported encodings, execute original UTF8 fields and helper40b090
+loops/cookie epilogs, then original result/reference/publication/cleanup. Other
+code pages/GetCPInfo/NLS, freeing and exceptional cleanup remain unbound. Target
+Windows ACP still needs matched-environment evidence; explicit-profile success or
+a separate observer's ACP is not default whole-PE support.
+
+At6daf5ad, both Rust CI runs failed different original-Windows launches; other8jobs
+in each and all13startup jobs passed. Both originals had expected output but were
+still alive at15s. Cause unresolved, separate from historical case19. A fixed
+nine-sample exact-image/context experiment preserves every failure and the same
+limits. [Evidence and diagnosis](WINDOWS-LAUNCH-6DAF5AD.md).
 
 ## Previous checkpoint: original comparison and malloc
 

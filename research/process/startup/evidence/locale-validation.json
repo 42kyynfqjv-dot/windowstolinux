@@ -1,0 +1,179 @@
+{
+  "timestamp_utc": "2026-11-01T06:02:01.636314+00:00",
+  "scope": "connected original-instruction components under explicit native65001 profile; full startup/rcedit/default admission unsupported",
+  "source_binding": "source hashes in the enclosing commit; unchanged frozen authored PE and recorded Windows wrapper baselines",
+  "reviewed_base": "6daf5ad5a98ea786084ea86ad1f5077cb8f765f2",
+  "diagnostic_commit": "2eab390d9eb79b7a9ed8dfca41df2e2ece240112",
+  "source_sha256": {
+    "src/crt_locale_code_page.rs": "8d03e7750cf3e1e5cb87c67dd200a9a9ec5bb709c8eb0dfaf1454f9f79a4bd24",
+    "src/crt_locale_startup.rs": "417a1568314b001fda57465a4f6407e6483a299e872f466a1912474754f21dec",
+    "src/crt_repeat_copy.rs": "56f4ffa506ea23a1195943d07f189f3338596e84153749cc4c6bba65769cf5cb",
+    "src/crt_stream_ir.rs": "fd9f03ba3b2177054a465d11c13fd19f4d6efc7ba7759048860fb00e04400f3f",
+    "src/crt_normal_frame_tests.rs": "41da39a8f55fc4341d021a8909c8edb0610e326cb0ef5ce70e22e99ae7301b5f",
+    "research/process/startup/check_normal_wrapper.py": "b3ed5d7f3cd0fd6741a7d8c4b89f53db60d21812db2c188a6bb7486c247b9556",
+    ".github/workflows/startup-inventory.yml": "35b17c8854421da709b2f7ac87c919b953778de27baf268f9b93b0b8f83330c0",
+    "research/process/startup/observe_code_page.py": "5eaf6dd69b3a31084a1b858e432cde23cb2d5872f7af7ffae5fe528775d856cc",
+    "research/process/startup/code_page_probe.c": "7e35a185e2e696e65c85007bf550c71ea16f3bf2a8e60d67de16008516d72a60",
+    "research/process/startup/code-page-expectations.json": "209e97d6696e102b945daae1cf103fd0ae9c530aed0a22b15430961772832101",
+    "research/process/startup/code-page-frozen.json": "1549fa8f61b18f7bc8ea3fd52c4c00c7c0defa6c97d620849207f44dbf84c0f6",
+    "research/process/startup/test_code_page.py": "cb8e5908ea74e449535cce265d04c4a77837e499d2ff89c9fa15920c067c6419",
+    "scripts/diagnose_windows_launch.py": "5a6d1281aed6dc1d42706a1ef686b25b3210b4b05dd5492280819844b38170d8",
+    "scripts/windows_original_contexts.py": "d4bc61442f67cedce10d81b290577f4c3b33491ab73a9f526d03c67d42ca5761",
+    "scripts/windows-original-contexts.json": "765b4c55d278948c2605ce8b3d54f08af68a09126b63ac7ba7175f5175a677ad",
+    "tools/test_original_contexts.py": "632a69cf74b3700678ccd92aea142a7273b84a2e0b0bf680d1af72d77152aec7",
+    "Cargo.lock": "b57ce0bbee252e9480a33413eeccc166dbc2bcf3a368467b117de81bd776523e"
+  },
+  "next_boundary": {
+    "pc": "0x40b4e6",
+    "iat": "0x4150cc",
+    "api": "kernel32.dll!IsValidCodePage",
+    "state": "original frame/cookie, selector and five-entry table execute; argument65001 pushed; no API BOOL or effect issued; initialized flag remains0, old references unchanged; actual second-selector write clears41d144"
+  },
+  "shared_semantics": {
+    "word_load_cases": 40,
+    "word_register_extension_cases": 112,
+    "word_encoding_rejections": 5,
+    "call_budget_order_cases": 2,
+    "locale_declared_cases": 45,
+    "rep_permission_progress_cases": 1,
+    "rep_baseline_vectors": {
+      "overlap": 7,
+      "zero_cursors": 3,
+      "unknown_knowledge": 1,
+      "typed_alias_retirement": 1,
+      "negative_failure_modes": 10
+    },
+    "new_production_worker_admission": false
+  },
+  "review_findings": {
+    "rep_baseline": "no demonstrated runtime defect found; added independent page-permission failure/reentry coverage",
+    "current_implementation": "manual CALL omitted instruction-budget tick; replaced with original-instruction graph emission and strict before-effect tests",
+    "test_corrections": "rejected width forms enabled with shared scalar semantics; CALL tested as instruction not straight-line fragment; unknown bits masked on storage reads; original nested registers/selector effects reflected in oracle; new mutation routes corrected after strict unexpected-success failure",
+    "unsupported_alternates": "other code-page/helper/return paths reject, never treated as success"
+  },
+  "checks": {
+    "crt_example": {
+      "passed": 308,
+      "ignored": 2,
+      "ignored_scope": "both artifact checks executed in complete final replay"
+    },
+    "unwind_example_passed": 185,
+    "startup_python": {
+      "run": 88,
+      "skip": 1
+    },
+    "tools_python": {
+      "run": 106,
+      "skip": 0
+    },
+    "corpus_python": {
+      "run": 18,
+      "skip": 1
+    },
+    "clippy_all_targets": "passed",
+    "fmt": "passed"
+  },
+  "replay": {
+    "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+    "observation_sha256": "0feb586c7170dfd7e2390cf92ce1e5efa050c3e208d6c8903312e2d054c506cc",
+    "vectors_sha256": "6f9b74742366c0f207d397ccf8b1af4afc2d01b34fae21cafb68d38d71a6ec66",
+    "recorded_windows_wrapper_component_comparisons": 5,
+    "new_whole_pe_windows_elf_pairs": 0,
+    "kind": "original prolog/epilog component comparison with explicit unexecuted body boundary",
+    "scope": "Live registry fixture; body EAX/flags inputs; original stack/FS/saved-state restoration only",
+    "report_sha256": "698123889199bb1b8b92e61017d17a3698073ba6098b462ee3aeb694a820369e",
+    "rust_sha256": "c589562e7164c77a019b4f8785712249448592ba086a8490a15715dbf7897b69",
+    "fresh_identical_rust": true,
+    "emission_mtime_before_ns": 1793512780031279985,
+    "emission_mtime_after_ns": 1793512872366648872,
+    "previous_before_call_budget_repair": {
+      "passed_component_comparisons": 5,
+      "rust_sha256": "e92c49eb58a19802b8f55770b1c9fa1758b9e39916e310dec5ad4c5569b0db72",
+      "report_sha256": "d84305da070fd5c18b04a46e1cccdfc2d26b80124a32b0bbccfd9b3e01f34736",
+      "status": "retained pre-repair verification, superseded for final source"
+    }
+  },
+  "original_initializer": {
+    "address": "0x40b485",
+    "length": 517,
+    "sha256": "887987a5a42bd44677e0586dc71eb3e00f4290058f7cee321bdadf18598fa4e1",
+    "caller_address": "0x40b2c7",
+    "caller_sha256": "2e8bb647af3d79dca36c658e3988fe3d8e3d778bf3860c3587688eaba41dce66"
+  },
+  "named_replay_gates": {
+    "native-uninitialized": {
+      "stdout": "e9430575bc2b1f29390d84ccf384c13842b55a57155a691702f05a84bfac2335",
+      "stderr": "29423147df5f27152c143f40399d5189737a902b622fb79efc6e1b2754336583"
+    },
+    "word-register": {
+      "stdout": "6b49c5b71bb00aa4f9f6bd7c783fec9158473b2ad9d357ae07a4506069eaad37",
+      "stderr": "ab1e8ab4b828624e75e6e8c917ac437f104b9cd0b496a9d073a4a52c0abca136"
+    },
+    "repeated-copy": {
+      "stdout": "97d25ec01db4fe29a8111ceb13af90e3bd6e1556ad4d6bdbc157dd9b24d75de8",
+      "stderr": "ab1e8ab4b828624e75e6e8c917ac437f104b9cd0b496a9d073a4a52c0abca136"
+    }
+  },
+  "new_windows_experiments": {
+    "code_page": "frozen original authored x86 API65001/UINT_MAX conformance; CI pending at publication; no converter/targetACP/XP7 claim",
+    "exact_contexts": "nine fixed mandatory original-image samples; CI pending at publication; unchanged timeout15s; all failures count"
+  },
+  "prior_ci": {
+    "source_commit": "6daf5ad5a98ea786084ea86ad1f5077cb8f765f2",
+    "runs": {
+      "41274514852": "failure/original corpus1 launch; other8jobs passed",
+      "41274512166": "failure/original output-probe launch; other8jobs passed",
+      "41274512180": "success/all13jobs"
+    },
+    "evidence": "windows-launch-6daf5ad.json",
+    "cause": "unresolved; both outputs present/processes alive at15s; not shown to involve REP; distinct from historical case19"
+  },
+  "log_sha256": {
+    "repeat-final.log": "6e9f8468a4b327dc498d3e145fe326833503ca6211fd60baa59aab81f4c19056",
+    "word-register-final.log": "ba8fe9f6af1fed528216dada95098934a919c3394196a5ec2b45b13eb53c6133",
+    "replay-final.log": "87d46a3d4344203e8fecf6ac4729d8c314f591d296158e3c01c22aeb9a1a7e0f",
+    "replay.log": "6f027ed72e3a21b165438e36e741c81a467cd74fb172099636748015bd0b65e6",
+    "canonical-state-reviewed.log": "f427c2370a4701658e155e2b57fd7c96fc4a2d12f0290dd215b63ff16db632c4",
+    "startup-python.log": "d3dce8b73b514080534e1738227c16786810840adaa408d3e7366b9c365d9253",
+    "crt-all.log": "46b87073305421807e0b994047f873804438a61b776e364e3267f7fb601e835b",
+    "clippy.log": "c226683d27cf06304397e4ed7438f0e45923bce815abc72640562da91379a346",
+    "canonical-complete.log": "9b0cfdac1346bc4315b5636f3cf92bdfff7c93bcf0e8c5a8435734a66ecd12d8",
+    "canonical-reviewed.log": "f960c3212d5d9a5c71cd0d695d7de661aaf423319846a0cad9507c65110c51ba",
+    "unwind-final.log": "379e4f28745ecb9dc7ce48bba9821b81edea81cc58ad09de44633ac9d4fc5e77",
+    "canonical-initial.log": "386452c886757b46a0824222f0393cd4f741c670a889f9035bee71388a63ba0a",
+    "corpus-python-final.log": "9463427398e1ccbec9941bbd7c02ff4a3de04aecc4692379ad7cd28e4af03c9a",
+    "tools-final.log": "1c6b5ccb55e99793d1d313f12d1d1495397287255c7a797368b4c0680dcb2b85",
+    "word-register.log": "aac061dccec4915b0306ed52ad66a4bcfcb5f5465cb38fedef0737ac12a669fa",
+    "fmt-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "clippy-final.log": "9322a4165e4c10cba76a9ebbcd540c1f4e20b68ea8d284b6cbf762147b9e10f6",
+    "canonical-call-gate.log": "f6d2d1db815bdd454e6d34078c2c5a92d7e550c1b64959e63a8eae15e0452d45",
+    "initializer-graph.log": "366d563fe47151eb8da1c5d1c2769d95d41e8b149ce8e52908ac57f9704bd55a",
+    "code-page-parser.log": "fe008aab760eb03ccac7578e2b84665b1b50b0d7f855b17a0c7a8d039435b658",
+    "rep-review.log": "2bb86040642ff018fffae48542eab9d35f2560db94a043e1c841cfed0c092401",
+    "initializer-graph-supported.log": "49ab2f8fa2bc75a0ce8b2502c3527bc2335b46a29a8fdb19736b5bbb0ab59cca",
+    "initializer-decode-diagnostic.log": "b90353c80461ec7b5d0f46bfb4be93054ef6ce96f9da3b2af82116bd815d6d8e",
+    "unwind-all.log": "fdc7fc9e3f1f2136e7cfff934c49aa98feaa68116a5279706f55c03bccd15d30",
+    "crt-final.log": "d612d29a5f1843e409f6b5c20c053872e043975f6032ccbdb4912bdfe182f68d",
+    "startup-python-final.log": "7f772482714a4f0401916ad4005258d330f65d48d7aa8c8ba2c7c4d044e62038",
+    "fmt.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "call-gate-final.log": "fc767a9dad55d7e0769149cd58d8be59e72b89da8ac046c0a778bfb5aab0509d",
+    "corpus-python.log": "fe8bb58ecf9641c4c3d340c3190d0e536556d774aab3a958a24f55ee28257941",
+    "initializer-graph-final.log": "ef00205d948dec0eaf8884c2eecb093ced819b99fd9a6c539c93eae744d4b9c6",
+    "canonical-final.log": "6430d1e4c2c70e1a9de09dbf99407f6a6e42855cbd557b6ea30c474878603f78",
+    "tools.log": "b45757cb67c7ec4827c8d42913f5cd00db40b216ecb5d4f42919af708fa269c1",
+    "canonical-gated.log": "8f394cb329ee98de5e58e2f507b8e53e77d81389bb8b01a8ffd3f4fd3ede97b1"
+  },
+  "primary_contract": {
+    "url": "https://learn.microsoft.com/en-us/windows/win32/api/winnls/nf-winnls-isvalidcodepage",
+    "download_html_sha256": "3a5cdc917a08a7aab3744a6944c6dca96f2a193d25cd0d8cb9575705f32a21d6",
+    "finding": "valid iff installed on OS; result nonzero/zero. No LastError default inferred."
+  },
+  "limits": [
+    "full formatter/startup/rcedit/default admission",
+    "malloc errno/new-handler effects",
+    "reference freeing and exceptional EH4 cleanup",
+    "Windows capture/delivery/incoming containment/collided unwind",
+    "native close/EOF and wider resource/encoding/XP7 equivalence",
+    "historical case19 and other original-Windows timeouts remain unresolved"
+  ]
+}
