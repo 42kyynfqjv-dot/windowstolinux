@@ -3,7 +3,7 @@
 
 def validate_entry_fp(row):
     fields = ['fp_control', 'fp_status', 'fp_tag', 'fp_mxcsr', 'fp_mxcsr_mask']
-    if type(row.get('fp_context_flags')) is not int or row['fp_context_flags'] & 0x28 != 0x28:
+    if type(row.get('fp_context_flags')) is not int or row['fp_context_flags'] & 0x10028 != 0x10028:
         raise ValueError('FP context categories not acquired')
     for name in fields:
         maximum = 0xffff if name in fields[:3] else 0xffffffff

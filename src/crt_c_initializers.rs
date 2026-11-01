@@ -218,9 +218,9 @@ fn startup_c_array_platform(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&Crt
     let g = cut_graph(
         &bytes,
         0x40155a,
-        0x4015d4,
+        0x4015da,
         &[
-            (0x4015d4, "C initializer post-FP continuation unbound"),
+            (0x4015da, "C initializer configuration call unbound at0x4015da"),
             (0x4015fd, "C initializer fatal path unbound at 0x4015fd"),
         ],
     )?;

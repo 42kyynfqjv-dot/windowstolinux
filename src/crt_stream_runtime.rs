@@ -239,6 +239,18 @@ impl CrtStreamRuntime {
   self.initialization(init)?;if profile!=Self::X87_PROFILE||self.x87.is_some(){return Err("CRT x87 profile unsupported/already bound");}
   self.x87=Some(CrtX87Context{anchor:self.anchor,owner:self.owner,thread:self.thread,init,fiber:None,state:CrtX87State::unknown(),mxcsr_mask:None});Ok(())
  }
+ /// Explicit target-platform policy backed by the retained Win2022 original-entry
+ /// observation. This produces only the declared controls, not host inheritance
+ /// or a universal Windows/XP7 loader guarantee. Original FNCLEX must establish
+ /// exception knowledge; status/tag/data/registers remain unknown here.
+ const NATIVE_FP_PROFILE:&'static str="w2l-win2022-entry-control-027f-mxcsr-1f80-v1";
+ fn initialize_native_fp_profile(&mut self,init:CrtInitialization,profile:&str)->Result<(),&'static str>{
+  self.initialization(init)?;
+  if profile!=Self::NATIVE_FP_PROFILE||self.x87.is_some(){return Err("CRT initial FP profile unsupported/already bound");}
+  if let Some(f)=self.fiber{self.check_fiber(f)?;}
+  let mut state=CrtX87State::unknown();state.control=CrtX87Word{bits:0x027f,known:0xffff};state.mxcsr=CrtValue::scalar(0x1f80);
+  self.x87=Some(CrtX87Context{anchor:self.anchor,owner:self.owner,thread:self.thread,init,fiber:Some(self.fiber),state,mxcsr_mask:Some(0xffbf)});Ok(())
+ }
  fn x87_context(&self,init:CrtInitialization)->Result<CrtX87Context,&'static str>{
   self.initialization(init)?;let mut x=self.x87.ok_or("CRT x87 profile unbound")?;
   if x.anchor!=self.anchor||x.owner!=self.owner||x.thread!=self.thread||x.init!=init{return Err("CRT x87 owner/lifetime");}

@@ -1,6 +1,19 @@
 # Remaining entry-to-exit dependencies
 
-## Current executable checkpoint: owned FP effects, initial control still unknown
+## Current executable checkpoint: opt-in initial controls reach post-FP continuation
+
+The measured Win2022 original-entry observation has CW0x027f and MXCSR0x1f80.
+A versioned explicit profile now produces exactly those two controls in the
+owned guest context. Status, tags and data remain unknown; original FNCLEX
+establishes exception knowledge. This is a declared target policy backed by one
+modern-host observation, not universal Windows/XP7 state or host inheritance.
+
+Under that profile the original entry executes the FP helper and real return,
+then executes the existing original RET0 helper at0x401bbc and PUSH EAX; it rejects at **0x4015da → 0x407158**, the next original configuration-call boundary.
+Legacy unknown-state/default admission remains rejected at0x40d013. See
+[policy and evidence](FP-INITIAL-PROFILE.md). Full startup/rcedit remains unsupported.
+
+## Previous executable checkpoint: owned FP effects, initial control still unknown
 
 The original precision/query call returns through real instructions in supplied
 FP-state component tests, including the MXCSR observation and branch around the
@@ -643,7 +656,7 @@ CALL401967 ->407653. Default admission is unchanged. See
 
 Current executable checkpoint: with an explicitly enabled native FLS service,
 original allocation wrapper/resolver/guard/indirect call and index store execute.
-Entry allocates a process index and retains callback ownership, then rejects at
+Entry allocates a process index and retains callback ownership, then executes the existing original RET0 helper at0x401bbc and PUSH EAX; it rejects at
 setter `0x402981 -> 0x402bef` before publishing a fiber value. Default admission
 remains blocked. [Contract, reproduced stack regression and next gate](FLS-ALLOCATION-WRAPPER.md).
 Earlier boundaries below are historical.
@@ -1108,7 +1121,7 @@ policy/FS frame and separate signal dispatch contracts.
 ## Inline shared exit now reached
 
 Abort's original exit wrapper → `0x406e69` now installs the distinct inline record
-under canonical thread/event ownership, then rejects at actual managed-runtime
+under canonical thread/event ownership, then executes the existing original RET0 helper at0x401bbc and PUSH EAX; it rejects at actual managed-runtime
 query `0x401d51` (GetModuleHandleW plus checked PE-header reads). A supplied return
 mode reaches manager `0x406cfa` and rejects. The original unlink/LEAVE/RET has
 separate native component coverage; body-to-return and process termination are

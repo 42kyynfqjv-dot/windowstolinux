@@ -245,3 +245,20 @@ fn native_control_observations_match_owned_clean_effects_without_host_state_leak
         "fp-native-control",
     );
 }
+
+#[test]
+fn explicit_initial_fp_policy_produces_only_controls_and_rejects_rebinding() {
+    crate::crt_stream_callees_tests::native_bounded_stack(
+        "",
+        r#"
+#[inline(never)] fn one(mode:u32){
+ let(mut rt,init)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();
+ if mode==1{rt.end_initialization(init).unwrap();}if mode==2{rt.configure_x87(init,CrtStreamRuntime::X87_PROFILE).unwrap();let x=rt.x87.as_mut().unwrap();x.state.control=CrtX87Word{bits:0x077e,known:0xffff};x.state.status=CrtX87Word{bits:0x8081,known:0xffff};}
+ let before=rt.x87;let result=rt.initialize_native_fp_profile(init,if mode==3{"host-default"}else{CrtStreamRuntime::NATIVE_FP_PROFILE});
+ if mode==0{result.unwrap();let x=rt.x87.unwrap();let mut expected=CrtX87State::unknown();expected.control=CrtX87Word{bits:0x027f,known:0xffff};expected.mxcsr=CrtValue::scalar(0x1f80);assert_eq!(x.state,expected);assert_eq!(rt.wait_x87(init),Err("CRT x87 exception summary unsupported"));rt.clear_x87_exceptions(init).unwrap();rt.wait_x87(init).unwrap();let current=rt.x87;assert!(rt.initialize_native_fp_profile(init,CrtStreamRuntime::NATIVE_FP_PROFILE).is_err());assert_eq!(rt.x87,current);rt.bind_fiber(rt.thread).unwrap();assert_eq!(rt.wait_x87(init),Err("CRT x87 stationary fiber changed"));}else{assert!(result.is_err(),"invalid profile mode{mode}");assert_eq!(rt.x87,before);}
+}
+for mode in 0..4{one(mode);}
+"#,
+        "initial-fp-profile",
+    );
+}

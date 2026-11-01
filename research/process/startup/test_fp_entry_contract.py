@@ -1,3 +1,6 @@
+import hashlib
+import json
+from pathlib import Path
 import unittest
 from fp_entry_contract import validate_entry_fp
 
@@ -14,8 +17,18 @@ class EntryFP(unittest.TestCase):
             got = validate_entry_fp(row)
             self.assertEqual((got['fp_control'], got['fp_status'], got['fp_mxcsr']), (cw, sw, mx))
 
+    def test_retained_actual_entry_provenance_matches_explicit_control_policy(self):
+        here = Path(__file__).parent
+        r = json.loads((here/'evidence/fp-original-entry-cceed83.json').read_text())
+        raw = (here/'evidence/fp-original-entry-cceed83.jsonl').read_bytes()
+        self.assertEqual(hashlib.sha256(raw).hexdigest(), r['raw_stdout_sha256'])
+        self.assertEqual(hashlib.sha256((here/'observe_entry.c').read_bytes()).hexdigest(), r['source_sha256'])
+        fp = validate_entry_fp(json.loads(raw))
+        self.assertEqual(fp, r['fp_observation'])
+        self.assertEqual((fp['fp_control'], fp['fp_mxcsr']), (0x027f, 0x1f80))
+
     def test_missing_categories_and_unknown_fields_reject(self):
-        for key, value in [('fp_context_flags', 0x10007), ('fp_control', None),
+        for key, value in [('fp_context_flags', 0x10007), ('fp_context_flags', 0x28), ('fp_control', None),
                            ('fp_mxcsr', True), ('fp_status', 65536)]:
             row = self.row()
             row[key] = value
