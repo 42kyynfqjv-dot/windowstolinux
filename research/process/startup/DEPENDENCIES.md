@@ -1,22 +1,33 @@
 # Remaining entry-to-exit dependencies
 
-## Current executable checkpoint: original code-page selector
+## Current executable checkpoint: original locale comparison and malloc
 
-The explicit native entry executes original CALL0x40b262 to0x40afbc, its
-locale-view constructor, actual -3/GetACP branch and protected return. The result
-is65001 from the same live explicit native process encoding token used by the
-command line. It rejects at0x40b267 before the caller's remaining argument cleanup,
-reference-code-page comparison and 0x220-byte allocation path. The initialized
-flag remains zero. [Contract, observed versus declared inputs and next work](LOCALE-CODE-PAGE.md).
+The explicit native entry executes40b267 argument cleanup, code-page local store
+and canonical live reference comparison, then original malloc408730/HeapAlloc
+flags0. It receives a distinct544-byte Buffer with unknown bytes and rejects at
+**40b289**, before the original local pointer store. The initialized flag stays0.
+A separately declared matching-code-page case executes the actual aligned epilog
+and callback flag/return without allocating. [Contract and next executable scope](LOCALE-MALLOC.md).
 
-Canonical process mapping, UCRT/FLS allocation identity, aligned ownership and
-original helper/lock effects are retained. Selector success does not grant
-encoding-conversion support for arbitrary numeric code pages. Missing/stale profile,
-OEM and per-thread mutation effects reject with preceding writes preserved.
-Heap reference free and exceptional EH4 cleanup are still unbound; LOCK XADD is
-restricted to an exclusive single-guest-thread lease. Default admission and whole
-startup/rcedit remain unproved. Next connect40b267's canonical reference comparison
-and the original allocator, then actual multibyte initialization/publication.
+Native flags0 now preserves uninitialized memory; flags8 still zeroes. No new
+PTD/descriptor/locale role follows merely from allocation. Descriptor requests
+still require flags8. Canonical heap publication and opaque identity are checked;
+internal resource failure rejects rather than fabricating Windows NULL/error.
+The actual mode getter executes on declared failed API input; original errno and
+new-handler effects remain rejected, preserving earlier effects and ownership.
+
+Next connect40b289 local stores and original REP MOVSD copies40b2b6/40b2c2, then
+initializer40b485 and its code-page API effects. REP remains unsupported until
+bounded count, initialization, alias, overlap and partial-progress semantics are
+established under the existing explicit DF-clear ABI. Freeing and exceptional
+cleanup remain separate gates; no full startup/rcedit/default admission follows.
+The65001 native process profile is explicit, not a general Windows ACP assumption.
+
+## Previous checkpoint: original code-page selector
+
+The original -3/GetACP branch returns65001 from the same live token as A/W command
+line data. Missing/stale profile, OEM and per-thread mutation effects reject with
+prior writes retained. [Preserved selector contract](LOCALE-CODE-PAGE.md).
 
 ## Previous checkpoint: original multibyte reference helper
 

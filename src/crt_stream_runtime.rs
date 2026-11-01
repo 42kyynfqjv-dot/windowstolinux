@@ -991,11 +991,11 @@ impl CrtStreamRuntime {
  /// exception policy. The existing process heap and allocation identity survive.
  fn native_heap_allocate(&mut self,init:CrtInitialization,heap:CrtHeap,flags:u32,size:u32)->Result<CrtPointer,&'static str>{
   self.initialization(init)?;self.heap_identity(heap)?;
-  if flags!=8||size==0{return Err("CRT native heap flags/size domain");}
-  let p=self.allocate(size,true,true)?.ok_or("CRT native heap allocation unavailable")?;self.last_os_error=None;Ok(p)
+  if !matches!(flags,0|8)||size==0{return Err("CRT native heap flags/size domain");}
+  let p=self.allocate(size,flags==8,true)?.ok_or("CRT native heap allocation unavailable")?;self.last_os_error=None;Ok(p)
  }
  fn native_descriptor_allocate(&mut self,init:CrtInitialization,heap:CrtHeap,flags:u32,size:u32)->Result<CrtPointer,&'static str>{
-  if size==0||size%56!=0||size/56>64{return Err("CRT native descriptor allocation extent");}
+  if flags!=8||size==0||size%56!=0||size/56>64{return Err("CRT native descriptor allocation extent");}
   let p=self.native_heap_allocate(init,heap,flags,size)?;let q=CrtPointer{kind:CrtRegionKind::Descriptor,..p};
   let r=self.regions.last_mut().ok_or("CRT native descriptor allocation identity")?;if r.pointer!=p||!r.heap||r.file_owner.is_some(){return Err("CRT native descriptor fresh allocation");}r.pointer=q;Ok(q)
  }

@@ -1,5 +1,8 @@
 # Original code-page selector and declared native ACP
 
+This records the e17247d checkpoint. [The connected caller/allocator
+checkpoint](LOCALE-MALLOC.md) supersedes its former execution boundary.
+
 The explicit native entry executes the original argument push and
 `CALL 0x40b262 -> 0x40afbc`, including its locale-view constructor at `0x40aabe`.
 The actual callback selects `-3`; original code calls named import

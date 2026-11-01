@@ -56,6 +56,16 @@ impl CrtCpu{
   let callback=match value{CrtValue::Scalar{bits:0,known:u32::MAX}=>None,CrtValue::Scalar{bits,known:u32::MAX}=>Some((image,rt.process_image_code(image,bits,1)?)),CrtValue::Pointer(p)=>{if rt.process_image_code(image,p.address(),1)?!=p{return Err("CRT FLS callback image/alias");}Some((image,p))},_=>return Err("CRT FLS callback provenance")};
   let id=rt.native_fls_allocate(init,callback)?;self.clobber(CrtValue::scalar(id.index));self.finish_pop(rt,4)
  }
+ /// Successful bounded Buffer allocation only. Flags0 preserves unknown bytes;
+ /// flags8 alone requests zeroing. No supplied NULL or exception outcome.
+ fn native_heap_buffer_call(&mut self,rt:&mut CrtStreamRuntime,init:CrtInitialization)->Result<CrtValue,&'static str>{
+  self.validate_active(rt)?;
+  if self.return_pop!=12||self.r[4]!=self.entry[4]||[3,5,6,7].iter().any(|&r|self.r[r]!=self.entry[r]){return Err("CRT native HeapAlloc ABI");}
+  let sp=Self::pointer(self.r[4])?;rt.offset(sp,16)?;rt.memory.validate_writable(sp.cap,sp.owner,sp.address(),16).map_err(|_|"CRT native HeapAlloc stack permission")?;
+  let CrtValue::Heap(heap)=rt.load(rt.offset(sp,4)?,32)?else{return Err("CRT native HeapAlloc canonical heap")};
+  let flags=rt.load(rt.offset(sp,8)?,32)?.known_scalar()?;let size=rt.load(rt.offset(sp,12)?,32)?.known_scalar()?;
+  let p=rt.native_heap_allocate(init,heap,flags,size)?;self.clobber(CrtValue::Pointer(p));self.finish_pop(rt,12)
+ }
  /// LOCK XADD returns the prior memory word in the source register. All
  /// knowledge/lifetime checks precede the write; flags use the original sum.
  fn exchange_add_reference(&mut self,rt:&mut CrtStreamRuntime,init:CrtInitialization,image:CrtProcessImage,lease:CrtGlobalLock,p:CrtPointer,register:usize)->Result<(),&'static str>{

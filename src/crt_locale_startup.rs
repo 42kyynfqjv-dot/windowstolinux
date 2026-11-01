@@ -85,14 +85,58 @@ pub(crate) fn source() -> Result<String, String> {
         |_, _| Ok(None),
         Some(caller_graph.end),
     )?;
-    out.push_str(&format!("fn locale_aligned_prefix(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:&CrtNativePlatform,epoch:&mut NormalCallEpoch<'_>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;let p=rt.process_image_code(inputs.image,0x40b235,{})?;if rt.memory.read(p.address(),{}).map_err(|_|\"locale aligned code read\")?!=&{prefix:?}{{return Err(\"locale aligned code changed\");}}let mut aligned=CrtAlignedActivation::begin(rt,cpu)?;let _=(||->Result<CrtValue,&'static str>{{{body}}})()?;aligned.live(rt,cpu)?;cpu.tick(u32::MAX)?;cpu.call_activation(rt,0x40b25f,0,|rt,c|locale_reference_original(rt,c,inputs,epoch))?;aligned.live(rt,cpu)?;let caller=rt.process_image_code(inputs.image,0x40b25f,8)?;if rt.memory.read(caller.address(),8).map_err(|_|\"locale caller code read\")?!=[255,115,8,232,85,253,255,255]{{return Err(\"locale code-page caller changed\");}}let _=(||->Result<CrtValue,&'static str>{{{caller_body}}})()?;aligned.live(rt,cpu)?;return Err(\"locale selected-code-page continuation unbound at 0x40b267\");}}",prefix.len(),prefix.len()));
+    out.push_str(&format!("fn locale_aligned_prefix(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:&CrtNativePlatform,epoch:&mut NormalCallEpoch<'_>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;let p=rt.process_image_code(inputs.image,0x40b235,{})?;if rt.memory.read(p.address(),{}).map_err(|_|\"locale aligned code read\")?!=&{prefix:?}{{return Err(\"locale aligned code changed\");}}let mut aligned=CrtAlignedActivation::begin(rt,cpu)?;let _=(||->Result<CrtValue,&'static str>{{{body}}})()?;aligned.live(rt,cpu)?;cpu.tick(u32::MAX)?;cpu.call_activation(rt,0x40b25f,0,|rt,c|locale_reference_original(rt,c,inputs,epoch))?;aligned.live(rt,cpu)?;let caller=rt.process_image_code(inputs.image,0x40b25f,8)?;if rt.memory.read(caller.address(),8).map_err(|_|\"locale caller code read\")?!=[255,115,8,232,85,253,255,255]{{return Err(\"locale code-page caller changed\");}}let _=(||->Result<CrtValue,&'static str>{{{caller_body}}})()?;aligned.live(rt,cpu)?;let value=locale_selected_caller(rt,cpu,inputs,&mut aligned)?;if cpu.returned{{return Ok(value);}}aligned.live(rt,cpu)?;return Err(\"locale allocated-body continuation unbound at 0x40b289\");}}",prefix.len(),prefix.len()));
     out.push_str(&reference_source()?);
     out.push_str(&crate::crt_locale_code_page::source()?);
+    out.push_str(&crate::crt_malloc::source()?);
+    out.push_str(&selected_source()?);
     Ok(out)
 }
 
 pub(crate) const ALIGNED_FRAME: &str =
     "8bff538bdc515183e4f883c404558b6b04896c24048bec81ec380200005657ff7314ff7310";
+pub(crate) const SELECTED_CALLER: &str =
+    "8b4b1083c40c8945f48b49483b4104750733c0e9020100006820020000e8a7d4ffff";
+pub(crate) const FAST_EPILOG: &str = "5f5e8be55d8be35bc3";
+
+fn selected_source() -> Result<String, String> {
+    let bytes = crate::crt_ptd::raw(SELECTED_CALLER);
+    let tail = crate::crt_ptd::raw(FAST_EPILOG);
+    let mut g = crate::crt_startup_table::graph(&bytes, 0x40b267)?;
+    // These are actual disjoint instruction ranges and the actual fast-branch
+    // target. The slow continuation is an explicit internal fragment boundary.
+    g.nodes.extend(Graph::decode(&tail, 0x40b381)?.nodes);
+    let body = crate::crt_stream_emit::emit_body_with_exit(
+        &g,
+        |pc, t| {
+            if t != Target::Direct(0x408730) {
+                return Err("locale selected caller target".into());
+            }
+            Ok(format!(
+                "cpu.call_activation(rt,{},0,|rt,c|malloc_original_native(rt,c,inputs))?;",
+                pc + g.nodes[&pc].length
+            ))
+        },
+        &Default::default(),
+        128,
+        |_, _| Err("locale selected caller thread effect".into()),
+        |pc, _| {
+            Ok(if pc == 0x40b273 {
+                "cpu.r[1]=CrtValue::Pointer(rt.module_word_pointer(inputs.image,cpu.r[1])?);".into()
+            } else {
+                String::new()
+            })
+        },
+        |_, pop| {
+            if pop != 0 {
+                return Err("locale aligned RET cleanup".into());
+            }
+            Ok(Some("return aligned.finish(rt,cpu);".into()))
+        },
+        Some(g.end),
+    )?;
+    Ok(format!("fn locale_selected_caller(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,aligned:&mut CrtAlignedActivation)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;aligned.live(rt,cpu)?;for(address,bytes)in[(0x40b267u32,&{bytes:?}[..]),(0x40b381,&{tail:?}[..])]{{let p=rt.process_image_code(inputs.image,address,bytes.len()as u32)?;if rt.memory.read(p.address(),bytes.len()as u32).map_err(|_|\"locale selected caller code read\")?!=bytes{{return Err(\"locale selected caller code changed\");}}}}{body}}}"))
+}
 #[cfg(test)]
 const ALIGNED_EPILOG: &str = "8be55d8be35bc3";
 

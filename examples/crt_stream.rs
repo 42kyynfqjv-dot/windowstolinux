@@ -378,3 +378,6 @@ mod crt_locale_startup;
 
 #[path = "../src/crt_locale_code_page.rs"]
 mod crt_locale_code_page;
+
+#[path = "../src/crt_malloc.rs"]
+mod crt_malloc;
