@@ -1,0 +1,62 @@
+{
+  "status": "focused implementation checks passed; aggregate/replay/final-head CI pending",
+  "base_commit": "4474da6d6c47e455807fc0faaf94a1a356b807b3",
+  "kind": "original mapped startup instruction and shared API component integration; no whole-PE translation",
+  "expectations_sha256": "dd2e9ea69f04f7bc327576bcebd3e9085d98414728b670075d029007a2f335eb",
+  "local_frozen_pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "base_Windows_review": {
+    "pe_sha256": "ae582daa006d3d84054c673b927ef4457d53d3f43adfe8f8339882fe3447cafd",
+    "rust_sha256": "7017962af3c1c24b1018af6d0da9686975a8d63b909067e31a3afa94cc06d562",
+    "scope": "Live registry fixture; body EAX/flags inputs; original stack/FS/saved-state restoration only",
+    "comparisons": 5,
+    "whole_pe_translation_pairs": 0,
+    "report_sha256": "5b55047c6d267026a9829b5be1102795866cb30977e87d97286a0bd4a8a0cb98",
+    "trace_sha256": "66b6a3c650413b25f6494901f61fde3f60a36c053c31572665b2747e059faad6",
+    "local_frozen_pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+    "qualification": "fresh Windows CI rebuilt its own authored PE; not the local frozen binary hash. Original region guards and identical emitted Rust passed; do not call these whole-PE pairs"
+  },
+  "base_raw_trace": {
+    "head": "4474da6d6c47e455807fc0faaf94a1a356b807b3",
+    "run": 41324424142,
+    "artifact": 13091510713,
+    "zip_sha256": "63107d89efcfb9f6ca6437ce72adee9ea03bbb3b0b83646e725392efa1c4be57",
+    "path": "normal-wrapper-windows/original-windows-narrow-conversion.jsonl",
+    "trace_sha256": "66b6a3c650413b25f6494901f61fde3f60a36c053c31572665b2747e059faad6",
+    "cases": 15,
+    "kind": "direct Windows API observations only; no PE translation"
+  },
+  "implemented": [
+    "explicit process-wide ANSI/OEM state and checked named getter export",
+    "fresh nonzero scalar identity with unknown raw bits; shared TEST and guarded storage transport",
+    "original resolver/cache/guard/call/locale return",
+    "original conversion and flags/helper body through real size query",
+    "UTF8 flags0 size query and checked ACP alias; output writes remain rejected",
+    "successful complete VirtualProtect data-word overwrite; failure atomicity/control/partial guards preserved"
+  ],
+  "boundary": "second original WideCharToMultiByte call40b924 with capacity260; native UTF8 conversion write effects unbound",
+  "cases": {
+    "argv_locale_native": 13,
+    "file_mode_contract_test_functions": 1,
+    "utf8_query_vectors": 7,
+    "utf8_api_cases": 12,
+    "protection_data_word_cases": 5,
+    "retained_direct_Windows_UTF8_cases": 15,
+    "retained_recorded_Windows_wrapper_comparisons": 5,
+    "new_whole_PE_pairs": 0
+  },
+  "source_hashes": {
+    "src/crt_argv.rs": "6dbf0ec2a346ce3d455476ef3a66d06fb39cfc3f38e5b7314b563d9a73398056",
+    "src/crt_stream_runtime.rs": "467e10f1b19f8bf6db11458e4e4d197acb28427ec6152c584d1e92c35e4bcf11",
+    "src/crt_stream_cpu.rs": "8b83843f3f16b0427814e1ada3d11339c8195477bb55997a4e4023db3c9aa885",
+    "src/crt_resident_loader.rs": "1a5c3a736609f1cce4c0b93a66130a4d8431785a3fb35de5c21c023623d8fbf5",
+    "src/crt_normal_frame_tests.rs": "5c7a4a3c04b34cd2fb02598b4831747a6fcab7e76e41fe503bde9600b9340ff5",
+    "research/process/startup/check_normal_wrapper.py": "e73f3a827472f7f1ba314c130170ab0313376c15963bf27450d5ab81904a3938"
+  },
+  "limits": [
+    "explicit native launch mode/encoding only, no assumed ANSI or universal Windows ACP",
+    "query only: no conversion output, strict/failure/free/growth/errno support",
+    "no argv publication",
+    "full startup/rcedit/default admission unsupported",
+    "historical original-Windows timeout causes unresolved"
+  ]
+}

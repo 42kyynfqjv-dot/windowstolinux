@@ -56,7 +56,7 @@ struct CrtExport {function:CrtFunction,symbol:String,target:CrtModule,callable:b
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 struct CrtProviderExport {record:CrtFunction}
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
-enum CrtNativeApi {InitializeGlobalCriticalSectionEx,FlsAlloc,FlsSetValue}
+enum CrtNativeApi {InitializeGlobalCriticalSectionEx,FlsAlloc,FlsSetValue,AreFileApisAnsi}
 /// A native registry construction ticket, not a Windows DLL initialization proof.
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 struct CrtNativeProviderReference {reference:CrtModuleReference,function:CrtFunction}
@@ -105,11 +105,16 @@ struct CrtHeapPtdAllocation {anchor:guest_memory::Capability,slot:CrtFlsSlot,bef
 /// not claim Windows released the block or left its contents unchanged.
 struct CrtHeapFreeEffect {anchor:guest_memory::Capability,thread:u64,serial:u64,pointer:CrtPointer,failed:bool}
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
-enum CrtValue {Module(CrtModule),Function(CrtFunction),Heap(CrtHeap),Dispatcher(CrtDispatcherContext),Scalar{bits:u32,known:u32},Pointer(CrtPointer),ProcessHandle(CrtProcessHandle),Handle(CrtDescriptorId),ThreadHead(CrtThreadHead),OpaqueSaved(u8),ProtectedReturn(u64)}
+enum CrtValue {NonZero{anchor:guest_memory::Capability,serial:u64},Module(CrtModule),Function(CrtFunction),Heap(CrtHeap),Dispatcher(CrtDispatcherContext),Scalar{bits:u32,known:u32},Pointer(CrtPointer),ProcessHandle(CrtProcessHandle),Handle(CrtDescriptorId),ThreadHead(CrtThreadHead),OpaqueSaved(u8),ProtectedReturn(u64)}
 impl CrtValue {
  fn scalar(bits:u32)->Self{Self::Scalar{bits,known:u32::MAX}}
  fn known_scalar(self)->Result<u32,&'static str>{match self{Self::Scalar{bits,known:u32::MAX}=>Ok(bits),_=>Err("CRT scalar knowledge/type")}}
 }
+/// Process policy, not a Windows BOOL bit encoding or the numeric ACP.
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+enum CrtFileApiMode {Ansi,Oem}
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+struct CrtProcessFileMode {anchor:guest_memory::Capability,serial:u64}
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 struct CrtLock {anchor:guest_memory::Capability,thread:u64,serial:u64,depth:usize,record:u32}
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
@@ -218,7 +223,7 @@ struct CrtStreamRuntime {
  uncertain_allocations:Vec<CrtPointer>,completed_failed_frees:Vec<(guest_memory::Capability,u64)>,heap_ptds:Vec<CrtHeapPtdView>,fiber:Option<CrtFiber>,fls_indices:CrtFlsIndices,fls:CrtFlsValues,
  unobserved_contexts:Vec<(CrtPointer,std::rc::Rc<std::cell::Cell<bool>>)>,heap:Option<CrtHeap>,memory:guest_memory::Space,owner:u64,thread:u64,anchor:guest_memory::Capability,
  dispatchers:std::collections::BTreeMap<u64,CrtDispatcherContext>,regions:Vec<CrtRegion>,retired:Vec<CrtPointer>,tags:std::collections::BTreeMap<u32,CrtValue>,
- partial:std::collections::BTreeMap<u32,(u8,u8)>,descriptors:Vec<CrtDescriptor>,native_endpoints:Vec<CrtNativeEndpoint>,native_standards:Option<(CrtNativeStandards,[CrtStandardEntry;3])>,command_line:Option<CrtCommandLine>,image_name:Option<CrtImageName>,
+ partial:std::collections::BTreeMap<u32,(u8,u8)>,descriptors:Vec<CrtDescriptor>,native_endpoints:Vec<CrtNativeEndpoint>,native_standards:Option<(CrtNativeStandards,[CrtStandardEntry;3])>,command_line:Option<CrtCommandLine>,image_name:Option<CrtImageName>,file_mode:Option<(CrtProcessFileMode,CrtFileApiMode)>,
  global_objects:CrtGlobalSlots<CrtPointer>,global_locks:CrtGlobalLeases,record_objects:Vec<CrtPointer>,record_locks:Vec<CrtRecordLock>,locks:Vec<CrtLock>,descriptor_locks:Vec<CrtDescriptorLock>,serial:u64,generation:u64,canonical_errno:bool,errno_cell:Option<CrtPointer>,errno:Option<i32>,doserrno:Option<u32>,last_os_error:Option<u32>,
  locale_generation:u64,locale_live:bool,initialization:Option<u64>,shutdown:Option<CrtShutdown>,closed:bool,lock_objects:std::collections::BTreeSet<u32>,
 }
@@ -252,7 +257,7 @@ impl CrtStreamRuntime {
  }
  fn from_file_storage(owner:u64,thread:u64,memory:guest_memory::Space,pointer:CrtPointer)->Result<Self,&'static str>{
   let anchor=pointer.cap;
-  Ok(Self{x87:None,file_view:pointer,main_image:None,main_image_regions:vec![],loader_cells:std::collections::BTreeMap::new(),modules:std::collections::BTreeMap::new(),module_references:CrtModuleReferences::new(),exports:std::collections::BTreeMap::new(),providers:std::collections::BTreeMap::new(),native_sync:CrtGlobalSlots::new(),uncertain_allocations:vec![],completed_failed_frees:vec![],heap_ptds:vec![],fiber:None,fls_indices:CrtFlsIndices::new(),fls:CrtFlsValues::new(),unobserved_contexts:vec![],heap:None,memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],native_endpoints:vec![],native_standards:None,command_line:None,image_name:None,global_objects:CrtGlobalSlots::new(),global_locks:CrtGlobalLeases::new(),record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,canonical_errno:false,errno_cell:None,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([pointer.base])})
+  Ok(Self{x87:None,file_view:pointer,main_image:None,main_image_regions:vec![],loader_cells:std::collections::BTreeMap::new(),modules:std::collections::BTreeMap::new(),module_references:CrtModuleReferences::new(),exports:std::collections::BTreeMap::new(),providers:std::collections::BTreeMap::new(),native_sync:CrtGlobalSlots::new(),uncertain_allocations:vec![],completed_failed_frees:vec![],heap_ptds:vec![],fiber:None,fls_indices:CrtFlsIndices::new(),fls:CrtFlsValues::new(),unobserved_contexts:vec![],heap:None,memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],native_endpoints:vec![],native_standards:None,command_line:None,image_name:None,file_mode:None,global_objects:CrtGlobalSlots::new(),global_locks:CrtGlobalLeases::new(),record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,canonical_errno:false,errno_cell:None,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([pointer.base])})
  }
 
  /// Initial FILE storage is a bounded role view of the original writable
@@ -341,9 +346,12 @@ impl CrtStreamRuntime {
   if begin<target.base{return Err("CRT protection page owner extent");}
   self.ordinary_file_bytes(CrtPointer{address:begin,..target},u32::try_from(end-u64::from(begin)).map_err(|_|"CRT protection page extent")?)?;
   self.valid(output,4)?;
-  if output.kind!=CrtRegionKind::Stack||self.has_overlapping_tags(output.address(),4)||self.unobserved_contexts.iter().any(|(p,_)|p.cap==output.cap){return Err("CRT protection output role/authority");}
+  let old=self.overlapping_tags(output.address(),4);
+  if output.kind!=CrtRegionKind::Stack||self.unobserved_contexts.iter().any(|(p,_)|p.cap==output.cap)||!old.is_empty()&&(old.len()!=1||old[0].0!=output.address()||matches!(old[0].1,CrtValue::ProtectedReturn(_)|CrtValue::OpaqueSaved(_)|CrtValue::ThreadHead(_)|CrtValue::Dispatcher(_))){return Err("CRT protection output role/authority");}
   self.memory.protect_data_with_old((target.cap,target.owner,target.address(),size),flags,(output.cap,output.owner,output.address())).map_err(|_|"CRT protection range/permission/output contract")?;
-  for n in 0..4{self.partial.remove(&(output.address()+n));}Ok(())
+  // The complete successful API word write destroys old data authority. A
+  // failed protection/output operation preserves both bytes and tags atomically.
+  for(at,_)in old{self.tags.remove(&at);}for n in 0..4{self.partial.remove(&(output.address()+n));}Ok(())
  }
  fn process_image_code(&self,token:CrtProcessImage,address:u32,size:u32)->Result<CrtPointer,&'static str>{
   let p=self.process_image_pointer(token,address,size)?;self.memory.validate_executable(p.cap,p.owner,address,size).map_err(|_|"CRT process image code permission")?;Ok(p)
@@ -503,9 +511,35 @@ impl CrtStreamRuntime {
   if e.symbol!="FlsAlloc"{return Err("CRT native FLS symbol/ABI");}e.api=Some(CrtNativeApi::FlsAlloc);e.callable=true;Ok(descriptor.record)
  }
  fn bind_native_fls_set(&mut self,init:CrtInitialization,d:CrtProviderExport)->Result<CrtFunction,&'static str>{self.initialization(init)?;self.provider_target(d)?;let e=self.exports.get_mut(&d.record.serial).unwrap();if e.symbol!="FlsSetValue"{return Err("CRT native FLS setter symbol/ABI");}e.api=Some(CrtNativeApi::FlsSetValue);e.callable=true;Ok(d.record)}
+ fn bind_native_file_mode(&mut self,init:CrtInitialization,d:CrtProviderExport,mode:CrtFileApiMode)->Result<(CrtFunction,CrtProcessFileMode),&'static str>{
+  self.initialization(init)?;self.provider_target(d)?;
+  if self.file_mode.is_some()||self.exports.get(&d.record.serial).is_none_or(|e|e.symbol!="AreFileApisANSI"){return Err("CRT file mode publication state/symbol");}
+  let serial=self.serial.checked_add(1).ok_or("CRT file mode serial")?;
+  let token=CrtProcessFileMode{anchor:self.anchor,serial};
+  let e=self.exports.get_mut(&d.record.serial).unwrap();e.api=Some(CrtNativeApi::AreFileApisAnsi);e.callable=true;
+  self.file_mode=Some((token,mode));self.serial=serial;Ok((d.record,token))
+ }
+ fn file_mode(&self,token:CrtProcessFileMode)->Result<CrtFileApiMode,&'static str>{
+  if self.closed||token.anchor!=self.anchor||self.file_mode.is_none_or(|(t,_)|t!=token)||self.memory.validate(self.anchor,guest_memory::Owner::Module(self.owner)).is_err(){return Err("CRT process file mode owner/lifetime");}Ok(self.file_mode.unwrap().1)
+ }
+ fn set_file_mode(&mut self,token:CrtProcessFileMode,mode:CrtFileApiMode)->Result<(),&'static str>{self.file_mode(token)?;self.file_mode.as_mut().unwrap().1=mode;Ok(())}
+ fn file_mode_result(&mut self,token:CrtProcessFileMode)->Result<CrtValue,&'static str>{
+  if self.file_mode(token)?==CrtFileApiMode::Oem{return Ok(CrtValue::scalar(0));}
+  let serial=self.serial.checked_add(1).ok_or("CRT BOOL symbol serial")?;self.serial=serial;Ok(CrtValue::NonZero{anchor:self.anchor,serial})
+ }
+ /// Read exactly the selected UTF-16 input and count modern replacement UTF-8
+ /// bytes. This is a query only: it issues no writable pointer or copy receipt.
+ fn utf8_required(&self,input:CrtPointer,count:i32)->Result<u32,&'static str>{
+  if count!= -1&&!(1..=32767).contains(&count){return Err("native UTF8 input count outside bounded domain");}
+  let bound=if count== -1{32767}else{count as u32};let mut units=Vec::new();let mut terminated=false;
+  for n in 0..bound{let p=self.offset(input,i64::from(n)*2)?;let unit=self.load(p,16)?.known_scalar()? as u16;units.try_reserve(1).map_err(|_|"native UTF8 query resource")?;units.push(unit);if count== -1&&unit==0{terminated=true;break;}}
+  if count== -1&&!terminated{return Err("native UTF8 unterminated input");}
+  char::decode_utf16(units).try_fold(0u32,|total,c|total.checked_add(c.unwrap_or(char::REPLACEMENT_CHARACTER).len_utf8()as u32).ok_or("native UTF8 byte count overflow"))
+ }
+
  fn native_api_identity(&self,f:CrtFunction)->Result<(),&'static str>{
   self.function_identity(f,None)?;
-  match self.exports.get(&f.serial).and_then(|e|e.api){Some(CrtNativeApi::InitializeGlobalCriticalSectionEx)=>self.native_sync_identity(f),Some(CrtNativeApi::FlsAlloc)=>self.function_identity(f,Some("FlsAlloc")),Some(CrtNativeApi::FlsSetValue)=>self.function_identity(f,Some("FlsSetValue")),None=>Err("CRT native API implementation unbound")}
+  match self.exports.get(&f.serial).and_then(|e|e.api){Some(CrtNativeApi::InitializeGlobalCriticalSectionEx)=>self.native_sync_identity(f),Some(CrtNativeApi::FlsAlloc)=>self.function_identity(f,Some("FlsAlloc")),Some(CrtNativeApi::FlsSetValue)=>self.function_identity(f,Some("FlsSetValue")),Some(CrtNativeApi::AreFileApisAnsi)=>self.function_identity(f,Some("AreFileApisANSI")),None=>Err("CRT native API implementation unbound")}
  }
  fn native_sync_identity(&self,function:CrtFunction)->Result<(),&'static str>{
   self.function_identity(function,Some("InitializeCriticalSectionEx"))?;
@@ -925,6 +959,7 @@ impl CrtStreamRuntime {
    }
   }
   let bits=match value{
+   CrtValue::NonZero{..}=>{if width!=32{return Err("CRT nonzero symbol store width");}0},
    CrtValue::Module(m)=>{if width!=32||!matches!(p.kind,CrtRegionKind::Stack|CrtRegionKind::Module){return Err("CRT module transport role/width");}self.module_identity(m)?;m.handle},
    CrtValue::Function(f)=>{if width!=32||!matches!(p.kind,CrtRegionKind::Stack|CrtRegionKind::Module){return Err("CRT export transport role/width");}self.function_identity(f,None)?;f.address},
    CrtValue::Heap(h)=>{if width!=32{return Err("CRT heap handle width");}self.heap_identity(h)?;0},
@@ -943,7 +978,7 @@ impl CrtStreamRuntime {
   }}
   self.memory.write(p.address,&bits.to_le_bytes()[..size as usize]).map_err(|_|"CRT storage write")?;
   for(at,_)in old{self.tags.remove(&at);}for i in 0..size{self.partial.remove(&(p.address+i));}
-  match value{CrtValue::Scalar{bits,known}=>{for i in 0..size{let mask=(known>>(8*i))as u8;if mask!=255{self.memory.forget(p.address+i,1).map_err(|_|"CRT scalar knowledge epoch")?;self.partial.insert(p.address+i,(((bits>>(8*i))as u8)&mask,mask));}}},_=>{self.tags.insert(p.address,value);}}
+  match value{CrtValue::NonZero{..}=>{self.memory.forget(p.address,4).map_err(|_|"CRT nonzero scalar knowledge")?;self.tags.insert(p.address,value);},CrtValue::Scalar{bits,known}=>{for i in 0..size{let mask=(known>>(8*i))as u8;if mask!=255{self.memory.forget(p.address+i,1).map_err(|_|"CRT scalar knowledge epoch")?;self.partial.insert(p.address+i,(((bits>>(8*i))as u8)&mask,mask));}}},_=>{self.tags.insert(p.address,value);}}
   if let Some(cell)=self.errno_cell{if cell.cap==p.cap&&u64::from(p.address)<u64::from(cell.address)+4&&u64::from(cell.address)<u64::from(p.address)+u64::from(size){self.errno=self.load(cell,32)?.known_scalar().ok().map(|n|n as i32);}}
   Ok(())
  }

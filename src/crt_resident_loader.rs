@@ -35,7 +35,7 @@ impl CrtResidentLoader {
 /// Explicit native replacement environment, not an inferred Windows loader state.
 /// Mapping revision 1 is grounded in the x86 Windows 10.0.20348 observation.
 /// Only this named domain is supported; no generic Windows version claim follows.
-struct CrtNativePlatform {code_pages:bool,anchor:guest_memory::Capability,function:CrtFunction,fls:Option<CrtFunction>,fls_set:Option<CrtFunction>,second_fiber:bool,startup_metadata:bool,standards:Option<CrtNativeStandards>,command_line:Option<CrtCommandLine>,image_name:Option<CrtImageName>}
+struct CrtNativePlatform {file_mode:Option<(CrtFunction,CrtProcessFileMode)>,code_pages:bool,anchor:guest_memory::Capability,function:CrtFunction,fls:Option<CrtFunction>,fls_set:Option<CrtFunction>,second_fiber:bool,startup_metadata:bool,standards:Option<CrtNativeStandards>,command_line:Option<CrtCommandLine>,image_name:Option<CrtImageName>}
 impl CrtNativePlatform {
  const PROFILE:&'static str="w2l-native-sync-20348-v1";
  const CONTRACT:&'static str="api-ms-win-core-synch-l1-2-0";
@@ -115,14 +115,50 @@ impl CrtNativePlatform {
   // guest LoadLibrary result, fabricated LastError or DLL initialization receipt.
   let ticket=rt.provider_begin(init,"kernelbase.dll",handle,1)?;
   let(_,function)=rt.provider_initialize_sync(init,&ticket,address)?;
-  Ok(Self{code_pages:false,anchor:rt.anchor,function,fls:None,fls_set:None,second_fiber:false,startup_metadata:false,standards:None,command_line:None,image_name:None})
+  Ok(Self{file_mode:None,code_pages:false,anchor:rt.anchor,function,fls:None,fls_set:None,second_fiber:false,startup_metadata:false,standards:None,command_line:None,image_name:None})
  }
  /// Explicit optional native kernel32/FLS service, prepared before entry.
  fn enable_fls(&mut self,rt:&mut CrtStreamRuntime,init:CrtInitialization,handle:u32,address:u32)->Result<(),&'static str>{
   self.validate(rt,init)?;if self.fls.is_some(){return Err("native FLS provider already enabled");}
-  let setter_address=address.checked_add(4).filter(|n|*n!=u32::MAX).ok_or("native FLS setter address")?;let ticket=rt.provider_begin(init,"kernel32.dll",handle,2)?;let mut published=None;
+  let setter_address=address.checked_add(4).filter(|n|*n!=u32::MAX).ok_or("native FLS setter address")?;let ticket=rt.provider_begin(init,"kernel32.dll",handle,3)?;let mut published=None;
   let result=(||{let m=rt.provider_publish(init,&ticket)?;published=Some(m);let d=rt.provider_export(init,m,m,"FlsAlloc",address)?;let alloc=rt.bind_native_fls(init,d)?;let d=rt.provider_export(init,m,m,"FlsSetValue",setter_address)?;let setter=rt.bind_native_fls_set(init,d)?;if let Some(f)=rt.fiber{rt.check_fiber(f)?;}else{rt.bind_fiber(rt.thread)?;}Ok((alloc,setter))})();
   match result{Ok((f,setter))=>{self.fls=Some(f);self.fls_set=Some(setter);Ok(())},Err(e)=>{if let Some(m)=published{rt.provider_destroy(init,m)?;}else{rt.provider_abort(init,&ticket)?;}Err(e)}}
+ }
+ /// Bounded modern UTF-8 size query. Writes and strict-error effects remain
+ /// unbound: original Windows can write replacement bytes even on failure.
+ fn wide_query_call(&self,rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,init:CrtInitialization)->Result<CrtValue,&'static str>{
+  self.validate(rt,init)?;cpu.validate_active(rt)?;
+  if cpu.return_pop!=32||cpu.r[4]!=cpu.entry[4]||[3,5,6,7].iter().any(|&r|cpu.r[r]!=cpu.entry[r]){return Err("native UTF8 query ABI");}
+  let sp=CrtCpu::pointer(cpu.r[4])?;rt.offset(sp,36)?;rt.memory.validate_writable(sp.cap,sp.owner,sp.address(),36).map_err(|_|"native UTF8 query stack permission")?;
+  let page=rt.load(rt.offset(sp,4)?,32)?.known_scalar()?;let flags=rt.load(rt.offset(sp,8)?,32)?.known_scalar()?;
+  let input=CrtCpu::pointer(rt.load(rt.offset(sp,12)?,32)?)?;let count=rt.load(rt.offset(sp,16)?,32)?.known_scalar()? as i32;
+  let capacity=rt.load(rt.offset(sp,24)?,32)?.known_scalar()?;
+  if capacity!=0{return Err("native UTF8 conversion write effects unbound");}
+  if flags!=0{return Err("native UTF8 flags outside supported query domain");}
+  if rt.load(rt.offset(sp,28)?,32)?!=CrtValue::scalar(0)||rt.load(rt.offset(sp,32)?,32)?!=CrtValue::scalar(0){return Err("native UTF8 default-character outputs unbound");}
+  if page==0{let token=self.command_line.ok_or("native UTF8 ACP profile unbound")?;rt.command_line_pointer(token,false)?;rt.command_line_pointer(token,true)?;if token.codepage!=65001{return Err("native UTF8 ACP encoding mismatch");}}
+  else if page!=65001{return Err("native UTF8 code-page alias unbound");}
+  // cbMultiByte=0 ignores lpMultiByteStr, including a non-NULL value. It must
+  // not read, initialize or issue authority for that unused output address.
+  for n in 0..8{if matches!(rt.load(rt.offset(sp,4+i64::from(n)*4)?,32)?,CrtValue::ProtectedReturn(_)|CrtValue::OpaqueSaved(_)|CrtValue::ThreadHead(_)){return Err("native UTF8 query protected argument");}}
+  let result=rt.utf8_required(input,count)?;rt.last_os_error=None;cpu.clobber(CrtValue::scalar(result));cpu.finish_pop(rt,32)
+ }
+ const FILE_MODE_PROFILE:&'static str="w2l-native-process-file-mode-v1";
+ /// Explicit pre-entry native policy; not acquired Windows loader/process state.
+ fn enable_file_mode(&mut self,rt:&mut CrtStreamRuntime,init:CrtInitialization,profile:&str,mode:CrtFileApiMode)->Result<(),&'static str>{
+  self.validate(rt,init)?;if profile!=Self::FILE_MODE_PROFILE||self.file_mode.is_some()||rt.file_mode.is_some(){return Err("native file mode profile/state");}
+  let f=self.fls.ok_or("native file mode kernel32 provider unbound")?;rt.native_api_identity(f)?;rt.provider_ready(f.module)?;
+  if !rt.modules.get(&f.module.handle).is_some_and(|m|m.identity=="kernel32.dll"){return Err("native file mode provider identity");}
+  let address=f.address.checked_add(8).filter(|n|*n!=u32::MAX).ok_or("native file mode callable address")?;
+  if rt.serial.checked_add(2).is_none(){return Err("native file mode serial");}
+  let descriptor=rt.provider_export(init,f.module,f.module,"AreFileApisANSI",address)?;
+  self.file_mode=Some(rt.bind_native_file_mode(init,descriptor,mode)?);Ok(())
+ }
+ fn file_mode_call(&self,rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,init:CrtInitialization,function:CrtFunction)->Result<CrtValue,&'static str>{
+  self.validate(rt,init)?;let(f,token)=self.file_mode.ok_or("native file mode launch policy unbound")?;
+  if function!=f||rt.native_named_export(init,f.module,"AreFileApisANSI")?!=f{return Err("native file mode callable identity");}rt.native_api_identity(f)?;rt.provider_ready(f.module)?;rt.file_mode(token)?;
+  cpu.validate_active(rt)?;if cpu.return_pop!=0||cpu.r[4]!=cpu.entry[4]||[3,5,6,7].iter().any(|&r|cpu.r[r]!=cpu.entry[r]){return Err("native file mode ABI");}let sp=CrtCpu::pointer(cpu.r[4])?;rt.memory.validate_writable(sp.cap,sp.owner,sp.address(),4).map_err(|_|"native file mode return permission")?;
+  let result=rt.file_mode_result(token)?;rt.last_os_error=None;cpu.clobber(result);cpu.finish(rt)
  }
  fn fls_call(&self,rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,init:CrtInitialization,image:CrtProcessImage,f:CrtFunction)->Result<CrtValue,&'static str>{
   self.validate(rt,init)?;if self.fls!=Some(f)||rt.native_named_export(init,f.module,"FlsAlloc")?!=f{return Err("native FLS callable target");}rt.native_api_identity(f)?;cpu.native_fls_alloc_call(rt,init,image)

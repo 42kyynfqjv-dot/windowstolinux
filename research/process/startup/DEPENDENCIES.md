@@ -1,6 +1,26 @@
 # Remaining entry-to-exit dependencies
 
-## Current executable checkpoint: original locale helper and real named lookup
+## Current executable checkpoint: process file mode and original UTF-8 query
+
+With an additional explicit native process file-mode policy, original entry now
+completes the real named lookup/cache/guard/AreFileApisANSI call, locale branch,
+conversion body and first WideCharToMultiByte size query. CP_ACP=0 is resolved
+through the existing declared UTF-8 process encoding, not the Windows host ACP.
+The original write wrapper reaches the second API call at **0x40b924, output
+capacity260**, and rejects conversion write effects. No narrow output or argv is
+published. OEM and unverified errors/growth/free remain explicit rejections.
+
+[Contract/review scope](FILE-MODE-QUERY.md), [frozen requirements](evidence/file-mode-expectations.json),
+[results](evidence/file-mode-query.json). Shared nonzero symbols preserve BOOL
+truth without inventing raw bits; process-owned mode is explicitly chosen.
+A demonstrated VirtualProtect reused-stack data-word restriction is fixed with
+control/partial/failure checks. Predecessor4474da6 all three workflows passed;
+15actual Windows API rows are now retained, including failure writes and the
+unsupported flag0x10 result2. Next close write/source lifetime/alias/error effects
+and original stores/cookie return before argv parsing. All earlier admission,
+XP7, broader equivalence and timeout limits remain. No whole-PE support claim.
+
+## Previous checkpoint: original locale helper and real named lookup
 
 Original entry executes40ae79/40ab89, existing locale-view constructor40aabe,
 code-page read and original file-mode resolver407fc0/407d96/407e41. With actual

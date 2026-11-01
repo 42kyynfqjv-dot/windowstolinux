@@ -1,0 +1,11 @@
+{
+ "frozen_before_implementation": true,
+ "kind": "shared process file-mode and nonzero scalar requirements; no raw Windows TRUE encoding assumption",
+ "mode": "explicit native launch selection ANSI or OEM; mutable process state shared across thread/fiber views; never derived from ACP",
+ "result": "OEM returns known zero; ANSI returns fresh nonzero symbol with unknown raw bits. Only same-symbol full-width TEST establishes nonzero; distinct symbols need not share a set bit",
+ "storage": "full-word transport retains symbol; raw/partial reads cannot expose fabricated bits; numeric conversion/address formation rejects",
+ "binding": "only implemented named AreFileApisANSI export with matching provider/mode state, original guard bytes and single-use indirect target receipt",
+ "entry": "original407fc0 returns query result,40ab89 maps it to CP_ACP0 or CP_OEMCP1; unchanged entry branch must not be replaced by65001",
+ "conversion": "CP_ACP alias requires declared process codepage; OEM policy distinct; query/copy/error/partial writes remain unbound until justified",
+ "whole_PE_pairs": 0
+}

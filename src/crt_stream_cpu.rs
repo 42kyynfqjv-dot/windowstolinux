@@ -138,7 +138,7 @@ impl CrtCpu{
   rt.last_os_error=None;self.clobber(CrtValue::scalar(1));self.finish_pop(rt,16)
  }
  fn tick(&mut self,budget:u32)->Result<(),&'static str>{self.steps=self.steps.checked_add(1).ok_or("CRT instruction counter overflow")?;if self.steps>budget{return Err("CRT certified instruction bound exceeded");}Ok(())}
- fn bits(v:CrtValue)->Result<(u32,u32),&'static str>{match v{CrtValue::Module(m)=>Ok((m.handle,u32::MAX)),CrtValue::Function(f)=>Ok((f.address,u32::MAX)),CrtValue::Scalar{bits,known}=>Ok((bits,known)),CrtValue::Pointer(p)=>Ok((p.address(),u32::MAX)),CrtValue::ProcessHandle(h)=>Ok((h.handle,u32::MAX)),CrtValue::Handle(h)=>Ok((h.handle,u32::MAX)),CrtValue::OpaqueSaved(_)=>Ok((0,0)),CrtValue::Heap(_)|CrtValue::Dispatcher(_)|CrtValue::ProtectedReturn(_)|CrtValue::ThreadHead(_)=>Err("CRT protected control bits")}}
+ fn bits(v:CrtValue)->Result<(u32,u32),&'static str>{match v{CrtValue::Module(m)=>Ok((m.handle,u32::MAX)),CrtValue::Function(f)=>Ok((f.address,u32::MAX)),CrtValue::Scalar{bits,known}=>Ok((bits,known)),CrtValue::Pointer(p)=>Ok((p.address(),u32::MAX)),CrtValue::ProcessHandle(h)=>Ok((h.handle,u32::MAX)),CrtValue::Handle(h)=>Ok((h.handle,u32::MAX)),CrtValue::OpaqueSaved(_)|CrtValue::NonZero{..}=>Ok((0,0)),CrtValue::Heap(_)|CrtValue::Dispatcher(_)|CrtValue::ProtectedReturn(_)|CrtValue::ThreadHead(_)=>Err("CRT protected control bits")}}
  fn number(v:CrtValue)->Result<u32,&'static str>{let(b,k)=Self::bits(v)?;if k!=u32::MAX{return Err("CRT unknown scalar bits observed");}Ok(b)}
  fn pointer(v:CrtValue)->Result<CrtPointer,&'static str>{match v{CrtValue::Pointer(p)=>Ok(p),_=>Err("CRT pointer provenance")}}
  fn mask(width:u8)->Result<u32,&'static str>{match width{8=>Ok(255),16=>Ok(65535),32=>Ok(u32::MAX),_=>Err("CRT operand width")}}
@@ -248,6 +248,9 @@ impl CrtCpu{
     self.flags=CrtFlags{cf:Some(false),of:Some(false),zf:Some(address==0),sf:Some(address&0x80000000!=0)};return Ok(CrtValue::Pointer(q));
    }
   }}
+  // A nonzero fact constrains truth, not any particular raw set bit. Distinct
+  // results can be disjoint bit patterns, even when both represent TRUE.
+  if width==32&&kind==8&&a==b&&matches!(a,CrtValue::NonZero{..}){self.flags=CrtFlags{cf:Some(false),of:Some(false),zf:Some(false),sf:None};return Ok(CrtValue::Scalar{bits:0,known:0});}
   if matches!(kind,3|4|5|8){let(x,kx)=Self::bits(a)?;let(y,ky)=Self::bits(b)?;let(bits,known)=match kind{3=>(x^y,kx&ky),4|8=>(x&y,(kx&ky)|(kx&!x)|(ky&!y)),5=>(x|y,(kx&ky)|(kx&x)|(ky&y)),_=>unreachable!()};let bits=bits&mask;let known=(known&mask)|!mask;let sign=1u32<<(width-1);self.flags=CrtFlags{cf:Some(false),of:Some(false),zf:if bits&known&mask!=0{Some(false)}else if known==u32::MAX{Some(true)}else{None},sf:if known&sign!=0{Some(bits&sign!=0)}else{None}};return Ok(CrtValue::Scalar{bits,known});}
   let x=Self::number(a)?&mask;let y=Self::number(b)?&mask;let sign=1u32<<(width-1);
   let (bits,cf,of)=match kind{1=>{let n=u64::from(x)+u64::from(y);let r=n as u32&mask;(r,n>u64::from(mask),(!(x^y)&(x^r)&sign)!=0)},2|7=>{let r=x.wrapping_sub(y)&mask;(r,x<y,((x^y)&(x^r)&sign)!=0)},3=>(x^y,false,false),4|8=>(x&y,false,false),5=>(x|y,false,false),6=>{let borrow=u32::from(self.flags.cf.ok_or("CRT unknown borrow")?);let r=x.wrapping_sub(y).wrapping_sub(borrow)&mask;(r,u64::from(x)<u64::from(y)+u64::from(borrow),((x^y)&(x^r)&sign)!=0)},_=>return Err("CRT binary kind")};

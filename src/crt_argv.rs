@@ -78,11 +78,11 @@ pub(crate) fn source() -> Result<String, String> {
     )?;
     out.push_str(&format!("fn argv_configure_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:Option<&CrtNativePlatform>,mut epoch:Option<&mut NormalCallEpoch<'_>>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;{}{body}}}",guard(0x4066d6,&bytes)));
     let bytes = raw(IMAGE_NAME);
-    let mut g = crate::crt_startup_table::graph(&bytes[..(0x40ae94 - 0x40ae0d)], 0x40ae0d)?;
+    let mut g = crate::crt_startup_table::graph(&bytes[..(0x40ae99 - 0x40ae0d)], 0x40ae0d)?;
     for (pc, reason) in [
         (
-            0x40ae94,
-            "argv original narrow-conversion body unbound at 0x40ae94",
+            0x40ae99,
+            "argv post-conversion result/epilog unbound at 0x40ae99",
         ),
         (
             0x40aea2,
@@ -104,6 +104,7 @@ pub(crate) fn source() -> Result<String, String> {
             let next = pc + g.nodes[&pc].length;
             Ok(match t{
   Target::Direct(0x40ab89)=>format!("cpu.call_activation(rt,{next},0,|rt,c|argv_locale_original(rt,c,inputs,platform))?;"),
+  Target::Direct(0x40ad10)=>format!("cpu.call_activation(rt,{next},0,|rt,c|argv_convert_original(rt,c,inputs,platform))?;"),
   Target::Import(0x415084)=>format!("rt.process_image_import(inputs.image,0x415084,\"kernel32.dll\",\"GetModuleFileNameW\")?;cpu.call_activation(rt,{next},12,|rt,c|platform.image_name_call(rt,c,inputs.init))?;"),
   Target::Import(0x415044)=>"return Err(\"argv GetLastError failure acquisition unbound\");".into(),
   Target::Direct(0x407c71)=>"return Err(\"argv image-name error mapping unbound\");".into(),
@@ -114,6 +115,7 @@ pub(crate) fn source() -> Result<String, String> {
     )?;
     out.push_str(&format!("fn argv_image_name_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:&CrtNativePlatform)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;{}{body}}}",guard(0x40ae0d,&bytes)));
     out.push_str(&locale_source()?);
+    out.push_str(&conversion_source()?);
     Ok(out)
 }
 #[test]
@@ -232,7 +234,7 @@ fn locale_source() -> Result<String, String> {
             let next = pc + g.nodes[&pc].length;
             Ok(match t{
   Target::Direct(0x407d96)=>format!("cpu.call_activation(rt,{next},0,|rt,c|argv_file_resolve_original(rt,c,inputs,platform))?;"),
-  Target::Import(0x415128)=>"return Err(\"argv AreFileApisANSI guard/callable effect unbound\");".into(),
+  Target::Import(0x415128)=>format!("let cell=rt.process_image_pointer(inputs.image,0x415128,4)?;if rt.load(cell,32)?.known_scalar()?!=0x401bf9{{return Err(\"argv file mode guard target\");}}let code=rt.process_image_code(inputs.image,0x401bf9,3)?;if rt.memory.read(code.address(),3).map_err(|_|\"argv file mode guard read\")?!=[0xc2,0,0]{{return Err(\"argv file mode guard code\");}}let CrtValue::Function(f)=cpu.r[1]else{{return Err(\"argv file mode guard provenance\");}};if cpu.r[6]!=CrtValue::Function(f)||platform.file_mode.is_none_or(|(expected,_)|expected!=f)||rt.native_named_export(inputs.init,f.module,\"AreFileApisANSI\")?!=f{{return Err(\"argv file mode guard mismatch\");}}cpu.call_activation(rt,{next},0,startup_original_guard)?;guarded=Some(f);"),
   _=>return Err("argv file API direct target".into())})
         },
         &Default::default(),
@@ -242,9 +244,11 @@ fn locale_source() -> Result<String, String> {
         |_, _| Ok(None),
         None,
         |_, _, _| Ok(None),
-        |_, _| Ok("return Err(\"argv AreFileApisANSI callable effect unbound\");".into()),
+        |pc, _| {
+            Ok(format!("let CrtValue::Function(f)=target else{{return Err(\"argv file mode callable provenance\");}};if guarded.take()!=Some(f){{return Err(\"argv file mode guard replay/target\");}}cpu.call_activation(rt,{},0,|rt,c|platform.file_mode_call(rt,c,inputs.init,f))?;",pc+g.nodes[&pc].length))
+        },
     )?;
-    out.push_str(&format!("fn argv_file_ansi_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:&CrtNativePlatform)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;{}{body}}}",guard(0x407fc0,&bytes)));
+    out.push_str(&format!("fn argv_file_ansi_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:&CrtNativePlatform)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;let mut guarded=None;{}{body}}}",guard(0x407fc0,&bytes)));
     Ok(out)
 }
 
@@ -297,5 +301,79 @@ fn original_windows_file_mode_and_utf8_conversion_observations() {
  }
  "#,
         "windows-narrow-conversion",
+    );
+}
+
+#[test]
+fn process_file_mode_and_nonzero_bool_preserve_unknown_bits_and_lifetimes() {
+    crate::crt_stream_callees_tests::native(
+        crate::crt_resident_loader::TYPES,
+        r#"
+ let(mut rt,init)=CrtStreamRuntime::new_initializing(17,23,0x8000,131072).unwrap();let mut p=CrtNativePlatform::prepare(&mut rt,init,CrtNativePlatform::PROFILE,0x700000,0x701000).unwrap();p.enable_fls(&mut rt,init,0x720000,0x721000).unwrap();assert!(rt.native_named_export(init,p.fls.unwrap().module,"AreFileApisANSI").is_err());
+ let serial=rt.serial;assert_eq!(p.enable_file_mode(&mut rt,init,"Windows7",CrtFileApiMode::Ansi),Err("native file mode profile/state"));assert_eq!(rt.serial,serial);assert!(rt.file_mode.is_none());
+ p.enable_file_mode(&mut rt,init,CrtNativePlatform::FILE_MODE_PROFILE,CrtFileApiMode::Ansi).unwrap();let(f,t)=p.file_mode.unwrap();assert_eq!(rt.native_named_export(init,f.module,"AreFileApisANSI"),Ok(f));let a=rt.file_mode_result(t).unwrap();let b=rt.file_mode_result(t).unwrap();assert_ne!(a,b);assert!(a.known_scalar().is_err());assert_eq!(CrtCpu::bits(a),Ok((0,0)));assert!(CrtCpu::number(a).is_err());assert!(CrtCpu::pointer(a).is_err());
+ let stack=rt.map_region(0x20000,512,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,256).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(73)).unwrap();let mut c=CrtCpu::new(sp,73).unwrap();c.binary(&rt,8,a,a,32).unwrap();assert_eq!((c.flags.cf,c.flags.of,c.flags.zf,c.flags.sf),(Some(false),Some(false),Some(false),None));
+ for bits in [1,2,256,0x80000000,u32::MAX]{assert_ne!(bits&bits,0);assert_eq!(c.flags.zf,Some(bits==0));}c.binary(&rt,8,a,b,32).unwrap();assert_eq!(c.flags.zf,None,"different TRUE results may have disjoint set bits");c.r[0]=a;assert!(c.get(0,8,0).unwrap().known_scalar().is_err());c.set(0,8,0,CrtValue::scalar(0)).unwrap();assert!(c.r[0].known_scalar().is_err());c.binary(&rt,8,c.r[0],c.r[0],32).unwrap();assert_eq!(c.flags.zf,None,"partial write cannot retain a nonzero fact");
+ let data=rt.offset(stack,32).unwrap();rt.store(data,32,a).unwrap();assert_eq!(rt.load(data,32),Ok(a));assert!(rt.load(data,8).is_err());assert_eq!(rt.memory.read(data.address(),4),Err(guest_memory::Fault::Uninitialized));assert!(rt.store(data,8,CrtValue::scalar(0)).is_err());rt.store(data,32,CrtValue::scalar(0)).unwrap();assert_eq!(rt.load(data,32),Ok(CrtValue::scalar(0)));
+ rt.thread+=1;assert_eq!(rt.file_mode(t),Ok(CrtFileApiMode::Ansi));rt.set_file_mode(t,CrtFileApiMode::Oem).unwrap();assert_eq!(rt.file_mode_result(t),Ok(CrtValue::scalar(0)));rt.thread-=1;assert_eq!(rt.file_mode(t),Ok(CrtFileApiMode::Oem));rt.set_file_mode(t,CrtFileApiMode::Ansi).unwrap();assert_ne!(rt.file_mode_result(t).unwrap(),a);
+ let(other,_)=CrtStreamRuntime::new_initializing(17,23,0x8000,65536).unwrap();assert_eq!(other.file_mode(t),Err("CRT process file mode owner/lifetime"));let forged=CrtProcessFileMode{serial:t.serial+1,..t};assert!(rt.file_mode(forged).is_err());
+ let saved3=c.r[3];c.r[3]=CrtValue::scalar(91);rt.last_os_error=Some(73);let before=rt.serial;assert_eq!(p.file_mode_call(&mut rt,&mut c,init,f),Err("native file mode ABI"));assert_eq!(rt.serial,before);assert_eq!(rt.last_os_error,Some(73));assert!(!c.returned);c.r[3]=saved3;
+ let result=p.file_mode_call(&mut rt,&mut c,init,f).expect("actual bound native mode call");assert!(matches!(result,CrtValue::NonZero{..}));assert!(c.returned);assert_eq!(rt.last_os_error,None);assert_eq!(p.file_mode_call(&mut rt,&mut c,init,f),Err("CRT active caller lifetime/return authority"));
+ rt.provider_destroy(init,f.module).unwrap();assert!(rt.native_api_identity(f).is_err());assert_eq!(rt.file_mode(t),Ok(CrtFileApiMode::Ansi),"module unload is not a process mode reset");rt.closed=true;assert_eq!(rt.file_mode(t),Err("CRT process file mode owner/lifetime"));
+ "#,
+        "file-mode-bool",
+    );
+}
+
+fn conversion_source() -> Result<String, String> {
+    let mut out = String::new();
+    for (name, at, hex) in [
+        ("argv_convert_original", 0x40ad10, CONVERT),
+        ("argv_convert_write_original", 0x40ab65, CONVERT_WRITE),
+        ("argv_wide_original", 0x40b8c5, WIDE_API),
+        ("argv_wide_flags_original", 0x40b835, WIDE_FLAGS),
+    ] {
+        let bytes = crate::crt_ptd::raw(hex);
+        let g = Graph::decode(&bytes, at)?;
+        let body = crate::crt_stream_emit::emit_body(
+            &g,
+            |pc, target| {
+                let next = pc + g.nodes[&pc].length;
+                Ok(match target{
+   Target::Direct(0x40b8c5)=>format!("cpu.call_activation(rt,{next},0,|rt,c|argv_wide_original(rt,c,inputs,platform))?;"),
+   Target::Direct(0x40b835)=>format!("cpu.call_activation(rt,{next},0,|rt,c|argv_wide_flags_original(rt,c,inputs,platform))?;"),
+   Target::Direct(0x40ab65)=>format!("cpu.call_activation(rt,{next},16,|rt,c|argv_convert_write_original(rt,c,inputs,platform))?;"),
+   Target::Import(0x4150e0)=>format!("rt.process_image_import(inputs.image,0x4150e0,\"kernel32.dll\",\"WideCharToMultiByte\")?;cpu.call_activation(rt,{next},32,|rt,c|platform.wide_query_call(rt,c,inputs.init))?;"),
+   Target::Direct(0x40add2)=>"return Err(\"argv conversion capacity/ownership growth unbound\");".into(),
+   Target::Direct(0x40adf9)=>"return Err(\"argv conversion reset/free unbound\");".into(),
+   Target::Import(0x415044)|Target::Direct(0x407c71)|Target::Direct(0x407ccd)=>"return Err(\"argv conversion error/errno effects unbound\");".into(),
+   _=>return Err(format!("argv conversion call {target:?}"))
+  })
+            },
+            &Default::default(),
+            512,
+        )?;
+        out.push_str(&format!("fn {name}(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:&CrtNativePlatform)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;{}{body}}}",guard(at,&bytes)));
+    }
+    Ok(out)
+}
+
+#[test]
+fn utf8_queries_preserve_byte_counts_alias_domains_unknowns_and_output_memory() {
+    crate::crt_stream_callees_tests::native(
+        crate::crt_resident_loader::TYPES,
+        r#"
+ let vectors:&[(&[u16],i32,u32)]=&[(&[65,0],-1,2),(&[233,55357,56832,0],-1,7),(&[65,0,66],3,3),(&[55296,0],-1,4),(&[56320,0],-1,4),(&[233,55357,56832,0],2,5),(&[65,0,66,0],-1,2)];
+ for &(units,count,expected)in vectors{let(mut rt,_)=CrtStreamRuntime::new_initializing(17,23,0x8000,65536).unwrap();let source=rt.map_region(0x20000,64,CrtRegionKind::Stack,None).unwrap();for(n,&v)in units.iter().enumerate(){rt.store(rt.offset(source,n as i64*2).unwrap(),16,CrtValue::scalar(u32::from(v))).unwrap();}assert_eq!(rt.utf8_required(source,count),Ok(expected));let tail=rt.offset(source,units.len()as i64*2).unwrap();assert_eq!(rt.memory.read(tail.address(),2),Err(guest_memory::Fault::Uninitialized));}
+ for mode in 0..12{let(mut rt,init)=CrtStreamRuntime::new_initializing(17,23,0x8000,131072).unwrap();let mut p=CrtNativePlatform::prepare(&mut rt,init,CrtNativePlatform::PROFILE,0x700000,0x701000).unwrap();let source=rt.map_region(0x20000,64,CrtRegionKind::Stack,None).unwrap();for(n,v)in [233,55357,56832,0].into_iter().enumerate(){rt.store(rt.offset(source,n as i64*2).unwrap(),16,CrtValue::scalar(v)).unwrap();}let stack=rt.map_region(0x30000,512,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,400).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(900+mode)).unwrap();let mut c=CrtCpu::new(sp,900+mode).unwrap();let mut args=[CrtValue::scalar(65001),CrtValue::scalar(0),CrtValue::Pointer(source),CrtValue::scalar(u32::MAX),CrtValue::scalar(0xdeadbeef),CrtValue::scalar(0),CrtValue::scalar(0),CrtValue::scalar(0)];
+  if matches!(mode,1|10|11){args[0]=CrtValue::scalar(0);if mode!=10{let token=rt.publish_command_line(init,0x50000,65001,&["modeled".into()]).unwrap();p.command_line=Some(token);if mode==11{rt.memory.release(token.wide.cap,token.wide.owner).unwrap();}}}
+  match mode{2=>args[1]=CrtValue::scalar(16),3=>args[0]=CrtValue::scalar(1),4=>args[5]=CrtValue::scalar(8),5=>args[6]=CrtValue::scalar(1),6=>args[3]=CrtValue::scalar(0),7=>{rt.store(source,16,CrtValue::Scalar{bits:0,known:0}).unwrap();},8=>{rt.memory.release(source.cap,source.owner).unwrap();},9=>args[1]=CrtValue::scalar(128),_=>{}}
+  for v in args.into_iter().rev(){c.push(&mut rt,v).unwrap();}rt.last_os_error=Some(73);let got=c.call_activation(&mut rt,0x430000,32,|rt,c|p.wide_query_call(rt,c,init));
+  if mode<=1{assert_eq!(got,Ok(CrtValue::scalar(7)));assert_eq!(c.r[4],CrtValue::Pointer(sp));assert_eq!(rt.last_os_error,None);c.finish(&mut rt).unwrap();assert!(c.returned);}
+  else{assert!(got.is_err(),"query negative {mode} accepted");assert!(!c.returned);assert_eq!(rt.last_os_error,Some(73));if mode==2||mode==9{assert_eq!(got,Err("native UTF8 flags outside supported query domain"));}if mode==3{assert_eq!(got,Err("native UTF8 code-page alias unbound"));}if mode==4{assert_eq!(got,Err("native UTF8 conversion write effects unbound"));}if mode==5{assert_eq!(got,Err("native UTF8 default-character outputs unbound"));}if mode==6{assert_eq!(got,Err("native UTF8 input count outside bounded domain"));}if mode==10{assert_eq!(got,Err("native UTF8 ACP profile unbound"));}}
+  assert_eq!(rt.memory.read(stack.address(),64),Err(guest_memory::Fault::Uninitialized),"query must not initialize ignored output memory");
+ }
+ "#,
+        "utf8-query",
     );
 }
