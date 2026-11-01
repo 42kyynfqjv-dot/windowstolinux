@@ -1,0 +1,88 @@
+{
+  "kind": "original onexit first publication native component checkpoint",
+  "status": "implementation checkpoint; full replay/aggregates running, final evidence will record actual outcomes",
+  "base_commit": "b936882eca17df22a735d344498b85109061fa9d",
+  "base_ci": [
+    {
+      "id": 41311107052,
+      "head": "b936882eca17df22a735d344498b85109061fa9d",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41311107052",
+      "attempt": 1
+    },
+    {
+      "id": 41311103619,
+      "head": "b936882eca17df22a735d344498b85109061fa9d",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41311103619",
+      "attempt": 1
+    },
+    {
+      "id": 41311103585,
+      "head": "b936882eca17df22a735d344498b85109061fa9d",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41311103585",
+      "attempt": 1
+    }
+  ],
+  "source_hashes": {
+    "src/crt_onexit.rs": "23ffc04f1d4a494b2a20586a5959874654503ae656231cfd4912852318e8aa87",
+    "src/crt_stream_cpu.rs": "4dd82c554901101f7d65c69ac3e0ea1ed8b7a2daf4ea2a933072800aad5d7230",
+    "src/crt_stream_ir.rs": "4c229106494f8d0829e56a45125d197f636376abe5194699fd3c0bb16ef25683",
+    "src/crt_stream_emit.rs": "46a181037b348c98c65428321183d56e9bc65a859fb013ae0c6a2e3f97a2a1e4",
+    "src/crt_repeat_copy.rs": "7b8d11b83fcded5eeae7020a028d0355ede92935402ed8f241ae712d16ee6304",
+    "src/crt_normal_frame_tests.rs": "6294c7da02d78a5a8594dcacb2811073eb97d7c6a95458f545c163cd25bb965f",
+    "research/process/startup/check_normal_wrapper.py": "f493b2d643f43436cfa4615df067f03f2f2a3cc2f0f0c79b7383346939d27da2"
+  },
+  "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "memset_region": {
+    "at": "0x402370",
+    "size": 346,
+    "sha256": "3586be7f6dac27b94938fabc1acb198c1d5ef385a43c4ec5abf110bfd81b8a97",
+    "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4"
+  },
+  "expectations_sha256": "c8fc55731bcb8de1afba6c2bbb4cc71c44be42cbd949ccaca78a359f2dff3f4a",
+  "entry_result": "one actual first registration completes through original stores and checked normal cleanup; reject before40159b ->401bbf",
+  "authority_limit": "no persistent encoded allocation/callback decoding association, repeated registration/growth/invocation remain unbound; no scalar retagging",
+  "checks_completed": {
+    "canonical": "canonical-v4.log passed",
+    "byte_oracle": "5056 complete native memset vectors passed in memset-v5.log and focused-final.log",
+    "encoding": "encoding-v3.log passed:128 scalar +128 live-pointer +128 stale-alias cases, plus LEA identity",
+    "clippy": "all targets -D warnings clippy-v2.log passed"
+  },
+  "checks_running": [
+    "aggregate root/CRT/unwind",
+    "full artifact replay"
+  ],
+  "whole_pe_translation_pairs": 0,
+  "new_windows_pairs": 0,
+  "retained_windows_wrapper_comparisons": 5,
+  "final_head_ci": "pending publication",
+  "historical_timeouts": "original Windows case5/case19/hello/others remain unresolved; b936882 three workflows passed without diagnosing those failures",
+  "local_review": "actual original graph/code guards, dedicated REP stores, unknown allocation remains unknown until actual writes, producer-bound per-store checks, numeric encoding drops pointer authority, normal cleanup checked; strict negative tests preserve partial effects",
+  "next_review": "Sol: exact bytes, repeated-store gate/progress, opaque identity LEA, actual four publication stores, lifetime failures and final-head CI; next original call40159b ->401bbf",
+  "local_log_sha256": {
+    "memset-v2.log": "dfc5498a6011b4736fcd2761eeb3c1c90937ae7cbf05ac83d55560c45add4b04",
+    "focused-final.log": "d3e5bd00fcdd8242519b14288b1a5950b24c1ec6087ef7d4b8a56b53522eb1a1",
+    "replay-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "canonical-v4.log": "54ae5aba588ad0c7028caceb737cdef69f16fea4e8dc892596ec9306888d918a",
+    "graph.log": "40d914b580d51ece1aa458740a82a2b852773d59a283915eb842aef5ffde1032",
+    "canonical.log": "083efd42f6e20b08511e9afa052493d4fff3e3a9648dfe3dcaef76d6b21c0921",
+    "clippy.log": "34e354d4b22467ff6159bb012b52c5e6b3e3cc7e22dd276bb26913810cefd426",
+    "append-graph.log": "0a761e9aaa825bf4543fb011221ef99fcdc9320600883658bdcfe596ddebd7cb",
+    "memset-v5.log": "56d99b87c4fad12a8c64e2b39b7ed954d02b4dc991e2541ffb523d8941578300",
+    "encoding-v3.log": "fd94dfda482fa580f6fac8c279eb11f801d1ed869b35dd8529ff1f30963fa458",
+    "canonical-v3.log": "bd066aec9e1501b85e50fd858a9123db383b6318be319d814fc1f9b68aa6f3c9",
+    "clippy-v2.log": "cf9fccb05b8a2a4ea0b4f9dfa09c939643bb256c89b9167cce28a4b286818071",
+    "memset-v4.log": "0066fd15c786b6330fd84e579dd4419e8ee50e665d5e8c4baff9243ef616dec5",
+    "encoding-v2.log": "ac087a327f1ed834e62d894af870346351d858b991e109083e97c07c6df5f6d3",
+    "memset-v3.log": "5e87b804a336dac53346115fb274c52fc1b14aec7665618ba6919a9f4df37a76",
+    "root.log": "4799acf33001924a6e74b166de72dd8fe5b5586fa61e8c9199402dc08555469e",
+    "memset-tests.log": "edd5f06ed606a85c4c14cab8d6d3471c85018daf8a95d09b4ad6b0990ed969bf",
+    "crt.log": "98a3cab93c46ae4d929de161a0139693c775344a4011885885324059599beff9",
+    "canonical-v2.log": "eb0fd767ae25a30fd3e4854949d6d9a0a43579e15d8dce96d51c854c5fc281e0"
+  }
+}

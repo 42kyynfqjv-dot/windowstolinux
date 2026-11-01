@@ -420,6 +420,36 @@ pub(crate) fn emit_body_with_indirect(
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn emit_body_with_repeat_copy(
     graph: &Graph,
+    call: impl FnMut(u32, Target) -> Result<String, String>,
+    roles: &BTreeMap<u32, String>,
+    step_budget: u32,
+    thread: impl FnMut(u32, &Op) -> Result<String, String>,
+    before: impl FnMut(u32, &Op) -> Result<String, String>,
+    return_hook: impl FnMut(u32, u16) -> Result<Option<String>, String>,
+    exit: Option<u32>,
+    store: impl FnMut(u32, &Address, u8) -> Result<Option<String>, String>,
+    indirect: impl FnMut(u32, &Operand) -> Result<String, String>,
+    repeat_copy: impl FnMut(u32, u8) -> Result<String, String>,
+) -> Result<String, String> {
+    emit_body_with_repeated_memory(
+        graph,
+        call,
+        roles,
+        step_budget,
+        thread,
+        before,
+        return_hook,
+        exit,
+        store,
+        indirect,
+        repeat_copy,
+        |_, _| Err("CRT emit repeated store effect unbound".into()),
+    )
+}
+/// Repeated stores cannot inherit authority from repeated-copy or thread hooks.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn emit_body_with_repeated_memory(
+    graph: &Graph,
     mut call: impl FnMut(u32, Target) -> Result<String, String>,
     roles: &BTreeMap<u32, String>,
     step_budget: u32,
@@ -430,6 +460,7 @@ pub(crate) fn emit_body_with_repeat_copy(
     mut store: impl FnMut(u32, &Address, u8) -> Result<Option<String>, String>,
     mut indirect: impl FnMut(u32, &Operand) -> Result<String, String>,
     mut repeat_copy: impl FnMut(u32, u8) -> Result<String, String>,
+    mut repeat_store: impl FnMut(u32, u8) -> Result<String, String>,
 ) -> Result<String, String> {
     if graph
         .nodes
@@ -464,6 +495,8 @@ pub(crate) fn emit_body_with_repeat_copy(
  Op::XmmStore{source,address:a,width,aligned}=>out.push_str(&format!("let p={};cpu.vector_store(rt,{source},p,{width},{aligned})?;",address(a,roles)?)),
  Op::XmmCopy{destination,source}=>out.push_str(&format!("cpu.xmm[{destination}]=cpu.xmm[{source}];")),
  Op::XmmZero(index)=>out.push_str(&format!("cpu.xmm[{index}]=[CrtValue::scalar(0);4];")),
+ Op::XmmFromDword{destination,source}=>out.push_str(&format!("cpu.vector_from_dword({destination},{})?;",read(&register(*source),roles)?)),
+ Op::XmmShuffleDwords{destination,source,control}=>out.push_str(&format!("cpu.vector_shuffle({destination},{source},{control})?;")),
  Op::XmmStoreLow64{source,address:a}=>out.push_str(&format!("let p={};rt.store_stack_pair(p,[cpu.xmm[{source}][0],cpu.xmm[{source}][1]])?;",address(a,roles)?)),
  Op::AddCarry{destination,source:operand}=>out.push_str(&format!("let a={};let b={};let v=cpu.add_carry(a,b)?;{}",read(destination,roles)?,read(operand,roles)?,write(destination,"v",roles)?)),
  Op::DivideUnsigned(operand)=>out.push_str(&format!("let divisor={};cpu.divide_unsigned(divisor)?;",read(operand,roles)?)),
@@ -503,6 +536,7 @@ pub(crate) fn emit_body_with_repeat_copy(
  Op::ConditionalMove{condition:c,dst,source:o}=>out.push_str(&format!("let v={};if cpu.condition({})?{{{}}}",read(o,roles)?,condition(*c),write(&register(*dst),"v",roles)?)),
  Op::StoreString{width}=>out.push_str(&format!("let p=CrtCpu::pointer(cpu.r[7])?;let v=cpu.get(0,{width},0)?;rt.store(p,{width},v)?;cpu.r[7]=CrtValue::Pointer(rt.offset(p,{})?);",width/8)),
  Op::RepeatCopyString{width}=>out.push_str(&repeat_copy(pc,*width)?),
+ Op::RepeatStoreString{width}=>out.push_str(&repeat_store(pc,*width)?),
  Op::CopyString{width}=>out.push_str(&format!("let src=CrtCpu::pointer(cpu.r[6])?;let dst=CrtCpu::pointer(cpu.r[7])?;let v=rt.load(src,{width})?;rt.store(dst,{width},v)?;cpu.r[6]=CrtValue::Pointer(rt.offset(src,{})?);cpu.r[7]=CrtValue::Pointer(rt.offset(dst,{})?);",width/8,width/8)),
  Op::Locked{operation,destination,source:o}=>{let Operand::Memory(a,32)=destination else{return Err("CRT emit atomic word form".into());};let method=match operation{Binary::Or=>"atomic_or",Binary::And=>"atomic_and",_=>return Err("CRT emit atomic operation".into())};out.push_str(&format!("let p={};let b={};let old=rt.{method}(lease,p,CrtCpu::number(b)?)?;cpu.binary(rt,{},CrtValue::scalar(old),b,32)?;",address(a,roles)?,read(o,roles)?,binary(*operation)));},
  _=>return Err(format!("CRT emit unsupported normalized operation {:?}",node.op)),

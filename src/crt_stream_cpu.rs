@@ -237,11 +237,11 @@ impl CrtCpu{
   if width==32&&kind==4{if let (CrtValue::Heap(h),CrtValue::Scalar{bits:0,known:u32::MAX})|(CrtValue::Scalar{bits:0,known:u32::MAX},CrtValue::Heap(h))=(a,b){rt.heap_identity(h)?;self.flags=CrtFlags{cf:Some(false),of:Some(false),zf:Some(true),sf:Some(false)};return Ok(CrtValue::scalar(0));}}
   if width==32&&kind==8{if let(CrtValue::Heap(x),CrtValue::Heap(y))=(a,b){if x!=y{return Err("CRT distinct opaque heap comparison");}rt.heap_identity(x)?;self.flags=CrtFlags{cf:Some(false),of:Some(false),zf:Some(false),sf:None};return Ok(CrtValue::Scalar{bits:0,known:0});}}
 
-  // Clearing low address bits can retain an existing stack capability only.
+  // Clearing low address bits can retain a checked stack or heap-buffer capability.
   // This is checked same-object arithmetic, never a scalar-to-pointer cast.
   if width==32&&kind==4{if let(CrtValue::Pointer(p),CrtValue::Scalar{bits:mask,known:u32::MAX})=(a,b){
    let alignment=(!mask).checked_add(1);
-   if p.kind==CrtRegionKind::Stack&&alignment.is_some_and(|n|n>=4&&n.is_power_of_two()){
+   if matches!(p.kind,CrtRegionKind::Stack|CrtRegionKind::Buffer)&&alignment.is_some_and(|n|n>=4&&n.is_power_of_two()){
     let address=p.address()&mask;let q=rt.offset(p,i64::from(address)-i64::from(p.address()))?;
     rt.valid(q,p.address()-address)?;
     if rt.overlapping_tags(q.address(),p.address()-address).iter().any(|(_,v)|matches!(v,CrtValue::ProtectedReturn(_)|CrtValue::OpaqueSaved(_)|CrtValue::ThreadHead(_))){return Err("CRT alignment crosses protected stack");}
@@ -258,6 +258,19 @@ impl CrtCpu{
  /// CDQ changes EDX only; an unknown sign stays unknown, not zero.
  fn vector_load(&mut self,rt:&CrtStreamRuntime,dst:u8,p:CrtPointer,width:u8,aligned:bool)->Result<(),&'static str>{
   if dst>=8||!matches!(width,64|128){return Err("CRT vector load form");}rt.valid(p,u32::from(width)/8)?;if aligned&&p.address()%16!=0{return Err("CRT vector alignment");}let mut words=[CrtValue::scalar(0);4];for (i,w)in words.iter_mut().enumerate().take(usize::from(width)/32){*w=rt.load(rt.offset(p,i as i64*4)?,32)?;if !matches!(w,CrtValue::Scalar{..}){return Err("CRT vector typed data unbound");}}self.xmm[usize::from(dst)]=words;Ok(())
+ }
+ /// Legacy MOVD clears upper lanes, preserves low-lane knowledge and flags.
+ fn vector_from_dword(&mut self,dst:u8,value:CrtValue)->Result<(),&'static str>{
+  if dst>=8||!matches!(value,CrtValue::Scalar{..}){return Err("CRT vector scalar MOVD form");}self.xmm[usize::from(dst)]=[value,CrtValue::scalar(0),CrtValue::scalar(0),CrtValue::scalar(0)];Ok(())
+ }
+ fn vector_shuffle(&mut self,dst:u8,src:u8,control:u8)->Result<(),&'static str>{
+  if dst>=8||src>=8{return Err("CRT vector shuffle form");}let before=self.xmm[usize::from(src)];if before.iter().any(|v|!matches!(v,CrtValue::Scalar{..})){return Err("CRT vector shuffle typed data");}self.xmm[usize::from(dst)]=std::array::from_fn(|n|before[usize::from((control>>(2*n))&3)]);Ok(())
+ }
+ /// Explicit forward cdecl domain, like REP MOVS. STD remains unsupported.
+ /// A completed element advances EDI/ECX; a failed element preserves prior work.
+ fn repeat_store_units(&mut self,rt:&mut CrtStreamRuntime,width:u8,bound:u32)->Result<(),&'static str>{
+  self.validate_active(rt)?;if self.abi!=CrtAbi::Cdecl32Forward||bound==0||bound>262144{return Err("CRT REP store ABI/count domain");}if !matches!(width,8|32){return Err("CRT REP store width");}let count=self.r[1].known_scalar()?;if count>bound{return Err("CRT REP store bound");}if count==0{return Ok(());}if !matches!(self.r[0],CrtValue::Scalar{..}){return Err("CRT REP store scalar value");}let value=self.get(0,width,0)?;if !matches!(value,CrtValue::Scalar{..}){return Err("CRT REP store scalar value");}
+  for _ in 0..count{let p=Self::pointer(self.r[7])?;let next=rt.effective_address(p,p.address().wrapping_add(u32::from(width/8)))?;rt.store(p,width,value)?;self.r[7]=CrtValue::Pointer(next);self.r[1]=CrtValue::scalar(self.r[1].known_scalar()?-1);self.tick(u32::MAX)?;}Ok(())
  }
  fn vector_store(&self,rt:&mut CrtStreamRuntime,src:u8,p:CrtPointer,width:u8,aligned:bool)->Result<(),&'static str>{
   if src>=8||!matches!(width,64|128){return Err("CRT vector store form");}let size=u32::from(width)/8;rt.valid(p,size)?;if matches!(p.kind,CrtRegionKind::File|CrtRegionKind::Descriptor|CrtRegionKind::Input|CrtRegionKind::ProcessData){return Err("CRT vector destination role unbound");}if aligned&&p.address()%16!=0{return Err("CRT vector alignment");}rt.memory.validate_writable(p.cap,p.owner,p.address(),size).map_err(|_|"CRT vector write permission")?;if !rt.overlapping_tags(p.address(),size).is_empty(){return Err("CRT vector typed destination unbound");}for i in 0..usize::from(width)/32{let CrtValue::Scalar{..}=self.xmm[usize::from(src)][i]else{return Err("CRT vector typed data unbound");};rt.ordinary_file_bytes(rt.offset(p,i as i64*4)?,4)?;}
@@ -293,6 +306,9 @@ impl CrtCpu{
  fn lea(&self,rt:&CrtStreamRuntime,base:Option<usize>,index:Option<usize>,scale:u32,displacement:u32,absolute:Option<CrtRegionKind>)->Result<CrtValue,&'static str>{
   if base.is_some_and(|r|matches!(self.r[r],CrtValue::Pointer(_)))||index.is_some_and(|r|matches!(self.r[r],CrtValue::Pointer(_)))||base.is_none()&&absolute.is_some(){return Ok(CrtValue::Pointer(self.form_address(rt,base,index,scale,displacement,absolute)?));}
   if !matches!(scale,1|2|4|8){return Err("CRT LEA scale");}
+  // A register-only identity LEA preserves an opaque saved value exactly.
+  // Other arithmetic still uses bit knowledge and cannot recreate this token.
+  if index.is_none()&&displacement==0&&absolute.is_none(){if let Some(r)=base{return Ok(self.r[r]);}}
   let a=base.map(|r|self.r[r]).unwrap_or(CrtValue::scalar(0));
   let b=if let Some(r)=index{let(bits,known)=Self::bits(self.r[r])?;let shift=scale.trailing_zeros();CrtValue::Scalar{bits:bits.wrapping_shl(shift),known:known.wrapping_shl(shift)|(scale-1)}}else{CrtValue::scalar(0)};
   Self::sum_bits(Self::sum_bits(a,b)?,CrtValue::scalar(displacement))

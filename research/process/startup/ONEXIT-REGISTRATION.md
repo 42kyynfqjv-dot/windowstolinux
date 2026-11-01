@@ -1,5 +1,8 @@
 # Original onexit routing and registered allocation prefix
 
+Historical checkpoint at `b936882`. Current execution and limitations are in
+[Original onexit fill and first publication](ONEXIT-FILL.md).
+
 ## Actual connected result
 
 The unchanged authored entry now executes CALL `0x401596 -> 0x401b0f`, the real

@@ -1,6 +1,25 @@
 # Remaining entry-to-exit dependencies
 
-## Current executable checkpoint: original onexit manager reaches real allocation
+## Current executable checkpoint: original first onexit publication completes
+
+Original memset402370 now initializes the actual128-byte heap allocation, then
+4072bb executes cookie filling, actual406d62 encoding and all four callback/table
+publication stores. The original manager releases logical lock2 and completes
+checked EH4 cleanup/RET12. Original entry rejects **before CALL40159b ->401bbf**
+in the first C initializer, preserving the root frame/scope/state and prior effects.
+This is explicit-profile mapped native component execution, not whole-PE support.
+Nonempty decoding/repeated registration/growth/callback invocation still reject;
+scalar encodings never grant pointer ownership.
+
+[Contract and review](ONEXIT-FILL.md), [frozen expectations](evidence/onexit-fill-expectations.json),
+[evidence](evidence/onexit-fill.json). Next inspect/execute401bbf and its following
+call4015a1 ->4069d4 only where supported. Persistent encoded-pointer association,
+free/resize/exception effects and all earlier broader gates remain unclosed.
+Sol can review this slice and inventory the next original call; no automatic
+Astra escalation. Predecessor b936882 exact-head three workflows passed.
+Historical original-Windows timeout causes remain unresolved.
+
+## Previous checkpoint: original onexit manager reaches real allocation
 
 Original entry now executes401596/401b0f/401ae1, sentinel routing to table41ce88,
 actual407525 reference setup, registered EH4 manager407260, logical lock2 and

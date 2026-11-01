@@ -45,6 +45,15 @@ pub(crate) enum Op {
     /// Consumer must bind guest x87 state and an enabled modern user-mode domain.
     X87ClearExceptions,
     XmmZero(u8),
+    XmmFromDword {
+        destination: u8,
+        source: Reg,
+    },
+    XmmShuffleDwords {
+        destination: u8,
+        source: u8,
+        control: u8,
+    },
     XmmLoad {
         destination: u8,
         address: graph::Address,
@@ -126,6 +135,10 @@ pub(crate) enum Op {
     },
     /// Requires a dedicated consumer-bound count/memory-effect contract.
     RepeatCopyString {
+        width: u8,
+    },
+    /// Separate memory-effect issuer required, including for zero count.
+    RepeatStoreString {
         width: u8,
     },
     Locked {
@@ -226,6 +239,13 @@ fn extended(i: &Instruction, raw: &[u8], tables: &[JumpTable<'_>]) -> Result<Op,
                 width: if raw[1] == 0xa4 { 8 } else { 32 },
             });
         }
+        if (raw == [0xf3, 0xaa] && i.mnemonic() == Mnemonic::Stosb)
+            || (raw == [0xf3, 0xab] && i.mnemonic() == Mnemonic::Stosd)
+        {
+            return Ok(Op::RepeatStoreString {
+                width: if raw[1] == 0xaa { 8 } else { 32 },
+            });
+        }
         return Err("CRT IR: repeated instruction outside domain".into());
     }
     if i.segment_prefix() == Register::FS && raw.first() == Some(&0x64) {
@@ -306,13 +326,32 @@ fn extended(i: &Instruction, raw: &[u8], tables: &[JumpTable<'_>]) -> Result<Op,
         });
     }
     if i.segment_prefix() == Register::None && !i.has_lock_prefix() {
+        if i.code() == Code::Movd_xmm_rm32 && i.op1_kind() == OpKind::Register {
+            return Ok(Op::XmmFromDword {
+                destination: xmm(i.op0_register())?,
+                source: full(i.op1_register())?,
+            });
+        }
+        if i.code() == Code::Pshufd_xmm_xmmm128_imm8 && i.op1_kind() == OpKind::Register {
+            return Ok(Op::XmmShuffleDwords {
+                destination: xmm(i.op0_register())?,
+                source: xmm(i.op1_register())?,
+                control: i.immediate8(),
+            });
+        }
         let load = matches!(
             i.code(),
-            Code::Movdqa_xmm_xmmm128 | Code::Movdqu_xmm_xmmm128 | Code::Movq_xmm_xmmm64
+            Code::Movdqa_xmm_xmmm128
+                | Code::Movdqu_xmm_xmmm128
+                | Code::Movq_xmm_xmmm64
+                | Code::Movups_xmm_xmmm128
         );
         let store = matches!(
             i.code(),
-            Code::Movdqa_xmmm128_xmm | Code::Movdqu_xmmm128_xmm | Code::Movq_xmmm64_xmm
+            Code::Movdqa_xmmm128_xmm
+                | Code::Movdqu_xmmm128_xmm
+                | Code::Movq_xmmm64_xmm
+                | Code::Movups_xmmm128_xmm
         );
         if load || store {
             if i.op0_kind() == OpKind::Register
