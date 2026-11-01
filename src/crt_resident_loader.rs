@@ -66,6 +66,13 @@ impl CrtNativePlatform {
   let sp=CrtCpu::pointer(cpu.r[4])?;rt.offset(sp,8)?;rt.memory.validate_writable(sp.cap,sp.owner,sp.address(),8).map_err(|_|"native standard API stack permission")?;let value=rt.load(rt.offset(sp,4)?,32)?;
   let result=if file_type{rt.native_file_type(init,value)?}else{rt.native_get_standard(init,set,value.known_scalar()?)?};cpu.clobber(result);cpu.finish_pop(rt,4)
  }
+ fn environment_call(&self,rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,init:CrtInitialization,free:bool)->Result<CrtValue,&'static str>{
+  self.validate(rt,init)?;cpu.validate_active(rt)?;let pop=if free{4}else{0};
+  if cpu.return_pop!=pop||cpu.r[4]!=cpu.entry[4]||[3,5,6,7].iter().any(|&r|cpu.r[r]!=cpu.entry[r]){return Err("CRT environment API ABI");}
+  let sp=CrtCpu::pointer(cpu.r[4])?;rt.memory.validate_writable(sp.cap,sp.owner,sp.address(),u32::from(pop)+4).map_err(|_|"CRT environment API stack permission")?;
+  let result=if free{let p=CrtCpu::pointer(rt.load(rt.offset(sp,4)?,32)?)?;rt.free_environment_snapshot(init,p)?}else{CrtValue::Pointer(rt.environment_snapshot(init)?)};
+  cpu.clobber(result);cpu.finish_pop(rt,pop)
+ }
  fn acquire_command_line(&mut self,rt:&mut CrtStreamRuntime,init:CrtInitialization,base:u32,codepage:u32)->Result<(),&'static str>{
   self.validate(rt,init)?;if !self.startup_metadata||self.command_line.is_some(){return Err("native command-line launch profile unbound/already acquired");}self.command_line=Some(rt.acquire_native_command_line(init,base,codepage)?);Ok(())
  }

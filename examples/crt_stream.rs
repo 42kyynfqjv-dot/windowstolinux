@@ -414,3 +414,7 @@ mod crt_malloc;
 
 #[path = "../src/crt_repeat_copy.rs"]
 mod crt_repeat_copy;
+
+#[cfg(test)]
+#[path = "../src/crt_environment_tests.rs"]
+mod crt_environment_tests;

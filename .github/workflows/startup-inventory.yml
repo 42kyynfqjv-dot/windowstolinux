@@ -255,6 +255,19 @@ jobs:
         with:
           name: startup-fp-control-observation
           path: ${{ runner.temp }}/fp-control-observation
+      - name: Observe authored PE32 synthetic PE32 environment snapshots
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $install = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $vcvars = Join-Path $install 'VC\Auxiliary\Build\vcvarsall.bat'
+          cmd /c "`"$vcvars`" x86 -vcvars_ver=14.44 && python research/process/startup/observe_environment.py %RUNNER_TEMP%/environment-observation"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: startup-environment-observation
+          path: ${{ runner.temp }}/environment-observation
       - name: Measure frozen original exception and cleanup outcomes
         shell: pwsh
         run: |

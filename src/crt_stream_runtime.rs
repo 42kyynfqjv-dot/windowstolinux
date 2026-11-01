@@ -13,6 +13,7 @@ struct CrtProcessHandle {anchor:guest_memory::Capability,serial:u64,handle:u32}
 struct CrtNativeStandards {anchor:guest_memory::Capability,serial:u64,pid:u32}
 #[derive(Clone,Copy)]
 struct CrtStandardEntry {value:CrtValue,last_error:Option<u32>}
+struct CrtEnvironment {anchor:guest_memory::Capability,owner:u64,pid:u32,words:Vec<u8>,next:u32,blocks:Vec<CrtPointer>}
 struct CrtNativeEndpoint {id:CrtProcessHandle,file:Option<std::fs::File>,certain:bool}
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 struct CrtCommandLine {anchor:guest_memory::Capability,pid:u32,serial:u64,codepage:u32,narrow:CrtPointer,wide:CrtPointer}
@@ -221,7 +222,7 @@ struct CrtX87Context{anchor:guest_memory::Capability,owner:u64,thread:u64,init:C
 
 struct CrtStreamRuntime {
  // Diagnostic instruction address only; never grants state authority.
- fp_boundary:Option<u32>,x87:Option<CrtX87Context>,
+ environment:Option<Box<CrtEnvironment>>,fp_boundary:Option<u32>,x87:Option<CrtX87Context>,
  file_view:CrtPointer,main_image:Option<CrtProcessImage>,main_image_regions:Vec<CrtPointer>,loader_cells:std::collections::BTreeMap<u32,(CrtPointer,bool)>,modules:std::collections::BTreeMap<u32,CrtLoadedModule>,module_references:CrtModuleReferences,exports:std::collections::BTreeMap<u64,CrtExport>,providers:std::collections::BTreeMap<u32,CrtNativeProvider>,native_sync:CrtGlobalSlots<(CrtFunction,u32,CrtPointer)>,slist_heads:Box<CrtGlobalSlots<CrtSListHead>>,
  uncertain_allocations:Vec<CrtPointer>,completed_failed_frees:Vec<(guest_memory::Capability,u64)>,heap_ptds:Vec<CrtHeapPtdView>,fiber:Option<CrtFiber>,fls_indices:CrtFlsIndices,fls:CrtFlsValues,
  unobserved_contexts:Vec<(CrtPointer,std::rc::Rc<std::cell::Cell<bool>>)>,heap:Option<CrtHeap>,memory:guest_memory::Space,owner:u64,thread:u64,anchor:guest_memory::Capability,
@@ -317,7 +318,7 @@ impl CrtStreamRuntime {
  }
  fn from_file_storage(owner:u64,thread:u64,memory:guest_memory::Space,pointer:CrtPointer)->Result<Self,&'static str>{
   let anchor=pointer.cap;
-  Ok(Self{fp_boundary:None,x87:None,file_view:pointer,main_image:None,main_image_regions:vec![],loader_cells:std::collections::BTreeMap::new(),modules:std::collections::BTreeMap::new(),module_references:CrtModuleReferences::new(),exports:std::collections::BTreeMap::new(),providers:std::collections::BTreeMap::new(),native_sync:CrtGlobalSlots::new(),slist_heads:Box::new(CrtGlobalSlots::new()),uncertain_allocations:vec![],completed_failed_frees:vec![],heap_ptds:vec![],fiber:None,fls_indices:CrtFlsIndices::new(),fls:CrtFlsValues::new(),unobserved_contexts:vec![],heap:None,memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],native_endpoints:vec![],native_standards:None,command_line:None,image_name:None,file_mode:None,global_objects:CrtGlobalSlots::new(),global_locks:CrtGlobalLeases::new(),record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,canonical_errno:false,errno_cell:None,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([pointer.base])})
+  Ok(Self{environment:None,fp_boundary:None,x87:None,file_view:pointer,main_image:None,main_image_regions:vec![],loader_cells:std::collections::BTreeMap::new(),modules:std::collections::BTreeMap::new(),module_references:CrtModuleReferences::new(),exports:std::collections::BTreeMap::new(),providers:std::collections::BTreeMap::new(),native_sync:CrtGlobalSlots::new(),slist_heads:Box::new(CrtGlobalSlots::new()),uncertain_allocations:vec![],completed_failed_frees:vec![],heap_ptds:vec![],fiber:None,fls_indices:CrtFlsIndices::new(),fls:CrtFlsValues::new(),unobserved_contexts:vec![],heap:None,memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],native_endpoints:vec![],native_standards:None,command_line:None,image_name:None,file_mode:None,global_objects:CrtGlobalSlots::new(),global_locks:CrtGlobalLeases::new(),record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,canonical_errno:false,errno_cell:None,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([pointer.base])})
  }
 
  /// Initial FILE storage is a bounded role view of the original writable
@@ -1324,6 +1325,36 @@ impl CrtStreamRuntime {
  }
  /// Process-owned, immutable buffers. Failed pair publication releases only its
  /// private first mapping; no pointer or generation escapes on failure.
+ /// Controlled launch input, never an implicit read of the host environment.
+ /// Names are ASCII in this bounded profile; Unicode values are preserved.
+ /// No entry contents appear in diagnostics. Hidden drive entries/collisions
+ /// and non-ASCII name collation remain unsupported until separately proved.
+ fn declare_environment(&mut self,init:CrtInitialization,profile:&str,base:u32,entries:&[(String,String)])->Result<(),&'static str>{
+  self.initialization(init)?;if profile!="w2l-controlled-environment-v1"||self.environment.is_some()||base==0||base%4096!=0||entries.len()>256{return Err("CRT environment launch profile/extent");}
+  let mut names=std::collections::BTreeSet::new();let mut ordered=Vec::new();
+  ordered.try_reserve_exact(entries.len()).map_err(|_|"CRT environment metadata resource")?;
+  let mut units=1usize;
+  for(name,value)in entries{if name.is_empty()||!name.is_ascii()||name.contains(['=','\0'])||value.contains('\0')||!names.insert(name.to_ascii_uppercase()){return Err("CRT environment entry domain/collision");}
+   units=units.checked_add(name.len()).and_then(|n|n.checked_add(value.encode_utf16().count()+2)).filter(|n|*n<=32767).ok_or("CRT environment supported size")?;ordered.push((name,value));}
+  if entries.is_empty(){units=2;}ordered.sort_by_key(|(n,_)|n.to_ascii_uppercase());
+  let mut words=Vec::new();words.try_reserve_exact(units*2).map_err(|_|"CRT environment encoding resource")?;
+  for(name,value)in ordered{for u in name.encode_utf16().chain(std::iter::once(61)).chain(value.encode_utf16()).chain(std::iter::once(0)){words.extend_from_slice(&u.to_le_bytes());}}
+  words.extend_from_slice(&0u16.to_le_bytes());if entries.is_empty(){words.extend_from_slice(&0u16.to_le_bytes());}
+  self.environment=Some(Box::new(CrtEnvironment{anchor:self.anchor,owner:self.owner,pid:std::process::id(),words,next:base,blocks:Vec::new()}));Ok(())
+ }
+ fn environment_live(&self)->Result<(),&'static str>{let e=self.environment.as_ref().ok_or("CRT environment launch state unbound")?;if self.closed||e.anchor!=self.anchor||e.owner!=self.owner||e.pid!=std::process::id(){return Err("CRT environment process/lifetime");}self.memory.validate(self.anchor,guest_memory::Owner::Module(self.owner)).map_err(|_|"CRT environment storage lifetime")}
+ fn environment_snapshot(&mut self,init:CrtInitialization)->Result<CrtPointer,&'static str>{
+  self.initialization(init)?;self.environment_live()?;let e=self.environment.as_mut().unwrap();if e.blocks.len()>=16{return Err("CRT environment snapshot capacity unsupported");}
+  let size=e.words.len()as u32;let base=e.next;let next=base.checked_add(size).and_then(|n|n.checked_add(4095)).map(|n|n&!4095).filter(|n|*n>base).ok_or("CRT environment address budget")?;
+  e.blocks.try_reserve(1).map_err(|_|"CRT environment snapshot metadata resource")?;self.regions.try_reserve(1).map_err(|_|"CRT environment region metadata resource")?;
+  let cap=self.memory.map_image(base,size,self.owner,guest_memory::Permissions::READ,&e.words).map_err(|_|"CRT environment snapshot mapping unsupported")?;
+  let p=CrtPointer{cap,owner:guest_memory::Owner::Module(self.owner),base,address:base,size,kind:CrtRegionKind::ProcessData};e.blocks.push(p);e.next=next;self.regions.push(CrtRegion{pointer:p,heap:false,file_owner:None});self.last_os_error=None;Ok(p)
+ }
+ fn free_environment_snapshot(&mut self,init:CrtInitialization,p:CrtPointer)->Result<CrtValue,&'static str>{
+  self.initialization(init)?;self.environment_live()?;let index=self.environment.as_ref().unwrap().blocks.iter().position(|q|*q==p).ok_or("CRT environment exact acquired root required")?;self.valid(p,p.size)?;
+  let serial=self.serial.checked_add(1).ok_or("CRT environment BOOL identity budget")?;self.reserve_retirement()?;
+  self.memory.release(p.cap,p.owner).map_err(|_|"CRT environment release unsupported")?;self.environment.as_mut().unwrap().blocks.remove(index);self.regions.retain(|r|r.pointer.cap!=p.cap);self.retired.push(p);self.tags.retain(|&a,_|a<p.base||u64::from(a)>=u64::from(p.base)+u64::from(p.size));self.partial.retain(|&a,_|a<p.base||u64::from(a)>=u64::from(p.base)+u64::from(p.size));self.serial=serial;self.last_os_error=None;Ok(CrtValue::NonZero{anchor:self.anchor,serial})
+ }
  fn publish_command_line(&mut self,init:CrtInitialization,base:u32,codepage:u32,args:&[String])->Result<CrtCommandLine,&'static str>{
   self.initialization(init)?;if self.command_line.is_some()||codepage!=65001||base==0||base%4096!=0{return Err("native command-line profile/base/publication");}
   let serial=self.serial.checked_add(1).ok_or("native command-line generation")?;let(narrow,wide)=Self::encode_native_command_line(args)?;
