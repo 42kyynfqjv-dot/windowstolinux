@@ -57,6 +57,35 @@ def require_test_completions(result, required):
         raise ValueError('original C++ owned record component failed: named completions/summary')
 
 
+def image_name_observations(path):
+    """Validate retained original API bytes; these are never PE translations."""
+    raw = Path(path).read_bytes()
+    rows = [json.loads(line) for line in raw.splitlines()]
+    kind = 'original Windows GetModuleFileNameW API component; no PE translation'
+    def words(value):
+        return (isinstance(value, list) and len(value) <= 32770
+                and all(type(n) is int and 0 <= n <= 65535 for n in value))
+    if len(rows) != 7 or not all(isinstance(row, dict) for row in rows):
+        raise ValueError('image-name observation row count/type')
+    baseline = rows[0].get('baseline_utf16')
+    if (rows[0].get('kind') != kind or not isinstance(rows[0].get('arch'), str)
+            or not rows[0]['arch'] or not words(baseline) or not 0 < len(baseline) <= 32765
+            or 0 in baseline):
+        raise ValueError('image-name original baseline provenance/domain')
+    b''.join(n.to_bytes(2, 'little') for n in baseline).decode('utf-16le')
+    size = len(baseline)
+    for row, count in zip(rows[1:], [1, 2, size, size+1, size+2, 261]):
+        copied = min(size, count-1)
+        expected = baseline[:copied] + [0] + [0x5a5a] * (count+2-copied)
+        if (type(row.get('count')) is not int or row['count'] != count
+                or type(row.get('result')) is not int or row['result'] != min(size, count)
+                or type(row.get('last_error')) is not int or not 0 <= row['last_error'] <= 0xffffffff
+                or (size >= count and row['last_error'] != 122)
+                or not words(row.get('units')) or row['units'] != expected):
+            raise ValueError('image-name original API effect/bounds mismatch')
+    return sha(raw)
+
+
 def check(original, observation, out, compare=None):
     out.mkdir(parents=True, exist_ok=False)
     image = (original/'unwind.exe').read_bytes()
@@ -534,6 +563,8 @@ def check(original, observation, out, compare=None):
         (out/(label+'.stderr')).write_bytes(checked.stderr)
         require_test_completions(checked,names)
 
+    windows_image_name_observation = (image_name_observations(out/'original-windows-image-name.jsonl')
+                                      if os.name == 'nt' else None)
     alignment_run = subprocess.run(['cargo','test','--locked','--example','crt_stream','aligned_'],
                                    env=mapping_env,capture_output=True,timeout=180)
     (out/'locale-alignment.stdout').write_bytes(alignment_run.stdout)
@@ -614,6 +645,7 @@ def check(original, observation, out, compare=None):
         raise ValueError('native wrapper restoration/result mismatch')
     source_hash = sha((out/'normal-wrapper.rs').read_bytes())
     result = dict(kind='original prolog/epilog component comparison with explicit unexecuted body boundary',
+                  windows_image_name_api_observation_sha256=windows_image_name_observation,
                   pe_sha256=sha(image), helper_sha256=sha(helper), epilog_sha256=sha(epilog),
                   handler_scope_store_sha256=sha(scope_store),
                   handler_prolog_sha256=sha((out/'handler-prolog.bin').read_bytes()),

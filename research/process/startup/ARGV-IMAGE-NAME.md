@@ -29,7 +29,9 @@ It publishes one immutable, process/image-owned UTF-16 snapshot. It does not
 reuse argv[0], guess the original Windows source path, use lossy conversion or
 claim Windows path spelling/loader acquisition. Supplied model text has a distinct
 provenance bit and cannot bind the production API adapter. Default admission and
-other profile choices are unchanged.
+other profile choices are unchanged. The host driver establishes pre-entry
+setup ordering; the token proves process/image/read lifetime, not Windows loader
+timing or Windows path-namespace equivalence.
 
 The token binds the runtime anchor, canonical main-image generation, actual host
 PID, publication serial, exact mapping and read fact. Mapping and metadata are
@@ -83,7 +85,11 @@ are not replaced with successful callbacks.
 - five original mode/disabled-mode/invalid-mode/mutated-code cases;
 - a Windows-only six-case direct GetModuleFileNameW comparison with the component
   contract. Fresh observations count only after the applicable Windows CI passes;
-  they are not unchanged-PE Windows/ELF comparisons.
+  they are not unchanged-PE Windows/ELF comparisons. The reproduction gate retains
+  raw baseline UTF-16 units and each count/result/error/output in
+  `original-windows-image-name.jsonl`, flushed before model comparisons. A missing
+  or malformed Windows trace rejects the gate. Ordinary unit-test success alone
+  does not establish that these raw observations were retained.
 
 The retained five recorded original-Windows wrapper comparisons remain component
 evidence. There are zero new whole-PE translation pairs. Earlier original-Windows
@@ -100,3 +106,12 @@ original `0x40ab89`, its live locale/code-page producer and `0x40ad10` narrow
 conversion, preserving failure behavior and record fields. Original count/allocate/
 parse and argv storage lifetime remain downstream. Escalate only a concrete
 ownership or encoding uncertainty; do not guess ACP or synthesize expected argv.
+
+Read-only next-call inventory: `0x40ab89` calls the existing locale-view constructor
+`0x40aabe`, reads the locale-info code page at offset 8 and compares it with
+65001. The fallback calls `0x407fc0`. A flagged temporary view conditionally clears
+bit 1 at PTD offset `0x350` before returning EDX through EAX. This is an owned
+view/cleanup connection, not an assumed GetACP result. Original `0x40ad10` then
+uses separate size-query and conversion helpers and output-record capacity/data
+fields; error/errno and allocation paths remain explicit. None of these later
+instructions is represented as newly executed by this checkpoint.
