@@ -1,5 +1,5 @@
-//! Original locale callback prefix and registered required-PTD acquisition.
-//! The aligned frame executes; its first locale body call remains rejected.
+//! Original locale/PTD, aligned reference and code-page execution.
+//! Multibyte initialization rejects at the original selector continuation.
 use crate::crt_stream_ir::{Graph, Target};
 pub(crate) const CALLBACK:&str="803d48d1410000753cc70540d1410040c24100c7053cd1410068c54100c70538d1410060c44100e899eeffff6840d14100506a016afde8d0fdffff83c410c60548d1410001b001c3";
 pub(crate) const GETTER:&str="6a00b84a4b4100e86d9f00008365fc00a170c1410083f8ff741550e852ddffff85c0740b83f8ff740fe8379f0000c3e8cbfeffff85c075f1e8d3d4ffff";
@@ -11,7 +11,7 @@ pub(crate) fn source() -> Result<String, String> {
         &g,
         |pc, target| {
             let next = pc + g.nodes[&pc].length;
-            Ok(match target{Target::Direct(0x40a2ef)=>format!("cpu.call_activation(rt,{next},0,|rt,c|locale_required_ptd(rt,c,inputs,platform,epoch))?;"),Target::Direct(0x40b235)=>format!("cpu.call_activation(rt,{next},0,|rt,c|locale_aligned_prefix(rt,c,inputs,epoch))?;"),_=>return Err("locale callback unexpected target".into())})
+            Ok(match target{Target::Direct(0x40a2ef)=>format!("cpu.call_activation(rt,{next},0,|rt,c|locale_required_ptd(rt,c,inputs,platform,epoch))?;"),Target::Direct(0x40b235)=>format!("cpu.call_activation(rt,{next},0,|rt,c|locale_aligned_prefix(rt,c,inputs,platform,epoch))?;"),_=>return Err("locale callback unexpected target".into())})
         },
         &std::collections::BTreeMap::from([
             (0x41d148, "CrtRegionKind::Module".into()),
@@ -68,8 +68,26 @@ pub(crate) fn source() -> Result<String, String> {
     out.push_str("fn locale_required_view(rt:&CrtStreamRuntime,_platform:&CrtNativePlatform,value:CrtValue)->Result<(),&'static str>{match value{CrtValue::Pointer(p)=>{let view=rt.heap_ptds.iter().find(|v|v.pointer==p&&v.layout==CrtPtdLayout::Ucrt).ok_or(\"required PTD UCRT allocation view\")?;rt.heap_ptd_layout_view(p,view.slot,CrtPtdLayout::Ucrt)?;if rt.fls.get(&view.slot.index).map(|x|x.1)!=Some(value){return Err(\"required PTD publication changed\");}Ok(())},CrtValue::Scalar{bits:0|u32::MAX,known:u32::MAX}=>Ok(()),_=>Err(\"required PTD value authority\")}}\n");
     let prefix = crate::crt_ptd::raw(ALIGNED_FRAME);
     let body = crate::crt_aligned_activation::prefix(&prefix, 0x40b235)?;
-    out.push_str(&format!("fn locale_aligned_prefix(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;let p=rt.process_image_code(inputs.image,0x40b235,{})?;if rt.memory.read(p.address(),{}).map_err(|_|\"locale aligned code read\")?!=&{prefix:?}{{return Err(\"locale aligned code changed\");}}let mut aligned=CrtAlignedActivation::begin(rt,cpu)?;let _=(||->Result<CrtValue,&'static str>{{{body}}})()?;aligned.live(rt,cpu)?;cpu.tick(u32::MAX)?;cpu.call_activation(rt,0x40b25f,0,|rt,c|locale_reference_original(rt,c,inputs,epoch))?;aligned.live(rt,cpu)?;return Err(\"locale code-page caller unbound at 0x40b25f\");}}",prefix.len(),prefix.len()));
+    let caller_bytes = crate::crt_ptd::raw("ff7308e855fdffff");
+    let caller_graph = crate::crt_startup_table::graph(&caller_bytes, 0x40b25f)?;
+    let caller_body = crate::crt_stream_emit::emit_body_with_exit(
+        &caller_graph,
+        |pc, t| {
+            if t != Target::Direct(0x40afbc) {
+                return Err("locale caller target".into());
+            }
+            Ok(format!("cpu.call_activation(rt,{},0,|rt,c|locale_code_page_original(rt,c,inputs,platform))?;",pc+caller_graph.nodes[&pc].length))
+        },
+        &Default::default(),
+        32,
+        |_, _| Err("locale caller thread effect".into()),
+        |_, _| Ok(String::new()),
+        |_, _| Ok(None),
+        Some(caller_graph.end),
+    )?;
+    out.push_str(&format!("fn locale_aligned_prefix(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:&CrtNativePlatform,epoch:&mut NormalCallEpoch<'_>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;let p=rt.process_image_code(inputs.image,0x40b235,{})?;if rt.memory.read(p.address(),{}).map_err(|_|\"locale aligned code read\")?!=&{prefix:?}{{return Err(\"locale aligned code changed\");}}let mut aligned=CrtAlignedActivation::begin(rt,cpu)?;let _=(||->Result<CrtValue,&'static str>{{{body}}})()?;aligned.live(rt,cpu)?;cpu.tick(u32::MAX)?;cpu.call_activation(rt,0x40b25f,0,|rt,c|locale_reference_original(rt,c,inputs,epoch))?;aligned.live(rt,cpu)?;let caller=rt.process_image_code(inputs.image,0x40b25f,8)?;if rt.memory.read(caller.address(),8).map_err(|_|\"locale caller code read\")?!=[255,115,8,232,85,253,255,255]{{return Err(\"locale code-page caller changed\");}}let _=(||->Result<CrtValue,&'static str>{{{caller_body}}})()?;aligned.live(rt,cpu)?;return Err(\"locale selected-code-page continuation unbound at 0x40b267\");}}",prefix.len(),prefix.len()));
     out.push_str(&reference_source()?);
+    out.push_str(&crate::crt_locale_code_page::source()?);
     Ok(out)
 }
 

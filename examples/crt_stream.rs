@@ -375,3 +375,6 @@ mod crt_command_line_tests;
 mod crt_aligned_activation;
 #[path = "../src/crt_locale_startup.rs"]
 mod crt_locale_startup;
+
+#[path = "../src/crt_locale_code_page.rs"]
+mod crt_locale_code_page;

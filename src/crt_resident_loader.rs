@@ -73,6 +73,16 @@ impl CrtNativePlatform {
   self.validate(rt,init)?;cpu.validate_active(rt)?;if cpu.return_pop!=0||cpu.r[4]!=cpu.entry[4]||[3,5,6,7].iter().any(|&r|cpu.r[r]!=cpu.entry[r]){return Err("native command-line API ABI");}let sp=CrtCpu::pointer(cpu.r[4])?;rt.memory.validate_writable(sp.cap,sp.owner,sp.address(),4).map_err(|_|"native command-line API return permission")?;
   let token=self.command_line.ok_or("startup native command line unbound")?;let p=rt.command_line_pointer(token,wide)?;rt.last_os_error=None;cpu.clobber(CrtValue::Pointer(p));cpu.finish(rt)
  }
+ /// ACP is the declared process encoding, never the host's inferred Windows ACP.
+ /// The same live token backs both command-line encodings and this API result.
+ fn ansi_code_page_call(&self,rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,init:CrtInitialization)->Result<CrtValue,&'static str>{
+  self.validate(rt,init)?;cpu.validate_active(rt)?;
+  if cpu.return_pop!=0||cpu.r[4]!=cpu.entry[4]||[3,5,6,7].iter().any(|&r|cpu.r[r]!=cpu.entry[r]){return Err("native code-page API ABI");}
+  let token=self.command_line.ok_or("native ANSI process profile unbound")?;
+  rt.command_line_pointer(token,false)?;rt.command_line_pointer(token,true)?;
+  let sp=CrtCpu::pointer(cpu.r[4])?;rt.memory.validate_writable(sp.cap,sp.owner,sp.address(),4).map_err(|_|"native code-page return permission")?;
+  rt.last_os_error=None;cpu.clobber(CrtValue::scalar(token.codepage));cpu.finish(rt)
+ }
  fn prepare(rt:&mut CrtStreamRuntime,init:CrtInitialization,profile:&str,handle:u32,address:u32)->Result<Self,&'static str>{
   rt.initialization(init)?;if profile!=Self::PROFILE{return Err("native platform profile unsupported");}
   // Native bootstrap executes before guest entry. A failed bootstrap issues no

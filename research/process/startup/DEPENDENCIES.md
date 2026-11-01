@@ -1,17 +1,29 @@
 # Remaining entry-to-exit dependencies
 
-## Current executable checkpoint: original multibyte reference helper
+## Current executable checkpoint: original code-page selector
 
-The explicit native entry now executes CALL0x40b25a to0x40b38a, its registered
-EH4 frame, checked UCRT reads, supported reference/lock effects and normal epilog.
-It returns to0x40b25f and rejects before the next argument push/code-page caller.
-The initialized flag remains zero. [Current contract and tests](LOCALE-REFERENCE.md).
-Shared LOCK XADD has checked old-value, wrapping-sum and flag semantics under an
-exclusive single-guest-thread lease; default emission still rejects unbound
-atomic effects. Heap-reference free and null termination remain explicit rejected
-paths with prior effects preserved. Full startup/rcedit/default admission remains
-unproved. The next connected gate is original selector0x40afbc/GetACP under the
-declared65001 native profile, without general Windows ACP assumptions.
+The explicit native entry executes original CALL0x40b262 to0x40afbc, its
+locale-view constructor, actual -3/GetACP branch and protected return. The result
+is65001 from the same live explicit native process encoding token used by the
+command line. It rejects at0x40b267 before the caller's remaining argument cleanup,
+reference-code-page comparison and 0x220-byte allocation path. The initialized
+flag remains zero. [Contract, observed versus declared inputs and next work](LOCALE-CODE-PAGE.md).
+
+Canonical process mapping, UCRT/FLS allocation identity, aligned ownership and
+original helper/lock effects are retained. Selector success does not grant
+encoding-conversion support for arbitrary numeric code pages. Missing/stale profile,
+OEM and per-thread mutation effects reject with preceding writes preserved.
+Heap reference free and exceptional EH4 cleanup are still unbound; LOCK XADD is
+restricted to an exclusive single-guest-thread lease. Default admission and whole
+startup/rcedit remain unproved. Next connect40b267's canonical reference comparison
+and the original allocator, then actual multibyte initialization/publication.
+
+## Previous checkpoint: original multibyte reference helper
+
+The registered helper40b38a executes its original reads, reference operations,
+lock5 cleanup and normal epilog. The earlier 1a08b95 checkpoint stopped at40b25f;
+its completed replay retained five recorded wrapper component comparisons.
+[Preserved helper contract](LOCALE-REFERENCE.md).
 
 ## Earlier checkpoint: aligned activation
 
