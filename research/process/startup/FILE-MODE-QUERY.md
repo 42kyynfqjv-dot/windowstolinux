@@ -92,9 +92,30 @@ calls; local query/BOOL cases are native components. Five retained wrapper
 comparisons are also components. **Zero new whole-PE pairs.** Full startup,
 rcedit/default admission and all historical timeout causes remain unresolved.
 
+## Reviewed local verification
+
+182 root, 332 CRT and 185 unwind tests passed; both ignored artifact gates were
+separately executed in the complete replay. Python checks passed: 96 startup
+(one skip), 106 tools and 18 corpus (one skip), plus Clippy and formatting.
+Fresh current-source emission is byte-identical to the reviewed full replay:
+`9638da15f369b2625e4cbb7fd6ce918dc9e1586b1f822e54a9881e5fb510c616`.
+The initial partial local replay was stopped and retained when review replaced
+the symbolic storage sequence with a single atomic forget; that partial run is
+not counted. The complete reviewed replay uses commit c2f2445. Fresh final-head
+CI remains separate, and no old run or component observation is a whole-program
+support claim.
+
 [Frozen requirements](evidence/file-mode-expectations.json),
 [verification/provenance](evidence/file-mode-query.json), and the
 [dependency map](DEPENDENCIES.md) retain exact boundaries. Sol can review these
 shared semantics. The next connected implementation is the output write, source
 lifetime/alias contract and growth/error effects, then original stores/cookie
 return and argv parser; it must preserve the measured failure writes.
+
+## Primary contracts
+
+- [AreFileApisANSI](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-arefileapisansi)
+- [SetFileApisToANSI](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-setfileapistoansi)
+- [SetFileApisToOEM](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-setfileapistooem)
+- [WideCharToMultiByte](https://learn.microsoft.com/en-us/windows/win32/api/stringapiset/nf-stringapiset-widechartomultibyte)
+- [VirtualProtect](https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualprotect)

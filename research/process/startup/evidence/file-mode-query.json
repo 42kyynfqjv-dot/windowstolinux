@@ -1,5 +1,5 @@
 {
-  "status": "focused implementation checks passed; aggregate/replay/final-head CI pending",
+  "status": "local reviewed implementation, aggregates, complete replay and fresh deterministic emission passed; final-head CI separate",
   "base_commit": "4474da6d6c47e455807fc0faaf94a1a356b807b3",
   "kind": "original mapped startup instruction and shared API component integration; no whole-PE translation",
   "expectations_sha256": "dd2e9ea69f04f7bc327576bcebd3e9085d98414728b670075d029007a2f335eb",
@@ -46,7 +46,7 @@
   },
   "source_hashes": {
     "src/crt_argv.rs": "6dbf0ec2a346ce3d455476ef3a66d06fb39cfc3f38e5b7314b563d9a73398056",
-    "src/crt_stream_runtime.rs": "467e10f1b19f8bf6db11458e4e4d197acb28427ec6152c584d1e92c35e4bcf11",
+    "src/crt_stream_runtime.rs": "395a8092834fdd8c33259ba35617854dbc570824125698c646c0599e889cbb72",
     "src/crt_stream_cpu.rs": "8b83843f3f16b0427814e1ada3d11339c8195477bb55997a4e4023db3c9aa885",
     "src/crt_resident_loader.rs": "1a5c3a736609f1cce4c0b93a66130a4d8431785a3fb35de5c21c023623d8fbf5",
     "src/crt_normal_frame_tests.rs": "5c7a4a3c04b34cd2fb02598b4831747a6fcab7e76e41fe503bde9600b9340ff5",
@@ -58,5 +58,178 @@
     "no argv publication",
     "full startup/rcedit/default admission unsupported",
     "historical original-Windows timeout causes unresolved"
+  ],
+  "implementation_commit": "2416b06095bc247786c75abe771a18428649ea6f",
+  "review_fix_commit": "c2f24454517a0d20b14a81d74785eeb29e441e77",
+  "checks": {
+    "root": 182,
+    "crt": 332,
+    "crt_ignored": 2,
+    "unwind": 185,
+    "both_ignored_artifact_gates": "separately passed in complete replay",
+    "startup_python": {
+      "run": 96,
+      "skip": 1
+    },
+    "tools_python": 106,
+    "corpus_python": {
+      "run": 18,
+      "skip": 1
+    },
+    "clippy": "all targets -D warnings passed",
+    "fmt": "passed",
+    "full_runtime_replay": "passed on reviewed c2f2445; prior interrupted partial run is not counted",
+    "fresh_deterministic_emission": "passed on same current source; source mtime advanced and exact SHA equal"
+  },
+  "replay": {
+    "kind": "original prolog/epilog component comparison with explicit unexecuted body boundary",
+    "scope": "Live registry fixture; body EAX/flags inputs; original stack/FS/saved-state restoration only",
+    "comparisons": 5,
+    "whole_pe_translation_pairs": 0,
+    "rust_sha256": "9638da15f369b2625e4cbb7fd6ce918dc9e1586b1f822e54a9881e5fb510c616",
+    "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+    "argv_locale_native_cases": 13,
+    "native_utf8_query_vectors": 7,
+    "native_utf8_query_api_cases": 12,
+    "protection_data_word_cases": 5,
+    "argv_narrow_conversion_implemented": false,
+    "report_sha256": "58e86bce99af576bf99fdd09da6cee465aa61045ffe39b41c8a69d357ee3b460",
+    "source_mtime_before_ns": 1793552136055864995,
+    "source_mtime_after_ns": 1793552161542790261,
+    "observer_report_sha256": "0feb586c7170dfd7e2390cf92ce1e5efa050c3e208d6c8903312e2d054c506cc",
+    "wrapper_vectors_sha256": "6f9b74742366c0f207d397ccf8b1af4afc2d01b34fae21cafb68d38d71a6ec66"
+  },
+  "named_gate_hashes": {
+    "cookie-record": {
+      "stdout": "e14e43decd7e7700a971ad663945e7a6272f1645afa6b2c6bb93a49e39a96b43",
+      "stderr": "c7af140a0e0c43a824bdd600e0a75df2c33ebe1451ae3630987d1bca833ee2c8"
+    },
+    "argv-contract": {
+      "stdout": "679df4fc72a1cbcf47c50bf4a358366f84281ab80246270b17da1e3b15f56cba",
+      "stderr": "ab1e8ab4b828624e75e6e8c917ac437f104b9cd0b496a9d073a4a52c0abca136"
+    },
+    "onexit-contract": {
+      "stdout": "6ccaaf0a210f9929b9d5ee9504ed324b275d578e0597566d3d67756face689c2",
+      "stderr": "29423147df5f27152c143f40399d5189737a902b622fb79efc6e1b2754336583"
+    },
+    "locale-alignment": {
+      "stdout": "125934efb9f1ccdcc3071d3b33748d12fc36fa40e11fdbd3928449e7f5df009e",
+      "stderr": "ab1e8ab4b828624e75e6e8c917ac437f104b9cd0b496a9d073a4a52c0abca136"
+    },
+    "c-initializer-graph": {
+      "stdout": "9da07dc2aeec764583c1365a2e1d01e199a2af893830397c2e6c9137eba60bc2",
+      "stderr": "29423147df5f27152c143f40399d5189737a902b622fb79efc6e1b2754336583"
+    },
+    "startup-caller-graph": {
+      "stdout": "110f02e59fe8324d12dc8b4529e4c2fef22692bc8779cfb22ffcfbbb1fe95bf7",
+      "stderr": "ab1e8ab4b828624e75e6e8c917ac437f104b9cd0b496a9d073a4a52c0abca136"
+    }
+  },
+  "local_failure_history": {
+    "mode-bool.log": "new test incorrectly assumed Eq flags and Clone CPU; test changed to compare fields and mutate/restore one live CPU, no clone/success bypass",
+    "canonical-locale.log": "generated test typo elseif; corrected test syntax",
+    "canonical-locale-v2.log": "independent cache-publication fixture lacked constructed logical14 lock; fixture now owns correct physical slot15, unchanged helper verifies mapping",
+    "canonical-query.log": "test setup accidentally enabled file mode in image API-only fixture without a kernel32 provider; corrected to intended full-entry setup only",
+    "query.log": "test incorrectly attempted map_region Buffer; VM properly rejected unowned allocation, input fixture now uses a real owned Stack mapping",
+    "canonical-query-v2.log": "actual resolver rejected VirtualProtect output due reused complete ordinary-pointer word; bounded complete-word data overwrite fixed, control/partial/failure cases retained",
+    "review_refinement": "nonzero transport now forgets bits once without a placeholder write; coherent full replay restarted after this source change"
+  },
+  "interrupted_replay": {
+    "reason": "review tightened nonzero storage to one forget operation with no placeholder bit write; restart for coherent final source",
+    "stopped": [
+      {
+        "pid": 275080,
+        "action": "stop incomplete local replay after review changed runtime source; keep all partial evidence; no test failure erased"
+      }
+    ]
+  },
+  "local_log_sha256": {
+    "canonical-locale-v2.log": "837847fca37582485690154045487498be7f10bb0c7a11a91e6ad8acf9092010",
+    "canonical-locale-v3.log": "c3209f801e2742ea44380f69d7e4a6aa8821d73b42affcd691594ddd53fb0c09",
+    "canonical-locale.log": "c3bd066c5446bb2edf80bfef4a91fb5b458d8335e5bf3e0f2e632b21e1c1b8e8",
+    "canonical-query-v2.log": "7ef2242cc25ba59948df7249a853c9464a8ffef2e496c326881c230b17b89b8a",
+    "canonical-query-v3.log": "aec3928ecce1ca3105802bccbb4343842a1575003cada20e4af2353058797b56",
+    "canonical-query.log": "0be8b4d6a04cc33a05ff6b0507f2bf19d2820c985b4182f6f9db68de057f543e",
+    "clippy-atomic.log": "2e698a29a67b569d5e3a7b8c79f6e981cd55d99bd43315662c5d095e662105ab",
+    "clippy.log": "de03ed7c38b67de689ad7ab602b390aa0497679c80d3932beb7c7d7c03dfec6a",
+    "compile.log": "fb233def0ba14426d972d2e1ad57cb27a2cf459e7539688e0ba55d2337bbb915",
+    "conversion-graph.log": "0e2ea9a0ce60cff6c4ee9031b58004018026126d6fc08b049af39a29dbc1319d",
+    "corpus-python.log": "4e42239014de2a527270f72c17941858544bfe8b0fb60ebde9e71ff297c98d21",
+    "crt.log": "de6eeadaa0aeb46967d97f12099a78b92665a9ef70daf2899e507a26df3f36b4",
+    "fmt-apply.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "fmt.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "fresh-identical.log": "e119502bcf825069605a1d861ff0e80cc9082fbcea271a70053e0fb977be1094",
+    "mode-bool-atomic.log": "37de74ee6b61f27e9c832320f698c42e04301da50e77758e450c9e2bb43a3bb6",
+    "mode-bool-v2.log": "a06d618945fa53d9194bc9768f2d96e5208250ae8c6564438e7aea65640e60ca",
+    "mode-bool.log": "0d86168b906469b9d516ab890eaf015375bf2d73231fe452a7c95271a1d8bea7",
+    "query-v2.log": "28ba4eede79c81648cbb457ba6a0be3bd10fa77d06e2b074929985315cd823e7",
+    "query.log": "eae3089318d4530e274ff5b6e7497ccb5289f4e9bb100424d2b0fe75ed4a241c",
+    "replay-reviewed.log": "5d0b137e57b5b5141350a5d7ab7e3f9b13870a83ca6c263dd920b04e9de89dc3",
+    "replay.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "root.log": "d085a2dac80339237b8561f3dfeb7c858c38f5c4bb29227e9398faa9ef15ef29",
+    "startup-python.log": "2de853d8e82551b7e421e84fbcf22b68b0a7b5a4181840335c2a2401ab876f06",
+    "tools-python.log": "38793c51e4fa8751c451d61fa6b50f00e7cbc1ed97bb18e5fe86d9b54dc33e5f",
+    "unwind.log": "5efc011458d7de5eadec38c5865601737fb2ed9f30aefe8a3d361ab8d74ce48e"
+  },
+  "reproduction": {
+    "commands": [
+      "cargo test --locked",
+      "cargo test --locked --example crt_stream",
+      "cargo test --locked --example unwind_slice",
+      "cargo clippy --locked --all-targets -- -D warnings",
+      "cargo fmt --all -- --check",
+      "PYTHONPATH=research/process/startup python3 -m unittest discover -s research/process/startup",
+      "python3 -m unittest discover -s tools",
+      "PYTHONPATH=corpus python3 -m unittest discover -s corpus",
+      "python3 research/process/startup/check_normal_wrapper.py ORIGINAL OBSERVED NEW_OUTPUT"
+    ],
+    "fresh": "W2L_EH4_CODE=OUTPUT W2L_EH4_EVIDENCE=OUTPUT W2L_EH4_VECTORS=OBSERVED/normal-wrapper-vectors.txt W2L_PE_MAPPING_INPUT=ORIGINAL/unwind.exe cargo test --locked --example crt_stream canonical_image_cookie_and_original_record_initialization_compose -- --ignored",
+    "Windows_artifact": "run41324424142 artifact13091510713, normal-wrapper-windows/original-windows-narrow-conversion.jsonl; byte hash validated against report; API observations, not whole-PE pairs"
+  },
+  "base_ci": [
+    {
+      "id": 41324428286,
+      "head": "4474da6d6c47e455807fc0faaf94a1a356b807b3",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41324428286"
+    },
+    {
+      "id": 41324424142,
+      "head": "4474da6d6c47e455807fc0faaf94a1a356b807b3",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41324424142"
+    },
+    {
+      "id": 41324424123,
+      "head": "4474da6d6c47e455807fc0faaf94a1a356b807b3",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41324424123"
+    }
+  ],
+  "implementation_checkpoint_ci_snapshot": [
+    {
+      "id": 41327489344,
+      "head": "2416b06095bc247786c75abe771a18428649ea6f",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41327489344"
+    },
+    {
+      "id": 41327483523,
+      "head": "2416b06095bc247786c75abe771a18428649ea6f",
+      "status": "in_progress",
+      "conclusion": null,
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41327483523"
+    },
+    {
+      "id": 41327483519,
+      "head": "2416b06095bc247786c75abe771a18428649ea6f",
+      "status": "in_progress",
+      "conclusion": null,
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41327483519"
+    }
   ]
 }
