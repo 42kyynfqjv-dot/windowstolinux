@@ -342,3 +342,123 @@ assert_eq!(rt.load(output,32).unwrap(),CrtValue::scalar(107));assert_eq!(CrtCpu:
         "nested-call-authority",
     );
 }
+
+#[test]
+fn shared_descriptor_handles_close_together_without_reuse_authority() {
+    crate::crt_stream_callees_tests::native(
+        "",
+        r#"
+struct Backend{mode:u8,calls:usize}
+impl CrtBackend for Backend{
+ fn write_once(&mut self,_:CrtDescriptorId,_:&[u8])->Result<CrtWriteResult,&'static str>{panic!("unexpected write")}
+ fn close_once(&mut self,_:CrtDescriptorId)->Result<bool,&'static str>{self.calls+=1;match self.mode{0=>Ok(false),1=>Err("close observation unavailable"),_=>Ok(true)}}
+}
+let(mut rt,init)=CrtStreamRuntime::new_initializing(7,9,0x8000,32768).unwrap();
+let out=rt.bind_descriptor(1,44).expect("stdout must bind");
+let err=rt.bind_descriptor(2,44).expect("stderr may share stdout's handle");
+let duplicate=rt.bind_descriptor(3,45).expect("a duplicated OS handle has a distinct lifetime");
+assert_ne!(out,err);assert_eq!(out.handle_generation,err.handle_generation);assert_eq!(CrtCpu::bits(CrtValue::Handle(out)).unwrap(),(44,u32::MAX));assert_eq!(CrtCpu::bits(CrtValue::Handle(out)),CrtCpu::bits(CrtValue::Handle(err)));
+assert_ne!(out.handle_generation,duplicate.handle_generation);
+assert!(rt.bind_descriptor(1,45).is_err());assert!(rt.bind_descriptor(4,0).is_err());assert!(rt.bind_descriptor(4,u32::MAX).is_err());
+let a=rt.lock_descriptor(9,out).unwrap();let b=rt.lock_descriptor(9,err).unwrap();
+let slot=rt.map_region(0xa000,4,CrtRegionKind::Stack,None).unwrap();rt.store(slot,32,CrtValue::Handle(err)).unwrap();
+let mut backend=Backend{mode:0,calls:0};rt.last_os_error=Some(77);assert_eq!(rt.close_once(out,&mut backend),Ok(false));assert_eq!(rt.last_os_error,None);rt.descriptor_identity(out).unwrap();rt.descriptor_identity(err).unwrap();
+let uncertain=rt.bind_descriptor(4,46).unwrap();let uncertain_alias=rt.bind_descriptor(5,46).unwrap();backend.mode=1;rt.last_os_error=Some(88);assert_eq!(rt.close_once(uncertain,&mut backend),Err("close observation unavailable"));assert_eq!(rt.last_os_error,None);assert!(rt.descriptor_identity(uncertain).is_err());assert!(rt.descriptor_identity(uncertain_alias).is_err());rt.descriptor_identity(out).unwrap();rt.descriptor_identity(err).unwrap();
+backend.mode=2;rt.last_os_error=Some(99);assert_eq!(rt.close_once(out,&mut backend),Ok(true));assert_eq!(rt.last_os_error,None);assert_eq!(backend.calls,3);
+assert!(rt.descriptor_identity(out).is_err());assert!(rt.descriptor_identity(err).is_err());assert!(rt.load(slot,32).is_err());rt.descriptor_identity(duplicate).unwrap();
+assert!(rt.close_once(err,&mut backend).is_err());assert_eq!(backend.calls,3);
+let replacement=rt.bind_descriptor(1,44).unwrap();assert_ne!(replacement.handle_generation,out.handle_generation);assert!(rt.descriptor_identity(out).is_err());assert!(rt.descriptor_identity(err).is_err());
+let replacement_err=rt.bind_descriptor(2,44).unwrap();assert_eq!(replacement.handle_generation,replacement_err.handle_generation);
+let forged=CrtDescriptorId{handle_generation:out.handle_generation,..replacement};assert!(rt.descriptor_identity(forged).is_err());
+rt.unlock_descriptor(b).unwrap();rt.unlock_descriptor(a).unwrap();rt.end_initialization(init).unwrap();
+assert!(rt.descriptor(replacement).is_err());let a=rt.lock_descriptor(9,replacement).unwrap();rt.descriptor(replacement).unwrap();assert!(rt.descriptor(replacement_err).is_err());rt.unlock_descriptor(a).unwrap();
+"#,
+        "shared-process-handle-lifetimes",
+    );
+}
+
+#[test]
+fn native_startup_metadata_layout_unknowns_and_output_preflight() {
+    crate::crt_stream_callees_tests::native(
+        "",
+        r#"
+for mode in 0..11{
+ let(mut rt,init)=CrtStreamRuntime::new_initializing(7,9,0x8000,32768).unwrap();
+ let root=rt.map_region(0xa000,80,CrtRegionKind::Stack,Some(&[0xa5;80])).unwrap();let p=rt.offset(root,4).unwrap();
+ let output=match mode{1=>rt.offset(root,16).unwrap(),2=>{rt.retire_region(root).unwrap();p},3=>rt.map_region(0xb000,68,CrtRegionKind::Input,Some(&[0x77;68])).unwrap(),6=>{let owner=guest_memory::Owner::Stack(9);let cap=rt.memory.map(0xb000,68,owner,guest_memory::Permissions::READ,false).unwrap();let q=CrtPointer{cap,owner,base:0xb000,size:68,address:0xb000,kind:CrtRegionKind::Stack};rt.regions.push(CrtRegion{pointer:q,heap:false,file_owner:None});q},_=>p};
+ if mode==4{rt.store(rt.offset(p,8).unwrap(),32,CrtValue::ProtectedReturn(99)).unwrap();}
+ if mode==5{rt.store(rt.offset(p,8).unwrap(),32,CrtValue::Pointer(root)).unwrap();}
+ if mode==7{rt.end_initialization(init).unwrap();}
+ let token=if mode==8{let other=CrtStreamRuntime::new_initializing(7,9,0x8000,32768).unwrap();other.1}else{init};
+ if mode==9{rt.thread+=1;}
+ let before=rt.memory.read(root.address(),80).ok().map(|x|x.to_vec());let result=rt.native_startup_info_output(token,output);
+ if mode==0||mode==10{
+  assert_eq!(result,Ok(()));assert_eq!(rt.load(p,32).unwrap(),CrtValue::scalar(68));assert_eq!(rt.load(rt.offset(p,50).unwrap(),16).unwrap(),CrtValue::scalar(0));assert_eq!(rt.load(rt.offset(p,52).unwrap(),32).unwrap(),CrtValue::scalar(0));
+  for offset in [4,8,12,16,20,24,28,32,36,40,44,56,60,64]{assert!(rt.load(rt.offset(p,offset).unwrap(),32).unwrap().known_scalar().is_err(),"unobserved field {offset} must stay unknown");}
+  assert_eq!(rt.memory.read(root.address(),4).unwrap(),&[0xa5;4]);assert_eq!(rt.memory.read(root.address()+72,8).unwrap(),&[0xa5;8]);
+  if mode==10{rt.store(rt.offset(p,56).unwrap(),32,CrtValue::scalar(123)).unwrap();rt.native_startup_info_output(init,p).unwrap();assert!(rt.load(rt.offset(p,56).unwrap(),32).unwrap().known_scalar().is_err());}
+ }else{assert!(result.is_err(),"invalid output mode {mode} must reject");assert_eq!(rt.memory.read(root.address(),80).ok().map(|x|x.to_vec()),before,"preflight failure must preserve prior bytes");}
+}
+"#,
+        "native-startup-metadata-output",
+    );
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn native_standard_handles_acquire_real_endpoints_without_descriptor_ownership() {
+    crate::crt_stream_callees_tests::native(
+        "",
+        r#"
+use std::os::fd::AsRawFd;
+struct Close(bool);impl CrtBackend for Close{fn write_once(&mut self,_:CrtDescriptorId,_:&[u8])->Result<CrtWriteResult,&'static str>{panic!("no writes")}fn close_once(&mut self,_:CrtDescriptorId)->Result<bool,&'static str>{Ok(self.0)}}
+for mode in 0..13{
+ let(mut rt,init)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();let set=rt.acquire_native_standards(init).expect("actual native endpoints must acquire");assert_eq!(rt.native_endpoints.len(),3);assert!(rt.descriptors.is_empty());assert!(rt.acquire_native_standards(init).is_err());
+ let values=[rt.native_get_standard(init,set,0xfffffff6).unwrap(),rt.native_get_standard(init,set,0xfffffff5).unwrap(),rt.native_get_standard(init,set,0xfffffff4).unwrap()];let handles=values.map(|v|{let CrtValue::ProcessHandle(h)=v else{panic!("actual process handle expected")};h});assert!(rt.descriptors.is_empty());
+ for h in handles{assert_ne!(h.handle,0);assert_ne!(h.handle,u32::MAX);assert_ne!(h.handle,rt.native_endpoint(h).unwrap().as_raw_fd()as u32);}
+ assert_eq!(rt.native_file_type(init,values[0]).unwrap(),CrtValue::scalar(2));assert_eq!(rt.native_file_type(init,values[1]).unwrap(),CrtValue::scalar(3));assert_eq!(rt.native_file_type(init,values[2]).unwrap(),CrtValue::scalar(3));
+ if mode==0{let n=rt.native_endpoints.len();for _ in 0..3{assert_eq!(rt.native_get_standard(init,set,0xfffffff5).unwrap(),values[1]);}assert_eq!(rt.native_endpoints.len(),n);assert!(rt.descriptors.is_empty());continue;}
+ if mode==1||mode==2||mode==3{let entry=CrtStandardEntry{value:CrtValue::scalar(if mode==1{0}else if mode==2{u32::MAX}else{0xdead}),last_error:if mode==2{Some(5)}else{None}};rt.native_standards.as_mut().unwrap().1[1]=entry;assert_eq!(rt.native_get_standard(init,set,0xfffffff5).unwrap(),entry.value);assert_eq!(rt.last_os_error,entry.last_error);assert!(rt.native_file_type(init,entry.value).is_err());assert_eq!(rt.native_endpoints.len(),3);assert!(rt.descriptors.is_empty());continue;}
+ if mode==4{let(other,oi)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();assert!(other.native_standard_set(set).is_err());assert!(other.native_endpoint(handles[0]).is_err());assert!(rt.native_get_standard(oi,set,0xfffffff6).is_err());continue;}
+ if mode==5{rt.native_standards.as_mut().unwrap().0.pid=std::process::id().wrapping_add(1);assert!(rt.native_get_standard(init,set,0xfffffff6).is_err());assert!(rt.native_endpoint(handles[0]).is_err());continue;}
+ if mode==6{rt.end_initialization(init).unwrap();assert!(rt.native_get_standard(init,set,0xfffffff6).is_err());assert!(rt.native_file_type(init,values[0]).is_err());continue;}
+ if mode==7{assert!(rt.native_get_standard(init,set,12).is_err());assert!(rt.native_file_type(init,CrtValue::scalar(handles[0].handle)).is_err());let forged=CrtProcessHandle{serial:handles[0].serial+1,..handles[0]};assert!(rt.native_endpoint(forged).is_err());continue;}
+ let a=rt.bind_descriptor(1,handles[1].handle).unwrap();let b=rt.bind_descriptor(2,handles[1].handle).unwrap();assert_eq!(a.handle_generation,handles[1].serial);assert_eq!(a.handle_generation,b.handle_generation);
+ if mode==8{assert!(!rt.close_once(a,&mut Close(false)).unwrap());rt.native_endpoint(handles[1]).unwrap();rt.descriptor_identity(b).unwrap();continue;}
+ if mode==9{assert!(rt.close_once(a,&mut Close(true)).unwrap());assert!(rt.native_endpoint(handles[1]).is_err());assert!(rt.descriptor_identity(b).is_err());assert_eq!(rt.native_get_standard(init,set,0xfffffff5).unwrap(),CrtValue::scalar(handles[1].handle));assert!(rt.bind_descriptor(1,handles[1].handle).is_err());assert!(rt.native_file_type(init,values[1]).is_err());continue;}
+ if mode==10{struct Unknown;impl CrtBackend for Unknown{fn write_once(&mut self,_:CrtDescriptorId,_:&[u8])->Result<CrtWriteResult,&'static str>{panic!()}fn close_once(&mut self,_:CrtDescriptorId)->Result<bool,&'static str>{Err("unknown close")}}assert_eq!(rt.close_once(a,&mut Unknown),Err("unknown close"));assert!(rt.native_endpoint(handles[1]).is_err());assert!(rt.native_endpoints[1].file.is_some());assert_eq!(rt.native_get_standard(init,set,0xfffffff5).unwrap(),CrtValue::scalar(handles[1].handle));assert!(rt.native_file_type(init,values[1]).is_err());continue;}
+ if mode==11{rt.native_standards.as_mut().unwrap().1[2].value=values[1];assert_eq!(rt.native_get_standard(init,set,0xfffffff4).unwrap(),values[1]);assert_eq!(rt.native_endpoints.len(),3);assert!(rt.close_once(a,&mut Close(true)).unwrap());assert_eq!(rt.native_get_standard(init,set,0xfffffff4).unwrap(),CrtValue::scalar(handles[1].handle));continue;}
+ let p=rt.map_region(0xa000,4,CrtRegionKind::Stack,None).unwrap();rt.store(p,32,values[1]).unwrap();assert_eq!(rt.load(p,32).unwrap(),values[1]);assert!(rt.close_once(a,&mut Close(true)).unwrap());assert!(rt.load(p,32).is_err());assert!(rt.store(p,32,values[1]).is_err());rt.native_endpoint(handles[0]).unwrap();rt.native_endpoint(handles[2]).unwrap();
+}
+"#,
+        "native-standard-process-endpoints",
+    );
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn native_standard_publication_is_atomic_and_duplicate_files_close_independently() {
+    crate::crt_stream_callees_tests::native(
+        r#"
+struct Guard;
+static DENY:std::sync::atomic::AtomicBool=std::sync::atomic::AtomicBool::new(false);
+unsafe impl std::alloc::GlobalAlloc for Guard{
+ unsafe fn alloc(&self,l:std::alloc::Layout)->*mut u8{if DENY.load(std::sync::atomic::Ordering::SeqCst){std::ptr::null_mut()}else{unsafe{std::alloc::System.alloc(l)}}}
+ unsafe fn alloc_zeroed(&self,l:std::alloc::Layout)->*mut u8{if DENY.load(std::sync::atomic::Ordering::SeqCst){std::ptr::null_mut()}else{unsafe{std::alloc::System.alloc_zeroed(l)}}}
+ unsafe fn realloc(&self,p:*mut u8,l:std::alloc::Layout,n:usize)->*mut u8{if DENY.load(std::sync::atomic::Ordering::SeqCst){std::ptr::null_mut()}else{unsafe{std::alloc::System.realloc(p,l,n)}}}
+ unsafe fn dealloc(&self,p:*mut u8,l:std::alloc::Layout){unsafe{std::alloc::System.dealloc(p,l)}}
+}
+#[global_allocator]static ALLOC:Guard=Guard;
+"#,
+        r#"
+let path=std::env::temp_dir().join(format!("w2l-owned-standard-{}",std::process::id()));
+let(mut rt,init)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();let root=std::fs::File::create(&path).unwrap();let files=[root.try_clone().unwrap(),root.try_clone().unwrap(),root.try_clone().unwrap()];rt.last_os_error=Some(77);let serial=rt.serial;
+DENY.store(true,std::sync::atomic::Ordering::SeqCst);let result=rt.publish_owned_standards(init,files);DENY.store(false,std::sync::atomic::Ordering::SeqCst);
+assert_eq!(result,Err("native standard resource budget"));assert!(rt.native_standards.is_none());assert!(rt.native_endpoints.is_empty());assert!(rt.descriptors.is_empty());assert_eq!(rt.serial,serial);assert_eq!(rt.last_os_error,Some(77));
+let set=rt.publish_owned_standards(init,[root.try_clone().unwrap(),root.try_clone().unwrap(),root.try_clone().unwrap()]).unwrap();
+let a=rt.native_get_standard(init,set,0xfffffff5).unwrap();let b=rt.native_get_standard(init,set,0xfffffff4).unwrap();let(CrtValue::ProcessHandle(a),CrtValue::ProcessHandle(b))=(a,b)else{panic!()};assert_ne!(a,b);assert_eq!(rt.native_file_type(init,CrtValue::ProcessHandle(a)).unwrap(),CrtValue::scalar(1));assert_eq!(rt.native_file_type(init,CrtValue::ProcessHandle(b)).unwrap(),CrtValue::scalar(1));
+use std::os::fd::AsRawFd;let old_fd=rt.native_endpoint(a).unwrap().as_raw_fd();let d=rt.bind_descriptor(1,a.handle).unwrap();struct Close;impl CrtBackend for Close{fn write_once(&mut self,_:CrtDescriptorId,_:&[u8])->Result<CrtWriteResult,&'static str>{panic!()}fn close_once(&mut self,_:CrtDescriptorId)->Result<bool,&'static str>{Ok(true)}}assert!(rt.close_once(d,&mut Close).unwrap());assert!(rt.native_endpoint(a).is_err());let reused=std::fs::File::open(&path).unwrap();assert_eq!(reused.as_raw_fd(),old_fd,"controlled native fd must actually be reused");assert!(rt.native_endpoint(a).is_err());assert!(reused.metadata().unwrap().is_file());assert_eq!(rt.native_file_type(init,CrtValue::ProcessHandle(b)).unwrap(),CrtValue::scalar(1));drop(reused);drop(rt);drop(root);std::fs::remove_file(path).unwrap();
+"#,
+        "native-standard-atomic-publication",
+    );
+}

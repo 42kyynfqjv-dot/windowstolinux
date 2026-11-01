@@ -1,5 +1,28 @@
 # Remaining entry-to-exit dependencies
 
+## Current executable checkpoint: actual native standard endpoints and callback8 return
+
+The optional native launch profile now acquires real Linux stdin/stdout/stderr as
+owned resources before entry. Process handle authority is separate from CRT
+numbers/locks. The unchanged 0x4085e7 body retrieves and queries those endpoints,
+performs its original classifications/stores, and returns. Callback8 executes its
+original cleanup and epilog; the outer lock7 lease retires and all prior UCRT,
+descriptor block/capacity64 and record-object state remains canonical.
+
+Entry next rejects at **CALL 0x40c946 -> 0x407093, table index9**, before that
+callback executes. Its 25 unchanged bytes call GetCommandLineA (IAT0x41508c), store
+to0x41ce74, call GetCommandLineW (IAT0x415090), store to0x41ce78, then return AL=1.
+Neither string producer has been acquired. The next coherent gate is process-owned
+narrow/wide command-line storage, explicit native argument/encoding policy and
+original publication. Linux argv is not a recovered Windows raw command line.
+
+[Native producer, partial effects, close/EOF limits and conformance](NATIVE-STANDARD-HANDLES.md).
+This is Linux original-instruction component execution under a declared native
+launch policy, not a new Windows startup observation or whole-PE pair. Other hosts
+still stop before the standard initializer; default/full startup/rcedit/XP7 remain
+unsupported. Existing metadata and nonempty-inheritance limits remain.
+Earlier checkpoints below are historical.
+
 ## Current executable checkpoint: native launch metadata and shared handle lifetime
 
 The optional `w2l-native-startup-metadata-v1` extension defines a native launch

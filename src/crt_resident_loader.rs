@@ -35,7 +35,7 @@ impl CrtResidentLoader {
 /// Explicit native replacement environment, not an inferred Windows loader state.
 /// Mapping revision 1 is grounded in the x86 Windows 10.0.20348 observation.
 /// Only this named domain is supported; no generic Windows version claim follows.
-struct CrtNativePlatform {anchor:guest_memory::Capability,function:CrtFunction,fls:Option<CrtFunction>,fls_set:Option<CrtFunction>,second_fiber:bool,startup_metadata:bool}
+struct CrtNativePlatform {anchor:guest_memory::Capability,function:CrtFunction,fls:Option<CrtFunction>,fls_set:Option<CrtFunction>,second_fiber:bool,startup_metadata:bool,standards:Option<CrtNativeStandards>}
 impl CrtNativePlatform {
  const PROFILE:&'static str="w2l-native-sync-20348-v1";
  const CONTRACT:&'static str="api-ms-win-core-synch-l1-2-0";
@@ -57,13 +57,22 @@ impl CrtNativePlatform {
   rt.native_startup_info_output(init,p)?;
   cpu.clobber(CrtValue::Scalar{bits:0,known:0});cpu.finish_pop(rt,4)
  }
+ fn acquire_standard_handles(&mut self,rt:&mut CrtStreamRuntime,init:CrtInitialization)->Result<(),&'static str>{
+  self.validate(rt,init)?;if !self.startup_metadata||self.standards.is_some(){return Err("native standard launch profile unbound/already acquired");}self.standards=Some(rt.acquire_native_standards(init)?);Ok(())
+ }
+ fn standard_handle_call(&self,rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,init:CrtInitialization,file_type:bool)->Result<CrtValue,&'static str>{
+  self.validate(rt,init)?;let set=self.standards.ok_or("startup native standard handles unbound")?;rt.native_standard_set(set)?;cpu.validate_active(rt)?;
+  if cpu.return_pop!=4||cpu.r[4]!=cpu.entry[4]||[3,5,6,7].iter().any(|&r|cpu.r[r]!=cpu.entry[r]){return Err("native standard API ABI");}
+  let sp=CrtCpu::pointer(cpu.r[4])?;rt.offset(sp,8)?;rt.memory.validate_writable(sp.cap,sp.owner,sp.address(),8).map_err(|_|"native standard API stack permission")?;let value=rt.load(rt.offset(sp,4)?,32)?;
+  let result=if file_type{rt.native_file_type(init,value)?}else{rt.native_get_standard(init,set,value.known_scalar()?)?};cpu.clobber(result);cpu.finish_pop(rt,4)
+ }
  fn prepare(rt:&mut CrtStreamRuntime,init:CrtInitialization,profile:&str,handle:u32,address:u32)->Result<Self,&'static str>{
   rt.initialization(init)?;if profile!=Self::PROFILE{return Err("native platform profile unsupported");}
   // Native bootstrap executes before guest entry. A failed bootstrap issues no
   // guest LoadLibrary result, fabricated LastError or DLL initialization receipt.
   let ticket=rt.provider_begin(init,"kernelbase.dll",handle,1)?;
   let(_,function)=rt.provider_initialize_sync(init,&ticket,address)?;
-  Ok(Self{anchor:rt.anchor,function,fls:None,fls_set:None,second_fiber:false,startup_metadata:false})
+  Ok(Self{anchor:rt.anchor,function,fls:None,fls_set:None,second_fiber:false,startup_metadata:false,standards:None})
  }
  /// Explicit optional native kernel32/FLS service, prepared before entry.
  fn enable_fls(&mut self,rt:&mut CrtStreamRuntime,init:CrtInitialization,handle:u32,address:u32)->Result<(),&'static str>{

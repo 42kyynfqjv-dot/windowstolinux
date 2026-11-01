@@ -8,6 +8,13 @@ enum CrtRegionKind {File,Descriptor,Module,Input,Stack,Buffer,Result,Context,Thr
 struct CrtPointer {cap:guest_memory::Capability,owner:guest_memory::Owner,base:u32,size:u32,address:u32,kind:CrtRegionKind}
 impl CrtPointer {fn address(self)->u32{self.address}}
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
+struct CrtProcessHandle {anchor:guest_memory::Capability,serial:u64,handle:u32}
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+struct CrtNativeStandards {anchor:guest_memory::Capability,serial:u64,pid:u32}
+#[derive(Clone,Copy)]
+struct CrtStandardEntry {value:CrtValue,last_error:Option<u32>}
+struct CrtNativeEndpoint {id:CrtProcessHandle,file:Option<std::fs::File>,certain:bool}
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
 struct CrtDescriptorId {anchor:guest_memory::Capability,generation:u64,number:u32,handle:u32,handle_generation:u64}
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 struct CrtThreadHead {anchor:guest_memory::Capability,thread:u64,registry:u64,epoch:u64,head:[u64;3]}
@@ -92,7 +99,7 @@ struct CrtHeapPtdAllocation {anchor:guest_memory::Capability,slot:CrtFlsSlot,bef
 /// not claim Windows released the block or left its contents unchanged.
 struct CrtHeapFreeEffect {anchor:guest_memory::Capability,thread:u64,serial:u64,pointer:CrtPointer,failed:bool}
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
-enum CrtValue {Module(CrtModule),Function(CrtFunction),Heap(CrtHeap),Dispatcher(CrtDispatcherContext),Scalar{bits:u32,known:u32},Pointer(CrtPointer),Handle(CrtDescriptorId),ThreadHead(CrtThreadHead),OpaqueSaved(u8),ProtectedReturn(u64)}
+enum CrtValue {Module(CrtModule),Function(CrtFunction),Heap(CrtHeap),Dispatcher(CrtDispatcherContext),Scalar{bits:u32,known:u32},Pointer(CrtPointer),ProcessHandle(CrtProcessHandle),Handle(CrtDescriptorId),ThreadHead(CrtThreadHead),OpaqueSaved(u8),ProtectedReturn(u64)}
 impl CrtValue {
  fn scalar(bits:u32)->Self{Self::Scalar{bits,known:u32::MAX}}
  fn known_scalar(self)->Result<u32,&'static str>{match self{Self::Scalar{bits,known:u32::MAX}=>Ok(bits),_=>Err("CRT scalar knowledge/type")}}
@@ -187,7 +194,7 @@ struct CrtStreamRuntime {
  uncertain_allocations:Vec<CrtPointer>,completed_failed_frees:Vec<(guest_memory::Capability,u64)>,heap_ptds:Vec<CrtHeapPtdView>,fiber:Option<CrtFiber>,fls_indices:CrtFlsIndices,fls:CrtFlsValues,
  unobserved_contexts:Vec<(CrtPointer,std::rc::Rc<std::cell::Cell<bool>>)>,heap:Option<CrtHeap>,memory:guest_memory::Space,owner:u64,thread:u64,anchor:guest_memory::Capability,
  dispatchers:std::collections::BTreeMap<u64,CrtDispatcherContext>,regions:Vec<CrtRegion>,retired:Vec<CrtPointer>,tags:std::collections::BTreeMap<u32,CrtValue>,
- partial:std::collections::BTreeMap<u32,(u8,u8)>,descriptors:Vec<CrtDescriptor>,
+ partial:std::collections::BTreeMap<u32,(u8,u8)>,descriptors:Vec<CrtDescriptor>,native_endpoints:Vec<CrtNativeEndpoint>,native_standards:Option<(CrtNativeStandards,[CrtStandardEntry;3])>,
  global_objects:CrtGlobalSlots<CrtPointer>,global_locks:CrtGlobalLeases,record_objects:Vec<CrtPointer>,record_locks:Vec<CrtRecordLock>,locks:Vec<CrtLock>,descriptor_locks:Vec<CrtDescriptorLock>,serial:u64,generation:u64,canonical_errno:bool,errno_cell:Option<CrtPointer>,errno:Option<i32>,doserrno:Option<u32>,last_os_error:Option<u32>,
  locale_generation:u64,locale_live:bool,initialization:Option<u64>,shutdown:Option<CrtShutdown>,closed:bool,lock_objects:std::collections::BTreeSet<u32>,
 }
@@ -205,7 +212,7 @@ impl CrtStreamRuntime {
  }
  fn from_file_storage(owner:u64,thread:u64,memory:guest_memory::Space,pointer:CrtPointer)->Result<Self,&'static str>{
   let anchor=pointer.cap;
-  Ok(Self{file_view:pointer,main_image:None,main_image_regions:vec![],loader_cells:std::collections::BTreeMap::new(),modules:std::collections::BTreeMap::new(),module_references:CrtModuleReferences::new(),exports:std::collections::BTreeMap::new(),providers:std::collections::BTreeMap::new(),native_sync:CrtGlobalSlots::new(),uncertain_allocations:vec![],completed_failed_frees:vec![],heap_ptds:vec![],fiber:None,fls_indices:CrtFlsIndices::new(),fls:CrtFlsValues::new(),unobserved_contexts:vec![],heap:None,memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],global_objects:CrtGlobalSlots::new(),global_locks:CrtGlobalLeases::new(),record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,canonical_errno:false,errno_cell:None,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([pointer.base])})
+  Ok(Self{file_view:pointer,main_image:None,main_image_regions:vec![],loader_cells:std::collections::BTreeMap::new(),modules:std::collections::BTreeMap::new(),module_references:CrtModuleReferences::new(),exports:std::collections::BTreeMap::new(),providers:std::collections::BTreeMap::new(),native_sync:CrtGlobalSlots::new(),uncertain_allocations:vec![],completed_failed_frees:vec![],heap_ptds:vec![],fiber:None,fls_indices:CrtFlsIndices::new(),fls:CrtFlsValues::new(),unobserved_contexts:vec![],heap:None,memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],native_endpoints:vec![],native_standards:None,global_objects:CrtGlobalSlots::new(),global_locks:CrtGlobalLeases::new(),record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,canonical_errno:false,errno_cell:None,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([pointer.base])})
  }
 
  /// Initial FILE storage is a bounded role view of the original writable
@@ -841,7 +848,7 @@ impl CrtStreamRuntime {
   // iterator directly so argument and protected-return reads cannot allocate.
   let mut tags=self.tags.iter().filter(|(at,_)|u64::from(**at)<u64::from(p.address)+u64::from(size)&&u64::from(p.address)<u64::from(**at)+4);
   if let Some((&at,&value))=tags.next(){if width!=32||at!=p.address||tags.next().is_some(){return Err("CRT partial typed-word read");}
-   match value{CrtValue::Module(m)=>self.module_identity(m)?,CrtValue::Function(f)=>self.function_identity(f,None)?,CrtValue::Heap(h)=>self.heap_identity(h)?,CrtValue::Dispatcher(token)=>self.dispatcher(token)?,CrtValue::Pointer(q)=>self.pointer_transport(q)?,CrtValue::Handle(h)=>{self.descriptor(h)?;},CrtValue::ThreadHead(head)=>self.thread_head_transport(head)?,_=>{}}
+   match value{CrtValue::Module(m)=>self.module_identity(m)?,CrtValue::Function(f)=>self.function_identity(f,None)?,CrtValue::Heap(h)=>self.heap_identity(h)?,CrtValue::Dispatcher(token)=>self.dispatcher(token)?,CrtValue::Pointer(q)=>self.pointer_transport(q)?,CrtValue::ProcessHandle(h)=>self.native_endpoint(h).map(|_|())?,CrtValue::Handle(h)=>{self.descriptor(h)?;},CrtValue::ThreadHead(head)=>self.thread_head_transport(head)?,_=>{}}
    return Ok(value);
   }
   let(mut bits,mut known)=(0u32,0u32);for i in 0..size{let a=p.address+i;
@@ -884,6 +891,7 @@ impl CrtStreamRuntime {
    CrtValue::Dispatcher(token)=>{if width!=32||p.kind!=CrtRegionKind::Stack{return Err("CRT dispatcher transport role");}self.dispatcher(token)?;0},
    CrtValue::Scalar{bits,..}=>bits,
    CrtValue::Pointer(q)=>{if width!=32{return Err("CRT pointer store width");}self.pointer_transport(q)?;q.address},
+   CrtValue::ProcessHandle(h)=>{if width!=32{return Err("CRT process handle store width");}self.native_endpoint(h)?;h.handle},
    CrtValue::Handle(h)=>{if width!=32{return Err("CRT handle store width");}self.descriptor(h)?;h.handle},
    CrtValue::ThreadHead(head)=>{if width!=32||p.kind!=CrtRegionKind::Stack{return Err("CRT thread registration token storage role");}self.thread_head_transport(head)?;0},
    CrtValue::OpaqueSaved(r)=>{if width!=32||p.kind!=CrtRegionKind::Stack||r>7{return Err("CRT saved-register slot");}0},
@@ -1094,18 +1102,69 @@ impl CrtStreamRuntime {
   self.store(self.offset(p,50)?,16,CrtValue::scalar(0))?;
   self.store(self.offset(p,52)?,32,CrtValue::scalar(0))?;Ok(())
  }
+ /// Native launch producer. Owned duplicates pin the actual host endpoints;
+ /// virtual process handle values never equal borrowed host fd numbers by design.
+ fn acquire_native_standards(&mut self,init:CrtInitialization)->Result<CrtNativeStandards,&'static str>{
+  self.initialization(init)?;if self.native_standards.is_some(){return Err("native standard table already acquired");}
+  #[cfg(target_os="linux")]{
+   use std::os::fd::AsFd;
+   let input=std::io::stdin().as_fd().try_clone_to_owned().map(std::fs::File::from).map_err(|_|"native stdin acquisition failed")?;
+   let output=std::io::stdout().as_fd().try_clone_to_owned().map(std::fs::File::from).map_err(|_|"native stdout acquisition failed")?;
+   let error=std::io::stderr().as_fd().try_clone_to_owned().map(std::fs::File::from).map_err(|_|"native stderr acquisition failed")?;
+   self.publish_owned_standards(init,[input,output,error])
+  }
+  #[cfg(not(target_os="linux"))]{Err("native standard acquisition unsupported host")}
+ }
+ /// Takes real owned resources by value; no outcome/scalar can mint authority.
+ fn publish_owned_standards(&mut self,init:CrtInitialization,files:[std::fs::File;3])->Result<CrtNativeStandards,&'static str>{
+  self.initialization(init)?;if self.native_standards.is_some(){return Err("native standard table already acquired");}
+  let serial=self.serial.checked_add(3).ok_or("native standard generation")?;
+  self.native_endpoints.try_reserve(3).map_err(|_|"native standard resource budget")?;
+  let mut handles=[0;3];let mut candidate=0x1000u32;
+  for i in 0..3{while self.descriptors.iter().any(|d|d.id.handle==candidate)||self.native_endpoints.iter().any(|e|e.id.handle==candidate)||handles[..i].contains(&candidate){candidate=candidate.checked_add(4).ok_or("native handle value budget")?;}handles[i]=candidate;candidate=candidate.checked_add(4).ok_or("native handle value budget")?;}
+  let set=CrtNativeStandards{anchor:self.anchor,serial,pid:std::process::id()};let mut entries=[CrtStandardEntry{value:CrtValue::scalar(0),last_error:None};3];
+  for(i,file)in files.into_iter().enumerate(){let id=CrtProcessHandle{anchor:self.anchor,serial:self.serial+1+i as u64,handle:handles[i]};self.native_endpoints.push(CrtNativeEndpoint{id,file:Some(file),certain:true});entries[i].value=CrtValue::ProcessHandle(id);}
+  self.serial=serial;self.native_standards=Some((set,entries));Ok(set)
+ }
+ fn native_standard_set(&self,set:CrtNativeStandards)->Result<(),&'static str>{
+  if self.closed||set.anchor!=self.anchor||set.pid!=std::process::id()||self.native_standards.as_ref().is_none_or(|(id,_)|*id!=set){return Err("native standard process/lifetime");}Ok(())
+ }
+ fn native_endpoint(&self,h:CrtProcessHandle)->Result<&std::fs::File,&'static str>{
+  if self.closed||h.anchor!=self.anchor||self.native_standards.as_ref().is_none_or(|(id,_)|id.pid!=std::process::id()){return Err("native endpoint process/lifetime");}
+  let e=self.native_endpoints.iter().find(|e|e.id==h).ok_or("native endpoint identity")?;
+  if !e.certain{return Err("native endpoint effects unknown");}e.file.as_ref().ok_or("native endpoint retired")
+ }
+ /// Copies the process table. It does not query/validate an OS handle or
+ /// acquire another owned endpoint. Lost authority is returned as bits only.
+ fn native_get_standard(&mut self,init:CrtInitialization,set:CrtNativeStandards,selector:u32)->Result<CrtValue,&'static str>{
+  self.initialization(init)?;self.native_standard_set(set)?;let index=match selector{0xfffffff6=>0,0xfffffff5=>1,0xfffffff4=>2,_=>return Err("native standard selector unsupported")};
+  let entry=self.native_standards.as_ref().unwrap().1[index];let value=match entry.value{CrtValue::ProcessHandle(h)if self.native_endpoint(h).is_err()=>CrtValue::scalar(h.handle),v=>v};
+  if !matches!(value,CrtValue::ProcessHandle(_)|CrtValue::Scalar{known:u32::MAX,..}){return Err("native standard table value unknown");}
+  self.last_os_error=entry.last_error;Ok(value)
+ }
+ fn native_file_type(&mut self,init:CrtInitialization,value:CrtValue)->Result<CrtValue,&'static str>{
+  self.initialization(init)?;let CrtValue::ProcessHandle(h)=value else{return Err("native file type lacks owned endpoint");};
+  let file=self.native_endpoint(h)?;
+  #[cfg(target_os="linux")]{
+   use std::os::unix::fs::FileTypeExt;
+   let observation=file.metadata();self.last_os_error=None;let kind=observation.map_err(|_|"native file type query failed")?.file_type();
+   let result=if kind.is_file()||kind.is_dir()||kind.is_block_device(){1}else if kind.is_char_device(){2}else if kind.is_fifo()||kind.is_socket(){3}else{return Err("native file type unsupported");};
+   self.last_os_error=None;Ok(CrtValue::scalar(result))
+  }
+  #[cfg(not(target_os="linux"))]{let _=file;Err("native file type unsupported host")}
+ }
  fn bind_descriptor(&mut self,number:u32,handle:u32)->Result<CrtDescriptorId,&'static str>{
   if self.locks.is_empty()&&self.initialization.is_none()||number>2047||handle==0||handle==u32::MAX||self.descriptors.iter().any(|d|d.live&&d.id.number==number){return Err("CRT descriptor binding/alias");}
   let generation=self.generation.checked_add(1).ok_or("CRT descriptor generation")?;
   // Equal process handle values share one lifetime, while descriptor numbers
   // retain separate lock/storage identities. A reused value gets a fresh epoch.
-  let handle_generation=self.descriptors.iter().find(|d|d.live&&d.id.handle==handle).map_or(generation,|d|d.id.handle_generation);
+  let native=self.native_endpoints.iter().rev().find(|e|e.id.handle==handle).map(|e|e.id);if let Some(h)=native{self.native_endpoint(h)?;}let handle_generation=native.map(|h|h.serial).unwrap_or_else(||self.descriptors.iter().find(|d|d.live&&d.id.handle==handle).map_or(generation,|d|d.id.handle_generation));
   let id=CrtDescriptorId{anchor:self.anchor,generation,number,handle,handle_generation};self.descriptors.push(CrtDescriptor{id,live:true,record:None,record_initialized:false});self.generation=generation;Ok(id)
  }
  /// A descriptor lease is separate from FILE locking: low-I/O can be called
  /// without a FILE, and one FILE's lock cannot authorize another descriptor.
  fn descriptor_identity(&self,id:CrtDescriptorId)->Result<(),&'static str>{
-  if self.closed||id.anchor!=self.anchor||!self.descriptors.iter().any(|d|d.live&&d.id==id){return Err("CRT descriptor owner/lifetime");}Ok(())
+  if self.closed||id.anchor!=self.anchor||!self.descriptors.iter().any(|d|d.live&&d.id==id){return Err("CRT descriptor owner/lifetime");}if let Some(e)=self.native_endpoints.iter().find(|e|e.id.handle==id.handle&&e.id.serial==id.handle_generation){self.native_endpoint(e.id)?;}Ok(())
  }
  fn descriptor(&self,id:CrtDescriptorId)->Result<(),&'static str>{
   self.descriptor_identity(id)?;if self.initialization.is_none()&&self.shutdown.is_none()&&!self.descriptor_locks.iter().any(|l|l.id==id){return Err("CRT exact descriptor lock required");}Ok(())
@@ -1163,7 +1222,7 @@ impl CrtStreamRuntime {
   self.descriptor(id)?;let result=backend.close_once(id);self.last_os_error=None;
   // An unavailable observation can follow an external effect. Revoke every
   // cached alias rather than pretending the handle is still known live.
-  if result!=Ok(false){for d in &mut self.descriptors{if d.id.handle==id.handle&&d.id.handle_generation==id.handle_generation{d.live=false;}}}result
+  if result!=Ok(false){for d in &mut self.descriptors{if d.id.handle==id.handle&&d.id.handle_generation==id.handle_generation{d.live=false;}}for e in &mut self.native_endpoints{if e.id.handle==id.handle&&e.id.serial==id.handle_generation{if result==Ok(true){e.file=None;}else{e.certain=false;}}}}result
  }
  /// Bind the actual accessor result, without initializing the selected cell.
  fn bind_errno_cell(&mut self,p:CrtPointer)->Result<CrtPointer,&'static str>{
@@ -1447,65 +1506,4 @@ let lb=r.lock_file(9,b).unwrap();r.free_buffer(lb,q).unwrap();r.unlock(lb).unwra
 "#,
         );
     }
-}
-
-#[test]
-fn shared_descriptor_handles_close_together_without_reuse_authority() {
-    crate::crt_stream_callees_tests::native(
-        "",
-        r#"
-struct Backend{mode:u8,calls:usize}
-impl CrtBackend for Backend{
- fn write_once(&mut self,_:CrtDescriptorId,_:&[u8])->Result<CrtWriteResult,&'static str>{panic!("unexpected write")}
- fn close_once(&mut self,_:CrtDescriptorId)->Result<bool,&'static str>{self.calls+=1;match self.mode{0=>Ok(false),1=>Err("close observation unavailable"),_=>Ok(true)}}
-}
-let(mut rt,init)=CrtStreamRuntime::new_initializing(7,9,0x8000,32768).unwrap();
-let out=rt.bind_descriptor(1,44).expect("stdout must bind");
-let err=rt.bind_descriptor(2,44).expect("stderr may share stdout's handle");
-let duplicate=rt.bind_descriptor(3,45).expect("a duplicated OS handle has a distinct lifetime");
-assert_ne!(out,err);assert_eq!(out.handle_generation,err.handle_generation);assert_eq!(CrtCpu::bits(CrtValue::Handle(out)).unwrap(),(44,u32::MAX));assert_eq!(CrtCpu::bits(CrtValue::Handle(out)),CrtCpu::bits(CrtValue::Handle(err)));
-assert_ne!(out.handle_generation,duplicate.handle_generation);
-assert!(rt.bind_descriptor(1,45).is_err());assert!(rt.bind_descriptor(4,0).is_err());assert!(rt.bind_descriptor(4,u32::MAX).is_err());
-let a=rt.lock_descriptor(9,out).unwrap();let b=rt.lock_descriptor(9,err).unwrap();
-let slot=rt.map_region(0xa000,4,CrtRegionKind::Stack,None).unwrap();rt.store(slot,32,CrtValue::Handle(err)).unwrap();
-let mut backend=Backend{mode:0,calls:0};rt.last_os_error=Some(77);assert_eq!(rt.close_once(out,&mut backend),Ok(false));assert_eq!(rt.last_os_error,None);rt.descriptor_identity(out).unwrap();rt.descriptor_identity(err).unwrap();
-let uncertain=rt.bind_descriptor(4,46).unwrap();let uncertain_alias=rt.bind_descriptor(5,46).unwrap();backend.mode=1;rt.last_os_error=Some(88);assert_eq!(rt.close_once(uncertain,&mut backend),Err("close observation unavailable"));assert_eq!(rt.last_os_error,None);assert!(rt.descriptor_identity(uncertain).is_err());assert!(rt.descriptor_identity(uncertain_alias).is_err());rt.descriptor_identity(out).unwrap();rt.descriptor_identity(err).unwrap();
-backend.mode=2;rt.last_os_error=Some(99);assert_eq!(rt.close_once(out,&mut backend),Ok(true));assert_eq!(rt.last_os_error,None);assert_eq!(backend.calls,3);
-assert!(rt.descriptor_identity(out).is_err());assert!(rt.descriptor_identity(err).is_err());assert!(rt.load(slot,32).is_err());rt.descriptor_identity(duplicate).unwrap();
-assert!(rt.close_once(err,&mut backend).is_err());assert_eq!(backend.calls,3);
-let replacement=rt.bind_descriptor(1,44).unwrap();assert_ne!(replacement.handle_generation,out.handle_generation);assert!(rt.descriptor_identity(out).is_err());assert!(rt.descriptor_identity(err).is_err());
-let replacement_err=rt.bind_descriptor(2,44).unwrap();assert_eq!(replacement.handle_generation,replacement_err.handle_generation);
-let forged=CrtDescriptorId{handle_generation:out.handle_generation,..replacement};assert!(rt.descriptor_identity(forged).is_err());
-rt.unlock_descriptor(b).unwrap();rt.unlock_descriptor(a).unwrap();rt.end_initialization(init).unwrap();
-assert!(rt.descriptor(replacement).is_err());let a=rt.lock_descriptor(9,replacement).unwrap();rt.descriptor(replacement).unwrap();assert!(rt.descriptor(replacement_err).is_err());rt.unlock_descriptor(a).unwrap();
-"#,
-        "shared-process-handle-lifetimes",
-    );
-}
-
-#[test]
-fn native_startup_metadata_layout_unknowns_and_output_preflight() {
-    crate::crt_stream_callees_tests::native(
-        "",
-        r#"
-for mode in 0..11{
- let(mut rt,init)=CrtStreamRuntime::new_initializing(7,9,0x8000,32768).unwrap();
- let root=rt.map_region(0xa000,80,CrtRegionKind::Stack,Some(&[0xa5;80])).unwrap();let p=rt.offset(root,4).unwrap();
- let output=match mode{1=>rt.offset(root,16).unwrap(),2=>{rt.retire_region(root).unwrap();p},3=>rt.map_region(0xb000,68,CrtRegionKind::Input,Some(&[0x77;68])).unwrap(),6=>{let owner=guest_memory::Owner::Stack(9);let cap=rt.memory.map(0xb000,68,owner,guest_memory::Permissions::READ,false).unwrap();let q=CrtPointer{cap,owner,base:0xb000,size:68,address:0xb000,kind:CrtRegionKind::Stack};rt.regions.push(CrtRegion{pointer:q,heap:false,file_owner:None});q},_=>p};
- if mode==4{rt.store(rt.offset(p,8).unwrap(),32,CrtValue::ProtectedReturn(99)).unwrap();}
- if mode==5{rt.store(rt.offset(p,8).unwrap(),32,CrtValue::Pointer(root)).unwrap();}
- if mode==7{rt.end_initialization(init).unwrap();}
- let token=if mode==8{let other=CrtStreamRuntime::new_initializing(7,9,0x8000,32768).unwrap();other.1}else{init};
- if mode==9{rt.thread+=1;}
- let before=rt.memory.read(root.address(),80).ok().map(|x|x.to_vec());let result=rt.native_startup_info_output(token,output);
- if mode==0||mode==10{
-  assert_eq!(result,Ok(()));assert_eq!(rt.load(p,32).unwrap(),CrtValue::scalar(68));assert_eq!(rt.load(rt.offset(p,50).unwrap(),16).unwrap(),CrtValue::scalar(0));assert_eq!(rt.load(rt.offset(p,52).unwrap(),32).unwrap(),CrtValue::scalar(0));
-  for offset in [4,8,12,16,20,24,28,32,36,40,44,56,60,64]{assert!(rt.load(rt.offset(p,offset).unwrap(),32).unwrap().known_scalar().is_err(),"unobserved field {offset} must stay unknown");}
-  assert_eq!(rt.memory.read(root.address(),4).unwrap(),&[0xa5;4]);assert_eq!(rt.memory.read(root.address()+72,8).unwrap(),&[0xa5;8]);
-  if mode==10{rt.store(rt.offset(p,56).unwrap(),32,CrtValue::scalar(123)).unwrap();rt.native_startup_info_output(init,p).unwrap();assert!(rt.load(rt.offset(p,56).unwrap(),32).unwrap().known_scalar().is_err());}
- }else{assert!(result.is_err(),"invalid output mode {mode} must reject");assert_eq!(rt.memory.read(root.address(),80).ok().map(|x|x.to_vec()),before,"preflight failure must preserve prior bytes");}
-}
-"#,
-        "native-startup-metadata-output",
-    );
 }

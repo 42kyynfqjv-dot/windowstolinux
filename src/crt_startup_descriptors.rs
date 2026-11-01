@@ -8,6 +8,7 @@ pub(crate) const MANAGER_EPILOG: &str = "8b4df064890d00000000595f5e5bc9c3";
 pub(crate) const MANAGER_CLEANUP: &str = "6a07e851feffff59c3";
 pub(crate) const CONSTRUCT: &str = "8bff558bec515153566a386a40e864beffff8bf033db8975f8595985f675048bf3eb4b8d86000e00003bf07441578d7e208bf05368a00f00008d47e050e8bdc1ffff834ff8ff80670df8891f8d7f38895fcc8d47e0c747d000000a0ac647d40a895fd6885fda3bc675c98b75f85f53e862beffff598bc65e5bc9c3";
 pub(crate) const INHERIT: &str = "8bff558bec83ec488d45b850ff153850410066837dea000f8491000000578b7dec85ff0f84840000008b0753568d5f04be0020000003d83bc60f4cf056e8b13900003b3508d14100590f4f3508d141008975fc33f68b45fc85c0744f833bff7442833bfe743d8a4c3e04f6c1017434f6c108750cff33ff15bc50410085c074208bc68bce83e03fc1f9066bd0388b0303148d08cf41008942188a443e048842288b45fc4683c3043bf075b15e5b5fc9c3";
+pub(crate) const STANDARD: &str = "8bff53565733ff8bc78bcf83e03fc1f9066bf03803348d08cf4100837e18ff740c837e18fe7406804e2880eb758bc7c646288183e800741083e801740783e8016af4eb066af5eb026af65850ff157c5041008bd883fbff742b85db742753ff15bc50410085c0741c0fb6c0895e1883f8027506804e2840eb2983f8037524804e2808eb1e804e2840c74618feffffffa130cd410085c0740a8b04b8c74010feffffff4783ff030f855bffffff5f5e5bc3";
 pub(crate) fn source() -> Result<String, String> {
     let mut out = String::new();
     let helper = crate::crt_ptd::raw(crate::crt_ucrt_locale::PROLOG);
@@ -108,7 +109,7 @@ pub(crate) fn source() -> Result<String, String> {
    Target::Direct(0x40bf2a)=>format!("cpu.call_activation(rt,{next},0,|rt,c|startup_descriptor_manager(rt,c,inputs,platform,epoch))?;"),
    Target::Direct(0x40be7a)=>format!("b.authority(rt,epoch)?;rt.check_global(held.ok_or(\"descriptor allocation without manager lock\")?)?;cpu.call_activation(rt,{next},0,|rt,c|startup_descriptor_construct(rt,c,inputs,platform,epoch))?;"),
    Target::Direct(0x408537)=>format!("cpu.call_activation(rt,{next},0,|rt,c|startup_inherit_native(rt,c,inputs,platform))?;"),
-   Target::Direct(0x4085e7)=>"return Err(\"startup standard-handle acquisition unbound\");".into(),
+   Target::Direct(0x4085e7)=>format!("cpu.call_activation(rt,{next},0,|rt,c|startup_standard_native(rt,c,inputs,platform))?;"),
    Target::Direct(0x407ccd)|Target::Direct(0x407b4f)=>"return Err(\"startup descriptor invalid-request errno effect unbound\");".into(),
    _=>return Err(format!("descriptor startup unexpected call {pc:x}"))})
             },
@@ -130,6 +131,7 @@ pub(crate) fn source() -> Result<String, String> {
         out.push_str(&format!("fn {name}(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:&CrtNativePlatform,epoch:&mut NormalCallEpoch<'_>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;platform.validate(rt,inputs.init)?;cpu.validate_active(rt)?;for(address,expected)in [({origin}u32,&{bytes:?}[..]),({eporigin},&{epbytes:?}[..]),(0x401e60,&{helper:?}[..])]{{let p=rt.process_image_code(inputs.image,address,expected.len()as u32)?;if rt.memory.read(p.address(),expected.len()as u32).map_err(|_|\"descriptor startup code read\")?!=expected{{return Err(\"descriptor startup code changed\");}}}}let mut b=CrtNormalBinding::bind_initializing(rt,cpu,epoch,{name}_epilog_layout(),inputs.init)?;let mut held=None;{body}}}"));
     }
     out.push_str(&constructor_source()?);
+    out.push_str(&standard_source()?);
     Ok(out)
 }
 fn constructor_source() -> Result<String, String> {
@@ -173,6 +175,29 @@ fn constructor_source() -> Result<String, String> {
     Ok(format!("fn startup_descriptor_construct(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:&CrtNativePlatform,epoch:&mut NormalCallEpoch<'_>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;let p=rt.process_image_code(inputs.image,0x40be7a,{})?;if rt.memory.read(p.address(),{}).map_err(|_|\"descriptor constructor code read\")?!=&{bytes:?}{{return Err(\"descriptor constructor code changed\");}}{body}}}
 fn startup_descriptor_lock(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:&CrtNativePlatform)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;platform.validate(rt,inputs.init)?;cpu.validate_active(rt)?;let p=rt.process_image_code(inputs.image,0x408079,12)?;if rt.memory.read(p.address(),12).map_err(|_|\"descriptor thunk code read\")?!=&{thunk:?}{{return Err(\"descriptor thunk code changed\");}}rt.process_image_import(inputs.image,0x4150ac,\"kernel32.dll\",\"InitializeCriticalSectionEx\")?;let _=(||->Result<CrtValue,&'static str>{{{pre}}})()?;if cpu.return_pop!=12||cpu.r[4]!=cpu.entry[4]||[3,5,6,7].iter().any(|&r|cpu.r[r]!=cpu.entry[r]){{return Err(\"descriptor lock ABI\");}}let sp=CrtCpu::pointer(cpu.r[4])?;rt.offset(sp,16)?;rt.memory.validate_writable(sp.cap,sp.owner,sp.address(),16).map_err(|_|\"descriptor lock stack permission\")?;let p=CrtCpu::pointer(rt.load(rt.offset(sp,4)?,32)?)?;let spin=rt.load(rt.offset(sp,8)?,32)?.known_scalar()?;let flags=rt.load(rt.offset(sp,12)?,32)?.known_scalar()?;if spin!=4000{{return Err(\"descriptor lock spin domain\");}}let result=rt.native_record_initialize(inputs.init,platform.function,p,flags)?;cpu.clobber(CrtValue::scalar(u32::from(result)));cpu.finish_pop(rt,12)}}
 fn startup_inherit_native(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:&CrtNativePlatform)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;let p=rt.process_image_code(inputs.image,0x408537,{})?;if rt.memory.read(p.address(),{}).map_err(|_|\"startup inherit code read\")?!=&{inherited:?}{{return Err(\"startup inherit code changed\");}}{ib}}}",bytes.len(),bytes.len(),inherited.len(),inherited.len()))
+}
+
+fn standard_source() -> Result<String, String> {
+    let bytes = crate::crt_ptd::raw(STANDARD);
+    let g = Graph::decode(&bytes, 0x4085e7)?;
+    let body = crate::crt_stream_emit::emit_body(
+        &g,
+        |pc, target| {
+            let next = pc + g.nodes[&pc].length;
+            let (iat, name, file_type) = match target {
+                Target::Import(0x41507c) => (0x41507c, "GetStdHandle", false),
+                Target::Import(0x4150bc) => (0x4150bc, "GetFileType", true),
+                _ => return Err("native standard body unbound call".into()),
+            };
+            Ok(format!("rt.process_image_import(inputs.image,{iat},\"kernel32.dll\",\"{name}\")?;cpu.call_activation(rt,{next},4,|rt,c|platform.standard_handle_call(rt,c,inputs.init,{file_type}))?;"))
+        },
+        &std::collections::BTreeMap::from([
+            (0x41cf08, "CrtRegionKind::Module".into()),
+            (0x41cd30, "CrtRegionKind::Module".into()),
+        ]),
+        4096,
+    )?;
+    Ok(format!("fn startup_standard_bytes()->Vec<u8>{{vec!{bytes:?}}}fn startup_standard_native(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:&CrtNativePlatform)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;platform.validate(rt,inputs.init)?;let set=platform.standards.ok_or(\"startup native standard handles unbound\")?;rt.native_standard_set(set)?;cpu.validate_active(rt)?;let p=rt.process_image_code(inputs.image,0x4085e7,{})?;if rt.memory.read(p.address(),{}).map_err(|_|\"startup standard body code read\")?!=&{bytes:?}{{return Err(\"startup standard body code changed\");}}{body}}}",bytes.len(),bytes.len()))
 }
 
 #[test]

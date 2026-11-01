@@ -56,7 +56,7 @@ impl CrtCpu{
   rt.last_os_error=None;self.clobber(CrtValue::scalar(1));self.finish_pop(rt,16)
  }
  fn tick(&mut self,budget:u32)->Result<(),&'static str>{self.steps=self.steps.checked_add(1).ok_or("CRT instruction counter overflow")?;if self.steps>budget{return Err("CRT certified instruction bound exceeded");}Ok(())}
- fn bits(v:CrtValue)->Result<(u32,u32),&'static str>{match v{CrtValue::Module(m)=>Ok((m.handle,u32::MAX)),CrtValue::Function(f)=>Ok((f.address,u32::MAX)),CrtValue::Scalar{bits,known}=>Ok((bits,known)),CrtValue::Pointer(p)=>Ok((p.address(),u32::MAX)),CrtValue::Handle(h)=>Ok((h.handle,u32::MAX)),CrtValue::OpaqueSaved(_)=>Ok((0,0)),CrtValue::Heap(_)|CrtValue::Dispatcher(_)|CrtValue::ProtectedReturn(_)|CrtValue::ThreadHead(_)=>Err("CRT protected control bits")}}
+ fn bits(v:CrtValue)->Result<(u32,u32),&'static str>{match v{CrtValue::Module(m)=>Ok((m.handle,u32::MAX)),CrtValue::Function(f)=>Ok((f.address,u32::MAX)),CrtValue::Scalar{bits,known}=>Ok((bits,known)),CrtValue::Pointer(p)=>Ok((p.address(),u32::MAX)),CrtValue::ProcessHandle(h)=>Ok((h.handle,u32::MAX)),CrtValue::Handle(h)=>Ok((h.handle,u32::MAX)),CrtValue::OpaqueSaved(_)=>Ok((0,0)),CrtValue::Heap(_)|CrtValue::Dispatcher(_)|CrtValue::ProtectedReturn(_)|CrtValue::ThreadHead(_)=>Err("CRT protected control bits")}}
  fn number(v:CrtValue)->Result<u32,&'static str>{let(b,k)=Self::bits(v)?;if k!=u32::MAX{return Err("CRT unknown scalar bits observed");}Ok(b)}
  fn pointer(v:CrtValue)->Result<CrtPointer,&'static str>{match v{CrtValue::Pointer(p)=>Ok(p),_=>Err("CRT pointer provenance")}}
  fn mask(width:u8)->Result<u32,&'static str>{match width{8=>Ok(255),16=>Ok(65535),32=>Ok(u32::MAX),_=>Err("CRT operand width")}}
