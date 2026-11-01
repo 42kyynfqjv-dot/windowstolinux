@@ -1,6 +1,25 @@
 # Remaining entry-to-exit dependencies
 
-## Current executable checkpoint: PTD reference publication reaches shared EH4 update
+## Current executable checkpoint: shared locale updater returns
+
+Explicit-profile original entry now completes callback10: real EH4 wrapper40aeae,
+lock5, checked257/256-byte copies, global/private reference replacement, unlock,
+RET12 and outer initialized-flag publication. Copy paths execute original scalar,
+REP or nonfaulting aligned SSE2 instructions; unproved SSSE3/backward/unaligned
+paths reject. Canonical mapped byte destinations cannot alias a stack frame.
+Prior writes survive later rejection; replay cannot repeat publication.
+
+Next actual initializer boundary is **index15, target407565**, calling4074fc twice
+with 41ce88/41ce94. Index14 reuses its already-bound original helper. The original
+three-word exit-table cookie initialization and return must execute before
+advancing. Non-null free,
+invalid-argument/errno, exceptional cleanup and other gaps below stay unsupported.
+[Contract and review scope](LOCALE-SHARED.md), [evidence](evidence/locale-shared.json).
+All three dfb3d77 workflows passed. New-head CI remains separately reported in
+SUB-579. No new whole-PE pair, default admission or full startup/rcedit claim;
+historical original-Windows timeout causes remain unresolved.
+
+## Previous checkpoint: PTD reference publication reaches shared EH4 update
 
 Explicit-profile entry now executes original result caller40b2cc, old-reference
 decrement, new counter1 and pointer publication to UCRT PTD+72. It rejects at

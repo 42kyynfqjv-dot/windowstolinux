@@ -1,0 +1,245 @@
+{
+  "kind": "original shared locale updater; explicit native-profile component execution",
+  "source_commit": "5f02da49304ebdabce7125f40b6b33ecad351e4c",
+  "scope": "same untouched authored PE; actual-entry component reaches next initializer, not whole-program conversion",
+  "entry_progress": {
+    "shared_call": "0x40b362 -> 0x40aeae",
+    "executed": [
+      "original eight-byte EH4 local allocation and prolog",
+      "actual indexed lock5",
+      "original checked257/256-byte copies from same544-byte allocation",
+      "private/global reference decrements and publication",
+      "normal unlock cleanup, scope exit and RET12",
+      "outer pointer writeback, aligned return and initialized flag",
+      "existing original index14 helper"
+    ],
+    "next_boundary": {
+      "table_index": 15,
+      "target": "0x407565",
+      "error": "original initializer callback effect unbound",
+      "state": "no index15 effects executed",
+      "next_helper": "0x4074fc called for0x41ce88 and0x41ce94; original three-word cookie initialization"
+    }
+  },
+  "contracts": {
+    "instruction_lowering": "shared decoded BT r/m32,imm8, REP MOVSB and scalar-lane SSE2 MOVDQA/MOVDQU/MOVQ; actual original instructions/control/table words; no host memcpy or output lookup",
+    "copy_graph": "source and target bytes bound to unchanged PE; actual AND EDX,3 dominates checked four-target tail table; SSSE3/backward/unaligned paths explicitly reject",
+    "knowledge": "unknown scalar masks retained, MOVQ clears upper64; protected/typed vector words reject, no new numeric pointer authority",
+    "state": "canonical process-image global byte destinations, same heap allocation identity, live initialization, registry and actual lock lease",
+    "failure": "prior committed writes and live locks/records remain at unsupported effects; no exception-cleanup success substituted",
+    "concurrency": "existing single-guest-thread exclusive initialization only"
+  },
+  "cases": {
+    "copy_matrix": 378,
+    "copy_matrix_returns": 368,
+    "copy_matrix_rejected_cuts": 10,
+    "copy_knowledge_negative": 11,
+    "result": 27,
+    "result_replay_rejections": 27,
+    "bit_test_register": 24,
+    "bit_test_memory": 4,
+    "rep_byte": 6,
+    "vector_memory": 9,
+    "retained_callback": 45,
+    "retained_initializer_cookie": 49,
+    "retained_word": 152
+  },
+  "review_findings": {
+    "global_alias": "typed destination must retain canonical mapped-image identity; stack/heap alias rejects before copy",
+    "failure_order": "first copy retained on second-copy rejection; both buffers compared byte-for-byte against prestate or source; cleanup mutation retains both copies/global publication/held lock",
+    "continuation": "result claim single-use on success/failure; normal shared epilog uses original proof and actual RET12; replay cannot decrement or publish again",
+    "test_oracle": "repeat callback fast path writes AL only; corrected oracle retains unknown upper EAX bits",
+    "test_stack": "independent primitive functions split into non-inlined frames under unchanged512KiB budget after local stack exhaustion",
+    "clippy": "local chunks-array conversion/needless-reference warnings fixed; compilation error from initial array-reference conversion retained in logs",
+    "certificate_scope": "new helper graph is consumer emission only; default admission and existing proof/capture analyses do not certify it as whole-program support"
+  },
+  "checks": {
+    "root": 182,
+    "crt": 314,
+    "crt_ignored": 2,
+    "artifact_ignored_scope": "both named artifact checks run in complete recorded-input replay; canonical check rerun on fresh identical Rust",
+    "unwind": 185,
+    "startup_python": {
+      "run": 89,
+      "skip": 1
+    },
+    "tools_python": {
+      "run": 106,
+      "skip": 0
+    },
+    "corpus_python": {
+      "run": 18,
+      "skip": 1
+    },
+    "clippy_all_targets": "passed",
+    "format": "passed"
+  },
+  "replay": {
+    "kind": "original prolog/epilog component comparison with explicit unexecuted body boundary",
+    "scope": "Live registry fixture; body EAX/flags inputs; original stack/FS/saved-state restoration only",
+    "comparisons": 5,
+    "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+    "rust_sha256": "72036164b1549c7a4fd5fc9d13594c9b46ec9243a06d48597f6ef792f9613764",
+    "new_whole_pe_windows_elf_pairs": 0,
+    "fresh_identical_rust": true,
+    "emission_mtime_before_ns": 1793525692896842007,
+    "emission_mtime_after_ns": 1793525719175754640,
+    "report_sha256": "37b033e2acdfbdcbb871e20d9d6f651f230fd1faa8c5cdf1c0bd26e74df9edcd",
+    "observer_report_sha256": "0feb586c7170dfd7e2390cf92ce1e5efa050c3e208d6c8903312e2d054c506cc",
+    "wrapper_vectors_sha256": "6f9b74742366c0f207d397ccf8b1af4afc2d01b34fae21cafb68d38d71a6ec66"
+  },
+  "named_gates": {
+    "locale-shared-copy": {
+      "stdout": "87ce790ece5fb229fd54ca917e1c6675733b0a577846b043fcc884e082c00bca",
+      "stderr": "ab1e8ab4b828624e75e6e8c917ac437f104b9cd0b496a9d073a4a52c0abca136"
+    },
+    "startup-atomics": {
+      "stdout": "9d77a7cc87bd37adc2439f48e64fd0f037b2dfbbcc87c29ad8698bfe9ceb3d2a",
+      "stderr": "29423147df5f27152c143f40399d5189737a902b622fb79efc6e1b2754336583"
+    },
+    "installed-code-pages": {
+      "stdout": "b80fa7d6651c9b698657f8c16e5d01f4cd09d6a5847c7cb5bac03b0795208a96",
+      "stderr": "ab1e8ab4b828624e75e6e8c917ac437f104b9cd0b496a9d073a4a52c0abca136"
+    },
+    "word-register": {
+      "stdout": "ac4348555727c8810d967de943e856ac695353ef613b33d915ffc1d69118d2e5",
+      "stderr": "29423147df5f27152c143f40399d5189737a902b622fb79efc6e1b2754336583"
+    },
+    "repeated-copy": {
+      "stdout": "9a2e42113d33ba94e9395cef932cfd186f6b5b67845656d7682cad4efdfbefbf",
+      "stderr": "29423147df5f27152c143f40399d5189737a902b622fb79efc6e1b2754336583"
+    },
+    "cookie-record": {
+      "stdout": "83e75d3bb84f02d86c558638764464bdbd37c511ced5d203c2499e48b8944e3a",
+      "stderr": "ab1e8ab4b828624e75e6e8c917ac437f104b9cd0b496a9d073a4a52c0abca136"
+    },
+    "locale-alignment": {
+      "stdout": "475533e42e9466d058ff3816590c43520c6b5ca254684557b2b4c148892760aa",
+      "stderr": "ab1e8ab4b828624e75e6e8c917ac437f104b9cd0b496a9d073a4a52c0abca136"
+    }
+  },
+  "original_regions": {
+    "crt_locale_shared_WRAPPER": {
+      "address": "0x40aeae",
+      "length": 65,
+      "sha256": "f18ea2c3528557559f831ee57311985d36b1abcbbe8433322e8467d8d3da4e4f"
+    },
+    "crt_locale_shared_CLEANUP": {
+      "address": "0x40aeef",
+      "length": 12,
+      "sha256": "ac85085b033cc1b5d22635ffd30a03897df90926807c1032ad81324c9be0a456"
+    },
+    "crt_locale_shared_BODY": {
+      "address": "0x40aefb",
+      "length": 131,
+      "sha256": "c85ad1357ba4ad16395ef26c513351725b2bc0e5da5d355653560f078ad81ba7"
+    },
+    "crt_locale_shared_COPY_S": {
+      "address": "0x40b68a",
+      "length": 129,
+      "sha256": "f51a05ecc797595dc89d59defa67e592afa34760ced242d3424f5181180019ea"
+    },
+    "crt_locale_memcpy_CODE": {
+      "address": "0x403040",
+      "length": 1351,
+      "sha256": "7521e6c0c10b0327a8dba788d7a08262ba8faf37fa21d1d970eb2a5a6a2296f3"
+    }
+  },
+  "source_sha256": {
+    "src/crt_locale_shared.rs": "ae077aa00ff7d22909c53db322f90937163fc6e8f10b37d05ef370db7bd43bed",
+    "src/crt_locale_memcpy.rs": "861def4a53a957c00b621381a5c9b0dff205575d257e4f299819f72554e2312b",
+    "src/crt_locale_startup.rs": "4e360dc3e5d408232d0911b284b3823b7d7e072f066f1c648c73ed73189574ed",
+    "src/crt_stream_ir.rs": "a5a80c0d807e9786be5a3c96e68e6535ed69887be111cd4adcdfadabe01cf2b0",
+    "src/crt_stream_emit.rs": "600028e23104eab6590b91b54b62554f1bf1fc5737f93af6de5e1416739f3688",
+    "src/crt_stream_cpu.rs": "d9cdea2a13d9642b968df567711619ce7b0b3dd2258160ec638b84ab86f9e35d",
+    "src/crt_normal_frame_tests.rs": "1d9769f897dc24b41564f4549bc131e4e40d4b96dd535f73e539dd351e8b69f0",
+    "src/crt_startup_table.rs": "34955f92dd8d87385e58ba23b37d630095323e0a9ef7f17d7004ca9662dd2d47",
+    "research/process/startup/check_normal_wrapper.py": "d323a38ae4d603b9ae92740110bfedef021e083e50cb2452351b8a0a1707d674"
+  },
+  "local_log_sha256": {
+    "canonical-checkpoint.log": "3a17db5e817d768d348804c318dc0ac37e3c786bf5cedc4de3ad358a5017531c",
+    "canonical-complete.log": "57908e1c855216e4bbcaedbf2a3cf2ecb957219a2850f9cecfc9eb1a0182667c",
+    "canonical-copy.log": "d02bb65bc3f59ba9f21d214655af383fe486199823d1bff72566fc3d7d169e2f",
+    "canonical-diagnostic.log": "93f68dbd7d63e980cc97d70f3ad3df048896978c45703a85435b19bf52e0e3cc",
+    "canonical-failures-executed-fixed.log": "05933ac97b45336a00494763a7815097eba73c7473a367a70ce8dc1b1a233b0a",
+    "canonical-failures-executed.log": "d116850993b6c6c8c844a391b327a6607b4ab765b3fdd3968650c3af17de9200",
+    "canonical-failures.log": "36e693143961134310322cfd2e5ce93d5b43d0d484adc4ab5cd8e3bc6dab97ce",
+    "canonical-first.log": "12ed4564c4c6429ae66a1be738ff17c62af702131b3134d4fed697b7c3ac314a",
+    "canonical-fresh-identical.log": "8b3e40c2cff5919daee2ff077ce2274d224f6c2cb398134a49d0b5f61a996568",
+    "canonical-globals.log": "314cabc73217a421b220fb1c11152cf491b6b9d1332b11e1d0226fe32766939a",
+    "canonical-memcpy.log": "3f1a9e0e599d983437a886eb24f6f4e555d9941dede5ba0fd5e37a3888e8ee71",
+    "canonical-repeated.log": "9a03d38b5a307f982afdf952c3b358482a7655b31da974518df0869ca8bc1009",
+    "canonical-return.log": "3b6d3cdc32c77d394099f6a1958c4da80c027cafc94ff95e14be5f4931aa2288",
+    "canonical-vectors.log": "04815b0050d1ce29ec6182f6f1c4219becec48736bf48176afc4383aa4cc7d84",
+    "canonical-wrapper.log": "819c3d77803752a8bcefbc7e8dc6c2b78b210a223d42de589dd0a5ff3df5fa10",
+    "clippy-final.log": "9544a2dec33e86a93e301022ecfdec0cc4a5d29aba13e557e1454936aeea0cd2",
+    "clippy-fixed.log": "d338bddf0e50ba1994e6310393a348765c498983b5bd681125f34c38f3fdfc4e",
+    "clippy.log": "f5c4727994cdd479024af5cf1c7cda0d5dc821a4a22e9915da7f5ae915424d61",
+    "copy-final.log": "26d017ef47dc297e82d314e67797a030a88c82c9c0fd35816ee89699355c29fe",
+    "corpus-python.log": "f2f4997def9d3b60e4ebd62b846e79b6005d8026efd93ccb4427cf0f3d7b4a85",
+    "crt.log": "e22edac03ee98ba5e740c9a3da36796eaaba402168646c94ad4801d3d9343035",
+    "fmt-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "graph-bounded.log": "9fcf1b2e3cb8f736d72d0281f1f14491cff1cca7cf11d4cb09caf7bd4e091bf0",
+    "graph-fixed.log": "9093d556142774a6bdb5046dccaa81d77f0960b6199dc167ca175cfd09c7279f",
+    "graph.log": "57261e76a79a833fbf06d6e50085480feeab7f4a41843c3fd28601a17b904d99",
+    "primitives-framed.log": "b0b3faa818b9e32232c079c285361b8c609c780140efaddbe7bf0d8e889fa6e7",
+    "primitives.log": "62f4f083e2767560dfa4a4fb3bfbb72ee2462bd71aa99d01f55f43263460f5db",
+    "replay-final.log": "eddb8952908b9dcad601aea87fbdf0d4f195286ee6e3209ce2ba058ad2e3d6e5",
+    "root.log": "f8285e4b91890e4e5b73063320d7721bb810e5c931b9d6beca94a665b814d3c9",
+    "startup-python.log": "44553a362bfc628e3cb7dae57dfe2dae955e04f75dbc6346da8f7ac28fb1361e",
+    "tools-python.log": "aa7e1e4597c7c9f4f139d694d866169862e7934f59b99abe70bdfaebbe574634",
+    "unwind.log": "feffe9eb69ac915bf17048e564f5c0fb3a050f79dba88d45012754855112bedd",
+    "vector-graph.log": "73c39183b6d309e815c9c808c350efd849dbdde63b96e92d7cfc2b7043a938d8",
+    "vectors-framed.log": "91d76a2369f123a02e423873b221dd46b530c61de1a92635d0e1f8dd9fe2dd98",
+    "vectors-sse2.log": "09c2b343614c95aef3ea868a5b8ebb712e5b71abf199090350a0facb19433413",
+    "vectors.log": "dc38e3c7f23f38e0c8c1ebbdfc1d3716c5c254c73b024163677a6e2f8b3d68bb"
+  },
+  "base_ci": [
+    {
+      "id": 41288514033,
+      "head": "dfb3d77799596008271a1bdbb1e5b2597d51a1f3",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41288514033"
+    },
+    {
+      "id": 41288510348,
+      "head": "dfb3d77799596008271a1bdbb1e5b2597d51a1f3",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41288510348"
+    },
+    {
+      "id": 41288510354,
+      "head": "dfb3d77799596008271a1bdbb1e5b2597d51a1f3",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41288510354"
+    }
+  ],
+  "new_head_ci": "pending after publication; exact run references/status maintained in existing SUB-579, no green claim here",
+  "limitations": [
+    "zero new whole-PE Windows/ELF pairs",
+    "five previously recorded Windows wrapper comparisons, not fresh Windows acquisition",
+    "default admission/full startup/formatter/rcedit unsupported",
+    "SSSE3/backward/unaligned copy, non-null free, invalid-argument/errno and exceptional EH4 cleanup unbound",
+    "actual Windows delivery/containment/collided unwind and native close/EOF equivalence unresolved",
+    "Windows resource-failure/encoding/XP7 equivalence unproved",
+    "historical original-Windows hello/corpus/output-probe/case19 and other launch timeout causes unresolved; later pass is not diagnosis"
+  ],
+  "reproduction": {
+    "commands": [
+      "cargo test --locked",
+      "cargo test --locked --example crt_stream",
+      "cargo test --locked --example unwind_slice",
+      "cargo clippy --locked --all-targets -- -D warnings",
+      "cargo fmt --all -- --check",
+      "PYTHONPATH=research/process/startup python3 -m unittest discover -s research/process/startup",
+      "python3 -m unittest discover -s tools",
+      "PYTHONPATH=corpus python3 -m unittest discover -s corpus",
+      "python3 research/process/startup/check_normal_wrapper.py ORIGINAL_DIRECTORY OBSERVER_DIRECTORY NEW_OUTPUT_DIRECTORY"
+    ],
+    "environment": "configured Rust toolchain, CARGO_INCREMENTAL=0 CARGO_NET_OFFLINE=true TMPDIR=/workspace/w2l-build-tmp W2L_Z3=/workspace/.tools/w2l-z3/bin/z3; artifact tests require original authored PE and recorded Windows vectors",
+    "limits": "unchanged timeouts, proof budgets and stack bounds"
+  }
+}

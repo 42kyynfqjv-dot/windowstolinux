@@ -1,5 +1,8 @@
 # Original locale result, reference publication and cleanup boundary
 
+Historical checkpoint `dfb3d77`; the [shared-update continuation](LOCALE-SHARED.md)
+now supersedes the next-boundary description below.
+
 ## Connected execution
 
 The explicit native-profile entry now executes original caller `0x40b2cc` after
