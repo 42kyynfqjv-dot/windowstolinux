@@ -12,19 +12,23 @@ struct CrtCpu{abi:CrtAbi,r:[CrtValue;8],xmm:[[CrtValue;4];8],entry:[CrtValue;8],
 /// A compiler-proved aligned frame may copy CALL return bits into ordinary
 /// storage. Only the original protected slot authorizes RET. No entry-boundary
 /// CPU with an unknown numeric continuation can issue this lease.
-struct CrtAlignedActivation{anchor:guest_memory::Capability,thread:u64,fiber:Option<CrtFiber>,entry:CrtPointer,identity:u64,pc:u32,mirror:Option<CrtPointer>,done:bool}
+struct CrtAlignedActivation{anchor:guest_memory::Capability,thread:u64,fiber:Option<CrtFiber>,entry:CrtPointer,identity:u64,pc:u32,mirror:Option<CrtPointer>,claimed_continuation:Option<u32>,done:bool}
 impl CrtAlignedActivation{
  fn begin(rt:&CrtStreamRuntime,cpu:&CrtCpu)->Result<Self,&'static str>{
   cpu.validate_active(rt)?;rt.memory.validate(rt.anchor,rt.file_view.owner).map_err(|_|"CRT aligned runtime lifetime")?;let entry=CrtCpu::pointer(cpu.entry[4])?;
   let (identity,pc)=cpu.return_site.ok_or("CRT aligned return bits unavailable")?;
   if identity!=cpu.return_id||pc==0||cpu.r[4]!=cpu.entry[4]||entry.address()%4!=0{return Err("CRT aligned entry identity");}
-  Ok(Self{anchor:rt.anchor,thread:rt.thread,fiber:rt.fiber,entry,identity,pc,mirror:None,done:false})
+  Ok(Self{anchor:rt.anchor,thread:rt.thread,fiber:rt.fiber,entry,identity,pc,mirror:None,claimed_continuation:None,done:false})
  }
  fn live(&self,rt:&CrtStreamRuntime,cpu:&CrtCpu)->Result<(),&'static str>{
   if self.anchor!=rt.anchor||self.thread!=rt.thread||self.fiber!=rt.fiber||self.done||cpu.return_id!=self.identity||cpu.return_site!=Some((self.identity,self.pc))||cpu.entry[4]!=CrtValue::Pointer(self.entry){return Err("CRT aligned activation lifetime");}
   cpu.validate_active(rt)?;rt.memory.validate(self.anchor,rt.file_view.owner).map_err(|_|"CRT aligned runtime lifetime")?;
   if let Some(p)=self.mirror{if rt.load(p,32)?!=CrtValue::scalar(self.pc){return Err("CRT aligned return mirror changed");}}
   Ok(())
+ }
+ /// A consumer-bound post-body fragment is single-use, including on failure.
+ fn claim_continuation(&mut self,rt:&CrtStreamRuntime,cpu:&CrtCpu,pc:u32)->Result<(),&'static str>{
+  self.live(rt,cpu)?;if pc==0||self.claimed_continuation.is_some(){return Err("CRT aligned continuation already consumed");}self.claimed_continuation=Some(pc);Ok(())
  }
  fn copy_return(&mut self,rt:&mut CrtStreamRuntime,cpu:&CrtCpu,destination:CrtPointer,value:CrtValue)->Result<(),&'static str>{
   self.live(rt,cpu)?;let sp=CrtCpu::pointer(cpu.r[4])?;
@@ -87,8 +91,14 @@ impl CrtCpu{
    remaining-=1;self.r[1]=CrtValue::scalar(remaining);
   }Ok(())
  }
- /// LOCK XADD returns the prior memory word in the source register. All
- /// knowledge/lifetime checks precede the write; flags use the original sum.
+ /// Owned initialization XCHG preserves flags; XADD uses original sum flags.
+ /// All knowledge/lifetime/permission checks precede the scalar write.
+ fn exchange_initializing_scalar(&mut self,rt:&mut CrtStreamRuntime,init:CrtInitialization,image:CrtProcessImage,p:CrtPointer,register:usize,add:bool)->Result<(),&'static str>{
+  let value=self.r.get(register).ok_or("CRT initializing atomic register")?.known_scalar()?;
+  let old=rt.exchange_initializing_scalar(init,image,p,value,add)?;
+  if add{self.binary(rt,1,CrtValue::scalar(old),CrtValue::scalar(value),32)?;}
+  self.r[register]=CrtValue::scalar(old);Ok(())
+ }
  fn exchange_add_reference(&mut self,rt:&mut CrtStreamRuntime,init:CrtInitialization,image:CrtProcessImage,lease:CrtGlobalLock,p:CrtPointer,register:usize)->Result<(),&'static str>{
   let addend=self.r.get(register).ok_or("CRT XADD register")?.known_scalar()?;
   let old=rt.add_module_reference(init,image,lease,p,addend)?;

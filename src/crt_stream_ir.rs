@@ -79,6 +79,13 @@ pub(crate) enum Op {
         destination: Operand,
         source: Reg,
     },
+    /// Consumer-bound scalar atomic in the explicit startup-exclusive domain.
+    /// Default decoding does not issue this effect or supply its authority.
+    InitializingAtomic {
+        destination: Operand,
+        source: Reg,
+        add: bool,
+    },
     /// Consumer discards address authority at an original register arithmetic
     /// result. This qualifier cannot skip reads or grant a memory capability.
     NumericArithmetic {
@@ -674,6 +681,31 @@ pub(crate) fn normalize(i: &Instruction, raw: &[u8]) -> Result<Op, String> {
     extended(i, raw, &[])
 }
 impl Graph {
+    pub(crate) fn initializing_atomic(&mut self, pc: u32) -> Result<(), String> {
+        let node = self
+            .nodes
+            .get_mut(&pc)
+            .ok_or("CRT initializing atomic missing instruction")?;
+        let (destination, source, add) = match &node.op {
+            Op::Exchange { address, register } => {
+                (Operand::Memory(address.clone(), 32), *register, false)
+            }
+            Op::LockedExchangeAdd {
+                destination: Operand::Memory(address, 32),
+                source,
+            } => (Operand::Memory(address.clone(), 32), *source, true),
+            _ => return Err("CRT initializing atomic encoding/effect".into()),
+        };
+        if source.width != 32 || source.index == 4 || source.index == 5 {
+            return Err("CRT initializing atomic register".into());
+        }
+        node.op = Op::InitializingAtomic {
+            destination,
+            source,
+            add,
+        };
+        Ok(())
+    }
     pub(crate) fn numeric_result(&mut self, pc: u32) -> Result<(), String> {
         let node = self
             .nodes

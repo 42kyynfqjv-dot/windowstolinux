@@ -976,6 +976,21 @@ impl CrtStreamRuntime {
  fn module_word_pointer(&self,image:CrtProcessImage,value:CrtValue)->Result<CrtPointer,&'static str>{
   match value{CrtValue::Scalar{bits,known:u32::MAX}=>self.process_image_pointer(image,bits,4),CrtValue::Pointer(p)=>{if self.process_image_pointer(image,p.address(),4)?!=p{return Err("CRT module word alias");}Ok(p)},_=>Err("CRT module word address knowledge")}
  }
+ /// Scalar atomic words during serialized initialization; no guest concurrency
+ /// or host callback/interleaving is admitted. Heap words retain whole identity.
+ fn initializing_scalar_pointer(&self,init:CrtInitialization,image:CrtProcessImage,value:CrtValue)->Result<CrtPointer,&'static str>{
+  self.initialization(init)?;self.process_image(image)?;
+  let p=match value{CrtValue::Scalar{..}=>self.module_word_pointer(image,value)?,CrtValue::Pointer(p)=>p,_=>return Err("CRT initializing scalar word address")};
+  self.valid(p,4)?;if p.address%4!=0{return Err("CRT initializing scalar word alignment");}
+  if p.kind==CrtRegionKind::Module{if self.process_image_pointer(image,p.address,4)?!=p{return Err("CRT initializing module word identity");}}
+  else if p.kind!=CrtRegionKind::Buffer||p.address!=p.base||!self.regions.iter().any(|r|r.pointer==p&&r.heap&&r.file_owner.is_none()){return Err("CRT initializing whole buffer word");}
+  Ok(p)
+ }
+ fn exchange_initializing_scalar(&mut self,init:CrtInitialization,image:CrtProcessImage,p:CrtPointer,value:u32,add:bool)->Result<u32,&'static str>{
+  if self.initializing_scalar_pointer(init,image,CrtValue::Pointer(p))?!=p{return Err("CRT initializing scalar identity");}
+  self.memory.validate_writable(p.cap,p.owner,p.address,4).map_err(|_|"CRT initializing scalar permission")?;
+  let old=self.load(p,32)?.known_scalar()?;self.store(p,32,CrtValue::scalar(if add{old.wrapping_add(value)}else{value}))?;Ok(old)
+ }
  fn increment_module_reference(&mut self,init:CrtInitialization,image:CrtProcessImage,lease:CrtGlobalLock,p:CrtPointer)->Result<u32,&'static str>{self.add_module_reference(init,image,lease,p,1)}
  /// Single guest-thread operation under the consumer's exclusive global lease;
  /// no callback or interleaving occurs between checked read and write.

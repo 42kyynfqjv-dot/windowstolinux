@@ -1,5 +1,5 @@
 //! Original locale/PTD, aligned reference and code-page execution.
-//! Multibyte initialization rejects at the original result/publication continuation.
+//! Shared publication and exceptional/free effects retain explicit boundaries.
 use crate::crt_stream_ir::{Graph, Target};
 pub(crate) const CALLBACK:&str="803d48d1410000753cc70540d1410040c24100c7053cd1410068c54100c70538d1410060c44100e899eeffff6840d14100506a016afde8d0fdffff83c410c60548d1410001b001c3";
 pub(crate) const GETTER:&str="6a00b84a4b4100e86d9f00008365fc00a170c1410083f8ff741550e852ddffff85c0740b83f8ff740fe8379f0000c3e8cbfeffff85c075f1e8d3d4ffff";
@@ -102,11 +102,12 @@ pub(crate) fn source() -> Result<String, String> {
         |_, _| Ok(None),
         Some(init_call_graph.end),
     )?;
-    out.push_str(&format!("fn locale_aligned_prefix(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:&CrtNativePlatform,epoch:&mut NormalCallEpoch<'_>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;let p=rt.process_image_code(inputs.image,0x40b235,{})?;if rt.memory.read(p.address(),{}).map_err(|_|\"locale aligned code read\")?!=&{prefix:?}{{return Err(\"locale aligned code changed\");}}let mut aligned=CrtAlignedActivation::begin(rt,cpu)?;let _=(||->Result<CrtValue,&'static str>{{{body}}})()?;aligned.live(rt,cpu)?;cpu.tick(u32::MAX)?;cpu.call_activation(rt,0x40b25f,0,|rt,c|locale_reference_original(rt,c,inputs,epoch))?;aligned.live(rt,cpu)?;let caller=rt.process_image_code(inputs.image,0x40b25f,8)?;if rt.memory.read(caller.address(),8).map_err(|_|\"locale caller code read\")?!=[255,115,8,232,85,253,255,255]{{return Err(\"locale code-page caller changed\");}}let _=(||->Result<CrtValue,&'static str>{{{caller_body}}})()?;aligned.live(rt,cpu)?;let value=locale_selected_caller(rt,cpu,inputs,&mut aligned)?;if cpu.returned{{return Ok(value);}}aligned.live(rt,cpu)?;let value=locale_allocated_copy_original(rt,cpu,inputs,&mut aligned)?;if cpu.returned{{return Ok(value);}}aligned.live(rt,cpu)?;let q=rt.process_image_code(inputs.image,0x40b2c7,5)?;if rt.memory.read(q.address(),5).map_err(|_|\"locale initializer caller read\")?!=&{init_call_bytes:?}{{return Err(\"locale initializer code changed\");}}let _=(||->Result<CrtValue,&'static str>{{{init_call_body}}})()?;aligned.live(rt,cpu)?;return Err(\"locale initializer result continuation unbound\");}}",prefix.len(),prefix.len()));
+    out.push_str(&format!("fn locale_aligned_prefix(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:&CrtNativePlatform,epoch:&mut NormalCallEpoch<'_>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;let p=rt.process_image_code(inputs.image,0x40b235,{})?;if rt.memory.read(p.address(),{}).map_err(|_|\"locale aligned code read\")?!=&{prefix:?}{{return Err(\"locale aligned code changed\");}}let mut aligned=CrtAlignedActivation::begin(rt,cpu)?;let _=(||->Result<CrtValue,&'static str>{{{body}}})()?;aligned.live(rt,cpu)?;cpu.tick(u32::MAX)?;cpu.call_activation(rt,0x40b25f,0,|rt,c|locale_reference_original(rt,c,inputs,epoch))?;aligned.live(rt,cpu)?;let caller=rt.process_image_code(inputs.image,0x40b25f,8)?;if rt.memory.read(caller.address(),8).map_err(|_|\"locale caller code read\")?!=[255,115,8,232,85,253,255,255]{{return Err(\"locale code-page caller changed\");}}let _=(||->Result<CrtValue,&'static str>{{{caller_body}}})()?;aligned.live(rt,cpu)?;let value=locale_selected_caller(rt,cpu,inputs,&mut aligned)?;if cpu.returned{{return Ok(value);}}aligned.live(rt,cpu)?;let value=locale_allocated_copy_original(rt,cpu,inputs,&mut aligned)?;if cpu.returned{{return Ok(value);}}aligned.live(rt,cpu)?;let q=rt.process_image_code(inputs.image,0x40b2c7,5)?;if rt.memory.read(q.address(),5).map_err(|_|\"locale initializer caller read\")?!=&{init_call_bytes:?}{{return Err(\"locale initializer code changed\");}}let _=(||->Result<CrtValue,&'static str>{{{init_call_body}}})()?;aligned.live(rt,cpu)?;let bp=CrtCpu::pointer(cpu.r[5])?;let allocation=CrtCpu::pointer(rt.load(rt.offset(bp,-4)?,32)?)?;locale_result_original(rt,cpu,inputs,platform,&mut aligned,allocation)}}",prefix.len(),prefix.len()));
     out.push_str(&reference_source()?);
     out.push_str(&crate::crt_locale_code_page::source()?);
     out.push_str(&crate::crt_malloc::source()?);
     out.push_str(&selected_source()?);
+    out.push_str(&result_source()?);
     out.push_str(&crate::crt_repeat_copy::source()?);
     Ok(out)
 }
@@ -116,6 +117,168 @@ pub(crate) const ALIGNED_FRAME: &str =
 pub(crate) const SELECTED_CALLER: &str =
     "8b4b1083c40c8945f48b49483b4104750733c0e9020100006820020000e8a7d4ffff";
 pub(crate) const FAST_EPILOG: &str = "5f5e8be55d8be35bc3";
+
+pub(crate) const RESULT_CALLER:&str="8bf883ceff59593bfe751be8f1c9ffffc700160000008b45fc50e865caffff8bc6e98e000000807b0c007505e829beffff8b43108b4048f00fc1304e75158b431081784840c241007409ff7048e832caffff598b45fcc700010000008b4b108941488b4b10a1b8c7410085815003000075398d43108945ec8d4dfb6a058d43148945f0588945f48945fc8d45f4508d45ec508d45fc50e847fbffff807b0c00740a8b43148b00a334c241006a00e8d2c9ffff8bc7595f5e8be55d8be35bc3";
+pub(crate) const FREE_BODY:&str="8bff558bec837d0800742dff75086a00ff35c8d24100ff159850410085c0751856ff154450410050e895feffff598bf0e848ffffff89305e5dc3";
+pub(crate) const MULTIBYTE_FLAG: &str = "33c0b97cce4100408701c3";
+
+fn initializing_atomic_effect(_: u32, op: &crate::crt_stream_ir::Op) -> Result<String, String> {
+    let crate::crt_stream_ir::Op::InitializingAtomic {
+        destination: crate::graph::Operand::Memory(a, 32),
+        source,
+        add,
+    } = op
+    else {
+        return Err("locale unbound thread effect".into());
+    };
+    let address = crate::crt_stream_emit::address(a, &Default::default())?;
+    Ok(format!(
+        "let p={address};cpu.exchange_initializing_scalar(rt,inputs.init,inputs.image,p,{},{} )?;",
+        source.index, add
+    ))
+}
+
+fn result_source() -> Result<String, String> {
+    let bytes = crate::crt_ptd::raw(RESULT_CALLER);
+    let mut graph = Graph::decode(&bytes, 0x40b2cc)?;
+    graph.initializing_atomic(0x40b303)?;
+    let body = crate::crt_stream_emit::emit_body_with_hooks(
+        &graph,
+        |pc, t| {
+            let next = pc + graph.nodes[&pc].length;
+            Ok(match t{
+            Target::Direct(0x407126)=>format!("cpu.call_activation(rt,{next},0,|rt,c|locale_multibyte_flag_original(rt,c,inputs))?;"),
+            Target::Direct(0x407d50)=>format!("cpu.call_activation(rt,{next},0,|rt,c|locale_free_original(rt,c,inputs))?;"),
+            Target::Direct(0x407ccd)=>"return Err(\"locale initializer failure errno effect unbound\");".into(),
+            Target::Direct(0x40aeae)=>"return Err(\"locale shared publication EH4 effect unbound at 0x40b362\");".into(),
+            _=>return Err(format!("locale result unexpected call {pc:x} {t:?}")),
+        })
+        },
+        &std::collections::BTreeMap::from([
+            (0x41c7b8, "CrtRegionKind::Module".into()),
+            (0x41c234, "CrtRegionKind::Module".into()),
+        ]),
+        512,
+        initializing_atomic_effect,
+        |pc, _| {
+            Ok(match pc{
+            0x40b300|0x40b30d|0x40b32b=>"locale_required_view(rt,platform,cpu.r[if pc==0x40b32b{1}else{0}])?;".into(),
+            0x40b303=>"let p=rt.initializing_scalar_pointer(inputs.init,inputs.image,cpu.r[0])?;if p.cap==allocation.cap{return Err(\"locale result new/old allocation alias\");}cpu.r[0]=CrtValue::Pointer(p);".into(),
+            0x40b322=>"if cpu.r[0]!=CrtValue::Pointer(allocation){return Err(\"locale result allocation changed\");}rt.valid(allocation,544)?;".into(),
+            _=>String::new(),
+        })
+        },
+        |_, pop| {
+            if pop != 0 {
+                return Err("locale result RET cleanup".into());
+            }
+            Ok(Some("return aligned.finish(rt,cpu);".into()))
+        },
+    )?;
+    let flag = crate::crt_ptd::raw(MULTIBYTE_FLAG);
+    let mut fg = Graph::decode(&flag, 0x407126)?;
+    fg.initializing_atomic(0x40712e)?;
+    let fb = crate::crt_stream_emit::emit_body_with_hooks(
+        &fg,
+        |_, _| Err("locale flag call".into()),
+        &Default::default(),
+        32,
+        initializing_atomic_effect,
+        |pc, _| {
+            Ok(if pc == 0x40712e {
+                "cpu.r[1]=CrtValue::Pointer(rt.module_word_pointer(inputs.image,cpu.r[1])?);".into()
+            } else {
+                String::new()
+            })
+        },
+        |_, _| Ok(None),
+    )?;
+    let free = crate::crt_ptd::raw(FREE_BODY);
+    let free_body = crate::crt_stream_emit::emit_body(
+        &Graph::decode(&free, 0x407d50)?,
+        |_, _| Ok("return Err(\"locale nonnull free API/errno effect unbound\");".into()),
+        &std::collections::BTreeMap::from([(0x41d2c8, "CrtRegionKind::Module".into())]),
+        256,
+    )?;
+    Ok(format!(
+        r#"
+fn locale_multibyte_flag_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;let p=rt.process_image_code(inputs.image,0x407126,{fl})?;if rt.memory.read(p.address(),{fl}).map_err(|_|"locale flag code read")?!=&{flag:?}{{return Err("locale flag code changed");}}{fb}}}
+fn locale_free_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;let p=rt.process_image_code(inputs.image,0x407d50,{zl})?;if rt.memory.read(p.address(),{zl}).map_err(|_|"locale free code read")?!=&{free:?}{{return Err("locale free code changed");}}{free_body}}}
+fn locale_result_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:&CrtNativePlatform,aligned:&mut CrtAlignedActivation,allocation:CrtPointer)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;platform.validate(rt,inputs.init)?;aligned.live(rt,cpu)?;let p=rt.process_image_code(inputs.image,0x40b2cc,{bl})?;if rt.memory.read(p.address(),{bl}).map_err(|_|"locale result code read")?!=&{bytes:?}{{return Err("locale result code changed");}}aligned.claim_continuation(rt,cpu,0x40b2cc)?;if allocation.kind!=CrtRegionKind::Buffer||allocation.address()!=allocation.base||allocation.size!=544||!rt.regions.iter().any(|r|r.pointer==allocation&&r.heap&&r.file_owner.is_none()){{return Err("locale result whole allocation identity");}}rt.valid(allocation,544)?;let bp=CrtCpu::pointer(cpu.r[5])?;if rt.load(rt.offset(bp,-4)?,32)?!=CrtValue::Pointer(allocation){{return Err("locale result local allocation changed");}}{body}}}
+"#,
+        fl = flag.len(),
+        zl = free.len(),
+        bl = bytes.len()
+    ))
+}
+
+#[test]
+fn initializing_atomics_require_effect_binding_and_preserve_identity_flags_and_failure() {
+    assert_eq!(FREE_BODY, crate::crt_heap_free::FREE);
+    let mut snippets = String::new();
+    for (name, raw) in [
+        ("swap", &[0x87, 0x01][..]),
+        ("add", &[0xf0, 0x0f, 0xc1, 0x01][..]),
+    ] {
+        let mut g = Graph::decode_linear_fragment(raw, 0x1000).unwrap();
+        g.initializing_atomic(0x1000).unwrap();
+        assert!(g.initializing_atomic(0x1000).is_err());
+        assert!(crate::crt_stream_emit::emit_linear_fragment(&g, &Default::default()).is_err());
+        let body = crate::crt_stream_emit::emit_body_with_exit(
+            &g,
+            |_, _| Err("no call".into()),
+            &Default::default(),
+            1,
+            |_, op| {
+                let crate::crt_stream_ir::Op::InitializingAtomic {
+                    destination: crate::graph::Operand::Memory(a, 32),
+                    source,
+                    add,
+                } = op
+                else {
+                    panic!()
+                };
+                Ok(format!(
+                    "let p={};cpu.exchange_initializing_scalar(rt,init,image,p,{},{} )?;",
+                    crate::crt_stream_emit::address(a, &Default::default())?,
+                    source.index,
+                    add
+                ))
+            },
+            |_, _| Ok(String::new()),
+            |_, _| Ok(None),
+            Some(g.end),
+        )
+        .unwrap();
+        snippets.push_str(&format!("fn atomic_{name}(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,init:CrtInitialization,image:CrtProcessImage)->Result<CrtValue,&'static str>{{{body}}}"));
+    }
+    for raw in [
+        &[0x87, 0xc1][..],
+        &[0x89, 0x01],
+        &[0x66, 0x87, 0x01],
+        &[0xf0, 0x0f, 0xc1, 0x21],
+    ] {
+        if let Ok(mut g) = Graph::decode_linear_fragment(raw, 0x1000) {
+            assert!(g.initializing_atomic(0x1000).is_err());
+        }
+    }
+    crate::crt_stream_callees_tests::native_bounded_stack(
+        &snippets,
+        r#"
+for add in [false,true]{for mode in 0..13{
+ let(mut rt,init)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();let image=rt.bootstrap_main_image(init,0x400000,&[1;4096]).unwrap();let CrtValue::Heap(h)=rt.native_process_heap(init).unwrap()else{panic!()};let word=rt.native_heap_allocate(init,h,8,16).unwrap();rt.store(word,32,CrtValue::scalar(0xffffffff)).unwrap();
+ let stack=rt.map_region(0xa000,1024,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,512).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(77)).unwrap();let mut c=CrtCpu::new(sp,77).unwrap();c.r[0]=CrtValue::scalar(2);c.r[1]=CrtValue::Pointer(word);c.flags=CrtFlags{cf:Some(false),zf:Some(true),sf:Some(false),of:Some(true)};let mut supplied=image;
+ if mode==1{rt.memory.release(word.cap,word.owner).unwrap();}if mode==2{rt.end_initialization(init).unwrap();}if mode==3{rt.store(word,32,CrtValue::Scalar{bits:0,known:0}).unwrap();}if mode==4{rt.store(word,32,CrtValue::Pointer(stack)).unwrap();}if mode==5{c.r[1]=CrtValue::Pointer(rt.offset(word,4).unwrap());}if mode==6{c.r[1]=CrtValue::Pointer(image.root);}if mode==7{c.r[0]=CrtValue::Scalar{bits:0,known:0};}if mode==8{rt.thread+=1;}if mode==9{c.r[1]=CrtValue::scalar(word.address());}if mode==10{c.r[1]=CrtValue::Pointer(rt.offset(word,1).unwrap());}if mode==11{supplied.generation+=1;}if mode==12{c.r[1]=CrtValue::Pointer(rt.subrange(word,4).unwrap());}
+ let before=c.r;let flags=c.flags;let memory=rt.memory.read(word.address(),16).map(|b|b.to_vec());rt.last_os_error=Some(71);
+ let result=if add{atomic_add(&mut rt,&mut c,init,supplied)}else{atomic_swap(&mut rt,&mut c,init,supplied)};
+ if mode==0{assert_eq!(result,Ok(CrtValue::scalar(0xffffffff)));assert_eq!(c.r[0],CrtValue::scalar(0xffffffff));assert_eq!(rt.load(word,32).unwrap(),CrtValue::scalar(if add{1}else{2}));assert_eq!((c.flags.cf,c.flags.zf,c.flags.sf,c.flags.of),if add{(Some(true),Some(false),Some(false),Some(false))}else{(flags.cf,flags.zf,flags.sf,flags.of)});}
+ else{let expected=match mode{1=>"CRT pointer lifetime",2|8=>"CRT initialization owner/lifetime",3|4|7=>"CRT scalar knowledge/type",5|12=>"CRT initializing whole buffer word",6=>"CRT initializing scalar permission",9=>"CRT scalar address lacks provenance",10=>"CRT initializing scalar word alignment",11=>"CRT process image owner/lifetime",_=>unreachable!()};assert_eq!(result,Err(expected),"atomic add{add} mode{mode}");assert_eq!(c.r,before);assert_eq!((c.flags.cf,c.flags.zf,c.flags.sf,c.flags.of),(flags.cf,flags.zf,flags.sf,flags.of));assert_eq!(rt.memory.read(word.address(),16).map(|b|b.to_vec()),memory);}
+ assert_eq!(rt.last_os_error,Some(71));
+}}
+"#,
+        "initializing-scalar-atomic",
+    );
+}
 
 fn selected_source() -> Result<String, String> {
     let bytes = crate::crt_ptd::raw(SELECTED_CALLER);
