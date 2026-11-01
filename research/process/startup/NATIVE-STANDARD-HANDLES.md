@@ -107,15 +107,42 @@ argv distinctions. No escalation is needed just for CI or this inventory. A futu
 close/I/O backend needs a separate concrete ownership decision about all retained
 host fd references before claiming pipe-EOF equivalence.
 
-## Recoverable implementation checkpoint
+## Recoverable implementation checkpoint (historical)
 
 Local verification passed 296 CRT tests (two artifact tests omitted in the ordinary
 suite), the artifact-backed canonical entry/body test including all nine new cases,
 185 unwind-slice tests, 76 Python tests (one existing skip), Clippy and formatting.
-The broader replay is not yet accepted: its last inline-exit native link failed
+At fc9093e, the broader replay was not yet accepted: its last inline-exit native link failed
 with `ld` signal7/Bus error while the workspace disk became full. A subsequent
 sandbox start explicitly failed ENOSPC. The failed logs/source are retained; this
 is separate from all historical original-Windows timeouts. Disk recovery removes
 only regenerable compiler cache/build output or compresses old generated native
 binaries with round-trip hash verification; source, original PE and Windows failure
 evidence stay intact. A fresh complete replay/report remains required.
+
+Other connected-fixture inputs remain explicit: the parent activation/thread-chain
+premises and the CPU/entropy test environments are not discharged by acquiring
+native standard endpoints. The replay therefore remains original-instruction
+component evidence, even though the new endpoint/type producers use real OS state.
+
+
+## Accepted final local replay
+
+A fresh complete replay passed with unchanged source and limits after resource
+recovery. Both artifact-dependent tests completed. A later explicit emission
+advanced mtime and matched generated Rust SHA-256
+`e9b4ac51302809bb6971674c39a8394f8bbad478f68b1ef0ec2022d88f840a6e`.
+The unchanged PE SHA-256 remains
+`1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4`.
+The report retains five recorded Windows wrapper comparisons, with zero new
+Windows observations, Windows/ELF pairs or whole-PE pairs. Nine Linux-only new body
+cases are reported separately. The first failed replay/decoded CI log and the
+historical Windows timeout remain preserved; no threshold or original expectation
+was relaxed to obtain the final result.
+
+[Exact source/report/log hashes and review findings](evidence/native-standard-handles.json)
+include all final gates (296 CRT, 185 unwind, 76 Python/one skip, Clippy/format), the
+cross-example CI regression and repair, and the local resource interruption.
+Checkpoint workflows 41256060511/41256056609/41256056664 were still running at
+publication of this evidence; final-head CI must be checked separately. No merge,
+formal approval, default admission or full startup/rcedit support follows.
