@@ -1,5 +1,8 @@
 # Controlled process environment snapshots
 
+This page records the ef59eb6 acquisition checkpoint. The subsequent original
+scanner and current boundary are documented in [ENVIRONMENT-SCAN.md](ENVIRONMENT-SCAN.md).
+
 The selected `w2l-controlled-environment-v1` launch profile defines a process
 environment from caller-declared entries. It **never reads the host environment**.
 Original GetEnvironmentStringsW now allocates a separate immutable guest block

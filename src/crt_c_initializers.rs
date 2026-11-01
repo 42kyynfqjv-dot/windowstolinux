@@ -19,7 +19,8 @@ pub(crate) const ZERO: &str = "33c0c3";
 pub(crate) const TRUE_BYTE: &str = "b001c3";
 pub(crate) const ENV_THUNK: &str = "e96afdffff";
 pub(crate) const ENV_PREFIX: &str = "833d48ce410000740333c0c356e80d4a0000e8444f0000";
-pub(crate) const ENV_PRODUCER_PREFIX: &str = "8bff558bec515156ff15e45041008bf085f60f84850000005356";
+pub(crate) const ENV_PRODUCER_PREFIX: &str = "8bff558bec515156ff15e45041008bf085f60f84850000005356e8aaffffff33db2bc653535353d1f8505653538945f8";
+pub(crate) const ENV_SCAN: &str = "8bff558bec8b55085733ff66393a7421568bca8d7102668b0183c102663bc775f52bced1f98d144a83c20266393a75e15e8d42025f5dc3";
 pub(crate) const GET_COMMODE: &str = "b884ce4100c3";
 pub(crate) const ONEXIT:&str="558bec803d85cc4100007404b0015dc3568b750885f6740583fe017562e81f08000085c0742685f675226888cc4100e84a5b00005985c0750f6894cc4100e83b5b00005985c0742b32c0eb3083c9ff890d88cc4100890d8ccc4100890d90cc4100890d94cc4100890d98cc4100890d9ccc4100c60585cc410001b0015e5dc36a05e833020000cc";
 pub(crate) const OPTIONS: &str = "e869f6ffff8b4804830824894804e8e7ffffff8b4804830802894804c3";
@@ -116,6 +117,8 @@ fn startup_c_array_platform(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&Crt
     out.push_str(&thread_locale_source()?);
     out.push_str(&environment_prefix_source()?);
     out.push_str(&environment_producer_source()?);
+    let scan = environment_scan_body()?;
+    out.push_str(&format!("fn cinit_environment_scan(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;{}{scan}}}",guard(0x40b92f,&raw(ENV_SCAN))));
     for (name, at, literal) in [
         ("cinit_app_type", 0x40662e, APP_TYPE),
         ("cinit_get_mode", 0x401bc3, GET_MODE),
@@ -548,11 +551,11 @@ fn environment_producer_source() -> Result<String, String> {
     let g = cut_graph(
         &bytes,
         0x40b966,
-        0x40b980,
+        0x40b996,
         &[
             (
-                0x40b980,
-                "original environment UTF16 scan unbound at0x40b980",
+                0x40b996,
+                "original environment conversion query unbound at0x40b996",
             ),
             (
                 0x40ba03,
@@ -563,6 +566,12 @@ fn environment_producer_source() -> Result<String, String> {
     let body = crate::crt_stream_emit::emit_body(
         &g,
         |pc, target| {
+            if target == Target::Direct(0x40b92f) {
+                return Ok(format!(
+                    "cpu.call_activation(rt,{},0,|rt,c|cinit_environment_scan(rt,c,inputs))?;",
+                    pc + g.nodes[&pc].length
+                ));
+            }
             if target != Target::Import(0x4150e4) {
                 return Err("environment producer unexpected import".into());
             }
@@ -572,4 +581,41 @@ fn environment_producer_source() -> Result<String, String> {
         64,
     )?;
     Ok(format!("fn cinit_env_producer_prefix(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:&CrtNativePlatform)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;{}{body}}}",guard(0x40b966,&bytes)))
+}
+
+// The declared block is <=32767 words and <=256 entries. The original loop
+// needs five instructions per word plus bounded per-entry/frame work.
+fn environment_scan_body() -> Result<String, String> {
+    let bytes = crate::crt_ptd::raw(ENV_SCAN);
+    let graph = Graph::decode(&bytes, 0x40b92f)?;
+    crate::crt_stream_emit::emit_body(
+        &graph,
+        |_, _| Err("environment scan unexpected call".into()),
+        &Default::default(),
+        262144,
+    )
+}
+
+#[test]
+fn original_environment_scan_preserves_word_bounds_lifetime_and_failure_progress() {
+    let body = environment_scan_body().unwrap();
+    let extra=format!("fn scan(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->Result<CrtValue,&'static str>{{cpu.validate_active(rt)?;{body}}}");
+    crate::crt_stream_callees_tests::native_bounded_stack(
+        &extra,
+        r#"
+ #[inline(never)]fn one(mode:u32){
+ let(mut rt,init)=CrtStreamRuntime::new_initializing(7,9,0x8000,131072).unwrap();
+ let words:Vec<u16>=match mode{0=>vec![0,0],1=>"A=雪😀\0B=\0\0".encode_utf16().collect(),2=>vec![65,0],3=>vec![65,66],4=>vec![0xd800,0xdc00,0,0],5=>vec![0],6=>vec![65,0,0],7=>vec![65,0,0],8=>vec![65,0,0],10=>vec![0xd800,0,0],11=>{let mut v=vec![65;32765];v.extend([0,0]);v},_=>vec![65,0,66,0,0]};
+ let bytes:Vec<u8>=words.iter().copied().flat_map(u16::to_le_bytes).collect();
+ let p=rt.map_region(0x20000,bytes.len()as u32,CrtRegionKind::Stack,if mode==7{None}else{Some(&bytes)}).unwrap();
+ let stack=rt.map_region(0x40000,1024,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,512).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(91)).unwrap();rt.store(rt.offset(sp,4).unwrap(),32,if mode==8{CrtValue::scalar(p.address())}else{CrtValue::Pointer(p)}).unwrap();let mut c=CrtCpu::new(sp,91).unwrap();let saved=c.r;
+ if mode==6{rt.retire_region(p).unwrap();}if mode==7{rt.partial.insert(p.address(),(0,0));}
+ let got=scan(&mut rt,&mut c);
+ if matches!(mode,2|3|6|7|8){assert_eq!(got,Err(match mode{2|3=>"CRT pointer complete range/identity",6=>"CRT stale/foreign pointer",7=>"CRT unknown scalar bits observed",8=>"CRT scalar address lacks provenance",_=>unreachable!()}),"invalid scan{mode}");assert!(!c.returned);assert_eq!(rt.load(rt.offset(sp,-4).unwrap(),32).unwrap(),saved[5]);if mode==2||mode==3{let cursor=CrtCpu::pointer(c.r[2]).unwrap();assert_eq!(cursor.cap,p.cap);if mode==2{assert_eq!(c.r[1],CrtValue::scalar(1));assert_eq!(cursor.address(),p.address()+4);}else{assert_eq!(CrtCpu::pointer(c.r[1]).unwrap().address(),p.address()+4);}assert_ne!(c.r[5],saved[5]);}}
+ else{let result=CrtCpu::pointer(got.unwrap()).unwrap();assert_eq!(result.cap,p.cap);assert_eq!(result.owner,p.owner);assert_eq!(result.address(),p.address()+if mode==0||mode==5{2}else{bytes.len()as u32});assert!(c.returned);for r in[3,5,6,7]{assert_eq!(c.r[r],saved[r]);}assert!(scan(&mut rt,&mut c).is_err());}
+ assert_eq!(rt.memory.read(p.address(),p.size).ok(),if mode==6||mode==7{None}else{Some(bytes.as_slice())});let _=init;
+ }for mode in 0..12{one(mode);}
+ "#,
+        "environment-original-scan",
+    );
 }

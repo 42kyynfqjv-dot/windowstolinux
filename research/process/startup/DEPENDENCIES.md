@@ -1,6 +1,18 @@
 # Remaining entry-to-exit dependencies
 
-## Current executable checkpoint: owned controlled environment snapshot
+## Current executable checkpoint: original UTF16 scanner and count
+
+The controlled-launch path executes the original helper at0x40b92f, returns
+through CALL0x40b980, then executes its caller's byte difference, word-count
+shift and conversion argument preparation. The next exact boundary is
+**CALL0x40b996→0x40b8c5**, before the conversion query. Empty blocks take the
+original one-word fast path; snapshot layout/lifetime remain checked. No narrow
+environment table or original free is claimed.
+
+[Execution, tests and replay-source contract](ENVIRONMENT-SCAN.md). The explicit
+profile remains separate from default admission and full startup/rcedit.
+
+## Previous executable checkpoint: owned controlled environment snapshot
 
 Within the deliberately selected controlled-launch environment profile, original
 GetEnvironmentStringsW at0x40b96e now returns an independently owned immutable
