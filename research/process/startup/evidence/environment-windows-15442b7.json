@@ -1,0 +1,28 @@
+{
+  "kind": "Synthetic-only PE32 process environment observations",
+  "source_sha256": "f50aa019d7a95334915a63cec4619b73c08790ed6dd51c6a22a0b1d789ee90af",
+  "pe_sha256": "e85fceb0869e8d12b16ef763ee09bc5b2c4f88f4ffe5002fca8b7b13b91df6a4",
+  "observations_sha256": "f3178a04166cc59a05690411df39f1ef9665f2f4131ae9cdf333f12f4a02e5a4",
+  "cases": 2,
+  "command": [
+    "cl",
+    "/nologo",
+    "/W4",
+    "/WX",
+    "/O2",
+    "/MT",
+    "/utf-8",
+    "D:\\a\\windowstolinux\\windowstolinux\\research\\process\\startup\\observe_environment.c",
+    "/Fe:environment.exe",
+    "/link",
+    "/MACHINE:X86",
+    "kernel32.lib"
+  ],
+  "scope": "Controlled child environment only; no host propagation or failed-API equivalence, no whole-PE pairs",
+  "head": "15442b71283892933f3cf26e4bb5a59688de1a20",
+  "run": 41360553403,
+  "artifact": 13105235411,
+  "host": "windows-2022, MSVC14.44 PE32; synthetic-only child env",
+  "raw_path": "environment-windows-15442b7.jsonl",
+  "failure_effects": "NULL/acquisition or valid-free failure not reproduced; not admitted"
+}

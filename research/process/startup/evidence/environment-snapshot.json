@@ -1,0 +1,85 @@
+{
+  "scope": "Controlled process environment ownership and original acquisition component; no host propagation",
+  "profile": "w2l-controlled-environment-v1",
+  "next_boundary": "CALL0x40b980 ->0x40b92f original UTF16 scanner unbound",
+  "runtime_modes": 5,
+  "declaration_failure_modes": 8,
+  "api_ABI_modes": 10,
+  "original_artifact_modes": 7,
+  "windows_observations": {
+    "kind": "Synthetic-only PE32 process environment observations",
+    "source_sha256": "f50aa019d7a95334915a63cec4619b73c08790ed6dd51c6a22a0b1d789ee90af",
+    "pe_sha256": "e85fceb0869e8d12b16ef763ee09bc5b2c4f88f4ffe5002fca8b7b13b91df6a4",
+    "observations_sha256": "f3178a04166cc59a05690411df39f1ef9665f2f4131ae9cdf333f12f4a02e5a4",
+    "cases": 2,
+    "command": [
+      "cl",
+      "/nologo",
+      "/W4",
+      "/WX",
+      "/O2",
+      "/MT",
+      "/utf-8",
+      "D:\\a\\windowstolinux\\windowstolinux\\research\\process\\startup\\observe_environment.c",
+      "/Fe:environment.exe",
+      "/link",
+      "/MACHINE:X86",
+      "kernel32.lib"
+    ],
+    "scope": "Controlled child environment only; no host propagation or failed-API equivalence, no whole-PE pairs",
+    "head": "15442b71283892933f3cf26e4bb5a59688de1a20",
+    "run": 41360553403,
+    "artifact": 13105235411,
+    "host": "windows-2022, MSVC14.44 PE32; synthetic-only child env",
+    "raw_path": "environment-windows-15442b7.jsonl",
+    "failure_effects": "NULL/acquisition or valid-free failure not reproduced; not admitted"
+  },
+  "primary_sources": [
+    {
+      "url": "https://learn.microsoft.com/en-us/windows/win32/api/processenv/nf-processenv-getenvironmentstringsw",
+      "sha256": "510954b7dd4aeccc24c5fc19b89445fc6fcb910c856eb01a65304d4ff1a6d8cd"
+    },
+    {
+      "url": "https://learn.microsoft.com/en-us/windows/win32/api/processenv/nf-processenv-freeenvironmentstringsw",
+      "sha256": "0cf9ba88bee67245851f7e4ffb9046ba0febfa535b7c4846908449cd6bd0dc7e"
+    },
+    {
+      "url": "https://learn.microsoft.com/en-us/windows/win32/procthread/environment-variables",
+      "sha256": "b6c211006aab1c54c9dea02167e836d0b8c6eba48dac236b037265b2c92ee31b"
+    }
+  ],
+  "validation": {
+    "crt": "348 passed,2 ignored artifact gates handled separately",
+    "canonical": "passed original controlled-environment entry and seven original artifact cases",
+    "python": "110 tests,1 skip",
+    "clippy": "all targets warnings denied pass",
+    "fmt": "cargo fmt --all -- --check pass",
+    "low_stack": "152 cases under512KiB plus64KiB environment padding pass",
+    "rust_sha256": "bdd8aaecb9abbd390e579bc15cc033f87f66d359e0aca683957a4a55045c9038"
+  },
+  "previous_review": {
+    "head": "50d4f66966416e9f4f484f11c081c0517c44f6d8",
+    "push_CI": 41359554170,
+    "push_conclusion": "success",
+    "PR_CI": 41359557511,
+    "PR_conclusion": "failure",
+    "failed_job": 125006824119,
+    "failed_case": "original Windows imported changed fixture,15second timeout",
+    "failure_artifact": 13104642897,
+    "inventory": 41359554028,
+    "inventory_status": "pending at review read",
+    "local_replay_hash": "169b97badde451d0aaafd2b5cca7ce6e0153f77ebf062d06418bded43b840881",
+    "recorded_canonical_hash": "2d01cad74a0ea5b727b90a5a5413fdf59e41255068a0c5b67b3a63e91d8ad6ff",
+    "local_replay_qualification": "contains later snapshot method; not pinned-head evidence"
+  },
+  "new_whole_PE_pairs": 0,
+  "limits": [
+    "declared synthetic/controlled launch inputs only, no host environment read",
+    "ASCII names and Unicode values; hidden/nonASCII names/mutation unsupported",
+    "resource/capacity/NULL and valid-free failure/error equivalence unproved",
+    "no original FreeEnvironmentStringsW call or table publication reached",
+    "full startup/rcedit/default and XP7 admission unproved",
+    "historical timeout causes unresolved"
+  ],
+  "final_gates": "final pushed-head CI and fresh frozen-source replay must be checked separately"
+}

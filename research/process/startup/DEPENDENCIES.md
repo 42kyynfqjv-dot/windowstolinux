@@ -1,6 +1,20 @@
 # Remaining entry-to-exit dependencies
 
-## Current executable checkpoint: boolean return and original environment entry
+## Current executable checkpoint: owned controlled environment snapshot
+
+Within the deliberately selected controlled-launch environment profile, original
+GetEnvironmentStringsW at0x40b96e now returns an independently owned immutable
+UTF16 double-NUL block. Original return, pointer move/test and pushes execute.
+The next exact boundary is **CALL0x40b980→0x40b92f**, before the UTF16 scan.
+The matching success-only free contract has independent ABI/lifetime tests; no
+original free call or full environment-table publication is claimed yet.
+
+[Contract, evidence and limits](ENVIRONMENT-SNAPSHOT.md). No host environment is
+read or logged. Unicode values/empty entries are supported; non-ASCII names,
+hidden drive names, mutation APIs and unmeasured acquisition/free failures reject.
+Full startup/rcedit/default admission and historical timeout causes remain open.
+
+## Previous executable checkpoint: boolean return and original environment entry
 
 Original CALL0x4015e0→0x401bd5 executes MOV AL,1; RET with upper-EAX knowledge,
 flags and return authority preserved. The original caller TEST/branch enters

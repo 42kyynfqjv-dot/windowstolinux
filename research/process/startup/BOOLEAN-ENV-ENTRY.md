@@ -1,5 +1,8 @@
 # Original boolean helper and environment entry
 
+This records50d4f66. See [current controlled snapshot](ENVIRONMENT-SNAPSHOT.md)
+for subsequent progress.
+
 The original helper0x401bd5 is MOV AL,1; RET. It defines only the low byte,
 preserves upper-EAX knowledge and integer flags, and consumes the original
 protected return. The actual caller TEST AL,AL and branch run. No boolean value

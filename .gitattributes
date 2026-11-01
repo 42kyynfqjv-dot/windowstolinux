@@ -68,3 +68,4 @@ research/process/startup/*.manifest text eol=lf
 # Raw PE32 FP observations retain their original CRLF bytes for SHA256 verification.
 research/process/startup/evidence/fp-control-windows-da1d3bd.jsonl -text
 research/process/startup/evidence/fp-original-entry-cceed83.jsonl -text
+research/process/startup/evidence/environment-windows-15442b7.jsonl -text
