@@ -29,15 +29,17 @@ def observe(output):
     if sys.platform!='win32':raise RuntimeError('original command-line observation requires Windows')
     if not os.environ.get('VCToolsVersion','').startswith('14.44.'):raise RuntimeError('MSVC14.44 toolchain environment required')
     output.mkdir(parents=True,exist_ok=True)
+    for name in ['command_line_probe.c','command_line_probe.manifest','command-line-vectors.json']:
+        shutil.copyfile(HERE/name,output/name)
     exe=output/'command-line-probe.exe'
-    flags=['/nologo','/O1','/MT','/W4','/WX','/utf-8',str(HERE/'command_line_probe.c'),'/Fe:'+str(exe),'/Fo:'+str(output/'command-line-probe.obj'),'/link','/MACHINE:X86','/SUBSYSTEM:CONSOLE','/MANIFEST:EMBED','/MANIFESTINPUT:'+str(HERE/'command_line_probe.manifest')]
+    flags=['/nologo','/O1','/MT','/W4','/WX','/utf-8',str(output/'command_line_probe.c'),'/Fe:'+str(exe),'/Fo:'+str(output/'command-line-probe.obj'),'/link','/MACHINE:X86','/SUBSYSTEM:CONSOLE','/MANIFEST:EMBED','/MANIFESTINPUT:'+str(output/'command_line_probe.manifest')]
     compiled=subprocess.run(['cl',*flags],capture_output=True,timeout=120)
     (output/'compile.stdout').write_bytes(compiled.stdout);(output/'compile.stderr').write_bytes(compiled.stderr)
     if compiled.returncode:raise RuntimeError('authored command-line probe compilation failed')
-    report=dict(kind='original Windows API/CRT observations; no translation',toolchain_family='MSVC14.44',toolchain_version=os.environ['VCToolsVersion'],compiler_sha256=sha(Path(shutil.which('cl'))),linker_sha256=sha(Path(shutil.which('link'))),sdk_version=os.environ.get('WindowsSDKVersion'),flags=flags,host=platform.platform(),pe_sha256=sha(exe),source_sha256=sha(HERE/'command_line_probe.c'),manifest_sha256=sha(HERE/'command_line_probe.manifest'),vectors_sha256=sha(HERE/'command-line-vectors.json'),cases=[],observations=0,whole_pe_pairs=0)
+    report=dict(kind='original Windows API/CRT observations; no translation',toolchain_family='MSVC14.44',toolchain_version=os.environ['VCToolsVersion'],compiler_sha256=sha(Path(shutil.which('cl'))),linker_sha256=sha(Path(shutil.which('link'))),sdk_version=os.environ.get('WindowsSDKVersion'),flags=flags,host=platform.platform(),pe_sha256=sha(exe),source_sha256=sha(output/'command_line_probe.c'),manifest_sha256=sha(output/'command_line_probe.manifest'),vectors_sha256=sha(output/'command-line-vectors.json'),cases=[],observations=0,whole_pe_pairs=0)
     def save(): (output/'report.json').write_text(json.dumps(report,indent=2)+'\n',encoding='utf-8')
     save()
-    for index,row in enumerate(vectors()):
+    for index,row in enumerate(vectors(output/'command-line-vectors.json')):
         record=dict(index=index,raw_utf16le_hex=row['utf16le_hex'],status='started');report['cases'].append(record);save()
         try:
             result=subprocess.run(row['raw'],executable=str(exe),capture_output=True,timeout=15)

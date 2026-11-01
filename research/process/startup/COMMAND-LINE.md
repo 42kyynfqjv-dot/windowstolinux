@@ -75,3 +75,24 @@ No formal approval, merge, release, native close/EOF equivalence or full startup
 rcedit/default/XP7 support is established by this checkpoint. Sol can review the
 codec, pair rollback, process lifetime, API/IR effects and evidence harness; routine
 verification does not need escalation.
+
+## First Windows conformance observation and input-byte repair
+
+Job124710377429 in run41259747689 at5fd86eb succeeded. Artifact13064208599
+(ZIP SHA2562c9ad131c85cb50603deb49556522fe2920f9b7ee5ecc7885d85f8769ff0169f)
+contains ten matched original Windows observations. Each raw stdout was independently
+redecoded locally against the frozen vectors, including UTF-8/UTF-16 terminators,
+Unicode confusables/non-BMP characters, quoting, actual MSVC argv and stable A/W
+pointers. Host Windows20348, MSVC14.44.35207, SDK10.0.26100.0; process ACP65001.
+This is API/CRT conformance, not ten converted Windows/ELF programs.
+
+Source C and vectors matched repository bytes exactly. Windows checkout converted
+the manifest to CRLF: the observed hash was
+4f636b71972d4814f1f5cb3935416e76f52a74866a13149c886b3d64007ac6a3,
+while the repository LF hash is
+76433dcefb453be86234dacbad769bfe31eaf94606213c27ea5a5ad5b3f138c3.
+The exact LF-to-CRLF transformation reproduces the observed hash; it is retained
+as a distinct input-byte variant, not falsely labeled byte-identical. Attributes
+now enforce LF for startup manifests. The observer archives and compiles its copied
+C/manifest inputs and reads the copied vectors, so a subsequent artifact contains
+the exact compiled/compared inputs. Fresh final-head conformance remains a CI gate.

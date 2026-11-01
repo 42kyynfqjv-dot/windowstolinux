@@ -4,8 +4,9 @@ from pathlib import Path
 import struct
 HERE=Path(__file__).resolve().parent
 
-def vectors():
-    data=json.loads((HERE/'command-line-vectors.json').read_text(encoding='utf-8'))
+def vectors(path=None):
+    source=HERE/'command-line-vectors.json' if path is None else Path(path)
+    data=json.loads(source.read_text(encoding='utf-8'))
     if data['version']!=1 or data['codepage']!=65001:raise ValueError('unsupported frozen command-line profile')
     for row in data['cases']:
         if row['raw'].encode('utf-8').hex()!=row['utf8_hex'] or row['raw'].encode('utf-16le').hex()!=row['utf16le_hex']:raise ValueError('inconsistent frozen encoding expectations')

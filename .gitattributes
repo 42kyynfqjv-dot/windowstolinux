@@ -62,3 +62,5 @@ research/process/buffers/*.py text eol=lf
 research/process/startup/*.json text eol=lf
 research/process/startup/*.py text eol=lf
 research/process/startup/*.c text eol=lf
+# Embedded startup profile manifests are frozen compiler inputs on both hosts.
+research/process/startup/*.manifest text eol=lf
