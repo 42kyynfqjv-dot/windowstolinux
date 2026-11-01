@@ -61,12 +61,27 @@ The protocol-only tests use synthetic records and are not Windows observations.
 First Windows run 41344214535/job124960453455 retained artifact13098681056:
 MSVC C4127 on a constant sizeof condition, promoted to C2220 under /WX. No probe
 executed and its dependent jobs were skipped. The layout requirement now uses
-a compile-time typedef, retaining /W4 /WX; a new Windows run is required.
+a compile-time typedef, retaining /W4 /WX. Corrected run **41344469225**,
+job **124961233509**, artifact **13098128613** now supplies 12 actual PE32
+observations. Source hash matches published 0d5f8c6; PE machine I386, PE hash and
+raw report hashes were independently checked. The [raw rows](evidence/slist-windows-0d5f8c6.jsonl)
+have SHA256 `7dbeb5ab0c9c8e9b6fd63bd7b03c5375aa5c8e39ef1d3250bfef7e0ef881562e`.
+All tested initialized bytes were zero on that host; the native contract still
+keeps private bytes opaque and does not generalize that observation to XP/7 or
+other implementations. The [original compile diagnostic](evidence/slist-msvc-a4d382b.stdout)
+is retained separately. These are API component observations, not translated
+Windows/Linux pairs. The rest of the corrected workflow remains a separate gate.
 
 ## Verification and review scope
 
 [Evidence](evidence/post-argv.json) records final local test/replay hashes and CI
-status. Fifteen original-helper cases cover live flag/unknown rejection, cookie
+status. Final local aggregates pass 182 root, 337 CRT and 185 unwind checks;
+both ignored CRT artifact gates execute in the full replay. Python has 101
+startup tests (one skipped), 106 tools and 18 corpus (one skipped). Clippy
+warnings denied and formatting pass. Full replay passes five retained original
+Windows wrapper comparisons. Same-input independent emission matches Rust
+SHA256 `52a24b83593945e60cd7096a3f7373e4b1867dd9df5cde3bf559ecb45905af63`.
+The frozen original PE hash is unchanged. Fifteen original-helper cases cover live flag/unknown rejection, cookie
 encoding with partial knowledge, exact FP rejection and changed bytes in each
 helper. Eleven direct API cases cover success, ABI/register/return-token errors,
 unknown argument, expired image/init/provider/storage, cross-thread access and
@@ -92,7 +107,12 @@ hash-verified; no new parser/allocator Windows result is inferred.
 The first test attempt expected the wrong *rejection diagnostic* for an unknown
 flag word (`unknown ZF` rather than the earlier `unknown scalar bits observed`).
 That expectation was corrected; the memory read and rejection were preserved.
-No semantic acceptance gate or timeout limit was relaxed.
+No semantic acceptance gate or timeout limit was relaxed. An initial independent
+repeat command selected the existing synthetic Main-fill fixture by omitting
+W2L_EH4_CODE; its different generated hash was expected. A second command failed
+before native execution because its output directory was missing. Both logs are
+retained. Repeating with the same original code catalog/vectors, PE and an
+existing fresh evidence directory passes and produces identical Rust.
 
 Read-only inventory identifies wrapper `0x4076a0` calling `0x40d000`. The first
 new instruction is waiting FSTCW (`9B D9 7D F8` at `0x40d00b`); later operations

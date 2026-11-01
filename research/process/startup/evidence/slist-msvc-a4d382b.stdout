@@ -1,0 +1,3 @@
+observe_slist.c
+D:\a\windowstolinux\windowstolinux\research\process\startup\observe_slist.c(19): error C2220: the following warning is treated as an error
+D:\a\windowstolinux\windowstolinux\research\process\startup\observe_slist.c(19): warning C4127: conditional expression is constant

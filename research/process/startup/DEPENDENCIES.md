@@ -12,10 +12,12 @@ operation implementation. Default/full startup/rcedit admission remains blocked.
 [Contract/review](POST-ARGV.md), [requirements](evidence/post-argv-expectations.json),
 [verification](evidence/post-argv.json). Next inventory and bind the original
 FP-control callee only under an explicit guest x87/MXCSR contract, independently
-of host floating-point state. Windows SLIST observations are pending; synthetic
-protocol tests are not Windows execution. Resource-failure, freeing/exceptional
+of host floating-point state. Twelve authored Windows PE32 SLIST observations are retained and hash-verified;
+synthetic protocol tests remain separate from Windows execution. Resource-failure, freeing/exceptional
 cleanup and prior API/profile gaps remain. Historical timeout causes unresolved;
-zero new whole-PE pairs. Final local replay/CI status is recorded in the evidence.
+zero new whole-PE pairs. Local 182/337/185 Rust aggregates, Python, Clippy,
+formatting, full coherent replay and same-input repeated emission pass. Current
+exact-head CI is separate and recorded in the evidence.
 
 ## Previous checkpoint: original calloc and argc/argv publication
 

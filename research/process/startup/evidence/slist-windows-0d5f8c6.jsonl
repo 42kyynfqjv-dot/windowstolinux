@@ -1,0 +1,13 @@
+{"kind":"original Windows InitializeSListHead PE32 API observations; no PE translation","pointer_bytes":4,"header_bytes":8,"compiler":194435229}
+{"case":0,"pattern":0,"offset":16,"initial":[0,0,0,0,0,0,0,0],"initialized":[0,0,0,0,0,0,0,0],"after_empty_pop":[0,0,0,0,0,0,0,0],"depth":0,"empty_pop_null":true,"guards_unchanged":true}
+{"case":1,"pattern":0,"offset":24,"initial":[0,0,0,0,0,0,0,0],"initialized":[0,0,0,0,0,0,0,0],"after_empty_pop":[0,0,0,0,0,0,0,0],"depth":0,"empty_pop_null":true,"guards_unchanged":true}
+{"case":2,"pattern":0,"offset":32,"initial":[0,0,0,0,0,0,0,0],"initialized":[0,0,0,0,0,0,0,0],"after_empty_pop":[0,0,0,0,0,0,0,0],"depth":0,"empty_pop_null":true,"guards_unchanged":true}
+{"case":3,"pattern":1,"offset":16,"initial":[255,255,255,255,255,255,255,255],"initialized":[0,0,0,0,0,0,0,0],"after_empty_pop":[0,0,0,0,0,0,0,0],"depth":0,"empty_pop_null":true,"guards_unchanged":true}
+{"case":4,"pattern":1,"offset":24,"initial":[255,255,255,255,255,255,255,255],"initialized":[0,0,0,0,0,0,0,0],"after_empty_pop":[0,0,0,0,0,0,0,0],"depth":0,"empty_pop_null":true,"guards_unchanged":true}
+{"case":5,"pattern":1,"offset":32,"initial":[255,255,255,255,255,255,255,255],"initialized":[0,0,0,0,0,0,0,0],"after_empty_pop":[0,0,0,0,0,0,0,0],"depth":0,"empty_pop_null":true,"guards_unchanged":true}
+{"case":6,"pattern":2,"offset":16,"initial":[165,165,165,165,165,165,165,165],"initialized":[0,0,0,0,0,0,0,0],"after_empty_pop":[0,0,0,0,0,0,0,0],"depth":0,"empty_pop_null":true,"guards_unchanged":true}
+{"case":7,"pattern":2,"offset":24,"initial":[165,165,165,165,165,165,165,165],"initialized":[0,0,0,0,0,0,0,0],"after_empty_pop":[0,0,0,0,0,0,0,0],"depth":0,"empty_pop_null":true,"guards_unchanged":true}
+{"case":8,"pattern":2,"offset":32,"initial":[165,165,165,165,165,165,165,165],"initialized":[0,0,0,0,0,0,0,0],"after_empty_pop":[0,0,0,0,0,0,0,0],"depth":0,"empty_pop_null":true,"guards_unchanged":true}
+{"case":9,"pattern":3,"offset":16,"initial":[16,17,18,19,20,21,22,23],"initialized":[0,0,0,0,0,0,0,0],"after_empty_pop":[0,0,0,0,0,0,0,0],"depth":0,"empty_pop_null":true,"guards_unchanged":true}
+{"case":10,"pattern":3,"offset":24,"initial":[24,25,26,27,28,29,30,31],"initialized":[0,0,0,0,0,0,0,0],"after_empty_pop":[0,0,0,0,0,0,0,0],"depth":0,"empty_pop_null":true,"guards_unchanged":true}
+{"case":11,"pattern":3,"offset":32,"initial":[32,33,34,35,36,37,38,39],"initialized":[0,0,0,0,0,0,0,0],"after_empty_pop":[0,0,0,0,0,0,0,0],"depth":0,"empty_pop_null":true,"guards_unchanged":true}
