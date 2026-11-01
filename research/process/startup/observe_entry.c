@@ -42,7 +42,7 @@ int main(int argc,char **argv) {
         } else if(ev.dwDebugEventCode==CREATE_THREAD_DEBUG_EVENT) {
             CloseHandle(ev.u.CreateThread.hThread);
         } else if(ev.dwDebugEventCode==EXCEPTION_DEBUG_EVENT) {
-            CONTEXT c={0}; c.ContextFlags=CONTEXT_FULL|CONTEXT_DEBUG_REGISTERS;
+            CONTEXT c={0}; c.ContextFlags=CONTEXT_FULL|CONTEXT_DEBUG_REGISTERS|CONTEXT_FLOATING_POINT|CONTEXT_EXTENDED_REGISTERS;
             DWORD code=ev.u.Exception.ExceptionRecord.ExceptionCode;
             action=DBG_EXCEPTION_NOT_HANDLED;
             if(ev.dwThreadId==pi.dwThreadId && code==EXCEPTION_BREAKPOINT && !armed) {
@@ -70,7 +70,11 @@ int main(int argc,char **argv) {
                 if(!module_path || memory.Type!=MEM_IMAGE || !read_exact(pi.hProcess,module_base,&dos,sizeof(dos)) || dos.e_magic!=IMAGE_DOS_SIGNATURE ||
                    dos.e_lfanew<0 || dos.e_lfanew>4096 || !read_exact(pi.hProcess,module_base+dos.e_lfanew,&nt,sizeof(nt)) ||
                    nt.Signature!=IMAGE_NT_SIGNATURE || nt.FileHeader.Machine!=IMAGE_FILE_MACHINE_I386) break;
-                printf("{\"module_path_hex\":\"");
+                DWORD mxcsr=0,mxcsr_mask=0;
+                memcpy(&mxcsr,c.ExtendedRegisters+24,sizeof(mxcsr));
+                memcpy(&mxcsr_mask,c.ExtendedRegisters+28,sizeof(mxcsr_mask));
+                printf("{\"fp_context_flags\":%lu,\"fp_control\":%lu,\"fp_status\":%lu,\"fp_tag\":%lu,\"fp_mxcsr\":%lu,\"fp_mxcsr_mask\":%lu,",c.ContextFlags,c.FloatSave.ControlWord&0xffff,c.FloatSave.StatusWord&0xffff,c.FloatSave.TagWord&0xffff,mxcsr,mxcsr_mask);
+                printf("\"module_path_hex\":\"");
                 for(size_t k=0;k<strlen(module_path);k++) printf("%02x",(unsigned char)module_path[k]);
                 printf("\",\"module_machine\":%u,\"module_timestamp\":%lu,\"module_size\":%lu,",nt.FileHeader.Machine,nt.FileHeader.TimeDateStamp,nt.OptionalHeader.SizeOfImage);
                 printf("\"kind\":\"INT3 entry observation; eip normalized from trap; not baseline\","
