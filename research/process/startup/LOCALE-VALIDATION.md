@@ -103,3 +103,27 @@ component evidence; there are zero new whole-PE Windows/ELF pairs.
 See [verification and source hashes](evidence/locale-validation.json),
 [retained Windows launch diagnosis](WINDOWS-LAUNCH-6DAF5AD.md),
 [preceding copy contract](LOCALE-REP.md) and [dependency map](DEPENDENCIES.md).
+
+## Windows CI test-layout repair
+
+At 0f6a9c3, both fresh exact-image launch matrices passed 9/9 and both original
+comparison gates passed. The frozen API probe observed 65001 valid, UINT_MAX
+invalid, ACP 1252 and LastError 0x12345678 on Windows 2022/MSVC14.44.35207. These
+are original observations, not translated pairs or evidence of the target ACP.
+They do not explain the retained original-process timeouts.
+
+Startup inventory 41279220163 nevertheless failed: the generated word-vector
+Rust child's main overflowed its stack (job124767509816), skipping the three
+native dependent jobs. This is a demonstrated test-harness failure, distinct
+from original Windows launch hangs. Separate non-inlined case functions retain
+all 40+112 assertions and increment a counter checked against 152 executions.
+The Linux child now runs under a lowered 512 KiB stack; Windows default stack,
+compiler limits, other tests and all timeout thresholds stay unchanged.
+
+All 308 CRT/185 unwind checks and both artifact tests pass locally after the
+repair. Emitted Rust remains c589562e7164c77a019b4f8785712249448592ba086a8490a15715dbf7897b69;
+the production initializer source prefix is unchanged. The old upload omitted
+the external temporary harness source/executable, so no exact old-harness Linux
+recompile or PE stack-reserve measurement is claimed. Windows confirmation
+requires the new fixed-head run. [Failure/fix evidence](evidence/word-register-stack.json)
+and [first fresh CI observations](evidence/locale-validation-ci-0f6a9c3.json).

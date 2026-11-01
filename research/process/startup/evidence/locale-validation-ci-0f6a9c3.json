@@ -1,0 +1,756 @@
+{
+  "head": "0f6a9c3e166f45a91008d2a87c389b7c6b5bf2c1",
+  "code_page": {
+    "run_id": 41279220163,
+    "job_id": 124767509785,
+    "artifact_id": 13072845197,
+    "report": {
+      "scope": "original authored Windows API only; zero translated pairs",
+      "host": "Windows-2022Server-10.0.20348-SP0",
+      "compiler_version": "14.44.35207",
+      "sdk": "10.0.26100.0\\",
+      "compiler_sha256": "fc26dcba228dd91cd09429670f298f4608833c84841a4ceca8c4955b4d495a7b",
+      "linker_sha256": "83d4fbff908e88be425898184d8470be1f139bf843190c24e041b019c9c69a78",
+      "sources": {
+        "code_page_probe.c": "7e35a185e2e696e65c85007bf550c71ea16f3bf2a8e60d67de16008516d72a60",
+        "code-page-expectations.json": "209e97d6696e102b945daae1cf103fd0ae9c530aed0a22b15430961772832101"
+      },
+      "flags": [
+        "/nologo",
+        "/O1",
+        "/MT",
+        "/W4",
+        "/WX",
+        "D:\\a\\_temp\\code-page-observation\\code_page_probe.c",
+        "/Fe:D:\\a\\_temp\\code-page-observation\\code-page-probe.exe",
+        "/Fo:D:\\a\\_temp\\code-page-observation\\code-page-probe.obj",
+        "/link",
+        "/MACHINE:X86",
+        "/SUBSYSTEM:CONSOLE"
+      ],
+      "status": "matched",
+      "observations": 2,
+      "pe_sha256": "54484036d1179d7c98d07bdbf709d78db9008c80be43cb2bee156d876ab699ad",
+      "launch_sha256": "ad950680ddca4c075198f0df90d2b60c337ce596f5e03b3786108cfc10ebd9d8",
+      "exit": 0,
+      "stdout_sha256": "646ddf887a2fc9be9cdab922fe2719f51a8c75c77c2c2d88a7be38a555dc034a",
+      "observed_acp": 1252,
+      "cases": [
+        {
+          "code_page": 65001,
+          "valid": 1,
+          "last_error": 305419896
+        },
+        {
+          "code_page": 4294967295,
+          "valid": 0,
+          "last_error": 305419896
+        }
+      ]
+    }
+  },
+  "exact_contexts": [
+    {
+      "run_id": 41279220095,
+      "job_id": 124767509802,
+      "records": [
+        {
+          "case": "corpus0",
+          "repetition": 0,
+          "context": "system-temp-case-sequence",
+          "pe_sha256": "ed3cbff6115a348caa3b8618cd0fc7fd1a3e0ceb826745d1888f1f41844cbb4c",
+          "scope": "original authored PE only; no converter execution",
+          "command": [
+            "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\w2l-exact-corpus-kf1dxug5\\case.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "21",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "ed3cbff6115a348caa3b8618cd0fc7fd1a3e0ceb826745d1888f1f41844cbb4c",
+          "pid": 9128,
+          "spawn_seconds": 0.008507400000013376,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.013017000000019152,
+          "elapsed_seconds": 0.021964499999995724,
+          "final_poll": 0,
+          "stdout_hex": "21",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "case": "corpus1",
+          "repetition": 0,
+          "context": "system-temp-case-sequence",
+          "pe_sha256": "52b0377c5641d44a3dc2dd1e916fb96b91851556a11dd8bce01daa4edc14299b",
+          "scope": "original authored PE only; no converter execution",
+          "command": [
+            "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\w2l-exact-corpus-kf1dxug5\\case.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "433031",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "52b0377c5641d44a3dc2dd1e916fb96b91851556a11dd8bce01daa4edc14299b",
+          "pid": 2036,
+          "spawn_seconds": 0.009950000000003456,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.005327499999992824,
+          "elapsed_seconds": 0.015684499999991885,
+          "final_poll": 0,
+          "stdout_hex": "433031",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "case": "output-probe",
+          "repetition": 0,
+          "context": "checkout-volume-owned-copy",
+          "pe_sha256": "7e93a771370cfd33aaf44e59b8c8656be77e4ac715176bf924a90034bae57e33",
+          "scope": "original authored PE only; no converter execution",
+          "command": [
+            "D:\\a\\windowstolinux\\windowstolinux\\w2l-exact-output-4srj0lle\\output-probe.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "48656c6c6f",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "7e93a771370cfd33aaf44e59b8c8656be77e4ac715176bf924a90034bae57e33",
+          "pid": 1736,
+          "spawn_seconds": 0.005139499999984309,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.008992100000000391,
+          "elapsed_seconds": 0.014563799999990579,
+          "final_poll": 0,
+          "stdout_hex": "48656c6c6f",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "case": "corpus0",
+          "repetition": 1,
+          "context": "system-temp-case-sequence",
+          "pe_sha256": "ed3cbff6115a348caa3b8618cd0fc7fd1a3e0ceb826745d1888f1f41844cbb4c",
+          "scope": "original authored PE only; no converter execution",
+          "command": [
+            "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\w2l-exact-corpus-kekc8ma_\\case.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "21",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "ed3cbff6115a348caa3b8618cd0fc7fd1a3e0ceb826745d1888f1f41844cbb4c",
+          "pid": 2732,
+          "spawn_seconds": 0.01054399999998168,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.010293300000000727,
+          "elapsed_seconds": 0.02125159999999937,
+          "final_poll": 0,
+          "stdout_hex": "21",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "case": "corpus1",
+          "repetition": 1,
+          "context": "system-temp-case-sequence",
+          "pe_sha256": "52b0377c5641d44a3dc2dd1e916fb96b91851556a11dd8bce01daa4edc14299b",
+          "scope": "original authored PE only; no converter execution",
+          "command": [
+            "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\w2l-exact-corpus-kekc8ma_\\case.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "433031",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "52b0377c5641d44a3dc2dd1e916fb96b91851556a11dd8bce01daa4edc14299b",
+          "pid": 716,
+          "spawn_seconds": 0.008090800000019271,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.005119199999995772,
+          "elapsed_seconds": 0.013634100000018634,
+          "final_poll": 0,
+          "stdout_hex": "433031",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "case": "output-probe",
+          "repetition": 1,
+          "context": "checkout-volume-owned-copy",
+          "pe_sha256": "7e93a771370cfd33aaf44e59b8c8656be77e4ac715176bf924a90034bae57e33",
+          "scope": "original authored PE only; no converter execution",
+          "command": [
+            "D:\\a\\windowstolinux\\windowstolinux\\w2l-exact-output-87lz2lna\\output-probe.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "48656c6c6f",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "7e93a771370cfd33aaf44e59b8c8656be77e4ac715176bf924a90034bae57e33",
+          "pid": 2040,
+          "spawn_seconds": 0.0049619999999777065,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.008925599999997758,
+          "elapsed_seconds": 0.01423439999999232,
+          "final_poll": 0,
+          "stdout_hex": "48656c6c6f",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "case": "corpus0",
+          "repetition": 2,
+          "context": "system-temp-case-sequence",
+          "pe_sha256": "ed3cbff6115a348caa3b8618cd0fc7fd1a3e0ceb826745d1888f1f41844cbb4c",
+          "scope": "original authored PE only; no converter execution",
+          "command": [
+            "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\w2l-exact-corpus-2w0o83vx\\case.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "21",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "ed3cbff6115a348caa3b8618cd0fc7fd1a3e0ceb826745d1888f1f41844cbb4c",
+          "pid": 7464,
+          "spawn_seconds": 0.008750699999978906,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.010227100000008704,
+          "elapsed_seconds": 0.019384799999983215,
+          "final_poll": 0,
+          "stdout_hex": "21",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "case": "corpus1",
+          "repetition": 2,
+          "context": "system-temp-case-sequence",
+          "pe_sha256": "52b0377c5641d44a3dc2dd1e916fb96b91851556a11dd8bce01daa4edc14299b",
+          "scope": "original authored PE only; no converter execution",
+          "command": [
+            "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\w2l-exact-corpus-2w0o83vx\\case.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "433031",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "52b0377c5641d44a3dc2dd1e916fb96b91851556a11dd8bce01daa4edc14299b",
+          "pid": 2024,
+          "spawn_seconds": 0.007917999999989433,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.005391599999995833,
+          "elapsed_seconds": 0.013754500000004555,
+          "final_poll": 0,
+          "stdout_hex": "433031",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "case": "output-probe",
+          "repetition": 2,
+          "context": "checkout-volume-owned-copy",
+          "pe_sha256": "7e93a771370cfd33aaf44e59b8c8656be77e4ac715176bf924a90034bae57e33",
+          "scope": "original authored PE only; no converter execution",
+          "command": [
+            "D:\\a\\windowstolinux\\windowstolinux\\w2l-exact-output-6kj8vw61\\output-probe.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "48656c6c6f",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "7e93a771370cfd33aaf44e59b8c8656be77e4ac715176bf924a90034bae57e33",
+          "pid": 3728,
+          "spawn_seconds": 0.005381599999992659,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.00913669999999911,
+          "elapsed_seconds": 0.014936299999988023,
+          "final_poll": 0,
+          "stdout_hex": "48656c6c6f",
+          "stderr_hex": "",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "run_id": 41279223972,
+      "job_id": 124767520858,
+      "records": [
+        {
+          "case": "corpus0",
+          "repetition": 0,
+          "context": "system-temp-case-sequence",
+          "pe_sha256": "ed3cbff6115a348caa3b8618cd0fc7fd1a3e0ceb826745d1888f1f41844cbb4c",
+          "scope": "original authored PE only; no converter execution",
+          "command": [
+            "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\w2l-exact-corpus-a_ndfkft\\case.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "21",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "ed3cbff6115a348caa3b8618cd0fc7fd1a3e0ceb826745d1888f1f41844cbb4c",
+          "pid": 5508,
+          "spawn_seconds": 0.006793799999996963,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.00793200000001093,
+          "elapsed_seconds": 0.015283399999987068,
+          "final_poll": 0,
+          "stdout_hex": "21",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "case": "corpus1",
+          "repetition": 0,
+          "context": "system-temp-case-sequence",
+          "pe_sha256": "52b0377c5641d44a3dc2dd1e916fb96b91851556a11dd8bce01daa4edc14299b",
+          "scope": "original authored PE only; no converter execution",
+          "command": [
+            "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\w2l-exact-corpus-a_ndfkft\\case.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "433031",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "52b0377c5641d44a3dc2dd1e916fb96b91851556a11dd8bce01daa4edc14299b",
+          "pid": 7340,
+          "spawn_seconds": 0.006162399999993795,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.0039729000000079395,
+          "elapsed_seconds": 0.01043380000001548,
+          "final_poll": 0,
+          "stdout_hex": "433031",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "case": "output-probe",
+          "repetition": 0,
+          "context": "checkout-volume-owned-copy",
+          "pe_sha256": "7e93a771370cfd33aaf44e59b8c8656be77e4ac715176bf924a90034bae57e33",
+          "scope": "original authored PE only; no converter execution",
+          "command": [
+            "D:\\a\\windowstolinux\\windowstolinux\\w2l-exact-output-q76b1uqs\\output-probe.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "48656c6c6f",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "7e93a771370cfd33aaf44e59b8c8656be77e4ac715176bf924a90034bae57e33",
+          "pid": 1976,
+          "spawn_seconds": 0.0033667999999806852,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.00652049999999349,
+          "elapsed_seconds": 0.01013689999999201,
+          "final_poll": 0,
+          "stdout_hex": "48656c6c6f",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "case": "corpus0",
+          "repetition": 1,
+          "context": "system-temp-case-sequence",
+          "pe_sha256": "ed3cbff6115a348caa3b8618cd0fc7fd1a3e0ceb826745d1888f1f41844cbb4c",
+          "scope": "original authored PE only; no converter execution",
+          "command": [
+            "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\w2l-exact-corpus-1z9keni6\\case.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "21",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "ed3cbff6115a348caa3b8618cd0fc7fd1a3e0ceb826745d1888f1f41844cbb4c",
+          "pid": 6916,
+          "spawn_seconds": 0.006426199999992832,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.007412500000015143,
+          "elapsed_seconds": 0.014186499999993885,
+          "final_poll": 0,
+          "stdout_hex": "21",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "case": "corpus1",
+          "repetition": 1,
+          "context": "system-temp-case-sequence",
+          "pe_sha256": "52b0377c5641d44a3dc2dd1e916fb96b91851556a11dd8bce01daa4edc14299b",
+          "scope": "original authored PE only; no converter execution",
+          "command": [
+            "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\w2l-exact-corpus-1z9keni6\\case.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "433031",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "52b0377c5641d44a3dc2dd1e916fb96b91851556a11dd8bce01daa4edc14299b",
+          "pid": 8084,
+          "spawn_seconds": 0.006153600000004644,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.003767000000010512,
+          "elapsed_seconds": 0.01016540000000532,
+          "final_poll": 0,
+          "stdout_hex": "433031",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "case": "output-probe",
+          "repetition": 1,
+          "context": "checkout-volume-owned-copy",
+          "pe_sha256": "7e93a771370cfd33aaf44e59b8c8656be77e4ac715176bf924a90034bae57e33",
+          "scope": "original authored PE only; no converter execution",
+          "command": [
+            "D:\\a\\windowstolinux\\windowstolinux\\w2l-exact-output-l92vzjj7\\output-probe.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "48656c6c6f",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "7e93a771370cfd33aaf44e59b8c8656be77e4ac715176bf924a90034bae57e33",
+          "pid": 6956,
+          "spawn_seconds": 0.003348000000016782,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.006217999999989843,
+          "elapsed_seconds": 0.009811400000018011,
+          "final_poll": 0,
+          "stdout_hex": "48656c6c6f",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "case": "corpus0",
+          "repetition": 2,
+          "context": "system-temp-case-sequence",
+          "pe_sha256": "ed3cbff6115a348caa3b8618cd0fc7fd1a3e0ceb826745d1888f1f41844cbb4c",
+          "scope": "original authored PE only; no converter execution",
+          "command": [
+            "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\w2l-exact-corpus-xmx87xlg\\case.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "21",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "ed3cbff6115a348caa3b8618cd0fc7fd1a3e0ceb826745d1888f1f41844cbb4c",
+          "pid": 1084,
+          "spawn_seconds": 0.006430700000009892,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.007119599999981574,
+          "elapsed_seconds": 0.013825800000006438,
+          "final_poll": 0,
+          "stdout_hex": "21",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "case": "corpus1",
+          "repetition": 2,
+          "context": "system-temp-case-sequence",
+          "pe_sha256": "52b0377c5641d44a3dc2dd1e916fb96b91851556a11dd8bce01daa4edc14299b",
+          "scope": "original authored PE only; no converter execution",
+          "command": [
+            "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\w2l-exact-corpus-xmx87xlg\\case.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "433031",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "52b0377c5641d44a3dc2dd1e916fb96b91851556a11dd8bce01daa4edc14299b",
+          "pid": 9240,
+          "spawn_seconds": 0.0060330000000021755,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.0035331999999925756,
+          "elapsed_seconds": 0.009856100000007473,
+          "final_poll": 0,
+          "stdout_hex": "433031",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "case": "output-probe",
+          "repetition": 2,
+          "context": "checkout-volume-owned-copy",
+          "pe_sha256": "7e93a771370cfd33aaf44e59b8c8656be77e4ac715176bf924a90034bae57e33",
+          "scope": "original authored PE only; no converter execution",
+          "command": [
+            "D:\\a\\windowstolinux\\windowstolinux\\w2l-exact-output-hfdprbqh\\output-probe.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "48656c6c6f",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "7e93a771370cfd33aaf44e59b8c8656be77e4ac715176bf924a90034bae57e33",
+          "pid": 10204,
+          "spawn_seconds": 0.0033285000000091713,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.005961999999982481,
+          "elapsed_seconds": 0.00953989999999294,
+          "final_poll": 0,
+          "stdout_hex": "48656c6c6f",
+          "stderr_hex": "",
+          "passed": true
+        }
+      ]
+    }
+  ],
+  "scope": "fresh original Windows observations only; no new translated pairs. Both original gates also passed; historical timeout cause unresolved.",
+  "ci_snapshot": [
+    {
+      "id": 41279223972,
+      "status": "in_progress",
+      "conclusion": null
+    },
+    {
+      "id": 41279220163,
+      "status": "completed",
+      "conclusion": "failure"
+    },
+    {
+      "id": 41279220095,
+      "status": "in_progress",
+      "conclusion": null
+    }
+  ],
+  "startup_failure": {
+    "run_id": 41279220163,
+    "job_id": 124767509816,
+    "artifact_id": 13072477206,
+    "conclusion": "generated word-case child main stack overflow; three native dependent jobs skipped; separate from original launch timeouts"
+  }
+}

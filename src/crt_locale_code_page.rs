@@ -143,23 +143,36 @@ fn base()->(CrtStreamRuntime,CrtCpu){let(mut rt,_)=CrtStreamRuntime::new_initial
 fn flags(c:&CrtCpu){assert_eq!((c.flags.cf,c.flags.zf,c.flags.sf,c.flags.of),(Some(true),Some(false),Some(true),Some(false)));}
 "#,
     );
+    let mut calls = String::from("let mut checked=0u32;");
     for dst in 0u8..8 {
+        calls.push_str(&format!("load_case{dst}(&mut checked);"));
         cases.push_str(&format!(r#"
+#[inline(never)] fn load_case{dst}(checked:&mut u32){{
 for mode in 0..5{{let(mut rt,mut c)=base();let data=rt.map_region(0x20000,if mode==4{{4}}else{{2}},CrtRegionKind::Stack,None).unwrap();rt.store(data,16,if mode==1{{CrtValue::Scalar{{bits:0x12cd,known:0xffff00ff}}}}else{{CrtValue::scalar(0x12cd)}}).unwrap();c.r[{dst}]=CrtValue::Scalar{{bits:0xdeadbeef,known:0xff00ffff}};if {dst}==4{{c.r[4]=c.entry[4];}}c.r[2]=CrtValue::Pointer(data);let old=c.r[{dst}];let prior=c.r;
 if mode==4{{rt.store(data,32,CrtValue::ProtectedReturn(777)).unwrap();}}if mode==2{{rt.memory.release(data.cap,data.owner).unwrap();}}if mode==3{{c.r[2]=CrtValue::scalar(data.address());}}let result=load{dst}(&mut rt,&mut c);
-if mode>=2{{assert_eq!(result,Err(if mode==2{{"CRT pointer lifetime"}}else if mode==3{{"CRT scalar address lacks provenance"}}else{{"CRT partial typed-word read"}}));assert_eq!(c.r[{dst}],if mode==3&&{dst}==2{{CrtValue::scalar(data.address())}}else{{prior[{dst}]}});}}else{{result.expect("word load must execute");let upper=if {dst}==2{{0x20000}}else if {dst}==4{{0}}else{{0xdead0000}};let knowledge=if {dst}==2||{dst}==4{{0xffff0000}}else{{0xff000000}};assert_eq!(c.r[{dst}],CrtValue::Scalar{{bits:upper|if mode==1{{0xcd}}else{{0x12cd}},known:knowledge|if mode==1{{0x00ff}}else{{0xffff}}}});assert!(CrtCpu::pointer(c.r[{dst}]).is_err());let _=old;}}flags(&c);
+if mode>=2{{assert_eq!(result,Err(if mode==2{{"CRT pointer lifetime"}}else if mode==3{{"CRT scalar address lacks provenance"}}else{{"CRT partial typed-word read"}}));assert_eq!(c.r[{dst}],if mode==3&&{dst}==2{{CrtValue::scalar(data.address())}}else{{prior[{dst}]}});}}else{{result.expect("word load must execute");let upper=if {dst}==2{{0x20000}}else if {dst}==4{{0}}else{{0xdead0000}};let knowledge=if {dst}==2||{dst}==4{{0xffff0000}}else{{0xff000000}};assert_eq!(c.r[{dst}],CrtValue::Scalar{{bits:upper|if mode==1{{0xcd}}else{{0x12cd}},known:knowledge|if mode==1{{0x00ff}}else{{0xffff}}}});assert!(CrtCpu::pointer(c.r[{dst}]).is_err());let _=old;}}flags(&c);*checked+=1;
+}}
 }}
 "#));
         if dst == 4 {
             continue;
         }
         for src in 0u8..8 {
+            calls.push_str(&format!("zx_case{dst}_{src}(&mut checked);"));
             cases.push_str(&format!(r#"
-for partial in [false,true]{{let(mut rt,mut c)=base();c.r[{src}]=CrtValue::Scalar{{bits:0xdeadbeef,known:if partial{{0xffffff00}}else{{0x0000ffff}}}};let before=c.r;let result=zx{dst}_{src}(&mut rt,&mut c);if partial{{assert_eq!(result,Err("CRT unknown scalar bits observed"));assert_eq!(c.r,before);}}else{{result.expect("known low word must extend despite unknown upper bits");assert_eq!(c.r[{dst}],CrtValue::scalar(0xbeef));assert!(CrtCpu::pointer(c.r[{dst}]).is_err());for r in 0..8{{if r!={dst}{{assert_eq!(c.r[r],before[r]);}}}}}}flags(&c);}}
+#[inline(never)] fn zx_case{dst}_{src}(checked:&mut u32){{
+for partial in [false,true]{{let(mut rt,mut c)=base();c.r[{src}]=CrtValue::Scalar{{bits:0xdeadbeef,known:if partial{{0xffffff00}}else{{0x0000ffff}}}};let before=c.r;let result=zx{dst}_{src}(&mut rt,&mut c);if partial{{assert_eq!(result,Err("CRT unknown scalar bits observed"));assert_eq!(c.r,before);}}else{{result.expect("known low word must extend despite unknown upper bits");assert_eq!(c.r[{dst}],CrtValue::scalar(0xbeef));assert!(CrtCpu::pointer(c.r[{dst}]).is_err());for r in 0..8{{if r!={dst}{{assert_eq!(c.r[r],before[r]);}}}}}}flags(&c);*checked+=1;}}
+}}
 "#));
         }
     }
-    crate::crt_stream_callees_tests::native(&extra, &cases, "word-register-knowledge");
+    calls.push_str("assert_eq!(checked,152,\"all declared word cases must execute\");");
+    cases.push_str(&calls);
+    crate::crt_stream_callees_tests::native_bounded_stack(
+        &extra,
+        &cases,
+        "word-register-knowledge",
+    );
     for bytes in [
         vec![0x66, 0x0f, 0xb7, 0xc3],
         vec![0x0f, 0xb7, 0xe0],

@@ -5,7 +5,7 @@
   "reviewed_base": "6daf5ad5a98ea786084ea86ad1f5077cb8f765f2",
   "diagnostic_commit": "2eab390d9eb79b7a9ed8dfca41df2e2ece240112",
   "source_sha256": {
-    "src/crt_locale_code_page.rs": "8d03e7750cf3e1e5cb87c67dd200a9a9ec5bb709c8eb0dfaf1454f9f79a4bd24",
+    "src/crt_locale_code_page.rs": "31c33735edbc3d9451e36109285645a5e8d4ec504ded0d598196e94ab949594f",
     "src/crt_locale_startup.rs": "417a1568314b001fda57465a4f6407e6483a299e872f466a1912474754f21dec",
     "src/crt_repeat_copy.rs": "56f4ffa506ea23a1195943d07f189f3338596e84153749cc4c6bba65769cf5cb",
     "src/crt_stream_ir.rs": "fd9f03ba3b2177054a465d11c13fd19f4d6efc7ba7759048860fb00e04400f3f",
@@ -21,7 +21,8 @@
     "scripts/windows_original_contexts.py": "d4bc61442f67cedce10d81b290577f4c3b33491ab73a9f526d03c67d42ca5761",
     "scripts/windows-original-contexts.json": "765b4c55d278948c2605ce8b3d54f08af68a09126b63ac7ba7175f5175a677ad",
     "tools/test_original_contexts.py": "632a69cf74b3700678ccd92aea142a7273b84a2e0b0bf680d1af72d77152aec7",
-    "Cargo.lock": "b57ce0bbee252e9480a33413eeccc166dbc2bcf3a368467b117de81bd776523e"
+    "Cargo.lock": "b57ce0bbee252e9480a33413eeccc166dbc2bcf3a368467b117de81bd776523e",
+    "src/crt_stream_callees_tests.rs": "cdf3bc92e4eb527356b5745d1b6b6ba11df62f7007c2a1afa4bf35c9961916b0"
   },
   "next_boundary": {
     "pc": "0x40b4e6",
@@ -175,5 +176,13 @@
     "Windows capture/delivery/incoming containment/collided unwind",
     "native close/EOF and wider resource/encoding/XP7 equivalence",
     "historical case19 and other original-Windows timeouts remain unresolved"
-  ]
+  ],
+  "test_layout_followup": {
+    "timestamp_utc": "2026-11-01T06:19:49.288934+00:00",
+    "evidence": "word-register-stack.json",
+    "ci_observations": "locale-validation-ci-0f6a9c3.json",
+    "scope": "full replay/first publication at0f6; subsequent test-only stack repair reran both artifact checks and all152 word vectors under512KiB, aggregate308/185 tests; identical emitted production Rust and original initializer prefix verified",
+    "rust_sha256": "c589562e7164c77a019b4f8785712249448592ba086a8490a15715dbf7897b69",
+    "full_final_head_ci": "pending new publication; old0f6 startup failure retained"
+  }
 }

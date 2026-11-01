@@ -29,6 +29,14 @@ still alive at15s. Cause unresolved, separate from historical case19. A fixed
 nine-sample exact-image/context experiment preserves every failure and the same
 limits. [Evidence and diagnosis](WINDOWS-LAUNCH-6DAF5AD.md).
 
+At 0f6a9c3, both exact-image launch matrices and original comparison gates passed;
+the new Windows API probe measured 65001 valid, UINT_MAX invalid and ACP 1252.
+These do not establish target ACP or diagnose historical hangs. Startup inventory
+failed a generated word-test child's main-stack layout, with three dependent jobs
+skipped. The test-only repair retains all 152 cases in separate non-inlined frames,
+passes a lowered 512 KiB Linux child limit, and preserves identical emitted runtime
+Rust. Fresh fixed-head Windows CI is required. [Repair evidence](evidence/word-register-stack.json).
+
 ## Previous checkpoint: original comparison and malloc
 
 Original malloc returns a fresh544-byte flags0 Buffer with unknown contents.

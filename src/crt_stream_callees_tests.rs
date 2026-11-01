@@ -17,6 +17,14 @@ fn security() -> Vec<u8> {
     raw("3b0d00c041007501c3e97c020000")
 }
 pub(super) fn native(extra: &str, body: &str, name: &str) {
+    native_execution(extra, body, name, false)
+}
+/// Lower only this owned child to 512 KiB on Linux; Windows keeps its default
+/// executable stack. The compiler and other tests keep their existing limits.
+pub(super) fn native_bounded_stack(extra: &str, body: &str, name: &str) {
+    native_execution(extra, body, name, true)
+}
+fn native_execution(extra: &str, body: &str, name: &str, bounded: bool) {
     let memory = include_str!("guest_memory.rs")
         .split("#[cfg(test)]")
         .next()
@@ -50,7 +58,19 @@ pub(super) fn native(extra: &str, body: &str, name: &str) {
         "{}",
         String::from_utf8_lossy(&built.stderr)
     );
-    let result = std::process::Command::new(&binary).output().unwrap();
+    let result = if cfg!(target_os = "linux") && bounded {
+        std::process::Command::new("sh")
+            .args([
+                "-c",
+                "ulimit -s 512 || exit 125; exec \"$1\"",
+                "w2l-owned-stack",
+            ])
+            .arg(&binary)
+            .output()
+            .unwrap()
+    } else {
+        std::process::Command::new(&binary).output().unwrap()
+    };
     assert!(
         result.status.success(),
         "{}",
