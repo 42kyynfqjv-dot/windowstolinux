@@ -1,6 +1,23 @@
 # Remaining entry-to-exit dependencies
 
-## Current executable checkpoint: original calloc and argc/argv publication
+## Current executable checkpoint: original post-argv helpers
+
+Original result/stack handling, SLIST initialization, live flag query, conditional
+callback encoding and two RET0 helpers execute after actual argc/argv publication.
+The FP wrapper pushes its real arguments and rejects **before CALL
+0x401be4 -> 0x4076a0**. Its live owned stack is preserved. Private SLIST bytes stay
+opaque and old read facts expire; there is no all-zero header assumption or list
+operation implementation. Default/full startup/rcedit admission remains blocked.
+
+[Contract/review](POST-ARGV.md), [requirements](evidence/post-argv-expectations.json),
+[verification](evidence/post-argv.json). Next inventory and bind the original
+FP-control callee only under an explicit guest x87/MXCSR contract, independently
+of host floating-point state. Windows SLIST observations are pending; synthetic
+protocol tests are not Windows execution. Resource-failure, freeing/exceptional
+cleanup and prior API/profile gaps remain. Historical timeout causes unresolved;
+zero new whole-PE pairs. Final local replay/CI status is recorded in the evidence.
+
+## Previous checkpoint: original calloc and argc/argv publication
 
 Original calloc now uses the canonical live process heap, actual zeroing and
 owned UCRT errno acquisition. The original NULL-free branch, second parser pass,

@@ -21,6 +21,13 @@ pub(crate) const ONEXIT:&str="558bec803d85cc4100007404b0015dc3568b750885f6740583
 pub(crate) const OPTIONS: &str = "e869f6ffff8b4804830824894804e8e7ffffff8b4804830802894804c3";
 pub(crate) const OPTIONS_GET: &str = "b8e8d24100c3";
 pub(crate) const SCAN_GET: &str = "b8a8cc4100c3";
+pub(crate) const POST_SLIST: &str = "68a0cc4100ff1530504100c3";
+pub(crate) const POST_FLAG: &str = "33c0390548c041000f94c0c3";
+pub(crate) const POST_ENCODE: &str =
+    "8bff558beca100c04100b92000000083e01f2bc88b4508d3c8330500c04100a33ccd41005dc3";
+pub(crate) const POST_NOOP: &str = "c20000";
+pub(crate) const POST_FP: &str =
+    "680000030068000001006a00e8b75a000083c40c85c07501c36a07e83f000000cc";
 fn cut_graph(
     bytes: &[u8],
     origin: u32,
@@ -98,6 +105,7 @@ fn startup_c_array_platform(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&Crt
     );
     out.push_str(&registration_source);
     out.push_str(&crate::crt_argv::source()?);
+    out.push_str(&post_source()?);
     for (name, at, literal) in [
         ("cinit_app_type", 0x40662e, APP_TYPE),
         ("cinit_get_mode", 0x401bc3, GET_MODE),
@@ -207,9 +215,9 @@ fn startup_c_array_platform(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&Crt
     let g = cut_graph(
         &bytes,
         0x40155a,
-        0x4015a6,
+        0x4015d4,
         &[
-            (0x4015a6, "C initializer post-argv continuation unbound"),
+            (0x4015d4, "C initializer post-FP continuation unbound"),
             (0x4015fd, "C initializer fatal path unbound at 0x4015fd"),
         ],
     )?;
@@ -217,6 +225,11 @@ fn startup_c_array_platform(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&Crt
         &g,
         |pc, t| {
             let callee = match t {
+                Target::Direct(0x401bc9) => return Ok(format!("let p=platform.ok_or(\"post-argv SLIST native profile unbound\")?;cpu.call_activation(rt,{},0,|rt,c|cinit_slist_original(rt,c,inputs,p))?;",pc+g.nodes[&pc].length)),
+                Target::Direct(0x401c1f) => "cinit_post_flag",
+                Target::Direct(0x4066b0) => "cinit_encode_callback",
+                Target::Direct(0x401bf9) => "cinit_post_noop",
+                Target::Direct(0x401bd8) => "cinit_fp_prefix",
                 Target::Direct(0x401bbf) => "argv_mode_original",
                 Target::Direct(0x4069d4) => return Ok(format!("cpu.call_activation(rt,{},0,|rt,c|argv_configure_wrapper(rt,c,inputs,platform,epoch.as_deref_mut()))?;",pc+g.nodes[&pc].length)),
                 Target::Direct(0x401b0f) => return Ok(format!("cpu.call_activation(rt,{},0,|rt,c|onexit_register_original(rt,c,inputs,epoch.as_deref_mut()))?;",pc+g.nodes[&pc].length)),
@@ -264,4 +277,68 @@ fn original_c_array_and_first_prefix_have_explicit_effect_boundaries() {
     let g = crate::crt_startup_table::graph(&crate::crt_ptd::raw(LOOP), 0x406ccc).unwrap();
     assert!(matches!(g.nodes[&0x406ce6].op, Op::IndirectCall(_)));
     source().expect("original guarded array and bounded callback bodies must lower");
+}
+
+fn post_source() -> Result<String, String> {
+    let mut out = String::new();
+    let roles =
+        BTreeMap::from([0x41c000, 0x41c048, 0x41cd3c].map(|a| (a, "CrtRegionKind::Module".into())));
+    for (name, address, hex) in [
+        ("cinit_slist_original", 0x401bc9, POST_SLIST),
+        ("cinit_post_flag", 0x401c1f, POST_FLAG),
+        ("cinit_encode_callback", 0x4066b0, POST_ENCODE),
+        ("cinit_post_noop", 0x401bf9, POST_NOOP),
+        ("cinit_fp_prefix", 0x401bd8, POST_FP),
+    ] {
+        let bytes = crate::crt_ptd::raw(hex);
+        let g = if name == "cinit_fp_prefix" {
+            cut_graph(
+                &bytes,
+                address,
+                0x401be4,
+                &[(
+                    0x401be4,
+                    "original FP control effect unbound at0x401be4->0x4076a0",
+                )],
+            )?
+        } else {
+            Graph::decode(&bytes, address)?
+        };
+        let body = crate::crt_stream_emit::emit_body(
+            &g,
+            |pc, target| {
+                if target != Target::Import(0x415030) {
+                    return Err("post-argv helper call".into());
+                }
+                let next = pc + g.nodes[&pc].length;
+                Ok(format!("rt.process_image_import(inputs.image,0x415030,\"kernel32.dll\",\"InitializeSListHead\")?;cpu.call_activation(rt,{next},4,|rt,c|platform.slist_head_call(rt,c,inputs.init,inputs.image))?;"))
+            },
+            &roles,
+            128,
+        )?;
+        let extra = if name == "cinit_slist_original" {
+            ",platform:&CrtNativePlatform"
+        } else {
+            ""
+        };
+        out.push_str(&format!("fn {name}(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs{extra})->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;{}{body}}}",guard(address,&bytes)));
+    }
+    Ok(out)
+}
+
+#[test]
+fn slist_opaque_initialization_expires_reads_and_protects_state() {
+    crate::crt_stream_callees_tests::native(
+        "",
+        r#"
+ let(mut rt,init)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();let data=rt.map_region(0x20000,512,CrtRegionKind::Module,Some(&[0xa5;512])).unwrap();let p=rt.offset(data,32).unwrap();let fact=rt.memory.prove_read(p.cap,p.owner,p.address(),8).unwrap();let old=rt.serial;let head=rt.initialize_slist_head(init,p).unwrap();assert!(head.serial>old);assert_eq!((head.header.cap,head.header.address(),head.header.size),(p.cap,p.address(),8));rt.slist_head(head).unwrap();assert!(rt.memory.read_proven(fact,p.owner).is_err());assert_eq!(rt.memory.read(p.address(),8),Err(guest_memory::Fault::Uninitialized));assert_eq!(rt.load(p,32),Err("CRT opaque SLIST header bytes"));assert_eq!(rt.store(p,8,CrtValue::scalar(0)),Err("CRT opaque SLIST header bytes"));assert_eq!(rt.memory.read(data.address(),32).unwrap(),&[0xa5;32]);assert_eq!(rt.memory.read(p.address()+8,8).unwrap(),&[0xa5;8]);let newer=rt.initialize_slist_head(init,p).unwrap();assert_ne!(newer,head);assert!(rt.slist_head(head).is_err());rt.slist_head(newer).unwrap();assert_eq!(rt.slist_heads.values().count(),1);let beside=rt.initialize_slist_head(init,rt.offset(p,8).unwrap()).unwrap();assert_ne!(beside,newer);assert_eq!(rt.slist_heads.values().count(),2);rt.memory.release(data.cap,data.owner).unwrap();assert!(rt.slist_head(newer).is_err());assert!(rt.slist_head(beside).is_err());
+ for mode in 0..9{
+  let(mut rt,mut init)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();let data=rt.map_region(0x20000,64,CrtRegionKind::Module,Some(&[0x5a;64])).unwrap();let stack=rt.map_region(0x30000,128,CrtRegionKind::Stack,None).unwrap();let mut p=rt.offset(data,32).unwrap();let serial=rt.serial;
+  match mode{0=>p=rt.offset(data,60).unwrap(),1=>p=rt.offset(p,1).unwrap(),2=>{rt.memory.protect_data_with_old((data.cap,data.owner,data.address(),64),2,(stack.cap,stack.owner,stack.address())).unwrap();},3=>rt.memory.release(data.cap,data.owner).unwrap(),4=>init.serial+=1,5=>p=stack,6=>{rt.tags.insert(p.address(),CrtValue::ProtectedReturn(51));},7=>{rt.store(rt.offset(p,6).unwrap(),32,CrtValue::Pointer(stack)).unwrap();},8=>rt.errno_cell=Some(rt.subrange(p,4).unwrap()),_=>unreachable!()}
+  let before=if mode!=3{Some(rt.memory.read(data.address()+32,8).unwrap().to_vec())}else{None};assert!(rt.initialize_slist_head(init,p).is_err(),"negative SLIST mode {mode}");assert!(rt.slist_heads.is_empty());assert_eq!(rt.serial,serial);if let Some(before)=before{assert_eq!(rt.memory.read(data.address()+32,8).unwrap(),before);}
+ }
+ let(mut rt,init)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();let data=rt.map_region(0x20000,512,CrtRegionKind::Module,Some(&[0x69;512])).unwrap();for n in 0..32{rt.initialize_slist_head(init,rt.offset(data,n*8).unwrap()).unwrap();}let p=rt.offset(data,256).unwrap();assert_eq!(rt.initialize_slist_head(init,p),Err("CRT SLIST capacity domain"));assert_eq!(rt.memory.read(p.address(),8).unwrap(),&[0x69;8]);let before=rt.slist_heads.values().count();rt.initialize_slist_head(init,data).unwrap();assert_eq!(rt.slist_heads.values().count(),before);
+ "#,
+        "slist-opaque-state",
+    );
 }

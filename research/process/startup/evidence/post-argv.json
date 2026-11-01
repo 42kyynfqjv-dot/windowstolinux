@@ -1,0 +1,148 @@
+{
+  "kind": "original native-profile component execution; no whole-PE translation",
+  "base_commit": "decf5897ae1e728986f87aa766ca8dba970164c7",
+  "status": "focused checks passed; corrected aggregate and full coherent replay running; new exact-head CI not yet run",
+  "next_boundary": "before CALL0x401be4 ->0x4076a0; FP-control effect unbound",
+  "source_sha256": {
+    "src/crt_c_initializers.rs": "b863f10e1023949042500be4ec4e52131979e75dd89525cdd360023b6513a088",
+    "src/crt_normal_frame_tests.rs": "e35d1c2e4cf12e4fcdecfe649a778971e54883e2db5c2fac6d34c4f5acbfafab",
+    "src/crt_stream_runtime.rs": "458524f427e042ebfb565637e17a42c5d68d6a51d7ed039d1059d70565b8db8a",
+    "src/crt_resident_loader.rs": "472edfda8174b2085e889482b1378addeb00e3d31c4af068b1f565cacc7be189",
+    "research/process/startup/check_normal_wrapper.py": "ca7bf17fe51fa2ea7741b740967b7dfe0b6eb5d178777d81ac8fbde3851654f1",
+    "research/process/startup/observe_slist.c": "ae57ca9da2a04d2df3919af413d80d85bc4cb1828d67aea7dfe34f5a34269242",
+    "research/process/startup/observe_slist.py": "144a3ecdd10cd05ad9d90e31d9d5c604bb2ed4a5821d74b44dbc6c7ef0461c56",
+    "research/process/startup/test_observe_slist.py": "646d54cc7b4db4d95ac77a75bea7be3a14fd78eeb6a9f0bb4d51562f01acd812",
+    ".github/workflows/startup-inventory.yml": "4c323c4d981f77dabb121d1a32a2799b852c44f95f4db89d23bea281401544cc",
+    "src/crt_locale_code_page.rs": "1d23e432373162a8003105f45fbd5169c2c46e13b22c522a94b5c46e76ee4b1d"
+  },
+  "requirements_sha256": "d003e9ae85063669a93bbb32393b69c1c6c96e9a1a9186e3eb79212c77d298b3",
+  "connected_effects": [
+    "original result/argument cleanup following actual argc/argv publication",
+    "original InitializeSListHead wrapper and import with opaque process-owned module header",
+    "live flag query and conditional original callback encoding/store",
+    "two original RET0 helpers and actual FP-wrapper argument pushes"
+  ],
+  "SLIST_domain": [
+    "PE32 aligned owned writable Module range8; opaque system-use-only bytes",
+    "initialization expires old read facts; raw guest reads/writes/copies rejected",
+    "same capability/owner retained; reinitialization replaces serial; stale storage rejected",
+    "fixed32 capacity boxed at runtime creation; capacity failure rejects before effects, no Windows resource-error result claimed",
+    "void stdcall4; volatile result/flags and LastError unknown; protected call/saved state validated before effects"
+  ],
+  "cases": {
+    "original_helper_modes": 15,
+    "direct_API_ABI_lifetime_modes": 11,
+    "opaque_negative_modes": 9,
+    "opaque_capacity": 32,
+    "opaque_positive": "initialization/read-fact expiry/adjacent preservation/reinitialization/stale storage",
+    "new_original_Windows_SLIST_observations": 0,
+    "retained_Windows_wrapper_comparisons": 5,
+    "retained_Windows_conversion_API_rows": 158,
+    "new_whole_PE_pairs": 0
+  },
+  "checks": {
+    "focused_opaque_state": "passed",
+    "focused_API_ABI": "passed",
+    "original_connected_gate": "passed before storage indirection; final-source replay pending",
+    "Python_startup": "101 passed, one skip",
+    "Python_tools": "106 passed",
+    "Python_corpus": "18 passed, one skip",
+    "root_Rust": 182,
+    "CRT_Rust": "final corrected aggregate running",
+    "unwind_Rust": "pending",
+    "clippy": "pending",
+    "format": "passed before final verification"
+  },
+  "base_CI": [
+    {
+      "id": 41341194171,
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 41341190130,
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 41341190135,
+      "status": "completed",
+      "conclusion": "success"
+    }
+  ],
+  "review": [
+    "published predecessor source fingerprints match five git-show files",
+    "retained158-row trace SHA25694e18f9c7a6f49141d8e9d9d56351df19a5e19c2ca030444388c950ff58a504d verified",
+    "argc/argv actual stores and pointer/string allocation identity preserved",
+    "opaque header not assumed all-zero; primary SDK has private CpuId state",
+    "no pointer/callable authority issued from callback encoding",
+    "original FP effect and fatal/invalid paths not replaced with successful callbacks"
+  ],
+  "failure_history": {
+    "wrong_unknown_flag_diagnostic": "expected ZF failure corrected to earlier unknown scalar read failure; read/rejection preserved",
+    "initial_aggregate": "334 passed,3 stack overflows,2 ignored; fixed inline state allocation",
+    "next_aggregate": "336 passed,1 numeric fixture stack overflow,2 ignored despite isolated pass",
+    "fix": "box fixed header table at runtime creation; split independent numeric test lifetimes into non-inlined frames; unchanged512KiB limit and all cases/assertions",
+    "partial_replays": "two explicitly interrupted after reproduced local stack defects; original logs retained, neither accepted as final replay",
+    "historical_Windows_timeouts": "unresolved; local stack regression is separate"
+  },
+  "next_inventory": [
+    {
+      "name": "fp-control",
+      "address": "0x4076a0",
+      "bytes": 108,
+      "sha256": "f9a5368fd72d7e46ab494548a9141e3e5099be0886e5d6cd4e42a6fef415824d",
+      "scope": "read-only bounded inventory; not admitted"
+    },
+    {
+      "name": "fp-low-level",
+      "address": "0x40d000",
+      "bytes": 912,
+      "sha256": "e460d509f556d0c7e2ba545ad2366576c9aaa3b34647f32e5b160a247e83141c",
+      "scope": "read-only bounded inventory; not admitted"
+    },
+    {
+      "name": "fp-encode-control",
+      "address": "0x40d390",
+      "bytes": 256,
+      "sha256": "d2b9be53fe11e99863678c7084d19ee75d77fa542240cf024a750c4615385425",
+      "scope": "read-only bounded inventory; not admitted"
+    }
+  ],
+  "Windows_probe": {
+    "status": "prepared; publication/Windows CI pending",
+    "cases": 12,
+    "scope": "authored PE32 publicAPI observations; private bytes observational, protocol tests synthetic",
+    "source_sha256": "ae57ca9da2a04d2df3919af413d80d85bc4cb1828d67aea7dfe34f5a34269242",
+    "toolchain": "existing Windows2022/MSVC14.44 x86 workflow",
+    "artifact": "startup-slist-observation"
+  },
+  "limits": [
+    "explicit native serialized startup profile only; no default/full startup/rcedit/wholePE admission",
+    "FP control/host-state equivalence unbound; x87 FNCLEX does not imply FSTCW/FLDCW or MXCSR support",
+    "SLIST operations, raw private byte representation and concurrency unbound",
+    "resource failures, nonnull free/new-handler/exceptional cleanup and prior broader equivalence remain open",
+    "no XP7 claim from modern-host API observations",
+    "no Ultra/formal approval/merge/release/denied optional comment retry"
+  ],
+  "log_sha256": {
+    "canonical-v4.log": "ce619f5efa61180f399e3aaccaec8f2b8d612799315ac6b79a213d976c343d6b",
+    "numeric-fixed.log": "73091ff155e34e63b46e98f3d839cb501eb75472769746ff60a0bad72d4e6714",
+    "tools-python.log": "86f52a726d0649e60fb854a4bf8d9ff58f82d17dbbd5cc7df8983b637268efdc",
+    "canonical.log": "58d218fd99b6141a64b96cc4730c966490066e697c31724ea9b975f011f69890",
+    "numeric-layout-fixed.log": "a6eda688b643d1f0392389ad1d2ee37e0fde2e92ad92c5bede024be2aff5d840",
+    "startup-python.log": "0cb96ede9064fdda06c7c06d784b8cf1f89519ce552fbc860eba4afb8d4502df",
+    "slist-model.log": "71d1f74039ed8be129c4229353a752b8b975d24af75f39ce8c54c5781b9b251b",
+    "slist-api.log": "5ae8ce6ecf70c1dd3e85b8c8ca25b06916ca99b8ea3f54cf9c9c6a9caf72ab82",
+    "canonical-v3.log": "f450726046bcab10ca0377edd342d28798cf4cc65c072b0215dbe2d3855a3980",
+    "crt-final.log": "aca839b973932e9358cb8c4bfa0980cd45bbe4c1b3086924c89ee81f2d1abf62",
+    "word-register-fixed.log": "1ba7147a25d54c3cf31951bad9ba47a7b77723e0b4b33ef53d6c34b501ea0f94",
+    "root.log": "e8bdbdaffdb77cda61db103862ed96c3d5ff13808267cec10455d4998d4f7b9d",
+    "catalog-fixed.log": "8e48a3f823adf4e8120009cbdf37315672a0139b4ee0f5eef2413712dda1c3fc",
+    "corpus-python.log": "8b3bf4a78b3fedd204818e7060cefe0ade6c565f85a2a19a633a9766b1eacc79",
+    "crt.log": "a283918f35776c4c592afd2f4dea714d43eb5973841c3575420867563f1aa09f",
+    "word-register-diagnostic.log": "483d6c4a81d9f89beb2de901b1ed573601a80cb69a17209fdceb189e79b62e96",
+    "canonical-v2.log": "d477b1a089b9a64b6df691b9cd4afc9e2c5aeb085ced7183ebcf9b9b6a102d9d",
+    "root-final.log": "f4028a55a27789d05b5e0c0103daf9cc52a767ba17100b0f82016ac9ea86e985"
+  }
+}

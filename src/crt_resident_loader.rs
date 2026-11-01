@@ -124,6 +124,14 @@ impl CrtNativePlatform {
   let result=(||{let m=rt.provider_publish(init,&ticket)?;published=Some(m);let d=rt.provider_export(init,m,m,"FlsAlloc",address)?;let alloc=rt.bind_native_fls(init,d)?;let d=rt.provider_export(init,m,m,"FlsSetValue",setter_address)?;let setter=rt.bind_native_fls_set(init,d)?;if let Some(f)=rt.fiber{rt.check_fiber(f)?;}else{rt.bind_fiber(rt.thread)?;}Ok((alloc,setter))})();
   match result{Ok((f,setter))=>{self.fls=Some(f);self.fls_set=Some(setter);Ok(())},Err(e)=>{if let Some(m)=published{rt.provider_destroy(init,m)?;}else{rt.provider_abort(init,&ticket)?;}Err(e)}}
  }
+ /// PE32 opaque SLIST startup initialization; no raw header bytes are claimed.
+ fn slist_head_call(&self,rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,init:CrtInitialization,image:CrtProcessImage)->Result<CrtValue,&'static str>{
+  self.validate(rt,init)?;rt.process_image(image)?;cpu.validate_active(rt)?;
+  if cpu.return_pop!=4||cpu.r[4]!=cpu.entry[4]||[3,5,6,7].iter().any(|&r|cpu.r[r]!=cpu.entry[r]){return Err("CRT SLIST API ABI");}
+  let sp=CrtCpu::pointer(cpu.r[4])?;rt.offset(sp,8)?;rt.memory.validate_writable(sp.cap,sp.owner,sp.address(),8).map_err(|_|"CRT SLIST return stack permission")?;
+  let value=rt.load(rt.offset(sp,4)?,32)?;let p=match value{CrtValue::Pointer(p)=>p,CrtValue::Scalar{bits,known:u32::MAX}=>rt.process_image_pointer(image,bits,8)?,_=>return Err("CRT SLIST pointer knowledge")};
+  rt.initialize_slist_head(init,p)?;rt.last_os_error=None;cpu.clobber(CrtValue::Scalar{bits:0,known:0});cpu.finish_pop(rt,4)
+ }
  /// Modern UTF-8 query or complete-fit write. Strict and insufficient-capacity
  /// failure effects remain unbound; original Windows may write before failure.
  fn wide_conversion_call(&self,rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,init:CrtInitialization,image:Option<CrtProcessImage>)->Result<CrtValue,&'static str>{
@@ -232,6 +240,23 @@ impl CrtNativePlatform {
 }
 
 "#;
+#[test]
+fn opaque_slist_api_preflights_abi_lifetimes_and_preserves_void_return() {
+    crate::crt_stream_callees_tests::native(
+        TYPES,
+        r#"
+for mode in 0..11{
+ let(mut rt,init)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();let image=rt.bootstrap_main_image(init,0x400000,&[0;512]).unwrap();let platform=CrtNativePlatform::prepare(&mut rt,init,CrtNativePlatform::PROFILE,0x700000,0x701000).unwrap();let header=rt.map_region(0x20000,64,CrtRegionKind::Module,Some(&[0xa5;64])).unwrap();let stack=rt.map_region(0xa000,512,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,384).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(900)).unwrap();let mut c=CrtCpu::new(sp,900).unwrap();c.push(&mut rt,if mode==4{CrtValue::Scalar{bits:0,known:0}}else{CrtValue::Pointer(header)}).unwrap();rt.last_os_error=Some(71);
+ if mode==5{rt.memory.release(image.root.cap,image.root.owner).unwrap();}if mode==6{rt.end_initialization(init).unwrap();}if mode==7{rt.thread+=1;}if mode==8{rt.provider_destroy(init,platform.function.module).unwrap();}if mode==9{rt.memory.release(header.cap,header.owner).unwrap();}
+ let result=c.call_activation(&mut rt,0x430000,4,|rt,c|{if mode==1{c.return_pop=0;}if mode==2{c.r[3]=CrtValue::scalar(3);}if mode==3{c.return_id+=1;}if mode==10{rt.store(rt.offset(CrtCpu::pointer(c.r[4])?,-8)?,32,CrtValue::ProtectedReturn(c.return_id))?;}platform.slist_head_call(rt,c,init,image)});
+ if mode==0{assert_eq!(result,Ok(CrtValue::Scalar{bits:0,known:0}));assert_eq!(c.r[4],CrtValue::Pointer(sp));assert!(!c.returned);assert_eq!(rt.last_os_error,None);let h=*rt.slist_heads.values().next().unwrap();rt.slist_head(h).unwrap();assert_eq!(rt.load(header,32),Err("CRT opaque SLIST header bytes"));}
+ else{assert!(result.is_err(),"SLIST ABI/lifetime mode {mode} must reject");assert!(rt.slist_heads.is_empty());assert_eq!(rt.last_os_error,Some(71));if mode!=9{assert_eq!(rt.memory.read(header.address(),8).unwrap(),&[0xa5;8]);}}
+}
+"#,
+        "slist-api-preflight",
+    );
+}
+
 #[test]
 fn resident_load_acquires_real_reference_and_rejects_search_and_stale_authority() {
     crate::crt_stream_callees_tests::native(

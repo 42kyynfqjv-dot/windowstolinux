@@ -174,6 +174,8 @@ impl CrtUnobservedContext {
  }
  fn revoke(&self){self.live.set(false);}
 }
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+struct CrtSListHead{anchor:guest_memory::Capability,header:CrtPointer,serial:u64}
 struct CrtRegion {pointer:CrtPointer,heap:bool,file_owner:Option<u32>}
 struct CrtDescriptor {id:CrtDescriptorId,live:bool,record:Option<CrtPointer>,record_initialized:bool}
 /// Fixed storage for the admitted 32 global objects. No guest operation grows
@@ -219,7 +221,7 @@ struct CrtX87Context{anchor:guest_memory::Capability,owner:u64,thread:u64,init:C
 
 struct CrtStreamRuntime {
  x87:Option<CrtX87Context>,
- file_view:CrtPointer,main_image:Option<CrtProcessImage>,main_image_regions:Vec<CrtPointer>,loader_cells:std::collections::BTreeMap<u32,(CrtPointer,bool)>,modules:std::collections::BTreeMap<u32,CrtLoadedModule>,module_references:CrtModuleReferences,exports:std::collections::BTreeMap<u64,CrtExport>,providers:std::collections::BTreeMap<u32,CrtNativeProvider>,native_sync:CrtGlobalSlots<(CrtFunction,u32,CrtPointer)>,
+ file_view:CrtPointer,main_image:Option<CrtProcessImage>,main_image_regions:Vec<CrtPointer>,loader_cells:std::collections::BTreeMap<u32,(CrtPointer,bool)>,modules:std::collections::BTreeMap<u32,CrtLoadedModule>,module_references:CrtModuleReferences,exports:std::collections::BTreeMap<u64,CrtExport>,providers:std::collections::BTreeMap<u32,CrtNativeProvider>,native_sync:CrtGlobalSlots<(CrtFunction,u32,CrtPointer)>,slist_heads:Box<CrtGlobalSlots<CrtSListHead>>,
  uncertain_allocations:Vec<CrtPointer>,completed_failed_frees:Vec<(guest_memory::Capability,u64)>,heap_ptds:Vec<CrtHeapPtdView>,fiber:Option<CrtFiber>,fls_indices:CrtFlsIndices,fls:CrtFlsValues,
  unobserved_contexts:Vec<(CrtPointer,std::rc::Rc<std::cell::Cell<bool>>)>,heap:Option<CrtHeap>,memory:guest_memory::Space,owner:u64,thread:u64,anchor:guest_memory::Capability,
  dispatchers:std::collections::BTreeMap<u64,CrtDispatcherContext>,regions:Vec<CrtRegion>,retired:Vec<CrtPointer>,tags:std::collections::BTreeMap<u32,CrtValue>,
@@ -257,7 +259,7 @@ impl CrtStreamRuntime {
  }
  fn from_file_storage(owner:u64,thread:u64,memory:guest_memory::Space,pointer:CrtPointer)->Result<Self,&'static str>{
   let anchor=pointer.cap;
-  Ok(Self{x87:None,file_view:pointer,main_image:None,main_image_regions:vec![],loader_cells:std::collections::BTreeMap::new(),modules:std::collections::BTreeMap::new(),module_references:CrtModuleReferences::new(),exports:std::collections::BTreeMap::new(),providers:std::collections::BTreeMap::new(),native_sync:CrtGlobalSlots::new(),uncertain_allocations:vec![],completed_failed_frees:vec![],heap_ptds:vec![],fiber:None,fls_indices:CrtFlsIndices::new(),fls:CrtFlsValues::new(),unobserved_contexts:vec![],heap:None,memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],native_endpoints:vec![],native_standards:None,command_line:None,image_name:None,file_mode:None,global_objects:CrtGlobalSlots::new(),global_locks:CrtGlobalLeases::new(),record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,canonical_errno:false,errno_cell:None,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([pointer.base])})
+  Ok(Self{x87:None,file_view:pointer,main_image:None,main_image_regions:vec![],loader_cells:std::collections::BTreeMap::new(),modules:std::collections::BTreeMap::new(),module_references:CrtModuleReferences::new(),exports:std::collections::BTreeMap::new(),providers:std::collections::BTreeMap::new(),native_sync:CrtGlobalSlots::new(),slist_heads:Box::new(CrtGlobalSlots::new()),uncertain_allocations:vec![],completed_failed_frees:vec![],heap_ptds:vec![],fiber:None,fls_indices:CrtFlsIndices::new(),fls:CrtFlsValues::new(),unobserved_contexts:vec![],heap:None,memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],native_endpoints:vec![],native_standards:None,command_line:None,image_name:None,file_mode:None,global_objects:CrtGlobalSlots::new(),global_locks:CrtGlobalLeases::new(),record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,canonical_errno:false,errno_cell:None,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([pointer.base])})
  }
 
  /// Initial FILE storage is a bounded role view of the original writable
@@ -557,6 +559,26 @@ impl CrtStreamRuntime {
   Ok(written)
  }
 
+ /// PE32 startup-only opaque initialization; no private byte pattern is asserted.
+ fn initialize_slist_head(&mut self,init:CrtInitialization,p:CrtPointer)->Result<CrtSListHead,&'static str>{
+  self.initialization(init)?;self.valid(p,8)?;
+  if p.kind!=CrtRegionKind::Module||p.address()%8!=0||self.file_overlap(p,8){return Err("CRT SLIST module/alignment domain");}
+  self.ordinary_non_slist_bytes(p,8)?;self.memory.validate_writable(p.cap,p.owner,p.address(),8).map_err(|_|"CRT SLIST write permission")?;
+  if self.errno_cell.is_some_and(|q|q.cap==p.cap&&u64::from(p.address())<u64::from(q.address())+4&&u64::from(q.address())<u64::from(p.address())+8){return Err("CRT SLIST errno alias");}
+  let header=self.subrange(p,8)?;let existing=(0..32).find(|i|self.slist_heads.get(i).is_some_and(|h|h.header==header));
+  if self.slist_heads.values().any(|h|h.header.cap==p.cap&&h.header!=header&&u64::from(p.address())<u64::from(h.header.address())+8&&u64::from(h.header.address())<u64::from(p.address())+8){return Err("CRT overlapping SLIST headers");}
+  let index=existing.or_else(||(0..32).find(|i|!self.slist_heads.contains_key(i))).ok_or("CRT SLIST capacity domain")?;
+  let serial=self.serial.checked_add(1).ok_or("CRT SLIST generation")?;let old=self.overlapping_tags(p.address(),8);
+  if old.iter().any(|(at,v)|*at<p.address()||u64::from(*at)+4>u64::from(p.address())+8||matches!(v,CrtValue::ProtectedReturn(_)|CrtValue::OpaqueSaved(_)|CrtValue::ThreadHead(_)|CrtValue::Dispatcher(_))){return Err("CRT SLIST partial/control alias");}
+  // Atomic forgetting expires old read facts. Unknown private bytes cannot be
+  // observed through guest loads, copies or writes while this role is live.
+  self.memory.forget(p.address(),8).map_err(|_|"CRT SLIST effect range")?;
+  for(at,_)in old{self.tags.remove(&at);}self.partial.retain(|at,_|*at<p.address()||u64::from(*at)>=u64::from(p.address())+8);
+  let head=CrtSListHead{anchor:self.anchor,header,serial};self.serial=serial;self.slist_heads.insert(index,head);Ok(head)
+ }
+ fn slist_head(&self,h:CrtSListHead)->Result<(),&'static str>{
+  if h.anchor!=self.anchor||!self.slist_heads.values().any(|q|*q==h){return Err("CRT stale/foreign SLIST state");}self.valid(h.header,8)
+ }
  fn native_api_identity(&self,f:CrtFunction)->Result<(),&'static str>{
   self.function_identity(f,None)?;
   match self.exports.get(&f.serial).and_then(|e|e.api){Some(CrtNativeApi::InitializeGlobalCriticalSectionEx)=>self.native_sync_identity(f),Some(CrtNativeApi::FlsAlloc)=>self.function_identity(f,Some("FlsAlloc")),Some(CrtNativeApi::FlsSetValue)=>self.function_identity(f,Some("FlsSetValue")),Some(CrtNativeApi::AreFileApisAnsi)=>self.function_identity(f,Some("AreFileApisANSI")),None=>Err("CRT native API implementation unbound")}
@@ -819,6 +841,10 @@ impl CrtStreamRuntime {
  fn file_storage(&self,cap:guest_memory::Capability)->Option<CrtPointer>{std::iter::once(self.file_view).chain(self.regions.iter().map(|r|r.pointer).filter(|p|p.kind==CrtRegionKind::File)).find(|p|p.cap==cap)}
  fn file_overlap(&self,p:CrtPointer,size:u32)->bool{self.file_storage(p.cap).is_some_and(|f|u64::from(p.address)<u64::from(f.base)+u64::from(f.size)&&u64::from(f.base)<u64::from(p.address)+u64::from(size.max(1)))}
  fn ordinary_file_bytes(&self,p:CrtPointer,size:u32)->Result<(),&'static str>{
+  if self.slist_heads.values().any(|h|h.header.cap==p.cap&&u64::from(p.address)<u64::from(h.header.address())+8&&u64::from(h.header.address())<u64::from(p.address)+u64::from(size)){return Err("CRT opaque SLIST header bytes");}
+  self.ordinary_non_slist_bytes(p,size)
+ }
+ fn ordinary_non_slist_bytes(&self,p:CrtPointer,size:u32)->Result<(),&'static str>{
   if self.global_objects.values().any(|q|q.cap==p.cap&&u64::from(p.address)<u64::from(q.address)+24&&u64::from(q.address)<u64::from(p.address)+u64::from(size)){return Err("CRT opaque global lock bytes");}
   if self.record_objects.iter().any(|r|r.cap==p.cap&&u64::from(p.address)<u64::from(r.address)+24&&u64::from(r.address)<u64::from(p.address)+u64::from(size)){return Err("CRT opaque descriptor lock bytes");}
   if self.file_storage(p.cap).is_some()&&self.lock_objects.iter().any(|&at|u64::from(p.address)<u64::from(at)+56&&u64::from(at)+32<u64::from(p.address)+u64::from(size)){return Err("CRT opaque critical section bytes");}Ok(())

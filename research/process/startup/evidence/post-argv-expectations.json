@@ -1,0 +1,10 @@
+{
+  "kind": "frozen primary-contract expectations before implementation; not original-Windows observations",
+  "slist": "PE32 module-owned header,8bytes/8alignment, documented initialized-empty logical state. Header is for system use only: private byte values remain unknown/opaque, never assumedzero. Initialization must expire old read facts and cannot authorize raw reads or list operations.",
+  "ownership": "Live initialization/process image and complete writable range, no FILE/lock/errno/control overlap. Reinitialization replaces logical lifetime; stale/foreign mappings and unknown pointer values reject before effects.",
+  "ABI": "InitializeSListHead is void stdcall4, unknown volatile results/flags and LastError; saved registers/protected return preserved.",
+  "postargv": "Original pops/result tests, actual live flag query, callback encoding/store and RET0 helpers execute in original order; no callback invocation authority follows merely from encoded bits.",
+  "FP": "Stop before actual control-state call0x401be4->0x4076a0; no host FP state assumption or no-op substitution.",
+  "Windows_probe": "12 safe authored PE32 aligned-header cases: SDK size8, logical depth0, empty popNULL, guards unchanged. Raw initial/header bytes retained observationally, not a zero-byte oracle. No unsupported/misaligned API call is executed.",
+  "profile_limits": "Explicit native serialized startup only; no whole-PE/rcedit/default admission, concurrent SLIST operations, kernel or XP7 equivalence. Historical timeout causes remain unresolved."
+}

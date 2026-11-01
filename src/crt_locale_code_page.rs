@@ -281,15 +281,18 @@ fn numeric_address_results_drop_authority_preserve_flags_and_reject_erased_reads
     crate::crt_stream_callees_tests::native_bounded_stack(
         &extra,
         r#"
-for base in [0x20000u32,0x41000,0x70000000]{for index in [0u32,64,65,90,97,122,255]{
+// Keep independent runtime instances in separate native frames. All vectors
+// and the 512 KiB child limit are unchanged.
+#[inline(never)] fn vector(base:u32,index:u32){
  let(mut rt,_)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();let stack=rt.map_region(0xa000,4096,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,2048).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(77)).unwrap();let mut c=CrtCpu::new(sp,77).unwrap();let p=rt.map_region(base,544,CrtRegionKind::Stack,None).unwrap();let addr=base+25+index;let relative=0xffffffa6u32.wrapping_sub(base);c.r[0]=CrtValue::scalar(relative);c.r[1]=CrtValue::Pointer(rt.offset(p,i64::from(25+index)).unwrap());let input=c.r;
  assert_eq!(number(&mut rt,&mut c),Ok(CrtValue::scalar(index.wrapping_sub(65))));assert!(CrtCpu::pointer(c.r[0]).is_err());for r in 1..8{assert_eq!(c.r[r],input[r]);}
  let sum=u64::from(relative)+u64::from(addr);let out=sum as u32;assert_eq!(c.flags.cf,Some(sum>u64::from(u32::MAX)));assert_eq!(c.flags.zf,Some(out==0));assert_eq!(c.flags.sf,Some(out&0x80000000!=0));assert_eq!(c.flags.of,Some((!(relative^addr)&(relative^out)&0x80000000)!=0));
  rt.memory.release(p.cap,p.owner).unwrap();c.r[0]=input[0];let old=c.r;let flags=c.flags;assert_eq!(number(&mut rt,&mut c),Err("CRT pointer lifetime"));assert_eq!(c.r,old);assert_eq!((c.flags.cf,c.flags.zf,c.flags.sf,c.flags.of),(flags.cf,flags.zf,flags.sf,flags.of));
-}}
-{
+}
+#[inline(never)] fn no_authority(){
  let(mut rt,_)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();let stack=rt.map_region(0xa000,4096,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,2048).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(77)).unwrap();let mut c=CrtCpu::new(sp,77).unwrap();let src=rt.map_region(0x20000,544,CrtRegionKind::Stack,None).unwrap();let other=rt.map_region(0x30000,4,CrtRegionKind::Stack,Some(&[71,0,0,0])).unwrap();c.r[0]=CrtValue::scalar(other.address()-src.address());c.r[1]=CrtValue::Pointer(src);assert_eq!(number(&mut rt,&mut c),Ok(CrtValue::scalar(other.address())));assert_eq!(c.address(&rt,Some(0),None,1,0,None),Err("CRT scalar address lacks provenance"));assert_eq!(rt.load(other,32).unwrap(),CrtValue::scalar(71));c.r[0]=CrtValue::Scalar{bits:0,known:0};c.r[1]=CrtValue::scalar(0);let old=c.r;let flags=c.flags;assert_eq!(number(&mut rt,&mut c),Err("CRT unknown scalar bits observed"));assert_eq!(c.r,old);assert_eq!((c.flags.cf,c.flags.zf,c.flags.sf,c.flags.of),(flags.cf,flags.zf,flags.sf,flags.of));
 }
+let mut checked=0;for base in [0x20000u32,0x41000,0x70000000]{for index in [0u32,64,65,90,97,122,255]{vector(base,index);checked+=1;}}assert_eq!(checked,21);no_authority();
 "#,
         "numeric-address-authority",
     );
