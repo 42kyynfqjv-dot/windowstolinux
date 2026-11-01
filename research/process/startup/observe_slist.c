@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 typedef VOID (WINAPI *InitHead)(PSLIST_HEADER);
+typedef char Pe32SListLayout[(sizeof(void*)==4 && sizeof(SLIST_HEADER)==8)?1:-1];
 static void bytes(const unsigned char *p, size_t n) {
     size_t i; putchar('['); for (i=0;i<n;i++) printf("%s%u",i?",":"",(unsigned)p[i]); putchar(']');
 }
@@ -16,7 +17,6 @@ int main(void) {
     if (!raw || sizeof(initialize)!=sizeof(raw)) return 11;
     memcpy(&initialize,&raw,sizeof(initialize));
     printf("{\"kind\":\"original Windows InitializeSListHead PE32 API observations; no PE translation\",\"pointer_bytes\":%u,\"header_bytes\":%u,\"compiler\":%lu}\n",(unsigned)sizeof(void*),(unsigned)sizeof(SLIST_HEADER),(unsigned long)_MSC_FULL_VER);
-    if (sizeof(void*)!=4 || sizeof(SLIST_HEADER)!=8) return 12;
     for (pattern=0;pattern<4;pattern++) for (offset=16;offset<=32;offset+=8) {
         __declspec(align(16)) unsigned char storage[64];
         unsigned char initial[64], after[64]; PSLIST_HEADER head;

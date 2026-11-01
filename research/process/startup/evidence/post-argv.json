@@ -1,7 +1,7 @@
 {
   "kind": "original native-profile component execution; no whole-PE translation",
   "base_commit": "decf5897ae1e728986f87aa766ca8dba970164c7",
-  "status": "focused checks passed; corrected aggregate and full coherent replay running; new exact-head CI not yet run",
+  "status": "corrected final aggregates passed; coherent replay running; first Windows probe compilation warning fixed without weakening warnings",
   "next_boundary": "before CALL0x401be4 ->0x4076a0; FP-control effect unbound",
   "source_sha256": {
     "src/crt_c_initializers.rs": "b863f10e1023949042500be4ec4e52131979e75dd89525cdd360023b6513a088",
@@ -9,7 +9,7 @@
     "src/crt_stream_runtime.rs": "458524f427e042ebfb565637e17a42c5d68d6a51d7ed039d1059d70565b8db8a",
     "src/crt_resident_loader.rs": "472edfda8174b2085e889482b1378addeb00e3d31c4af068b1f565cacc7be189",
     "research/process/startup/check_normal_wrapper.py": "ca7bf17fe51fa2ea7741b740967b7dfe0b6eb5d178777d81ac8fbde3851654f1",
-    "research/process/startup/observe_slist.c": "ae57ca9da2a04d2df3919af413d80d85bc4cb1828d67aea7dfe34f5a34269242",
+    "research/process/startup/observe_slist.c": "4c4e419aebf60ccf4e5504214c2c671829201ebfb3c7abd8304227b9e3f4a041",
     "research/process/startup/observe_slist.py": "144a3ecdd10cd05ad9d90e31d9d5c604bb2ed4a5821d74b44dbc6c7ef0461c56",
     "research/process/startup/test_observe_slist.py": "646d54cc7b4db4d95ac77a75bea7be3a14fd78eeb6a9f0bb4d51562f01acd812",
     ".github/workflows/startup-inventory.yml": "4c323c4d981f77dabb121d1a32a2799b852c44f95f4db89d23bea281401544cc",
@@ -44,14 +44,15 @@
     "focused_opaque_state": "passed",
     "focused_API_ABI": "passed",
     "original_connected_gate": "passed before storage indirection; final-source replay pending",
-    "Python_startup": "101 passed, one skip",
+    "Python_startup": "101 tests, one skipped",
     "Python_tools": "106 passed",
-    "Python_corpus": "18 passed, one skip",
+    "Python_corpus": "18 tests, one skipped",
     "root_Rust": 182,
-    "CRT_Rust": "final corrected aggregate running",
-    "unwind_Rust": "pending",
-    "clippy": "pending",
-    "format": "passed before final verification"
+    "CRT_Rust": 337,
+    "unwind_Rust": 185,
+    "clippy": "passed warnings denied",
+    "format": "passed",
+    "CRT_ignored": 2
   },
   "base_CI": [
     {
@@ -84,7 +85,8 @@
     "next_aggregate": "336 passed,1 numeric fixture stack overflow,2 ignored despite isolated pass",
     "fix": "box fixed header table at runtime creation; split independent numeric test lifetimes into non-inlined frames; unchanged512KiB limit and all cases/assertions",
     "partial_replays": "two explicitly interrupted after reproduced local stack defects; original logs retained, neither accepted as final replay",
-    "historical_Windows_timeouts": "unresolved; local stack regression is separate"
+    "historical_Windows_timeouts": "unresolved; local stack regression is separate",
+    "Windows_probe_compilation": "MSVC19.44 warning C4127 at observe_slist.c:19 promoted to error C2220. No probe execution occurred; following dependent jobs skipped. Layout condition changed to compile-time typedef, no warning suppression or threshold change."
   },
   "next_inventory": [
     {
@@ -110,12 +112,16 @@
     }
   ],
   "Windows_probe": {
-    "status": "prepared; publication/Windows CI pending",
+    "status": "first compilation failed C4127 under /WX; compile-time layout gate replaces constant runtime condition; rerun pending",
     "cases": 12,
     "scope": "authored PE32 publicAPI observations; private bytes observational, protocol tests synthetic",
-    "source_sha256": "ae57ca9da2a04d2df3919af413d80d85bc4cb1828d67aea7dfe34f5a34269242",
+    "source_sha256": "4c4e419aebf60ccf4e5504214c2c671829201ebfb3c7abd8304227b9e3f4a041",
     "toolchain": "existing Windows2022/MSVC14.44 x86 workflow",
-    "artifact": "startup-slist-observation"
+    "artifact": "startup-slist-observation",
+    "failed_run": 41344214535,
+    "failed_job": 124960453455,
+    "failed_artifact": 13098681056,
+    "failed_zip_sha256": "1889e504c9b90fdd1adb9093b5f190e53d94e85a5eeab460c68a02cbd05e24b8"
   },
   "limits": [
     "explicit native serialized startup profile only; no default/full startup/rcedit/wholePE admission",
@@ -143,6 +149,11 @@
     "crt.log": "a283918f35776c4c592afd2f4dea714d43eb5973841c3575420867563f1aa09f",
     "word-register-diagnostic.log": "483d6c4a81d9f89beb2de901b1ed573601a80cb69a17209fdceb189e79b62e96",
     "canonical-v2.log": "d477b1a089b9a64b6df691b9cd4afc9e2c5aeb085ced7183ebcf9b9b6a102d9d",
-    "root-final.log": "f4028a55a27789d05b5e0c0103daf9cc52a767ba17100b0f82016ac9ea86e985"
-  }
+    "root-final.log": "f4028a55a27789d05b5e0c0103daf9cc52a767ba17100b0f82016ac9ea86e985",
+    "crt-final-2.log": "3f7b2774eab66091fc8af90fb0f663e5a6dcdebf52d238016c4b95934c519309",
+    "unwind-final.log": "2b8d669b0d50c0fc7e811aadaa078a4e1273cc6f435420ddc8c78b8942099049",
+    "clippy-final.log": "340705305371abc558adf10782bc16c5148335b3866994d5839c8d4e0aa59b2d",
+    "fmt-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "implementation_commit": "a4d382b878744800ebb53360a7d36ec62bb2d4a5"
 }

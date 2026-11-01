@@ -58,7 +58,10 @@ checks empty depth/pop and guards, and never executes a misaligned or unsupporte
 operation. Its [runner](observe_slist.py) retains raw output before assertions,
 pins the existing CI MSVC 14.44 configuration, and preserves timeout output.
 The protocol-only tests use synthetic records and are not Windows observations.
-New probe execution is pending publication/Windows CI at this checkpoint.
+First Windows run 41344214535/job124960453455 retained artifact13098681056:
+MSVC C4127 on a constant sizeof condition, promoted to C2220 under /WX. No probe
+executed and its dependent jobs were skipped. The layout requirement now uses
+a compile-time typedef, retaining /W4 /WX; a new Windows run is required.
 
 ## Verification and review scope
 
