@@ -1,0 +1,48 @@
+{
+  "base_commit": "13334bf2dc998d0b8da6520be883d77bdd3e6afd",
+  "scope": "original entry/reference helper component; no whole-PE claim",
+  "next_boundary": "0x40b25f before next original argument push; selector call0x40b262 ->0x40afbc not executed",
+  "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "source_sha256": {
+    "research/process/startup/check_normal_wrapper.py": "ee2eaa3b0dad90c4954a251c704d8eadfc8d666e1ad2712905f87066812ef609",
+    "src/crt_locale_startup.rs": "3b672ab5a8f98931e996791e5cd755813c315f8c0a51b912486833035630f13c",
+    "src/crt_normal_frame_tests.rs": "6e056b6966acd16735fff9bacae520ad233c96d1b5eaf34e0ed266d58d1ff5ab",
+    "src/crt_stream_cpu.rs": "79e1f554d23330fa3922af0a78a34679f6f10e45212ac010b2831fa86730b215",
+    "src/crt_stream_emit.rs": "ac0091dd6609c20a08924de96e920c311a5af8abae3d50870ab03eb71412e8ad",
+    "src/crt_stream_ir.rs": "ebe8058fc5e540bab19a06aeb47a2c75b60bfd53d0ed03c2864ac8b87b3b9731",
+    "src/crt_stream_runtime.rs": "a6d54357b0111e325e5a356049bb3fc12c41c2f0bf64424ffc58b8947f7b3b8b",
+    "src/crt_ucrt_locale.rs": "85671a379bfb9ed2af483bc6729f91e6c7b4863908f1f8e63371847ed3b6a1bb"
+  },
+  "tests": {
+    "crt_stream_passed": 301,
+    "artifact_ignored": 2,
+    "unwind_passed": 185,
+    "python_run": 84,
+    "python_skip": 1,
+    "clippy": "passed",
+    "canonical": "passed",
+    "locale_declared_modes": 25,
+    "xadd_boundary_vectors": 6,
+    "xadd_negative_checks": "unknown source, misaligned word, stale lock for each vector"
+  },
+  "log_sha256": {
+    "canonical.log": "7b3bf9fb28ff5ec743e42672edf2a4da04ab8580ce6f71aa4bdf88df926f6093",
+    "clippy.log": "49082ec5a7a9193ac3f149a90013fe67b67912196c8852b0def67b37614f9a0d",
+    "python.log": "72ebe6ee230839b5c8dad11d2d6c1d3798ff694b76e3ed885dd3c4642275d69d",
+    "unwind.log": "f56f73e436a04da9b15b92e2913c12f9ed1e1cca31ce8ed4b5864781d83542f6",
+    "root.log": "80f4a105f965a9cd726561467175905bec1cc4032b3447cb3e73be74667467df"
+  },
+  "full_replay": {
+    "status": "running at checkpoint",
+    "path": "/workspace/w2l-evidence/locale-reference/replay",
+    "command": "check_normal_wrapper.py original observed output",
+    "new_windows_elf_pairs": 0
+  },
+  "limitations": [
+    "module-word XADD only with checked exclusive lease; unbound emission rejects",
+    "heap reference freeing rejected after prior decrement, preserving lock and frame",
+    "null termination explicit rejection",
+    "aligned exception unwinding and full startup/rcedit/default admission unproved",
+    "native close/EOF and historical Windows case19 timeout unresolved"
+  ]
+}

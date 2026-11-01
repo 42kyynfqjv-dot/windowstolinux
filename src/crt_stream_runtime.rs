@@ -976,12 +976,15 @@ impl CrtStreamRuntime {
  fn module_word_pointer(&self,image:CrtProcessImage,value:CrtValue)->Result<CrtPointer,&'static str>{
   match value{CrtValue::Scalar{bits,known:u32::MAX}=>self.process_image_pointer(image,bits,4),CrtValue::Pointer(p)=>{if self.process_image_pointer(image,p.address(),4)?!=p{return Err("CRT module word alias");}Ok(p)},_=>Err("CRT module word address knowledge")}
  }
- fn increment_module_reference(&mut self,init:CrtInitialization,image:CrtProcessImage,lease:CrtGlobalLock,p:CrtPointer)->Result<u32,&'static str>{
+ fn increment_module_reference(&mut self,init:CrtInitialization,image:CrtProcessImage,lease:CrtGlobalLock,p:CrtPointer)->Result<u32,&'static str>{self.add_module_reference(init,image,lease,p,1)}
+ /// Single guest-thread operation under the consumer's exclusive global lease;
+ /// no callback or interleaving occurs between checked read and write.
+ fn add_module_reference(&mut self,init:CrtInitialization,image:CrtProcessImage,lease:CrtGlobalLock,p:CrtPointer,addend:u32)->Result<u32,&'static str>{
   self.initialization(init)?;self.check_global(lease)?;
   if p.kind!=CrtRegionKind::Module||p.address%4!=0||self.process_image_pointer(image,p.address,4)?!=p{return Err("CRT module reference identity/alignment");}
   self.memory.validate_writable(p.cap,p.owner,p.address,4).map_err(|_|"CRT module reference permission")?;
   self.ordinary_file_bytes(p,4)?;let old=self.load(p,32)?.known_scalar()?;
-  self.store(p,32,CrtValue::scalar(old.wrapping_add(1)))?;Ok(old)
+  self.store(p,32,CrtValue::scalar(old.wrapping_add(addend)))?;Ok(old)
  }
  /// Execute a bounded successful allocation in the explicit native domain.
  /// Budget/host allocation failure is rejection, never guest NULL or a guessed

@@ -11,7 +11,7 @@ pub(crate) fn source() -> Result<String, String> {
         &g,
         |pc, target| {
             let next = pc + g.nodes[&pc].length;
-            Ok(match target{Target::Direct(0x40a2ef)=>format!("cpu.call_activation(rt,{next},0,|rt,c|locale_required_ptd(rt,c,inputs,platform,epoch))?;"),Target::Direct(0x40b235)=>format!("cpu.call_activation(rt,{next},0,|rt,c|locale_aligned_prefix(rt,c,inputs))?;"),_=>return Err("locale callback unexpected target".into())})
+            Ok(match target{Target::Direct(0x40a2ef)=>format!("cpu.call_activation(rt,{next},0,|rt,c|locale_required_ptd(rt,c,inputs,platform,epoch))?;"),Target::Direct(0x40b235)=>format!("cpu.call_activation(rt,{next},0,|rt,c|locale_aligned_prefix(rt,c,inputs,epoch))?;"),_=>return Err("locale callback unexpected target".into())})
         },
         &std::collections::BTreeMap::from([
             (0x41d148, "CrtRegionKind::Module".into()),
@@ -68,7 +68,8 @@ pub(crate) fn source() -> Result<String, String> {
     out.push_str("fn locale_required_view(rt:&CrtStreamRuntime,_platform:&CrtNativePlatform,value:CrtValue)->Result<(),&'static str>{match value{CrtValue::Pointer(p)=>{let view=rt.heap_ptds.iter().find(|v|v.pointer==p&&v.layout==CrtPtdLayout::Ucrt).ok_or(\"required PTD UCRT allocation view\")?;rt.heap_ptd_layout_view(p,view.slot,CrtPtdLayout::Ucrt)?;if rt.fls.get(&view.slot.index).map(|x|x.1)!=Some(value){return Err(\"required PTD publication changed\");}Ok(())},CrtValue::Scalar{bits:0|u32::MAX,known:u32::MAX}=>Ok(()),_=>Err(\"required PTD value authority\")}}\n");
     let prefix = crate::crt_ptd::raw(ALIGNED_FRAME);
     let body = crate::crt_aligned_activation::prefix(&prefix, 0x40b235)?;
-    out.push_str(&format!("fn locale_aligned_prefix(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;let p=rt.process_image_code(inputs.image,0x40b235,{})?;if rt.memory.read(p.address(),{}).map_err(|_|\"locale aligned code read\")?!=&{prefix:?}{{return Err(\"locale aligned code changed\");}}let mut aligned=CrtAlignedActivation::begin(rt,cpu)?;let _=(||->Result<CrtValue,&'static str>{{{body}}})()?;aligned.live(rt,cpu)?;return Err(\"locale body helper unbound at 0x40b25a -> 0x40b38a\");}}",prefix.len(),prefix.len()));
+    out.push_str(&format!("fn locale_aligned_prefix(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;let p=rt.process_image_code(inputs.image,0x40b235,{})?;if rt.memory.read(p.address(),{}).map_err(|_|\"locale aligned code read\")?!=&{prefix:?}{{return Err(\"locale aligned code changed\");}}let mut aligned=CrtAlignedActivation::begin(rt,cpu)?;let _=(||->Result<CrtValue,&'static str>{{{body}}})()?;aligned.live(rt,cpu)?;cpu.tick(u32::MAX)?;cpu.call_activation(rt,0x40b25f,0,|rt,c|locale_reference_original(rt,c,inputs,epoch))?;aligned.live(rt,cpu)?;return Err(\"locale code-page caller unbound at 0x40b25f\");}}",prefix.len(),prefix.len()));
+    out.push_str(&reference_source()?);
     Ok(out)
 }
 
@@ -171,4 +172,100 @@ rt.store(rt.offset(p,-4).unwrap(),32,CrtValue::ProtectedReturn(123)).unwrap();as
 "#,
         "aligned-return-authority",
     );
+}
+
+pub(crate) const REFERENCE_BODY:&str="6a0c6860b64100e8ca6affff33f68975e48b7d08a1b8c74100858750030000740e39774c74098b774885f6746deb596a05e80f0a0000598975fc8b77488975e48b5d0c3b33742785f6741883c8fff00fc106750f81fe40c24100740756e864c9ffff598b338977488975e4f0ff06c745fcfeffffffe805000000ebad8b75e46a05e8070a000059c38bc68b4df064890d00000000595f5e5bc9c3e8d6c3ffffcc";
+
+fn reference_source() -> Result<String, String> {
+    let raw = crate::crt_ptd::raw;
+    let helper = raw(crate::crt_ucrt_locale::PROLOG);
+    let p = crate::crt_exception_wrapper::PrologProof::prove(
+        crate::crt_exception_wrapper::Region {
+            bytes: &helper,
+            origin: 0x401e60,
+        },
+        12,
+        0x41b660,
+        0x41c000,
+        0x402210,
+    )?;
+    let eb = raw("8b4df064890d00000000595f5e5bc9c3");
+    let ep = crate::crt_exception_wrapper::EpilogProof::prove(
+        crate::crt_exception_wrapper::Region {
+            bytes: &eb,
+            origin: 0x40b414,
+        },
+        &p,
+    )?;
+    let mut out = format!(
+        "{}{}",
+        p.emit("locale_reference_prolog")?,
+        ep.emit("locale_reference_epilog")?
+    );
+    let bytes = raw(REFERENCE_BODY);
+    let g = crate::crt_startup_table::graph(&bytes[..bytes.len() - 1], 0x40b38a)?;
+    let cleanup = bytes[0x7f..0x88].to_vec();
+    let cg = Graph::decode(&cleanup, 0x40b409)?;
+    let cb = crate::crt_stream_emit::emit_body(
+        &cg,
+        |pc, t| {
+            if t != Target::Direct(0x40be17) {
+                return Err("reference cleanup target".into());
+            }
+            let next = pc + cg.nodes[&pc].length;
+            Ok(format!("cpu.call_activation(rt,{next},0,|rt,c|startup_second_lock(rt,c,inputs,false,held))?;"))
+        },
+        &Default::default(),
+        64,
+    )?;
+    out.push_str(&format!("fn locale_reference_cleanup(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,held:&mut Option<CrtGlobalLock>)->Result<CrtValue,&'static str>{{{cb}}}"));
+    let body = crate::crt_stream_emit::emit_body_with_exit(
+        &g,
+        |pc, t| {
+            let next = pc + g.nodes[&pc].length;
+            Ok(match t{
+ Target::Direct(0x401e60)=>"let id=rt.generation.checked_add(1).filter(|n|*n<1u64<<63).ok_or(\"reference helper identity\")?|(1u64<<63);if rt.tags.values().any(|v|*v==CrtValue::ProtectedReturn(id)){return Err(\"reference helper collision\");}rt.generation=id&!(1u64<<63);cpu.push(rt,CrtValue::ProtectedReturn(id))?;locale_reference_prolog(rt,cpu,id,b.token,|rt,c,record,head|b.install(rt,c,epoch,record,head))?;".into(),
+ Target::Direct(0x40bdcf)=>format!("cpu.call_activation(rt,{next},0,|rt,c|startup_second_lock(rt,c,inputs,true,&mut held))?;"),
+ Target::Direct(0x40b409)=>format!("cpu.call_activation(rt,{next},0,|rt,c|locale_reference_cleanup(rt,c,inputs,&mut held))?;"),
+ Target::Direct(0x407d50)=>"return Err(\"locale reference free effect unbound\");".into(),
+ Target::Direct(0x4077ff)=>"return Err(\"locale reference null termination unbound\");".into(),
+ Target::Direct(0x40be17)=>"return Err(\"reference inline cleanup requires owned call\");".into(),
+ _=>return Err(format!("reference helper call {pc:x} {t:?}"))})
+        },
+        &std::collections::BTreeMap::from([(0x41c7b8, "CrtRegionKind::Module".into())]),
+        512,
+        |pc, op| {
+            use crate::crt_stream_ir::Op;
+            match op{
+ Op::LockedExchangeAdd{destination:crate::graph::Operand::Memory(a,32),source} if pc==0x40b3d8=>{let address=crate::crt_stream_emit::address(a,&Default::default())?;Ok(format!("b.authority(rt,epoch)?;let lease=held.ok_or(\"locale reference lock missing\")?;let pointer={address};cpu.exchange_add_reference(rt,inputs.init,inputs.image,lease,pointer,{})?;",source.index))},
+ Op::LockedIncrement(_) if pc==0x40b3f5=>Ok("b.authority(rt,epoch)?;let lease=held.ok_or(\"locale reference lock missing\")?;let pointer=rt.module_word_pointer(inputs.image,cpu.r[6])?;cpu.increment_reference(rt,inputs.init,inputs.image,lease,pointer)?;".into()),
+ _=>Ok("return Err(\"reference unresolved thread effect\");".into())}
+        },
+        |pc, _| {
+            let mut code = String::new();
+            if pc == 0x40b414 {
+                code.push_str("if held.is_some(){return Err(\"reference epilog lock still held\");}return locale_reference_epilog(rt,cpu,epoch,&mut b);");
+            }
+            if matches!(pc, 0x40b3d8 | 0x40b3cd) {
+                let reg = if pc == 0x40b3d8 { 6 } else { 3 };
+                code.push_str(&format!("cpu.r[{reg}]=CrtValue::Pointer(rt.module_word_pointer(inputs.image,cpu.r[{reg}])?);"));
+            }
+            Ok(code)
+        },
+        |_, _| Ok(None),
+        Some(g.end),
+    )?;
+    let terminal = format!("if pc=={}{{return Ok(cpu.r[0]);}}", g.end);
+    if !body.contains(&terminal) {
+        return Err("reference terminal missing".into());
+    }
+    let body = body.replace(
+        &terminal,
+        &format!(
+            "if pc=={}{{return Err(\"reference terminal trap\");}}",
+            g.end
+        ),
+    );
+    out.push_str(&format!("fn locale_reference_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;let sp=CrtCpu::pointer(cpu.entry[4])?;let arg=rt.load(rt.offset(sp,4)?,32)?;let pointer=CrtCpu::pointer(arg)?;let view=rt.heap_ptds.iter().find(|v|v.pointer==pointer&&v.layout==CrtPtdLayout::Ucrt).ok_or(\"reference UCRT allocation view\")?;rt.heap_ptd_layout_view(pointer,view.slot,CrtPtdLayout::Ucrt)?;if rt.fls.get(&view.slot.index).map(|x|x.1)!=Some(arg){{return Err(\"reference UCRT publication\");}}for(address,expected)in[(0x40b38au32,&{bytes:?}[..]),(0x401e60,&{helper:?}[..])]{{let q=rt.process_image_code(inputs.image,address,expected.len()as u32)?;if rt.memory.read(q.address(),expected.len()as u32).map_err(|_|\"reference code read\")?!=expected{{return Err(\"locale reference code changed\");}}}}let mut b=CrtNormalBinding::bind_initializing(rt,cpu,epoch,locale_reference_epilog_layout(),inputs.init)?;let mut held=None;{body}}}"));
+    Ok(out)
 }

@@ -74,6 +74,11 @@ pub(crate) enum Op {
     IncrementMemory(Operand),
     /// Requires a consumer-supplied exclusive ownership/atomic effect contract.
     LockedIncrement(Operand),
+    /// Requires an independently bound exclusive memory-effect contract.
+    LockedExchangeAdd {
+        destination: Operand,
+        source: Reg,
+    },
     DecrementMemory(Operand),
     StoreString {
         width: u8,
@@ -193,6 +198,17 @@ fn extended(i: &Instruction, raw: &[u8], tables: &[JumpTable<'_>]) -> Result<Op,
         && i.segment_prefix() == Register::None
     {
         return Ok(Op::LockedIncrement(operand_from_move(i, 0)?));
+    }
+    if i.has_lock_prefix()
+        && i.code() == Code::Xadd_rm32_r32
+        && raw.first() == Some(&0xf0)
+        && i.op0_kind() == OpKind::Memory
+        && i.segment_prefix() == Register::None
+    {
+        return Ok(Op::LockedExchangeAdd {
+            destination: operand_from_move(i, 0)?,
+            source: full(i.op1_register())?,
+        });
     }
     if i.has_lock_prefix() {
         if raw.first() != Some(&0xf0)

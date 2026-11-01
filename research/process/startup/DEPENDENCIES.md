@@ -1,6 +1,21 @@
 # Remaining entry-to-exit dependencies
 
-## Current executable checkpoint: callback10 aligned activation
+## Current executable checkpoint: original multibyte reference helper
+
+The explicit native entry now executes CALL0x40b25a to0x40b38a, its registered
+EH4 frame, checked UCRT reads, supported reference/lock effects and normal epilog.
+It returns to0x40b25f and rejects before the next argument push/code-page caller.
+The initialized flag remains zero. [Current contract and tests](LOCALE-REFERENCE.md).
+Shared LOCK XADD has checked old-value, wrapping-sum and flag semantics under an
+exclusive single-guest-thread lease; default emission still rejects unbound
+atomic effects. Heap-reference free and null termination remain explicit rejected
+paths with prior effects preserved. Full startup/rcedit/default admission remains
+unproved. The next connected gate is original selector0x40afbc/GetACP under the
+declared65001 native profile, without general Windows ACP assumptions.
+
+## Earlier checkpoint: aligned activation
+
+
 
 The explicit UTF-8 native launch (process code page65001) now captures real Linux
 argv once and constructs a canonical MSVC command line. It does not recover an

@@ -56,6 +56,14 @@ impl CrtCpu{
   let callback=match value{CrtValue::Scalar{bits:0,known:u32::MAX}=>None,CrtValue::Scalar{bits,known:u32::MAX}=>Some((image,rt.process_image_code(image,bits,1)?)),CrtValue::Pointer(p)=>{if rt.process_image_code(image,p.address(),1)?!=p{return Err("CRT FLS callback image/alias");}Some((image,p))},_=>return Err("CRT FLS callback provenance")};
   let id=rt.native_fls_allocate(init,callback)?;self.clobber(CrtValue::scalar(id.index));self.finish_pop(rt,4)
  }
+ /// LOCK XADD returns the prior memory word in the source register. All
+ /// knowledge/lifetime checks precede the write; flags use the original sum.
+ fn exchange_add_reference(&mut self,rt:&mut CrtStreamRuntime,init:CrtInitialization,image:CrtProcessImage,lease:CrtGlobalLock,p:CrtPointer,register:usize)->Result<(),&'static str>{
+  let addend=self.r.get(register).ok_or("CRT XADD register")?.known_scalar()?;
+  let old=rt.add_module_reference(init,image,lease,p,addend)?;
+  self.binary(rt,1,CrtValue::scalar(old),CrtValue::scalar(addend),32)?;
+  self.r[register]=CrtValue::scalar(old);Ok(())
+ }
  fn increment_reference(&mut self,rt:&mut CrtStreamRuntime,init:CrtInitialization,image:CrtProcessImage,lease:CrtGlobalLock,p:CrtPointer)->Result<(),&'static str>{
   let old=rt.increment_module_reference(init,image,lease,p)?;let cf=self.flags.cf;
   self.binary(rt,1,CrtValue::scalar(old),CrtValue::scalar(1),32)?;self.flags.cf=cf;Ok(())

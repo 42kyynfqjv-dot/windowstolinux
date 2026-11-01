@@ -109,10 +109,22 @@ fn locked_increment_needs_a_consumer_effect_contract() {
         16
     )
     .is_err());
+    let xadd = Graph::decode(&[0xf0, 0x0f, 0xc1, 0x06, 0xc3], 0x1000).unwrap();
+    assert!(matches!(
+        xadd.nodes[&0x1000].op,
+        Op::LockedExchangeAdd { .. }
+    ));
+    assert!(crate::crt_stream_emit::emit_body(
+        &xadd,
+        |_, _| Err("call".into()),
+        &Default::default(),
+        16
+    )
+    .is_err());
     for bytes in [
         &[0xf0, 0x66, 0xff, 0x00, 0xc3][..],
         &[0xf0, 0xff, 0xc0, 0xc3],
-        &[0xf0, 0x0f, 0xc1, 0x00, 0xc3],
+        &[0xf0, 0x66, 0x0f, 0xc1, 0x00, 0xc3],
     ] {
         assert!(Graph::decode(bytes, 0x1000).is_err());
     }
