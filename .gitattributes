@@ -64,3 +64,6 @@ research/process/startup/*.py text eol=lf
 research/process/startup/*.c text eol=lf
 # Embedded startup profile manifests are frozen compiler inputs on both hosts.
 research/process/startup/*.manifest text eol=lf
+
+# Raw PE32 FP observations retain their original CRLF bytes for SHA256 verification.
+research/process/startup/evidence/fp-control-windows-da1d3bd.jsonl -text

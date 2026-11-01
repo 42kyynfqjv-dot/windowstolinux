@@ -32,7 +32,35 @@
   "owned_effect_cases": 23,
   "emitted_wait_store_cases": 4,
   "native_instruction_comparisons": 12,
-  "windows_fp_observations": "pending new workflow; no observed count claimed",
+  "windows_fp_observations": {
+    "kind": "Windows PE32 FP instruction observations",
+    "source_sha256": "e0f65b42159bb16de8fe22a6b5615d7f1368827d99a331354bb220ec19bded30",
+    "pe_sha256": "bb07785522668bf94fbcf5a84cb32fbbef20aeff251140104648076c04d1ae10",
+    "observations_sha256": "5cbde4cd916a635440113e79ed1b2d875d2568a88ad62d3e8cda16429e3b6215",
+    "cases": 12,
+    "command": [
+      "cl",
+      "/nologo",
+      "/W4",
+      "/WX",
+      "/O2",
+      "/MT",
+      "D:\\a\\windowstolinux\\windowstolinux\\research\\process\\startup\\observe_fp_control.c",
+      "/Fe:fp_control.exe",
+      "/link",
+      "/MACHINE:X86",
+      "kernel32.lib"
+    ],
+    "scope": "Authored PE32 defined-bit ISA observations; no original-entry capture, no whole-PE pairs",
+    "run": 41352824230,
+    "job": 124986487622,
+    "artifact": 13102241023,
+    "head": "da1d3bd45c0e14769e2c43257aa9195c03f24988",
+    "matching_linux_instruction_rows": 12,
+    "compiler_full_version": 194435229,
+    "host": "windows-2022 GitHub runner; not XP/7 equivalence",
+    "raw_path": "fp-control-windows-da1d3bd.jsonl"
+  },
   "whole_pe_pairs": 0,
   "linux_observations_sha256": "e065835cbeab5d4cdfd39fb9e44d9c22f4f5e871eb4859f29d81682d5a3d9be4",
   "probe_source_sha256": "e0f65b42159bb16de8fe22a6b5615d7f1368827d99a331354bb220ec19bded30",
@@ -53,12 +81,13 @@
   ],
   "verification": {
     "focused_FP_tests": 9,
-    "previous_CRT_aggregate": "340 pass / 2 ignored, before final WAIT correction and added native comparison",
-    "unwind": 185,
-    "python": "103 tests, 1 skip",
+    "unwind": "185 passed",
+    "python": "104 tests, 1 skip including retained Windows provenance",
     "clippy": "pass all targets warnings denied",
-    "canonical": "passed before final WAIT correction; coherent final replay required",
+    "canonical": "final source replay in progress; no full-CI conclusion yet",
     "word_low_stack": "all152 pass,512KiB with64KiB environment padding",
-    "prior_head_CI": "bf95b1f all3 workflows passed"
+    "prior_head_CI": "bf95b1f all3 workflows passed",
+    "CRT_aggregate": "341 passed / 2 ignored at da1d3bd after final WAIT correction; ignored gates exercised by separate artifact replay",
+    "prior_CRT_aggregate": "340 passed / 2 ignored before WAIT correction; retained intermediate result"
   }
 }

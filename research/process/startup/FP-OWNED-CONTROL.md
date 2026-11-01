@@ -71,9 +71,12 @@ are retained locally. SHA256: Vol2A `71f69c75ae9ce3d4a103333266ac2f22d44f097e5b3
 Vol2B `036ae35aec4da9dd54ba3b683547f09963f69609a3b98eae15586a692c4cd3d2`,
 Vol2C `eb6b8645764f417ee1ccfb4f3df5b24e0a9d0ba488317b1e9d437d0a4e735e91`.
 `observe_fp_control.c` saves/restores its complete FP state around each authored
-instruction block. Twelve Linux observations are retained; Windows PE32/MSVC
-14.44 observations are collected by the existing workflow. Their status must be
-reported from the actual run, never inferred from protocol unit tests. These
+instruction block. Twelve Linux observations and twelve Windows PE32/MSVC14.44 observations
+are retained and their parsed instruction rows match. Windows run41352824230,
+job124986487622, artifact13102241023 belongs to implementation head da1d3bd.
+Source, PE and original CRLF output hashes were independently checked; see
+[evidence](evidence/fp-owned-control.json) and
+[raw Windows rows](evidence/fp-control-windows-da1d3bd.jsonl). These
 observations establish only the tested instruction cases, not loader state or
 initial Windows thread acquisition. Raw output is retained before validation.
 
@@ -83,3 +86,21 @@ MOVZX lowering could preserve partial knowledge more precisely, but doing so
 alone cannot establish the missing control/MXCSR values. Full deferred x87
 exceptions, EH4/DAZ loading, resource failures, full startup/rcedit/default
 admission and historical Windows launch-timeout causes remain unresolved.
+
+## Validation checkpoint
+
+At implementation commit `da1d3bd`, the final CRT aggregate passes 341 tests
+(two artifact-dependent gates run separately), all nine FP tests pass, and
+185 unwind tests pass. Clippy passes for all targets with warnings denied.
+The evidence/protocol suite passes 104 tests with one skip. The unchanged
+152-case stack gate also passes with its 512 KiB limit and 64 KiB environment
+padding. A fresh coherent artifact replay is running; its completion and the
+three current GitHub workflows must be checked independently. No final CI pass
+is inferred from the successful Windows instruction probe.
+
+Independent Sol review should inspect owned context and feature premises,
+undefined-condition knowledge (including FWAIT), no-read versus checked-store
+failure ordering, original call/return and precision-only loader exclusion,
+partial effects, and the unknown actual-entry boundary. The remaining initial
+state producer and deferred-exception semantics need a bounded design pass;
+more supplied-state examples alone cannot close acquisition.
