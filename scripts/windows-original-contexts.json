@@ -1,0 +1,11 @@
+{
+  "scope": "Fixed original-launch diagnosis only; these hashes never grant converter support",
+  "source_commit": "6daf5ad5a98ea786084ea86ad1f5077cb8f765f2",
+  "images": {
+    "corpus0": "ed3cbff6115a348caa3b8618cd0fc7fd1a3e0ceb826745d1888f1f41844cbb4c",
+    "corpus1": "52b0377c5641d44a3dc2dd1e916fb96b91851556a11dd8bce01daa4edc14299b",
+    "output-probe": "7e93a771370cfd33aaf44e59b8c8656be77e4ac715176bf924a90034bae57e33"
+  },
+  "plan": "3 repetitions, corpus0 then corpus1 in same system-temp case.exe followed by output-probe.exe in owned checkout-volume directory; 9 mandatory samples, no retries; timeout15s unchanged",
+  "prior_evidence": "research/process/startup/evidence/windows-launch-6daf5ad.json"
+}
