@@ -1,5 +1,8 @@
 # Original thread-locale mode-zero query
 
+This records e90af45. See [current boolean/environment entry](BOOLEAN-ENV-ENTRY.md)
+for subsequent execution progress.
+
 The original startup argument0 enters0x407158 through CALL0x4015da. Its unchanged
 98-byte body calls the unchanged required wrapper0x40a2e1, which calls the existing
 registered/lazy UCRT PTD getter0x40a332. The canonical 868-byte UCRT allocation,

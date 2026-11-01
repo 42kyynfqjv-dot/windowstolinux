@@ -1,6 +1,19 @@
 # Remaining entry-to-exit dependencies
 
-## Current executable checkpoint: original thread-locale query
+## Current executable checkpoint: boolean return and original environment entry
+
+Original CALL0x4015e0→0x401bd5 executes MOV AL,1; RET with upper-EAX knowledge,
+flags and return authority preserved. The original caller TEST/branch enters
+CALL0x4015e9→0x406c9c; its original tail JMP0x406a0b observes the initialized
+pointer and reuses the original locale initializer. The actual environment
+producer prolog at0x40b966 executes, then rejects **before IAT CALL0x40b96e
+GetEnvironmentStringsW (0x4150e4)**. No environment block is acquired/published.
+
+[Contract and evidence](BOOLEAN-ENV-ENTRY.md). Next establish owned UTF16
+snapshot/acquisition/free and conversion/failure contracts. Full startup/rcedit,
+default admission and historical timeout causes remain unresolved.
+
+## Previous executable checkpoint: original thread-locale query
 
 Original mode0 CALL0x4015da→0x407158 runs its actual required-PTD wrapper,
 registered/lazy canonical getter, +848 flag read, SETE/INC, return and caller

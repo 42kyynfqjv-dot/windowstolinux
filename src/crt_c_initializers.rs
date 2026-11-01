@@ -16,6 +16,10 @@ pub(crate) const APP_TYPE: &str = "8bff558bec8b4508a338cd41005dc3";
 pub(crate) const GET_MODE: &str = "b800400000c3";
 pub(crate) const SET_MODE:&str="8bff558bec8b45083d0040000074233d00800000741c3d000001007415e8550c0000c70016000000e8cc0a00006a16585dc3b9bcd24100870133c05dc3";
 pub(crate) const ZERO: &str = "33c0c3";
+pub(crate) const TRUE_BYTE: &str = "b001c3";
+pub(crate) const ENV_THUNK: &str = "e96afdffff";
+pub(crate) const ENV_PREFIX: &str = "833d48ce410000740333c0c356e80d4a0000e8444f0000";
+pub(crate) const ENV_PRODUCER_PREFIX: &str = "8bff558bec515156";
 pub(crate) const GET_COMMODE: &str = "b884ce4100c3";
 pub(crate) const ONEXIT:&str="558bec803d85cc4100007404b0015dc3568b750885f6740583fe017562e81f08000085c0742685f675226888cc4100e84a5b00005985c0750f6894cc4100e83b5b00005985c0742b32c0eb3083c9ff890d88cc4100890d8ccc4100890d90cc4100890d94cc4100890d98cc4100890d9ccc4100c60585cc410001b0015e5dc36a05e833020000cc";
 pub(crate) const OPTIONS: &str = "e869f6ffff8b4804830824894804e8e7ffffff8b4804830802894804c3";
@@ -110,10 +114,13 @@ fn startup_c_array_platform(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&Crt
     out.push_str(&crate::crt_argv::source()?);
     out.push_str(&post_source()?);
     out.push_str(&thread_locale_source()?);
+    out.push_str(&environment_prefix_source()?);
+    out.push_str(&environment_producer_source()?);
     for (name, at, literal) in [
         ("cinit_app_type", 0x40662e, APP_TYPE),
         ("cinit_get_mode", 0x401bc3, GET_MODE),
         ("cinit_zero", 0x401bbc, ZERO),
+        ("cinit_true_byte", 0x401bd5, TRUE_BYTE),
         ("cinit_get_commode", 0x4071ff, GET_COMMODE),
         ("cinit_options_get", 0x401270, OPTIONS_GET),
         ("cinit_scan_get", 0x401bfc, SCAN_GET),
@@ -219,9 +226,12 @@ fn startup_c_array_platform(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&Crt
     let g = cut_graph(
         &bytes,
         0x40155a,
-        0x4015e0,
+        0x4015ee,
         &[
-            (0x4015e0, "C initializer next callback unbound at0x4015e0"),
+            (
+                0x4015ee,
+                "C initializer post-environment continuation unbound at0x4015ee",
+            ),
             (0x4015fd, "C initializer fatal path unbound at 0x4015fd"),
         ],
     )?;
@@ -234,6 +244,8 @@ fn startup_c_array_platform(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&Crt
                 Target::Direct(0x4066b0) => "cinit_encode_callback",
                 Target::Direct(0x401bf9) => "cinit_post_noop",
                 Target::Direct(0x401bd8) => "cinit_fp_prefix",
+                Target::Direct(0x401bd5) => "cinit_true_byte",
+                Target::Direct(0x406c9c) => return Ok(format!("let e=epoch.as_deref_mut().ok_or(\"environment registry context absent\")?;let p=platform.ok_or(\"environment platform absent\")?;cpu.call_activation(rt,{},0,|rt,c|cinit_environment_thunk(rt,c,inputs,p,e))?;",pc+g.nodes[&pc].length)),
                 Target::Direct(0x407158) => return Ok(format!("let e=epoch.as_deref_mut().ok_or(\"thread locale live registry absent\")?;let p=platform.ok_or(\"thread locale platform absent\")?;cpu.call_activation(rt,{},0,|rt,c|cinit_thread_locale_query(rt,c,inputs,p,e))?;",pc+g.nodes[&pc].length)),
                 Target::Direct(0x401bbf) => "argv_mode_original",
                 Target::Direct(0x4069d4) => return Ok(format!("cpu.call_activation(rt,{},0,|rt,c|argv_configure_wrapper(rt,c,inputs,platform,epoch.as_deref_mut()))?;",pc+g.nodes[&pc].length)),
@@ -436,4 +448,117 @@ for mode in 0..10{one(mode);}
 "#,
         "thread-locale-query",
     );
+}
+
+fn environment_prefix_source() -> Result<String, String> {
+    let bytes = crate::crt_ptd::raw(ENV_PREFIX);
+    let g = cut_graph(
+        &bytes,
+        0x406a0b,
+        0x406a22,
+        &[(
+            0x406a22,
+            "original environment result continuation unbound at0x406a22",
+        )],
+    )?;
+    let body = crate::crt_stream_emit::emit_body(
+        &g,
+        |pc, t| {
+            if t == Target::Direct(0x40b966) {
+                return Ok(format!(
+                    "cpu.call_activation(rt,{},0,|rt,c|cinit_env_producer_prefix(rt,c,inputs))?;",
+                    pc + 5
+                ));
+            }
+            if t != Target::Direct(0x40b42a) {
+                return Err("environment locale initialization target".into());
+            }
+            Ok(format!("cpu.call_activation(rt,{},0,|rt,c|locale_startup_original(rt,c,inputs,platform,epoch))?;",pc+5))
+        },
+        &BTreeMap::from([(0x41ce48, "CrtRegionKind::Module".into())]),
+        64,
+    )?;
+    let thunk = crate::crt_ptd::raw(ENV_THUNK);
+    let node = Graph::decode_instruction(&thunk, 0x406c9c)?;
+    if node.op != Op::Ordinary(crate::graph::Operation::Jump(0x406a0b)) {
+        return Err("environment original tail target".into());
+    }
+    Ok(format!("fn cinit_environment_prefix(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:&CrtNativePlatform,epoch:&mut NormalCallEpoch<'_>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;{}{body}}}fn cinit_environment_thunk(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:&CrtNativePlatform,epoch:&mut NormalCallEpoch<'_>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;{}cinit_environment_prefix(rt,cpu,inputs,platform,epoch)}}",guard(0x406a0b,&bytes),guard(0x406c9c,&thunk)))
+}
+
+#[test]
+fn original_boolean_helper_preserves_upper_knowledge_flags_and_return_authority() {
+    let raw = crate::crt_ptd::raw(TRUE_BYTE);
+    let g = Graph::decode(&raw, 0x401bd5).unwrap();
+    let body = crate::crt_stream_emit::emit_body(
+        &g,
+        |_, _| Err("unexpected call".into()),
+        &Default::default(),
+        8,
+    )
+    .unwrap();
+    let extra=format!("fn helper(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->Result<CrtValue,&'static str>{{cpu.validate_active(rt)?;{body}}}");
+    crate::crt_stream_callees_tests::native_bounded_stack(
+        &extra,
+        r#"
+#[inline(never)]fn one(mode:u32){let(mut rt,_)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();let stack=rt.map_region(0x10000,1024,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,512).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(81)).unwrap();let mut c=CrtCpu::new(sp,81).unwrap();let bits=[0,0xffffffff,0x12345678,0xaabbccdd][(mode%4)as usize];let known=if mode==4{0}else if mode==5{0xffff0000}else{u32::MAX};c.r[0]=CrtValue::Scalar{bits:bits&known,known};c.flags=CrtFlags{cf:Some(true),zf:None,sf:Some(false),of:Some(true)};let saved=c.r;let flags=(c.flags.cf,c.flags.zf,c.flags.sf,c.flags.of);if mode==6{rt.tags.insert(sp.address(),CrtValue::ProtectedReturn(82));}let got=helper(&mut rt,&mut c);if mode==6{assert!(got.is_err());assert!(!c.returned);assert_eq!(c.r,saved);}else{assert_eq!(got,Ok(CrtValue::Scalar{bits:(bits&known&!255)|1,known:known|255}));assert!(c.returned);for n in[1,2,3,5,6,7]{assert_eq!(c.r[n],saved[n]);}assert!(helper(&mut rt,&mut c).is_err());}assert_eq!((c.flags.cf,c.flags.zf,c.flags.sf,c.flags.of),flags);}
+for mode in 0..7{one(mode);}
+"#,
+        "original-bool-helper",
+    );
+}
+
+#[test]
+fn environment_prefix_observes_init_flag_and_preserves_prior_callback_failure_effects() {
+    let bytes = crate::crt_ptd::raw(ENV_PREFIX);
+    let g = cut_graph(
+        &bytes,
+        0x406a0b,
+        0x406a1d,
+        &[(0x406a1d, "environment acquisition unsupported")],
+    )
+    .unwrap();
+    let body = crate::crt_stream_emit::emit_body(
+        &g,
+        |pc, t| {
+            assert_eq!(t, Target::Direct(0x40b42a));
+            Ok(format!(
+                "cpu.call_activation(rt,{},0,|rt,c|callback(rt,c))?;",
+                pc + 5
+            ))
+        },
+        &BTreeMap::from([(0x41ce48, "CrtRegionKind::Module".into())]),
+        64,
+    )
+    .unwrap();
+    let extra=format!("fn prefix(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,callback:&mut impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu)->Result<CrtValue,&'static str>)->Result<CrtValue,&'static str>{{cpu.validate_active(rt)?;{body}}}");
+    crate::crt_stream_callees_tests::native_bounded_stack(
+        &extra,
+        r#"
+#[inline(never)]fn one(mode:u32){let(mut rt,_)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();let cell=rt.map_region(0x41ce48,4,CrtRegionKind::Module,None).unwrap();rt.store(cell,32,if mode==2{CrtValue::Scalar{bits:0,known:0}}else{CrtValue::scalar(u32::from(mode==0))}).unwrap();let marker=rt.map_region(0x420000,4,CrtRegionKind::Module,Some(&[0;4])).unwrap();let stack=rt.map_region(0x10000,1024,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,512).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(91)).unwrap();let mut c=CrtCpu::new(sp,91).unwrap();let saved=c.r;let mut calls=0;let got=prefix(&mut rt,&mut c,&mut|rt,c|{calls+=1;rt.store(marker,32,CrtValue::scalar(77))?;if mode==3{return Err("injected callback failure");}c.clobber(CrtValue::scalar(1));c.finish(rt)});
+ if mode==0{assert_eq!(got,Ok(CrtValue::scalar(0)));assert!(c.returned);assert_eq!(calls,0);for n in[3,5,6,7]{assert_eq!(c.r[n],saved[n]);}assert_eq!((c.flags.cf,c.flags.zf,c.flags.sf,c.flags.of),(Some(false),Some(true),Some(false),Some(false)));}else{assert_eq!(got,Err(if mode==2{"CRT unknown scalar bits observed"}else if mode==3{"injected callback failure"}else{"environment acquisition unsupported"}));assert!(!c.returned);assert_eq!(calls,u32::from(mode!=2));if mode!=2{let sp=CrtCpu::pointer(c.r[4]).unwrap();if mode==3{assert!(matches!(rt.load(sp,32).unwrap(),CrtValue::ProtectedReturn(_)));assert_eq!(rt.load(rt.offset(sp,4).unwrap(),32).unwrap(),saved[6]);}else{assert_eq!(rt.load(sp,32).unwrap(),saved[6]);}assert_eq!(rt.load(marker,32).unwrap(),CrtValue::scalar(77));}else{assert_eq!(c.r[4],saved[4]);assert_eq!(rt.load(marker,32).unwrap(),CrtValue::scalar(0));}}
+}for mode in 0..4{one(mode);}
+"#,
+        "env-prefix",
+    );
+}
+
+fn environment_producer_source() -> Result<String, String> {
+    let bytes = crate::crt_ptd::raw(ENV_PRODUCER_PREFIX);
+    let g = cut_graph(
+        &bytes,
+        0x40b966,
+        0x40b96e,
+        &[(
+            0x40b96e,
+            "GetEnvironmentStringsW acquisition unbound at0x40b96e",
+        )],
+    )?;
+    let body = crate::crt_stream_emit::emit_body(
+        &g,
+        |_, _| Err("environment producer prefix unexpected call".into()),
+        &Default::default(),
+        32,
+    )?;
+    Ok(format!("fn cinit_env_producer_prefix(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;{}{body}}}",guard(0x40b966,&bytes)))
 }
