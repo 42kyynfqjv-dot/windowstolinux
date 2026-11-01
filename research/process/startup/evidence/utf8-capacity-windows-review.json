@@ -1,0 +1,64 @@
+{
+  "implementation_commit": "a4c155336dd774be8821bf482ca874111510edc9",
+  "run": 41332040104,
+  "job": 124923992596,
+  "artifact": 13094385278,
+  "artifact_zip_sha256": "546a5a40bba8bbee9416fdb00a4cee68a9ad939520492ac445aac091ed257024",
+  "workflow_runner": "windows-2022; moving hosted image, not a pinned Windows build or XP/7 evidence",
+  "trace": "utf8-capacity-windows-a4c1553.jsonl",
+  "trace_sha256": "94e18f9c7a6f49141d8e9d9d56351df19a5e19c2ca030444388c950ff58a504d",
+  "API_rows": 158,
+  "header_records": 1,
+  "report_sha256": "70ddc8709f4a25b57edf0b4bd50ce554c118f67992e76658f5f48b150076de45",
+  "windows_rebuilt_PE_sha256": "d0c6c278ce0ba7869064cb8da1fa05ccd78452becbcdfc23bebc857f766d4469",
+  "local_frozen_PE_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "identical_emitted_Rust_sha256": "851555e8ff75fe3da1c49b52679b890b84b43487bede2e38b34abfed82392536",
+  "scope": "Direct original-Windows API observations and five retained wrapper component comparisons. Windows rebuilt its own authored PE; not the same full PE as local input. Zero new whole-PE pairs.",
+  "Linux_only_original_image_wrapper_cases": 6,
+  "Windows_original_image_wrapper_cases": 0,
+  "hypotheses_frozen_before_download": {
+    "frozen_before_new_capacity_observations": true,
+    "scope": "observational hypotheses only; no native error implementation or equivalence claim",
+    "flags0_capacity": "distinguish raw byte-prefix truncation from maximum whole-UTF8-codepoint prefix; prior cap2 row alone could not distinguish them",
+    "strict_invalid": "distinguish post-conversion validation/error1113 from prevalidation/no replacement, and inspect error122 versus1113 precedence at short capacities",
+    "query": "record whether strict invalid capacity0 fails or only counts; do not infer from full-capacity behavior",
+    "gate": "new error bindings need supported observable state/effect semantics, not fixture-content matching. Existing complete-fit writes do not admit these errors."
+  },
+  "finite_failure_observations": {
+    "scope": "finite original Windows API observations; hypothesis comparisons, not a production failure contract",
+    "trace_sha256": "94e18f9c7a6f49141d8e9d9d56351df19a5e19c2ca030444388c950ff58a504d",
+    "records": 158,
+    "failed_output_records": 98,
+    "all_failure_outputs_contiguous": true,
+    "all_failure_outputs_whole_replacement_prefix": true,
+    "all_failure_outputs_maximum_fit_prefix": true
+  },
+  "strict_invalid_queries": [
+    {
+      "label": "high-first",
+      "result": 0,
+      "error": 1113
+    },
+    {
+      "label": "invalid-middle",
+      "result": 0,
+      "error": 1113
+    },
+    {
+      "label": "invalid-tail",
+      "result": 0,
+      "error": 1113
+    },
+    {
+      "label": "alternating",
+      "result": 0,
+      "error": 1113
+    }
+  ],
+  "limits": [
+    "No production strict/insufficient-capacity error implementation.",
+    "98 failed nonzero-capacity rows all show maximum whole-replacement-codepoint prefix in this finite matrix; not a universal contract.",
+    "Raw flags0x10 result2 remains in the separate retained15-case trace, not admitted here.",
+    "No full startup/rcedit/default admission or XP/7 claim; historical timeouts unresolved."
+  ]
+}

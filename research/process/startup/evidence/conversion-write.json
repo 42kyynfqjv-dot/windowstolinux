@@ -1,5 +1,5 @@
 {
-  "status": "focused implementation and original-entry component checks passed; aggregate/replay/final-head CI pending",
+  "status": "local aggregates, full replay and fresh deterministic emission passed; implementation Rust CI passed; inventory Linux job still running at evidence snapshot",
   "base_commit": "568c7ed7fbb58bf4aecb79192c30d48d1eeb5783",
   "kind": "original mapped instruction component execution and bounded native API write; no whole-PE translation",
   "local_frozen_pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
@@ -56,8 +56,7 @@
     "write_storage_scenarios": 10,
     "write_API_scenarios": 6,
     "original_image_wrapper_Linux_scenarios": 6,
-    "new_capacity_Windows_cases_planned": 158,
-    "new_capacity_Windows_actual": "pending; metadata typecheck not execution",
+    "new_capacity_Windows_actual": 158,
     "base_retained_Windows_API_cases": 15,
     "retained_recorded_Windows_wrapper_comparisons": 5,
     "new_whole_PE_pairs": 0
@@ -69,5 +68,104 @@
     "growth/reset/free/errno effects unbound",
     "full startup/rcedit/default admission unsupported",
     "historical Windows timeout causes unresolved"
-  ]
+  ],
+  "implementation_commit": "a4c155336dd774be8821bf482ca874111510edc9",
+  "checks": {
+    "root_Rust": 182,
+    "CRT_Rust": 333,
+    "CRT_ignored_artifact_gates": 2,
+    "CRT_ignored_gates_executed_by_full_replay": true,
+    "unwind_Rust": 185,
+    "startup_Python": 99,
+    "startup_Python_skips": 1,
+    "tools_Python": 106,
+    "corpus_Python": 18,
+    "corpus_Python_skips": 1,
+    "clippy_all_targets_warnings_denied": "passed",
+    "format": "passed",
+    "focused_argv_test_functions": 6,
+    "capacity_protocol_test_functions": 3,
+    "capacity_protocol_mutation_modes": 11,
+    "metadata_typecheck": "passed; not Windows execution",
+    "log_sha256": {
+      "root": "10fd403e84f7faf9e5844a51dbacf9b0185f33944a48fb482ec9db891782528e",
+      "crt": "009098816763b413f2d9556bbb888189f910756a5c9fb41c67ea6045575e21c0",
+      "unwind": "85ceebd1a596debd3c05f8bbaaec9a715c1a10f75b2a885c69e3b1c85ea64178",
+      "startup-python": "b546a303fccbd73f91e85fef94e73749928224a5e66266e8e892d0dd490ef753",
+      "tools-python": "0888e824760dd56e4676bdd2dd77d1b0243c76d2de90adffcd5598149ba5d81d",
+      "corpus-python": "479a0bcf1ae7495c8b705af01cb2b7c3b9d3f58c9d96a038df8c0b505bb27e3d",
+      "clippy": "340705305371abc558adf10782bc16c5148335b3866994d5839c8d4e0aa59b2d",
+      "fmt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "replay": "cd1e6b067c9b8ddd9d6456c589624a588ce0e97e2e3ffd6910848a14bb182d2f",
+      "fresh-identical": "dcd73a604d5fa51d15664bf678bdafde2bf1b188846a12134ab232123d77b523",
+      "argv-components": "6b34bc2819ee4ec632fb58ba214da8d710318bf5e4940da5c5852823d9f83dc1",
+      "protocol": "fa97c80fc3eb7334a7712f41052656d9ec705f0053004a58704211e91a7526ad",
+      "windows-capacity-typecheck": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "local_replay": {
+    "kind": "original prolog/epilog component comparison with explicit unexecuted body boundary",
+    "comparisons": 5,
+    "whole_PE_pairs": 0,
+    "PE_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+    "emitted_Rust_sha256": "851555e8ff75fe3da1c49b52679b890b84b43487bede2e38b34abfed82392536",
+    "report_sha256": "72c83774f1e79e3aba11fcf0e63b7ca868e5900cf3c1fd76db790e0092391006",
+    "fresh_repeat_source_mtime_advanced": true,
+    "fresh_repeat_emission_identical": true,
+    "scope": "Live registry fixture; body EAX/flags inputs; original stack/FS/saved-state restoration only"
+  },
+  "fresh_Windows_evidence": "utf8-capacity-windows-review.json",
+  "CI_snapshot": {
+    "implementation_head": "a4c155336dd774be8821bf482ca874111510edc9",
+    "Rust_PR": {
+      "run": 41332043466,
+      "conclusion": "success"
+    },
+    "Rust_push": {
+      "run": 41332039882,
+      "conclusion": "success"
+    },
+    "inventory": {
+      "run": 41332040104,
+      "conclusion": null,
+      "pending_job": 124928241198,
+      "Windows_probe_job": "success"
+    },
+    "scope": "These run IDs belong to implementation head; a later documentation-only final head requires its own check status."
+  },
+  "review": {
+    "source_hashes_rechecked": true,
+    "complete_word_copy_index": "preflight excludes partial/control tags before32-bit stores; whole ordinary words lose old authority",
+    "source_read_provenance": "selected units freshly read at each call; read fact revalidated before first output write; no callback/concurrent guest writer in supported domain",
+    "query_copy_separation": "query grants no cached source or output authority",
+    "error_domain": "insufficient/strict effects reject internally; no fake guest error return or atomic-buffer equivalence",
+    "prior_effects": "actual cookie failure preserves completed bytes without successful return/publication",
+    "initial_test_compile_failure": "canonical.log: test range inferred i32; corrected range to u32; canonical-v2 passed. Not a production regression.",
+    "publication_recovery": "existing inherited CLI credential and per-command gh auth git-credential helper; no identity/credential/global-security changes"
+  },
+  "next_original_regions": {
+    "argv-counter": {
+      "address": "0x406813",
+      "size": 370,
+      "sha256": "f5e7881a8f4ceb933aef51afb969b6af962f6780180c628d176b82b299e3be78",
+      "call_lines": [
+        "40686c:\te8 ea 4e 00 00       \tcall   0x40b75b",
+        "406944:\te8 12 4e 00 00       \tcall   0x40b75b"
+      ]
+    },
+    "argv-storage": {
+      "address": "0x406985",
+      "size": 79,
+      "sha256": "a19494037020af84e5aa72cdf06f4569c84df988944f19bdd41bd4292488a337",
+      "call_lines": [
+        "4069ba:\te8 31 13 00 00       \tcall   0x407cf0",
+        "4069c3:\te8 88 13 00 00       \tcall   0x407d50"
+      ]
+    }
+  },
+  "reproduction": {
+    "replay": "python3 research/process/startup/check_normal_wrapper.py ORIGINAL_UNWIND ORIGINAL_STDIO OUTPUT",
+    "capacity_validation": "PYTHONPATH=research/process/startup python3 -c 'from utf8_capacity_observations import utf8_capacity_observations; print(utf8_capacity_observations(\"research/process/startup/evidence/utf8-capacity-windows-a4c1553.jsonl\"))'",
+    "note": "Use the documented frozen original artifacts; local replay and Windows rebuilt fixture hashes are distinct."
+  }
 }

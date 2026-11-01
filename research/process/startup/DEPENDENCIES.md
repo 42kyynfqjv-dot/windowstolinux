@@ -13,9 +13,13 @@ bounded owned storage are required; no host ACP or unknown byte is guessed.
 [evidence](evidence/conversion-write.json). Independent byte, storage, ABI and
 original-wrapper cases cover Unicode/NUL, stale/aliased data, control tags and
 writes surviving an actual original cookie failure. Predecessor568c7ed all three
-workflows passed; its raw15Windows API rows were checked independently. New158
-capacity/error observations await WindowsCI; failure buffers are not presumed
-atomic. Strict/insufficient-error/growth/free and broader admission/equivalence
+workflows passed; its raw15Windows API rows were checked independently. Fresh
+Windows run41332040104 supplies158 retained capacity/error observations, with
+raw hash and identical emitted Rust verified. Local aggregates and full replay
+passed, including deterministic repeat emission. Implementation Rust PR/push CI
+passed; the inventory Linux job was still running at this evidence snapshot.
+Failure buffers are not presumed atomic. Strict/insufficient-error/growth/free
+and broader admission/equivalence
 limits remain explicit. Next execute original argument count/parser and owned
 allocation/publication. Fullstartup/rcedit/defaultadmission and historical
 Windows timeout causes remain unresolved; zero new whole-PE pairs.

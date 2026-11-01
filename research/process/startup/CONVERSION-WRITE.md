@@ -84,8 +84,44 @@ failures remain preserved. A separate **158-row Windows capacity matrix** now
 records valid BMP/pair/mixed/embedded-NUL and invalid-position inputs, flags0/128,
 and capacities around each independently frozen byte count. Failure-buffer bytes
 and new strict-invalid outcomes are observations, not guessed atomicity/prefix
-rules. Local Rust metadata typechecking is not Windows execution; actual new
-rows require fresh CI and hash validation. Unsupported flags remain excluded.
+rules. Local Rust metadata typechecking alone was not Windows execution;
+the fresh CI rows were independently validated below. Unsupported flags remain
+excluded.
+
+Fresh implementation-head Windows run **41332040104**, job **124923992596**,
+artifact **13094385278** now supplies those 158 rows. The retained
+[raw trace](evidence/utf8-capacity-windows-a4c1553.jsonl) hashes to
+`94e18f9c7a6f49141d8e9d9d56351df19a5e19c2ca030444388c950ff58a504d`,
+matching the workflow report. In this finite matrix, all 98 failed calls with
+nonzero capacity wrote the maximum whole-codepoint prefix of the replacement
+UTF-8 payload. Strict-invalid queries returned error 1113; short writes observed
+error 122 or 1113 according to the case. These observations do not implement or
+prove a general error-path contract. The moving `windows-2022` runner is not a
+pinned Windows build or XP/7 evidence. [Review and identities](evidence/utf8-capacity-windows-review.json)
+keep the Windows rebuilt PE distinct from the local frozen PE.
+
+## Reviewed local verification
+
+Local aggregates passed: **182 root, 333 CRT and 185 unwind Rust tests**;
+the two artifact-dependent CRT gates were separately executed by the full
+replay. Python suites passed 99 startup tests (one skip), 106 tool tests and
+18 corpus tests (one skip). Clippy with warnings denied and formatting passed.
+
+Full replay and fresh repeat emission passed, with identical Rust SHA-256
+`851555e8ff75fe3da1c49b52679b890b84b43487bede2e38b34abfed82392536`.
+The Windows artifact contains that same emitted Rust. Five retained wrapper
+comparisons remain component evidence; zero whole-PE pairs are claimed. Six
+original image-wrapper scenarios execute only on Linux, separately from the
+Windows API observations and shared native tests. Implementation-head Rust PR
+and push CI passed; the inventory workflow's final Linux job was still running
+at this evidence snapshot. Later documentation-only heads require their own
+CI status.
+
+The next bounded step is original argument counting at `0x406813` and its
+classification calls to `0x40b75b`. The downstream storage helper at `0x406985`
+calls `0x407cf0` and `0x407d50`; allocation and publication remain separate
+gates. The evidence records these original regions' hashes without claiming
+they executed.
 
 [Requirements](evidence/conversion-write-expectations.json),
 [capacity inputs](evidence/utf8-capacity-expectations.json), and
