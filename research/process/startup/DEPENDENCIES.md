@@ -1,27 +1,33 @@
 # Remaining entry-to-exit dependencies
 
-## Current executable checkpoint: original locale comparison and malloc
+## Current executable checkpoint: original stores and repeated copies
 
-The explicit native entry executes40b267 argument cleanup, code-page local store
-and canonical live reference comparison, then original malloc408730/HeapAlloc
-flags0. It receives a distinct544-byte Buffer with unknown bytes and rejects at
-**40b289**, before the original local pointer store. The initialized flag stays0.
-A separately declared matching-code-page case executes the actual aligned epilog
-and callback flag/return without allocating. [Contract and next executable scope](LOCALE-MALLOC.md).
+Under the explicit65001 native profile, original40b289..40b2c4 stores the fresh
+allocation pointer, prepares actual stack arguments and executes both REP MOVSD
+copies through owned private stack into the544-byte buffer. Original AND initializes
+its first word; other knowledge follows only actual source reads/stores. It rejects
+at **40b2c7**, before calling initializer40b485. PTD/global references and the actual
+entry's initialized flag remain unchanged. [Contract and tests](LOCALE-REP.md).
 
-Native flags0 now preserves uninitialized memory; flags8 still zeroes. No new
-PTD/descriptor/locale role follows merely from allocation. Descriptor requests
-still require flags8. Canonical heap publication and opaque identity are checked;
-internal resource failure rejects rather than fabricating Windows NULL/error.
-The actual mode getter executes on declared failed API input; original errno and
-new-handler effects remain rejected, preserving earlier effects and ownership.
+REP requires a dedicated consumer effect. Existing default/generic thread hooks
+reject it. Within Cdecl32Forward DF0, known bounded count and checked word accesses,
+overlap is sequential; pointer identities and unknown masks are preserved. Later
+rejection retains completed words and exact cursor/count progress, without issuing
+Windows exception/resumption authority. Control tokens cannot be cloned.
 
-Next connect40b289 local stores and original REP MOVSD copies40b2b6/40b2c2, then
-initializer40b485 and its code-page API effects. REP remains unsupported until
-bounded count, initialization, alias, overlap and partial-progress semantics are
-established under the existing explicit DF-clear ABI. Freeing and exceptional
-cleanup remain separate gates; no full startup/rcedit/default admission follows.
-The65001 native process profile is explicit, not a general Windows ACP assumption.
+Next connect original initializer40b485: existing selector, five-entry table and
+IsValidCodePage4150cc at40b4e6, UTF8 stores, helper40b090 built-in table loops and
+cookie epilogs, then original reference/publication/cleanup. Actual65001 branches
+bypass GetCPInfo/NLS calls; other code pages remain separate unproved domains.
+Target Windows ACP still needs matched-environment evidence; the manifest observer
+is not that evidence. Heap reference freeing and exceptional cleanup stay unbound.
+
+## Previous checkpoint: original comparison and malloc
+
+Original malloc returns a fresh544-byte flags0 Buffer with unknown contents.
+Flags8 alone zeroes; no semantic PTD/descriptor/locale role follows from success.
+Actual heap identity/ABI and resource checks remain. Original errno/new-handler
+paths reject with prior effects retained. [Preserved contract](LOCALE-MALLOC.md).
 
 ## Previous checkpoint: original code-page selector
 

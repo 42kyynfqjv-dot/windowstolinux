@@ -1,5 +1,8 @@
 # Original locale comparison and uninitialized allocation
 
+This records1a9c0ab. [The connected copy checkpoint](LOCALE-REP.md) supersedes
+its former execution boundary.
+
 Under the explicit native UTF-8 process profile, original entry executes
 `0x40b267` argument cleanup, selected-code-page store and live reference
 comparison. The differing-code-page path calls the complete original malloc

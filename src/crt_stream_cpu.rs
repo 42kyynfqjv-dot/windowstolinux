@@ -66,6 +66,27 @@ impl CrtCpu{
   let flags=rt.load(rt.offset(sp,8)?,32)?.known_scalar()?;let size=rt.load(rt.offset(sp,12)?,32)?.known_scalar()?;
   let p=rt.native_heap_allocate(init,heap,flags,size)?;self.clobber(CrtValue::Pointer(p));self.finish_pop(rt,12)
  }
+ /// REP MOVSD within the explicit forward-cdecl ABI. Scalar knowledge and data
+ /// pointer aliases are copied, never control authority. Each completed word
+ /// commits its write and cursor/count progress; a later rejection retains it.
+ fn repeat_move_dwords(&mut self,rt:&mut CrtStreamRuntime,max_words:u32)->Result<(),&'static str>{
+  self.validate_active(rt)?;
+  if self.abi!=CrtAbi::Cdecl32Forward||max_words==0||max_words>262144{return Err("CRT repeated copy ABI/count domain");}
+  let mut remaining=self.r[1].known_scalar()?;
+  if remaining>max_words{return Err("CRT repeated copy count bound");}
+  while remaining!=0{
+   self.tick(u32::MAX)?;
+   let src=Self::pointer(self.r[6])?;let dst=Self::pointer(self.r[7])?;
+   let value=rt.load(src,32)?;
+   if matches!(value,CrtValue::ProtectedReturn(_)|CrtValue::OpaqueSaved(_)|CrtValue::ThreadHead(_)|CrtValue::Dispatcher(_)){return Err("CRT repeated copy control authority");}
+   rt.store(dst,32,value)?;
+   // Effective-address formation preserves the old capability and bounds. It
+   // never resolves an out-of-range next address into an unrelated allocation.
+   self.r[6]=CrtValue::Pointer(rt.effective_address(src,src.address().wrapping_add(4))?);
+   self.r[7]=CrtValue::Pointer(rt.effective_address(dst,dst.address().wrapping_add(4))?);
+   remaining-=1;self.r[1]=CrtValue::scalar(remaining);
+  }Ok(())
+ }
  /// LOCK XADD returns the prior memory word in the source register. All
  /// knowledge/lifetime checks precede the write; flags use the original sum.
  fn exchange_add_reference(&mut self,rt:&mut CrtStreamRuntime,init:CrtInitialization,image:CrtProcessImage,lease:CrtGlobalLock,p:CrtPointer,register:usize)->Result<(),&'static str>{

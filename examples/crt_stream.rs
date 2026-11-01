@@ -381,3 +381,6 @@ mod crt_locale_code_page;
 
 #[path = "../src/crt_malloc.rs"]
 mod crt_malloc;
+
+#[path = "../src/crt_repeat_copy.rs"]
+mod crt_repeat_copy;

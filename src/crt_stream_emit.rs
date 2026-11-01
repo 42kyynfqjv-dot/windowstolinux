@@ -391,6 +391,35 @@ pub(crate) fn emit_body_with_store(
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn emit_body_with_indirect(
     graph: &Graph,
+    call: impl FnMut(u32, Target) -> Result<String, String>,
+    roles: &BTreeMap<u32, String>,
+    step_budget: u32,
+    thread: impl FnMut(u32, &Op) -> Result<String, String>,
+    before: impl FnMut(u32, &Op) -> Result<String, String>,
+    return_hook: impl FnMut(u32, u16) -> Result<Option<String>, String>,
+    exit: Option<u32>,
+    store: impl FnMut(u32, &Address, u8) -> Result<Option<String>, String>,
+    indirect: impl FnMut(u32, &Operand) -> Result<String, String>,
+) -> Result<String, String> {
+    emit_body_with_repeat_copy(
+        graph,
+        call,
+        roles,
+        step_budget,
+        thread,
+        before,
+        return_hook,
+        exit,
+        store,
+        indirect,
+        |_, _| Err("CRT emit repeated copy effect unbound".into()),
+    )
+}
+/// Repeated copies require a distinct issuer; an existing catch-all thread hook
+/// cannot erase or implicitly authorize a newly decoded memory operation.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn emit_body_with_repeat_copy(
+    graph: &Graph,
     mut call: impl FnMut(u32, Target) -> Result<String, String>,
     roles: &BTreeMap<u32, String>,
     step_budget: u32,
@@ -400,6 +429,7 @@ pub(crate) fn emit_body_with_indirect(
     exit: Option<u32>,
     mut store: impl FnMut(u32, &Address, u8) -> Result<Option<String>, String>,
     mut indirect: impl FnMut(u32, &Operand) -> Result<String, String>,
+    mut repeat_copy: impl FnMut(u32, u8) -> Result<String, String>,
 ) -> Result<String, String> {
     if graph
         .nodes
@@ -466,6 +496,7 @@ pub(crate) fn emit_body_with_indirect(
  Op::SignedMove{condition:c,dst,source:o}=>{let kind=match c{SignedCondition::Less=>6,SignedCondition::Greater=>8,_=>return Err("CRT signed selection condition".into())};out.push_str(&format!("let v={};if cpu.condition({kind})?{{{}}}",read(o,roles)?,write(&register(*dst),"v",roles)?));},
  Op::ConditionalMove{condition:c,dst,source:o}=>out.push_str(&format!("let v={};if cpu.condition({})?{{{}}}",read(o,roles)?,condition(*c),write(&register(*dst),"v",roles)?)),
  Op::StoreString{width}=>out.push_str(&format!("let p=CrtCpu::pointer(cpu.r[7])?;let v=cpu.get(0,{width},0)?;rt.store(p,{width},v)?;cpu.r[7]=CrtValue::Pointer(rt.offset(p,{})?);",width/8)),
+ Op::RepeatCopyString{width}=>out.push_str(&repeat_copy(pc,*width)?),
  Op::CopyString{width}=>out.push_str(&format!("let src=CrtCpu::pointer(cpu.r[6])?;let dst=CrtCpu::pointer(cpu.r[7])?;let v=rt.load(src,{width})?;rt.store(dst,{width},v)?;cpu.r[6]=CrtValue::Pointer(rt.offset(src,{})?);cpu.r[7]=CrtValue::Pointer(rt.offset(dst,{})?);",width/8,width/8)),
  Op::Locked{operation,destination,source:o}=>{let Operand::Memory(a,32)=destination else{return Err("CRT emit atomic word form".into());};let method=match operation{Binary::Or=>"atomic_or",Binary::And=>"atomic_and",_=>return Err("CRT emit atomic operation".into())};out.push_str(&format!("let p={};let b={};let old=rt.{method}(lease,p,CrtCpu::number(b)?)?;cpu.binary(rt,{},CrtValue::scalar(old),b,32)?;",address(a,roles)?,read(o,roles)?,binary(*operation)));},
  _=>return Err(format!("CRT emit unsupported normalized operation {:?}",node.op)),

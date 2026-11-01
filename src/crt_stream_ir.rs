@@ -86,6 +86,10 @@ pub(crate) enum Op {
     CopyString {
         width: u8,
     },
+    /// Requires a dedicated consumer-bound count/memory-effect contract.
+    RepeatCopyString {
+        width: u8,
+    },
     Locked {
         operation: Binary,
         destination: Operand,
@@ -172,6 +176,9 @@ pub(crate) struct ByteTable<'a> {
 }
 fn extended(i: &Instruction, raw: &[u8], tables: &[JumpTable<'_>]) -> Result<Op, String> {
     if i.has_rep_prefix() || i.has_repne_prefix() {
+        if raw == [0xf3, 0xa5] && i.mnemonic() == Mnemonic::Movsd {
+            return Ok(Op::RepeatCopyString { width: 32 });
+        }
         return Err("CRT IR: repeated instruction outside domain".into());
     }
     if i.segment_prefix() == Register::FS && raw.first() == Some(&0x64) {
