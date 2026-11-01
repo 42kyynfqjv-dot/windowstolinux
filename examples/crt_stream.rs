@@ -366,3 +366,7 @@ mod crt_resident_loader;
 #[cfg(test)]
 #[path = "../src/crt_provider_tests.rs"]
 mod crt_provider_tests;
+
+#[cfg(test)]
+#[path = "../src/crt_command_line_tests.rs"]
+mod crt_command_line_tests;

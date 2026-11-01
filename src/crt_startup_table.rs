@@ -104,8 +104,28 @@ fn startup_table_loop(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,image:CrtProcessI
   let params=if name=="startup_table_entry"{",callback:&mut impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu,usize,bool,CrtPointer)->Result<CrtValue,&'static str>"}else{""};
   out.push_str(&format!("fn {name}(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs{params})->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;let p=rt.process_image_code(inputs.image,{origin},{})?;if rt.memory.read(p.address(),{}).map_err(|_|\"initializer helper code read\")?!=&{bytes:?}{{return Err(\"initializer helper code changed\");}}{body}}}",bytes.len(),bytes.len()));
  }
+    let command = raw("ff158c504100a374ce4100ff1590504100a378ce4100b001c3");
+    let cg = Graph::decode(&command, 0x407093)?;
+    let cb = crate::crt_stream_emit::emit_body(
+        &cg,
+        |pc, target| {
+            let next = pc + cg.nodes[&pc].length;
+            let (iat, name, wide) = match target {
+                Target::Import(0x41508c) => (0x41508c, "GetCommandLineA", false),
+                Target::Import(0x415090) => (0x415090, "GetCommandLineW", true),
+                _ => return Err("original command line call binding".into()),
+            };
+            Ok(format!("rt.process_image_import(inputs.image,{iat},\"kernel32.dll\",\"{name}\")?;cpu.call_activation(rt,{next},0,|rt,c|platform.command_line_call(rt,c,inputs.init,{wide}))?;"))
+        },
+        &std::collections::BTreeMap::from([
+            (0x41ce74, "CrtRegionKind::Module".into()),
+            (0x41ce78, "CrtRegionKind::Module".into()),
+        ]),
+        128,
+    )?;
+    out.push_str(&format!("fn startup_command_line_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:&CrtNativePlatform)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;let p=rt.process_image_code(inputs.image,0x407093,{})?;if rt.memory.read(p.address(),{}).map_err(|_|\"command line code read\")?!=&{command:?}{{return Err(\"original command line code changed\");}}{cb}}}",command.len(),command.len()));
     let table = raw(TABLE);
-    out.push_str(&format!("fn startup_original_table(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:Option<&CrtNativePlatform>,mut epoch:Option<&mut NormalCallEpoch<'_>>)->Result<CrtValue,&'static str>{{let p=rt.process_image_pointer(inputs.image,0x415fb8,128)?;if rt.memory.read(p.address(),128).map_err(|_|\"initializer table read\")?!=&{table:?}{{return Err(\"original initializer table changed\");}}startup_table_entry(rt,cpu,inputs,&mut |rt,c,index,cleanup,target|{{if !cleanup{{match(index,target.address()){{(0,0x407558)=>startup_table_first(rt,c,inputs),(1,0x407587)=>startup_table_second(rt,c,inputs),(2,0x408113)=>startup_table_third(rt,c,inputs),(3,0x401bd5)=>startup_table_noop(rt,c,inputs),(4,0x40bd8e)=>startup_lock_loop(rt,c,inputs,&mut startup_lock_api),(5,0x40c8f0)=>startup_heap_original(rt,c,inputs,&mut startup_heap_api),(7,0x40a407)=>startup_fiber_init_registered(rt,c,inputs,platform,epoch.as_deref_mut(),&mut startup_fiber_api),(8,0x408697)=>{{let e=epoch.as_deref_mut().ok_or(\"startup lowio epoch unbound\")?;startup_lowio(rt,c,inputs,platform.ok_or(\"startup lowio native profile absent\")?,e)}},_=>Err(\"original initializer callback effect unbound\")}}}}else{{match(index,target.address()){{(5,0x40c910)=>startup_table_heap_clear(rt,c,inputs),_=>Err(\"original initializer cleanup effect unbound\")}}}}}})}}"));
+    out.push_str(&format!("fn startup_original_table(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:Option<&CrtNativePlatform>,mut epoch:Option<&mut NormalCallEpoch<'_>>)->Result<CrtValue,&'static str>{{let p=rt.process_image_pointer(inputs.image,0x415fb8,128)?;if rt.memory.read(p.address(),128).map_err(|_|\"initializer table read\")?!=&{table:?}{{return Err(\"original initializer table changed\");}}startup_table_entry(rt,cpu,inputs,&mut |rt,c,index,cleanup,target|{{if !cleanup{{match(index,target.address()){{(0,0x407558)=>startup_table_first(rt,c,inputs),(1,0x407587)=>startup_table_second(rt,c,inputs),(2,0x408113)=>startup_table_third(rt,c,inputs),(3,0x401bd5)=>startup_table_noop(rt,c,inputs),(4,0x40bd8e)=>startup_lock_loop(rt,c,inputs,&mut startup_lock_api),(5,0x40c8f0)=>startup_heap_original(rt,c,inputs,&mut startup_heap_api),(7,0x40a407)=>startup_fiber_init_registered(rt,c,inputs,platform,epoch.as_deref_mut(),&mut startup_fiber_api),(9,0x407093)=>startup_command_line_original(rt,c,inputs,platform.ok_or(\"startup command line native profile absent\")?),(8,0x408697)=>{{let e=epoch.as_deref_mut().ok_or(\"startup lowio epoch unbound\")?;startup_lowio(rt,c,inputs,platform.ok_or(\"startup lowio native profile absent\")?,e)}},_=>Err(\"original initializer callback effect unbound\")}}}}else{{match(index,target.address()){{(5,0x40c910)=>startup_table_heap_clear(rt,c,inputs),_=>Err(\"original initializer cleanup effect unbound\")}}}}}})}}"));
     out.push_str(&format!(
         "fn crate_second_b_bytes()->Vec<u8>{{vec!{:?}}}",
         raw("8bff558bec8b4508a3ccd241005dc3")

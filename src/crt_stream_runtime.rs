@@ -3,7 +3,7 @@
 //! Generated code embeds the existing guest_memory::Space and this source.
 pub(crate) const EMITTED_TYPES: &str = r#"
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
-enum CrtRegionKind {File,Descriptor,Module,Input,Stack,Buffer,Result,Context,ThreadData}
+enum CrtRegionKind {File,Descriptor,Module,Input,Stack,Buffer,Result,Context,ThreadData,ProcessData}
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 struct CrtPointer {cap:guest_memory::Capability,owner:guest_memory::Owner,base:u32,size:u32,address:u32,kind:CrtRegionKind}
 impl CrtPointer {fn address(self)->u32{self.address}}
@@ -14,6 +14,9 @@ struct CrtNativeStandards {anchor:guest_memory::Capability,serial:u64,pid:u32}
 #[derive(Clone,Copy)]
 struct CrtStandardEntry {value:CrtValue,last_error:Option<u32>}
 struct CrtNativeEndpoint {id:CrtProcessHandle,file:Option<std::fs::File>,certain:bool}
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+struct CrtCommandLine {anchor:guest_memory::Capability,pid:u32,serial:u64,codepage:u32,narrow:CrtPointer,wide:CrtPointer}
+
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 struct CrtDescriptorId {anchor:guest_memory::Capability,generation:u64,number:u32,handle:u32,handle_generation:u64}
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
@@ -194,7 +197,7 @@ struct CrtStreamRuntime {
  uncertain_allocations:Vec<CrtPointer>,completed_failed_frees:Vec<(guest_memory::Capability,u64)>,heap_ptds:Vec<CrtHeapPtdView>,fiber:Option<CrtFiber>,fls_indices:CrtFlsIndices,fls:CrtFlsValues,
  unobserved_contexts:Vec<(CrtPointer,std::rc::Rc<std::cell::Cell<bool>>)>,heap:Option<CrtHeap>,memory:guest_memory::Space,owner:u64,thread:u64,anchor:guest_memory::Capability,
  dispatchers:std::collections::BTreeMap<u64,CrtDispatcherContext>,regions:Vec<CrtRegion>,retired:Vec<CrtPointer>,tags:std::collections::BTreeMap<u32,CrtValue>,
- partial:std::collections::BTreeMap<u32,(u8,u8)>,descriptors:Vec<CrtDescriptor>,native_endpoints:Vec<CrtNativeEndpoint>,native_standards:Option<(CrtNativeStandards,[CrtStandardEntry;3])>,
+ partial:std::collections::BTreeMap<u32,(u8,u8)>,descriptors:Vec<CrtDescriptor>,native_endpoints:Vec<CrtNativeEndpoint>,native_standards:Option<(CrtNativeStandards,[CrtStandardEntry;3])>,command_line:Option<CrtCommandLine>,
  global_objects:CrtGlobalSlots<CrtPointer>,global_locks:CrtGlobalLeases,record_objects:Vec<CrtPointer>,record_locks:Vec<CrtRecordLock>,locks:Vec<CrtLock>,descriptor_locks:Vec<CrtDescriptorLock>,serial:u64,generation:u64,canonical_errno:bool,errno_cell:Option<CrtPointer>,errno:Option<i32>,doserrno:Option<u32>,last_os_error:Option<u32>,
  locale_generation:u64,locale_live:bool,initialization:Option<u64>,shutdown:Option<CrtShutdown>,closed:bool,lock_objects:std::collections::BTreeSet<u32>,
 }
@@ -212,7 +215,7 @@ impl CrtStreamRuntime {
  }
  fn from_file_storage(owner:u64,thread:u64,memory:guest_memory::Space,pointer:CrtPointer)->Result<Self,&'static str>{
   let anchor=pointer.cap;
-  Ok(Self{file_view:pointer,main_image:None,main_image_regions:vec![],loader_cells:std::collections::BTreeMap::new(),modules:std::collections::BTreeMap::new(),module_references:CrtModuleReferences::new(),exports:std::collections::BTreeMap::new(),providers:std::collections::BTreeMap::new(),native_sync:CrtGlobalSlots::new(),uncertain_allocations:vec![],completed_failed_frees:vec![],heap_ptds:vec![],fiber:None,fls_indices:CrtFlsIndices::new(),fls:CrtFlsValues::new(),unobserved_contexts:vec![],heap:None,memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],native_endpoints:vec![],native_standards:None,global_objects:CrtGlobalSlots::new(),global_locks:CrtGlobalLeases::new(),record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,canonical_errno:false,errno_cell:None,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([pointer.base])})
+  Ok(Self{file_view:pointer,main_image:None,main_image_regions:vec![],loader_cells:std::collections::BTreeMap::new(),modules:std::collections::BTreeMap::new(),module_references:CrtModuleReferences::new(),exports:std::collections::BTreeMap::new(),providers:std::collections::BTreeMap::new(),native_sync:CrtGlobalSlots::new(),uncertain_allocations:vec![],completed_failed_frees:vec![],heap_ptds:vec![],fiber:None,fls_indices:CrtFlsIndices::new(),fls:CrtFlsValues::new(),unobserved_contexts:vec![],heap:None,memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],native_endpoints:vec![],native_standards:None,command_line:None,global_objects:CrtGlobalSlots::new(),global_locks:CrtGlobalLeases::new(),record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,canonical_errno:false,errno_cell:None,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([pointer.base])})
  }
 
  /// Initial FILE storage is a bounded role view of the original writable
@@ -804,7 +807,7 @@ impl CrtStreamRuntime {
   self.identity_range(a,0)?;self.identity_range(b,0)?;if a.cap!=b.cap{return Err("CRT unrelated pointer subtraction");}Ok(a.address.wrapping_sub(b.address))
  }
  fn map_region(&mut self,base:u32,size:u32,kind:CrtRegionKind,initial:Option<&[u8]>)->Result<CrtPointer,&'static str>{
-  if self.closed||kind==CrtRegionKind::Buffer||kind==CrtRegionKind::File&&(self.initialization.is_none()||base%4!=0||size%56!=0)||base==0||size==0||base.checked_add(size).is_none()
+  if self.closed||matches!(kind,CrtRegionKind::Buffer|CrtRegionKind::ProcessData)||kind==CrtRegionKind::File&&(self.initialization.is_none()||base%4!=0||size%56!=0)||base==0||size==0||base.checked_add(size).is_none()
    ||initial.is_some_and(|bytes|bytes.len()!=size as usize){return Err("CRT mapped region contract");}
   let next=self.generation.checked_add(1).ok_or("CRT generation budget")?;
   let owner=match kind{CrtRegionKind::Stack|CrtRegionKind::Context|CrtRegionKind::ThreadData=>guest_memory::Owner::Stack(next),_=>guest_memory::Owner::Module(self.owner)};
@@ -872,7 +875,7 @@ impl CrtStreamRuntime {
  fn store(&mut self,p:CrtPointer,width:u8,value:CrtValue)->Result<(),&'static str>{
   if self.unobserved_contexts.iter().any(|(q,_)|q.cap==p.cap){return Err("unobserved context write requires effect proof");}
   let size=match width{8=>1,16=>2,32=>4,_=>return Err("CRT store width")};self.valid(p,size)?;self.ordinary_file_bytes(p,size)?;
-  if matches!(p.kind,CrtRegionKind::Input){return Err("CRT immutable source write");}
+  if matches!(p.kind,CrtRegionKind::Input|CrtRegionKind::ProcessData){return Err("CRT immutable source write");}
   self.memory.validate_writable(p.cap,p.owner,p.address,size).map_err(|_|"CRT storage write")?;
   if self.errno_cell.is_some_and(|q|q.cap==p.cap&&u64::from(p.address)<u64::from(q.address)+4&&u64::from(q.address)<u64::from(p.address)+u64::from(size))&&!matches!(value,CrtValue::Scalar{..}){return Err("CRT errno scalar field");}
   let old=self.overlapping_tags(p.address,size);
@@ -1101,6 +1104,46 @@ impl CrtStreamRuntime {
   self.store(p,32,CrtValue::scalar(68))?;
   self.store(self.offset(p,50)?,16,CrtValue::scalar(0))?;
   self.store(self.offset(p,52)?,32,CrtValue::scalar(0))?;Ok(())
+ }
+ /// Canonical MSVC-style command line for an explicit UTF-8 native launch.
+ /// argv[0] uses the distinct program-name grammar, not argument backslash rules.
+ fn encode_native_command_line(args:&[String])->Result<(Vec<u8>,Vec<u8>),&'static str>{
+  const MAX:usize=32766;
+  if args.is_empty()||args.len()>32767||args[0].is_empty()||args[0].contains('"')||args.iter().any(|a|a.contains('\0')){return Err("native command-line argument domain");}
+  fn put(s:&mut String,units:&mut usize,c:char)->Result<(),&'static str>{*units=units.checked_add(c.len_utf16()).filter(|n|*n<=32766).ok_or("native command-line UTF16 limit")?;s.push(c);Ok(())}
+  let mut text=String::new();text.try_reserve_exact(4*(MAX+1)).map_err(|_|"native command-line encoding resource")?;let mut units=0;
+  put(&mut text,&mut units,'"')?;for c in args[0].chars(){put(&mut text,&mut units,c)?;}put(&mut text,&mut units,'"')?;
+  for argument in &args[1..]{
+   put(&mut text,&mut units,' ')?;put(&mut text,&mut units,'"')?;let mut slashes=0usize;
+   for c in argument.chars(){if c=='\\'{slashes=slashes.checked_add(1).filter(|n|*n<=MAX).ok_or("native command-line UTF16 limit")?;continue;}
+    let count=if c=='"'{slashes*2+1}else{slashes};for _ in 0..count{put(&mut text,&mut units,'\\')?;}slashes=0;put(&mut text,&mut units,c)?;
+   }
+   for _ in 0..slashes*2{put(&mut text,&mut units,'\\')?;}put(&mut text,&mut units,'"')?;
+  }
+  let mut wide=Vec::new();wide.try_reserve_exact((units+1)*2).map_err(|_|"native command-line encoding resource")?;for unit in text.encode_utf16().chain(std::iter::once(0)){wide.extend_from_slice(&unit.to_le_bytes());}
+  let mut narrow=text.into_bytes();narrow.push(0);Ok((narrow,wide))
+ }
+ /// Process-owned, immutable buffers. Failed pair publication releases only its
+ /// private first mapping; no pointer or generation escapes on failure.
+ fn publish_command_line(&mut self,init:CrtInitialization,base:u32,codepage:u32,args:&[String])->Result<CrtCommandLine,&'static str>{
+  self.initialization(init)?;if self.command_line.is_some()||codepage!=65001||base==0||base%4096!=0{return Err("native command-line profile/base/publication");}
+  let serial=self.serial.checked_add(1).ok_or("native command-line generation")?;let(narrow,wide)=Self::encode_native_command_line(args)?;
+  let offset=u32::try_from(narrow.len()).map_err(|_|"native command-line size")?.checked_add(4095).map(|n|n&!4095).ok_or("native command-line address")?;let wide_base=base.checked_add(offset).ok_or("native command-line address")?;
+  self.regions.try_reserve(2).map_err(|_|"native command-line region metadata resource")?;
+  let a=self.memory.map_image(base,narrow.len()as u32,self.owner,guest_memory::Permissions::READ,&narrow).map_err(|_|"native command-line narrow mapping")?;
+  let w=match self.memory.map_image(wide_base,wide.len()as u32,self.owner,guest_memory::Permissions::READ,&wide){Ok(w)=>w,Err(_)=>{self.memory.release(a,guest_memory::Owner::Module(self.owner)).map_err(|_|"native command-line mapping rollback")?;return Err("native command-line wide mapping");}};
+  let make=|cap,address,size|CrtPointer{cap,owner:guest_memory::Owner::Module(self.owner),base:address,address,size,kind:CrtRegionKind::ProcessData};
+  let token=CrtCommandLine{anchor:self.anchor,pid:std::process::id(),serial,codepage,narrow:make(a,base,narrow.len()as u32),wide:make(w,wide_base,wide.len()as u32)};
+  for pointer in [token.narrow,token.wide]{self.regions.push(CrtRegion{pointer,heap:false,file_owner:None});}self.serial=serial;self.command_line=Some(token);Ok(token)
+ }
+ fn acquire_native_command_line(&mut self,init:CrtInitialization,base:u32,codepage:u32)->Result<CrtCommandLine,&'static str>{
+  self.initialization(init)?;if codepage!=65001||self.command_line.is_some(){return Err("native command-line profile/base/publication");}
+  #[cfg(target_os="linux")]{let mut args=Vec::new();for argument in std::env::args_os(){if args.len()>=32767{return Err("native command-line argument count");}let argument=argument.into_string().map_err(|_|"native command-line non-UTF8 argument")?;if argument.len()>131064{return Err("native command-line argument size");}args.try_reserve(1).map_err(|_|"native command-line argument resource")?;args.push(argument);}self.publish_command_line(init,base,codepage,&args)}
+  #[cfg(not(target_os="linux"))]{let _=base;Err("native command-line acquisition unsupported host")}
+ }
+ fn command_line_pointer(&self,token:CrtCommandLine,wide:bool)->Result<CrtPointer,&'static str>{
+  if self.closed||token.anchor!=self.anchor||token.pid!=std::process::id()||token.codepage!=65001||self.command_line!=Some(token){return Err("native command-line process/lifetime");}
+  let p=if wide{token.wide}else{token.narrow};self.identity_range(p,p.size)?;self.memory.validate_immutable(p.cap,p.owner,p.address(),p.size).map_err(|_|"native command-line immutable lifetime")?;self.memory.read(p.address(),p.size).map_err(|_|"native command-line initialized bytes")?;Ok(p)
  }
  /// Native launch producer. Owned duplicates pin the actual host endpoints;
  /// virtual process handle values never equal borrowed host fd numbers by design.

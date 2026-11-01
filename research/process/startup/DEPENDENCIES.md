@@ -1,5 +1,28 @@
 # Remaining entry-to-exit dependencies
 
+## Current executable checkpoint: process-owned A/W command lines and callback9 return
+
+The explicit UTF-8 native launch (process code page65001) now captures real Linux
+argv once and constructs a canonical MSVC command line. It does not recover an
+original Windows raw command line or guess a legacy ACP. A/W buffers are separately
+initialized, read-only, process-owned mappings with stable pointers and transactional
+pair publication. Invalid native UTF-8, unsupported argv0 and length/code-page
+inputs reject; Unicode and quoting are preserved within the declared profile.
+
+Original callback9 at0x407093 calls the actual bound GetCommandLineA/W producers,
+stores pointers to0x41ce74/0x41ce78, sets AL1 and returns. A later W/import/return
+failure preserves an already completed A store. API calls invalidate unproved
+LastError knowledge. All earlier endpoint, UCRT and descriptor state remains.
+
+The next boundary is **CALL0x40c946 ->0x40b42a, initializer table index10**, before
+that callback executes. Its actual instruction/import inventory is the next gate;
+no environment/argument-array initialization or full startup is claimed.
+[Encoding, ownership, independent vectors and conformance](COMMAND-LINE.md).
+Fresh Windows probe observations and final-head CI are pending until measured;
+component replay remains distinct from unchanged whole-PE translation. Earlier
+thread/entropy/exception/close-EOF premises and unsupported default/rcedit/XP7 remain.
+Earlier checkpoints below are historical.
+
 ## Current executable checkpoint: actual native standard endpoints and callback8 return
 
 The optional native launch profile now acquires real Linux stdin/stdout/stderr as
