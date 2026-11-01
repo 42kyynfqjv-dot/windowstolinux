@@ -5,6 +5,15 @@ pub(crate) const MODE: &str = "33c040c3";
 pub(crate) const WRAPPER: &str = "8bff558bec5de9f7fcffff";
 pub(crate) const CONFIGURE: &str = "8bff558bec83ec0c578b7d0885ff750733c0e9230100005683ff02741b83ff017416e8d01500006a165e8930e8481400008bc6e90101000053e8164d00006804010000bb40cd410033f65356e8e6460000891d64ce410083c40c8b1d74ce410085db7405803b007505bb40cd41008d45f48975fc508d45fc8975f450565653e8b90000006a01ff75f4ff75fce81e0200008bf083c42085f6750ce8581500006a0c5e8930eb2f8d45f4508d45fc508b45fc8d0486505653e88100000083c41483ff01751c8b45fc4889356cce4100a368ce410033f66a00e89e1500008bc6eb578d45f833db5056895df8e8404500008bf8595985ff740aff75f8e87b150000eb2a8b55f88bcb8bc2391a74088d400441391875f853890d68ce4100895df889156cce4100e8511500008bfb5956895df8e8451500008bc7595b5e5fc9c3";
 pub(crate) const IMAGE_NAME: &str = "8bff558bec81ec2c020000a100c0410033c58945fc8b45088d8df0fdffff68050100005150ff158450410085c07511ff154450410050e829ceffff5933c0eb558b4d0c8b451083a5e4fdffff00898dd4fdffff8985d8fdffff898ddcfdffff8985e0fdffffc685e8fdffff00e80bfdffff508d85effdffff508d85d4fdffff508d85f0fdffff50e877feffff8b85e4fdffff83c4108b4dfc33cde8a066ffffc9c3";
+pub(crate) const LOCALE: &str = "8bff558bec83ec106a008d4df0e823ffffff8b45f4bae9fd0000395008740ce813d4ffff33d285c0750142807dfc00740a8b4df083a150030000fd8bc2c9c3";
+pub(crate) const FILE_ANSI: &str = "8bff56e8cefdffff8bf085f6740c8bceff1528514100ffd65ec333c0405ec3";
+pub(crate) const FILE_RESOLVE: &str =
+    "a100e0410083f8ff750333c0c385c0751868f466410068f066410068f466410050e88500000083c410c3";
+pub(crate) const CONVERT: &str = "8bff558bec568b750885f6750f8b4d0ce8d400000033c0e9a30000005333db66391e75258b750c395e0c75116a018bcee88d00000085c00f85810000008b4608881833c0895e10eb75535353536aff5653ff7514e85c0b000083c42085c07516ff154450410050e8f5ceffff59e84bcfffff8b00eb48578b7d0c3b470c760c508bcfe83b00000085c07532ff770c8b4d10ff770856ff7514e8b8fdffff85c07516ff154450410050e8b4ceffff59e80acfffff8b00eb064889471033c05f5b5e5dc3";
+pub(crate) const CONVERT_WRITE: &str =
+    "8bff558bec33c05050ff7514ff75106affff750c50ff7508e8430d000083c4205dc21000";
+pub(crate) const WIDE_API: &str = "8bff558bec518b550853565781fae8fd0000740c81fae9fd0000740432dbeb02b301ff750c52e845ffffff33ff84db59598b4d248bf10f45f78365fc008b7d2084db0f457dfc740785c974038321005657ff751cff7518ff7514ff75105052ff15e05041005f5e5bc9c3";
+pub(crate) const WIDE_FLAGS: &str = "8bff558bec8b4508b9acde00003bc1773d7479b933c400003bc1771d746e83e82a74692d02c40000746283e801745d83e801745883e803eb472d35c40000744c2d6312000074452d12080000eb2db9b1de00003bc1771374332dadde0000742c83e801742783e801eb112db2de0000741b83e80174162d351f0000740f83e801740a8b450c257fffffff5dc333c05dc3";
 fn guard(at: u32, bytes: &[u8]) -> String {
     format!("let p=rt.process_image_code(inputs.image,{at},{})?;if rt.memory.read(p.address(),{}).map_err(|_|\"argv code read\")?!=&{bytes:?}{{return Err(\"argv original code changed\");}}",bytes.len(),bytes.len())
 }
@@ -69,11 +78,11 @@ pub(crate) fn source() -> Result<String, String> {
     )?;
     out.push_str(&format!("fn argv_configure_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:Option<&CrtNativePlatform>,mut epoch:Option<&mut NormalCallEpoch<'_>>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;{}{body}}}",guard(0x4066d6,&bytes)));
     let bytes = raw(IMAGE_NAME);
-    let mut g = crate::crt_startup_table::graph(&bytes[..(0x40ae79 - 0x40ae0d)], 0x40ae0d)?;
+    let mut g = crate::crt_startup_table::graph(&bytes[..(0x40ae94 - 0x40ae0d)], 0x40ae0d)?;
     for (pc, reason) in [
         (
-            0x40ae79,
-            "argv original narrow-conversion locale unbound at 0x40ae79",
+            0x40ae94,
+            "argv original narrow-conversion body unbound at 0x40ae94",
         ),
         (
             0x40aea2,
@@ -94,6 +103,7 @@ pub(crate) fn source() -> Result<String, String> {
         |pc, t| {
             let next = pc + g.nodes[&pc].length;
             Ok(match t{
+  Target::Direct(0x40ab89)=>format!("cpu.call_activation(rt,{next},0,|rt,c|argv_locale_original(rt,c,inputs,platform))?;"),
   Target::Import(0x415084)=>format!("rt.process_image_import(inputs.image,0x415084,\"kernel32.dll\",\"GetModuleFileNameW\")?;cpu.call_activation(rt,{next},12,|rt,c|platform.image_name_call(rt,c,inputs.init))?;"),
   Target::Import(0x415044)=>"return Err(\"argv GetLastError failure acquisition unbound\");".into(),
   Target::Direct(0x407c71)=>"return Err(\"argv image-name error mapping unbound\");".into(),
@@ -103,6 +113,7 @@ pub(crate) fn source() -> Result<String, String> {
         128,
     )?;
     out.push_str(&format!("fn argv_image_name_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:&CrtNativePlatform)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;{}{body}}}",guard(0x40ae0d,&bytes)));
+    out.push_str(&locale_source()?);
     Ok(out)
 }
 #[test]
@@ -160,5 +171,121 @@ fn original_windows_image_name_api_matches_modern_component_contract() {
  println!("six original Windows GetModuleFileNameW component observations; not PE translations");
  "#,
         "image-name-windows-api",
+    );
+}
+
+fn locale_source() -> Result<String, String> {
+    let raw = crate::crt_ptd::raw;
+    let mut out = String::new();
+    let bytes = raw(LOCALE);
+    let g = Graph::decode(&bytes, 0x40ab89)?;
+    let body = crate::crt_stream_emit::emit_body_with_hooks(
+        &g,
+        |pc, t| {
+            let next = pc + g.nodes[&pc].length;
+            Ok(match t{
+  Target::Direct(0x40aabe)=>format!("cpu.call_activation(rt,{next},4,|rt,c|locale_view_original(rt,c,inputs,platform))?;"),
+  Target::Direct(0x407fc0)=>format!("cpu.call_activation(rt,{next},0,|rt,c|argv_file_ansi_original(rt,c,inputs,platform))?;"),
+  _=>return Err("argv locale call target".into())})
+        },
+        &Default::default(),
+        128,
+        |_, _| Err("argv locale thread effect".into()),
+        |pc, _| {
+            Ok(if pc == 0x40aba3 {
+                "let p=rt.module_word_pointer(inputs.image,cpu.r[0])?;rt.valid(p,12)?;cpu.r[0]=CrtValue::Pointer(p);".into()
+            } else {
+                String::new()
+            })
+        },
+        |_, _| Ok(None),
+    )?;
+    out.push_str(&format!("fn argv_locale_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:&CrtNativePlatform)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;{}{body}}}",guard(0x40ab89,&bytes)));
+    let bytes = raw(FILE_RESOLVE);
+    let g = Graph::decode(&bytes, 0x407d96)?;
+    let body = crate::crt_stream_emit::emit_body_with_hooks(
+        &g,
+        |pc, t| {
+            if t != Target::Direct(0x407e41) {
+                return Err("argv file resolver call target".into());
+            }
+            Ok(format!("cpu.call_activation(rt,{},0,|rt,c|startup_fiber_resolve(rt,c,inputs,Some(platform),&mut |rt,c,i,p,iat|startup_fiber_api(rt,c,i,p,iat)))?;",pc+g.nodes[&pc].length))
+        },
+        &BTreeMap::from([(0x41e000, "CrtRegionKind::Module".into())]),
+        256,
+        |_, _| Err("argv resolver thread effect".into()),
+        |pc, _| {
+            Ok(if pc == 0x407d96 {
+                "let cell=rt.process_image_pointer(inputs.image,0x41e000,4)?;startup_loader_cell(rt,inputs,cell,true)?;if rt.load(cell,32)?==CrtValue::scalar(u32::MAX){return Err(\"argv file API absence provenance unbound\");}".into()
+            } else {
+                String::new()
+            })
+        },
+        |_, _| Ok(None),
+    )?;
+    out.push_str(&format!("fn argv_file_resolve_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:&CrtNativePlatform)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;{}{body}}}",guard(0x407d96,&bytes)));
+    let bytes = raw(FILE_ANSI);
+    let g = crate::crt_startup_table::graph(&bytes, 0x407fc0)?;
+    let body = crate::crt_stream_emit::emit_body_with_indirect(
+        &g,
+        |pc, t| {
+            let next = pc + g.nodes[&pc].length;
+            Ok(match t{
+  Target::Direct(0x407d96)=>format!("cpu.call_activation(rt,{next},0,|rt,c|argv_file_resolve_original(rt,c,inputs,platform))?;"),
+  Target::Import(0x415128)=>"return Err(\"argv AreFileApisANSI guard/callable effect unbound\");".into(),
+  _=>return Err("argv file API direct target".into())})
+        },
+        &Default::default(),
+        128,
+        |_, _| Err("argv file API thread".into()),
+        |_, _| Ok(String::new()),
+        |_, _| Ok(None),
+        None,
+        |_, _, _| Ok(None),
+        |_, _| Ok("return Err(\"argv AreFileApisANSI callable effect unbound\");".into()),
+    )?;
+    out.push_str(&format!("fn argv_file_ansi_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:&CrtNativePlatform)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;{}{body}}}",guard(0x407fc0,&bytes)));
+    Ok(out)
+}
+
+#[cfg(windows)]
+#[test]
+fn original_windows_file_mode_and_utf8_conversion_observations() {
+    crate::crt_stream_callees_tests::native(
+        "",
+        r#"
+ use std::io::Write;
+ #[link(name="kernel32")]extern "system"{
+ fn AreFileApisANSI()->i32;fn SetFileApisToANSI();fn SetFileApisToOEM();fn GetACP()->u32;fn GetOEMCP()->u32;
+ fn GetModuleHandleW(name:*const u16)->usize;fn GetProcAddress(module:usize,name:*const u8)->usize;fn GetModuleHandleExW(flags:u32,address:*const u16,module:*mut usize)->i32;fn GetModuleFileNameW(module:usize,out:*mut u16,count:u32)->u32;
+ fn SetLastError(value:u32);fn GetLastError()->u32;fn WideCharToMultiByte(cp:u32,flags:u32,input:*const u16,count:i32,out:*mut u8,capacity:i32,default:*const u8,used:*mut i32)->i32;
+ }
+ let initial=unsafe{AreFileApisANSI()};unsafe{SetFileApisToOEM()};let oem=unsafe{AreFileApisANSI()};unsafe{SetFileApisToANSI()};let ansi=unsafe{AreFileApisANSI()};unsafe{if initial==0{SetFileApisToOEM()}else{SetFileApisToANSI()}};let restored=unsafe{AreFileApisANSI()};assert_eq!(oem,0);assert_ne!(ansi,0);assert_eq!(restored!=0,initial!=0);
+ let library:Vec<u16>="kernel32.dll".encode_utf16().chain(std::iter::once(0)).collect();let module=unsafe{GetModuleHandleW(library.as_ptr())};assert_ne!(module,0);let address=unsafe{GetProcAddress(module,b"AreFileApisANSI\0".as_ptr())};assert_ne!(address,0);let query:unsafe extern "system" fn()->i32=unsafe{std::mem::transmute(address)};assert_eq!(unsafe{query()}!=0,restored!=0);
+ let mut owner=0;assert_ne!(unsafe{GetModuleHandleExW(6,address as *const u16,&mut owner)},0);let mut owner_name=vec![0u16;1024];let n=unsafe{GetModuleFileNameW(owner,owner_name.as_mut_ptr(),1024)};assert!(n>0&&n<1024);owner_name.truncate(n as usize);
+ let mut trace=std::env::var_os("W2L_EH4_EVIDENCE").map(|dir|std::fs::File::create(std::path::PathBuf::from(dir).join("original-windows-narrow-conversion.jsonl")).unwrap());
+ if let Some(out)=trace.as_mut(){writeln!(out,"{{\"kind\":\"original Windows file-mode and UTF8 API observations; no PE translation\",\"arch\":{:?},\"initial_ansi_raw\":{initial},\"oem_raw\":{oem},\"ansi_raw\":{ansi},\"restored_raw\":{restored},\"acp\":{},\"oemcp\":{},\"export_owner_utf16\":{owner_name:?}}}",std::env::consts::ARCH,unsafe{GetACP()},unsafe{GetOEMCP()}).unwrap();out.flush().unwrap();}
+ let cases:&[(&str,&[u16],i32,u32,i32,i32,Option<u32>,Option<&[u8]>,bool)]=&[
+("ascii-query",&[65, 0],-1,0,0,2,None,Some(&[65, 0]),false),
+("unicode-query",&[233, 55357, 56832, 0],-1,0,0,7,None,Some(&[195, 169, 240, 159, 152, 128, 0]),false),
+("unicode-write",&[233, 55357, 56832, 0],-1,0,7,7,None,Some(&[195, 169, 240, 159, 152, 128, 0]),false),
+("positive-embedded-nul",&[65, 0, 66],3,0,3,3,None,Some(&[65, 0, 66]),false),
+("valid-strict",&[233, 55357, 56832, 0],-1,128,7,7,None,Some(&[195, 169, 240, 159, 152, 128, 0]),false),
+("high-replacement",&[55296, 0],-1,0,4,4,None,Some(&[239, 191, 189, 0]),false),
+("low-replacement",&[56320, 0],-1,0,4,4,None,Some(&[239, 191, 189, 0]),false),
+("high-strict",&[55296, 0],-1,128,8,0,Some(1113),None,false),
+("low-strict",&[56320, 0],-1,128,8,0,Some(1113),None,false),
+("insufficient",&[233, 55357, 56832, 0],4,0,2,0,Some(122),None,false),
+("zero-input",&[65, 0],0,0,8,0,Some(87),None,false),
+("invalid-flags",&[65, 0],-1,16,8,0,Some(1004),None,false),
+("positive-split-pair",&[233, 55357, 56832, 0],2,0,8,5,None,Some(&[195, 169, 239, 191, 189]),false),
+("minus-one-first-nul",&[65, 0, 66, 0],-1,0,8,2,None,Some(&[65, 0]),false),
+("query-nonnull-output",&[65, 0],-1,0,0,2,None,Some(&[65, 0]),true)];
+ for &(label,units,count,flags,capacity,expected,error,payload,query_nonnull)in cases{let mut bytes=vec![0x5au8;capacity as usize+4];let target=if capacity==0&&!query_nonnull{std::ptr::null_mut()}else{bytes.as_mut_ptr()};unsafe{SetLastError(73);}let result=unsafe{WideCharToMultiByte(65001,flags,units.as_ptr(),count,target,capacity,std::ptr::null(),std::ptr::null_mut())};let last=unsafe{GetLastError()};
+  if let Some(out)=trace.as_mut(){writeln!(out,"{{\"label\":{label:?},\"utf16\":{units:?},\"input_count\":{count},\"flags\":{flags},\"capacity\":{capacity},\"query_nonnull\":{query_nonnull},\"result\":{result},\"last_error\":{last},\"bytes\":{bytes:?}}}").unwrap();out.flush().unwrap();}
+  assert_eq!(result,expected,"{label}");if let Some(error)=error{assert_eq!(last,error,"{label}");}assert_eq!(&bytes[capacity as usize..],&[0x5a;4],"{label}: guard beyond API capacity");if capacity>0&&result>0{let payload=payload.unwrap();assert_eq!(&bytes[..payload.len()],payload,"{label}");assert!(bytes[payload.len()..].iter().all(|b|*b==0x5a),"{label}: exact output bytes");}if capacity==0{assert_eq!(bytes,vec![0x5a;4]);}
+ }
+ "#,
+        "windows-narrow-conversion",
     );
 }

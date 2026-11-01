@@ -1,6 +1,27 @@
 # Remaining entry-to-exit dependencies
 
-## Current executable checkpoint: original argument mode and wide image name
+## Current executable checkpoint: original locale helper and real named lookup
+
+Original entry executes40ae79/40ab89, existing locale-view constructor40aabe,
+code-page read and original file-mode resolver407fc0/407d96/407e41. With actual
+module acquisition it reaches **GetProcAddress407efe for AreFileApisANSI** and
+rejects the unimplemented named export. Function cache41e000 stays0; no fake
+missing-export result, errno127, ANSI default or successful conversion. Prior
+startup/onexit/locale/output-record/module-reference effects remain. Original
+40ad10 narrow conversion and argv are not yet executed.
+
+[Contract/review/next gate](ARGV-LOCALE-CONVERSION.md),
+[expectations](evidence/argv-locale-expectations.json),
+[evidence](evidence/argv-locale-conversion.json). Eleven independent native modes
+cover original 65001 success and ownership/unknown/cache/mutation rejections.
+Six predecessor Windows filename observations are now retained as raw repository
+JSONL and hash-validated; 15 new conversion observation cases await Windows CI.
+Next close real process file-mode/callable authority and query/copy effects
+before executing original conversion/output stores. No assumption of raw TRUE=1
+or atomic failure-buffer behavior. Full startup/rcedit/default admission and all
+prior cleanup/equivalence limits remain; historical timeout causes unresolved.
+
+## Previous checkpoint: original argument mode and wide image name
 
 Original entry executes `0x401bbf`, argument-config wrapper `0x4069d4` and mode-1
 body `0x4066d6`, the original initialized locale check, and image-name wrapper

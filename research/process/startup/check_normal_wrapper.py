@@ -16,6 +16,7 @@ import sys
 from formatter_binding import mapped, locale_state_evidence
 from coff_binding import import_at_iat, pe_sections
 from observe_stdio import CASES, parse_events, summarize
+from narrow_conversion_observations import narrow_conversion_observations
 
 
 def sha(raw):
@@ -110,6 +111,8 @@ def check(original, observation, out, compare=None):
     if tuple(import_at_iat(image,0x41501c-cpu_base)) != ('kernel32.dll','IsProcessorFeaturePresent'):
         raise ValueError('startup processor feature import identity')
     (out/'startup-cpu-import.txt').write_text('41501c kernel32.dll IsProcessorFeaturePresent\n')
+    if tuple(import_at_iat(image,0x4150e0-cpu_base)) != ('kernel32.dll','WideCharToMultiByte'):
+        raise ValueError('argv wide conversion import identity')
     cookie_imports = []
     cookie_base, _ = pe_sections(image)
     for address, name in [(0x41502c,'GetSystemTimeAsFileTime'),(0x415028,'GetCurrentThreadId'),(0x415024,'GetCurrentProcessId'),(0x415020,'QueryPerformanceCounter')]:
@@ -370,7 +373,7 @@ def check(original, observation, out, compare=None):
         (out/('locale-copy-'+name.lower()+'.bin')).write_bytes(raw)
         file_regions['locale-copy-'+name.lower()] = sha(raw)
     # Bind the new component paths to the same untouched PE, not fixture answers.
-    for module, regions in [('crt_locale_shared', [('WRAPPER',0x40aeae),('CLEANUP',0x40aeef),('BODY',0x40aefb),('COPY_S',0x40b68a)]), ('crt_locale_memcpy', [('CODE',0x403040)]), ('crt_exit_tables', [('HELPER',0x4074fc),('WRAPPER',0x407565)]), ('crt_startup_caller', [('CALLER',0x401632),('LOCK',0x401913),('FLAG',0x4021bf)]), ('crt_argv', [('MODE',0x401bbf),('WRAPPER',0x4069d4),('CONFIGURE',0x4066d6),('IMAGE_NAME',0x40ae0d)]), ('crt_onexit', [('ATEXIT', 4201231), ('COMMON', 4201185), ('GLOBAL', 4224168), ('WRAPPER', 4224293), ('MANAGER', 4223584), ('CLEANUP', 4223663), ('BODY', 4223675), ('RECALLOC', 4245584), ('REALLOC', 4263072), ('ENCODE', 4222306), ('MEMSET', 0x402370)]), ('crt_c_initializers', [('EMPTY',0x401e00),('LOOP', 4222156), ('FIRST', 4199770), ('SECOND', 4199941), ('FILE_INIT', 4211984), ('LOCALE', 4262330), ('MODE', 4243721), ('FEATURE', 4270000), ('CPP', 4199949), ('APP_TYPE', 4220462), ('GET_MODE', 4201411), ('SET_MODE', 4223062), ('ZERO', 4201404), ('GET_COMMODE', 4223487), ('ONEXIT', 4200830), ('OPTIONS', 4201474), ('OPTIONS_GET', 4199024), ('SCAN_GET', 4201468)])]:
+    for module, regions in [('crt_locale_shared', [('WRAPPER',0x40aeae),('CLEANUP',0x40aeef),('BODY',0x40aefb),('COPY_S',0x40b68a)]), ('crt_locale_memcpy', [('CODE',0x403040)]), ('crt_exit_tables', [('HELPER',0x4074fc),('WRAPPER',0x407565)]), ('crt_startup_caller', [('CALLER',0x401632),('LOCK',0x401913),('FLAG',0x4021bf)]), ('crt_argv', [('MODE',0x401bbf),('WRAPPER',0x4069d4),('CONFIGURE',0x4066d6),('IMAGE_NAME',0x40ae0d),('LOCALE',0x40ab89),('FILE_ANSI',0x407fc0),('FILE_RESOLVE',0x407d96),('CONVERT',0x40ad10),('CONVERT_WRITE',0x40ab65),('WIDE_API',0x40b8c5),('WIDE_FLAGS',0x40b835)]), ('crt_onexit', [('ATEXIT', 4201231), ('COMMON', 4201185), ('GLOBAL', 4224168), ('WRAPPER', 4224293), ('MANAGER', 4223584), ('CLEANUP', 4223663), ('BODY', 4223675), ('RECALLOC', 4245584), ('REALLOC', 4263072), ('ENCODE', 4222306), ('MEMSET', 0x402370)]), ('crt_c_initializers', [('EMPTY',0x401e00),('LOOP', 4222156), ('FIRST', 4199770), ('SECOND', 4199941), ('FILE_INIT', 4211984), ('LOCALE', 4262330), ('MODE', 4243721), ('FEATURE', 4270000), ('CPP', 4199949), ('APP_TYPE', 4220462), ('GET_MODE', 4201411), ('SET_MODE', 4223062), ('ZERO', 4201404), ('GET_COMMODE', 4223487), ('ONEXIT', 4200830), ('OPTIONS', 4201474), ('OPTIONS_GET', 4199024), ('SCAN_GET', 4201468)])]:
         source = Path('src/'+module+'.rs').read_text()
         for name,address in regions:
             literal = re.search(r'const\s+'+name+r'\s*:\s*&str\s*=\s*"([0-9a-f]+)"', source)
@@ -563,6 +566,8 @@ def check(original, observation, out, compare=None):
         (out/(label+'.stderr')).write_bytes(checked.stderr)
         require_test_completions(checked,names)
 
+    windows_narrow_observation = (narrow_conversion_observations(out/'original-windows-narrow-conversion.jsonl')
+                                  if os.name == 'nt' else None)
     windows_image_name_observation = (image_name_observations(out/'original-windows-image-name.jsonl')
                                       if os.name == 'nt' else None)
     alignment_run = subprocess.run(['cargo','test','--locked','--example','crt_stream','aligned_'],
@@ -646,6 +651,8 @@ def check(original, observation, out, compare=None):
     source_hash = sha((out/'normal-wrapper.rs').read_bytes())
     result = dict(kind='original prolog/epilog component comparison with explicit unexecuted body boundary',
                   windows_image_name_api_observation_sha256=windows_image_name_observation,
+                  windows_narrow_conversion_observation_sha256=windows_narrow_observation,
+                  argv_locale_native_cases=11, argv_narrow_conversion_implemented=False,
                   pe_sha256=sha(image), helper_sha256=sha(helper), epilog_sha256=sha(epilog),
                   handler_scope_store_sha256=sha(scope_store),
                   handler_prolog_sha256=sha((out/'handler-prolog.bin').read_bytes()),
