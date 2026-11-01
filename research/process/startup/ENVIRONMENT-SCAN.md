@@ -79,3 +79,9 @@ canonical controlled entry and ten artifact cases pass;112 Python tests with
 one skip;Clippy all targets warnings denied and formatting pass. All152 word
 cases pass with the unchanged512KiB limit and64KiB environment padding. Pushed
 head replay and full CI remain separate gates; no pending run is called a pass.
+
+Final report review found a stale `fp_explicit_profile_boundary` annotation
+naming0x40b980 after actual execution advanced. It now names0x40b996. The aa0d495
+local replay was intentionally interrupted before a final report; its manifest,
+sources and component outputs remain retained. A new clean-head replay is
+required. No runtime check, instruction behavior or timeout was changed.

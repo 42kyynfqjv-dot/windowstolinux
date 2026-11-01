@@ -49,5 +49,11 @@
     "No new API failure semantics",
     "No full propagation/startup/rcedit/default support",
     "Historical Windows timeouts unresolved"
-  ]
+  ],
+  "report_review": {
+    "corrected_field": "fp_explicit_profile_boundary",
+    "actual_boundary": "0x40b996 original environment conversion query unbound",
+    "interrupted_replay_head": "aa0d4951403c3f2d8c964c5a3a60b8b24091a26e",
+    "status": "partial outputs retained; final report not claimed; fresh corrected-head replay required"
+  }
 }
