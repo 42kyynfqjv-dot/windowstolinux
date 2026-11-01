@@ -16,6 +16,10 @@ handling and actual helper calls, beginning0x4015ac->0x401bc9. Allocation resour
 failures, nonnull free/new-handler/wildcard and other existing gates remain
 explicit. Historical Windows timeout causes remain unresolved.
 
+Local verification passes 182/335/185 Rust aggregates, 18 new allocation cases,
+13 field-view cases and the existing parser cases. Full replay and repeated
+emission pass; new exact-head CI remains separate. Zero new whole-PE pairs.
+
 ## Previous checkpoint: original argument count and size checks
 
 Original count-only CALL `0x406755 -> 0x406813` now executes the parser and its

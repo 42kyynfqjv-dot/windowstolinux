@@ -91,6 +91,27 @@ zero-request calloc, native resource-failure/close-EOF equivalence, broader
 UTF-8 error/growth/free paths, XP/7 and historical Windows timeout causes remain
 unsupported or unresolved. No formal approval, merge or release is performed.
 
+## Verified checkpoint
+
+Implementation `7147f93652e98cf6e9d8be2e2a8cb7cdaa84025b` passes 182 root,
+335 CRT and 185 unwind Rust tests; both ignored artifact-dependent CRT gates
+were separately executed in full replay. Python suites pass 99 startup tests
+(one skip), 106 tool tests and 18 corpus tests (one skip). Clippy with warnings
+denied and formatting pass. The current canonical gate includes all 18 new
+scenarios and actual argument publication; the 13 field-view cases also pass.
+
+Full coherent-source replay passes. Independent generator invocations emit
+identical Rust SHA-256
+`51abea7786e5a141e494f54c13741d75d7a165c489a3ed6c95e66c4532d4510b`.
+The frozen PE remains
+`1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4`.
+No new Windows calloc/parser observations or whole-PE pairs are counted.
+
+All three exact-head workflows for reviewed base `eb69a96` passed. The new
+implementation's three workflows were still running at the evidence snapshot;
+later documentation-only heads require their own CI status. Initial fixture,
+lowering and stale-expectation failures remain recorded in the evidence.
+
 ## Next bounded gate
 
 Continue original `0x4015a6` pops and result test, then bind actual subsequent
