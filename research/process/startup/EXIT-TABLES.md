@@ -1,5 +1,9 @@
 # Original exit-table initialization and initializer return
 
+Historical checkpoint `246087c`; the [caller continuation](STARTUP-CALLER.md)
+now supersedes its next-boundary description. The completed initializer table
+still does not imply complete startup or application execution.
+
 ## Connected execution
 
 The unchanged authored PE now completes initializer callback 15 at `0x407565`

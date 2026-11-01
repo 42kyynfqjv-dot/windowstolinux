@@ -1,6 +1,26 @@
 # Remaining entry-to-exit dependencies
 
-## Current executable checkpoint: initializer table completes; startup prefix remains open
+## Current executable checkpoint: caller activates scope and reaches C-array initializer
+
+Explicit-profile original entry now executes POP401632, AL branch, BL/local
+writes, scope-2 ->0, real CALL401647/401913 and its live flag getter4021bf. The
+unchanged input takes the checked zero-flag return. Caller writes startup state
+41cc7c=1 and pushes actual C-array bounds41513c/415158, then rejects **before
+CALL401673 ->406ccc**. Argument words, active scope, frame and prior effects
+remain; no cleanup or whole-startup completion is fabricated. Nonzero guard flag
+rejects before FS:[18]/CMPXCHG; unknown/failure/reentry branches remain explicit.
+[Contract/review scope](STARTUP-CALLER.md), [evidence](evidence/startup-caller.json).
+
+Next: shared guarded C/C++ initializer-array traversal and actual callback/error
+effects. The C array is not empty: NULL plus40155a,401605,404510,4109ba,40c109,
+4127b0. The subsequent C++ array has NULL and40160d. Preserve state1/scope0 and
+failure effects; do not skip unbound targets. Sol can start the bounded inventory
+and traversal. Escalate only a demonstrated hard semantic/ownership gap; no Ultra.
+All broader default admission/startup/formatter/rcedit and cleanup/delivery,
+resource/encoding/XP7 equivalence gaps remain unsupported. Historical original
+Windows timeout causes remain unresolved; exact-head CI is tracked in SUB-579.
+
+## Previous checkpoint: initializer table completes; startup prefix remains open
 
 Explicit-profile unchanged entry now runs callback15 at407565 and both original
 exit-table helpers4074fc, initializes separate tables41ce88/41ce94, completes the
