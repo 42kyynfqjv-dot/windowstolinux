@@ -1,0 +1,8 @@
+{
+  "toolchain": "official MSVC14.44 x86/SDK10.0.26100, Windows2022",
+  "sources": {
+    "code_page_raw_probe.c": "6bbfb85b0f3b0f326aae92152d478de00195a17708ffb156a9c378f1326a6812",
+    "code-page-raw-expectations.json": "00e8fed3ef350dfd342c87f23cf933b60d41cac488741bcc49a7a12cc5f73d52"
+  },
+  "scope": "frozen before raw-BOOL binding; original v1 source/expectations unchanged; no target ACP inference"
+}

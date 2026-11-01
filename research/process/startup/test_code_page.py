@@ -37,3 +37,16 @@ class CodePageObservation(unittest.TestCase):
     def test_host_guard(self):
         if sys.platform=='win32':self.skipTest('non-Windows host guard')
         with self.assertRaisesRegex(RuntimeError,'requires Windows'):observe(Path('unused-code-page'))
+
+class RawCodePageObservation(unittest.TestCase):
+    def test_raw_return_is_not_silently_normalized(self):
+        expected=json.loads((HERE/'code-page-raw-expectations.json').read_text())
+        valid=struct.pack('<9I',0x32504356,1252,2,65001,1,0x12345678,0xffffffff,0,0x12345678)
+        self.assertEqual(validate(valid,expected)['cases'][0]['valid'],1)
+        for raw in [0,2,0x80000000,0xffffffff]:
+            changed=bytearray(valid);struct.pack_into('<I',changed,16,raw)
+            with self.assertRaises(ValueError):validate(changed,expected)
+        old=bytearray(valid);struct.pack_into('<I',old,0,0x31504356)
+        with self.assertRaises(ValueError):validate(old,expected)
+        frozen=json.loads((HERE/'code-page-raw-frozen.json').read_text())
+        for name,digest in frozen['sources'].items():self.assertEqual(hashlib.sha256((HERE/name).read_bytes()).hexdigest(),digest)

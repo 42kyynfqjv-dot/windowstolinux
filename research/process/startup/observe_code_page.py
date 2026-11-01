@@ -32,18 +32,18 @@ def validate_identity(output,expected_sha):
     if record.get('executed_sha256')!=expected_sha or any(hashlib.sha256(p.read_bytes()).hexdigest()!=expected_sha for p in [launch/'program.bin',output/'code-page-probe.exe']):
         raise ValueError('code-page executed PE identity mismatch')
 
-def observe(output):
+def observe(output, *, source_name="code_page_probe.c", expected_name="code-page-expectations.json", frozen_name="code-page-frozen.json"):
     if sys.platform!='win32':raise RuntimeError('code-page observation requires Windows')
     if not os.environ.get('VCToolsVersion','').startswith('14.44.'):raise RuntimeError('MSVC14.44 required')
     if not os.environ.get('WindowsSDKVersion','').startswith('10.0.26100.'):raise RuntimeError('Windows SDK10.0.26100 required')
     output.mkdir(parents=True,exist_ok=True)
-    for name in ['code_page_probe.c','code-page-expectations.json','code-page-frozen.json']:shutil.copyfile(HERE/name,output/name)
+    for name in [source_name,expected_name,frozen_name]:shutil.copyfile(HERE/name,output/name)
     sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()
-    frozen=json.loads((output/'code-page-frozen.json').read_text(encoding='utf-8'))
+    frozen=json.loads((output/frozen_name).read_text(encoding='utf-8'))
     for name,digest in frozen['sources'].items():
         if sha(output/name)!=digest:raise ValueError('code-page frozen source mismatch')
-    flags=['/nologo','/O1','/MT','/W4','/WX',str(output/'code_page_probe.c'),'/Fe:'+str(output/'code-page-probe.exe'),'/Fo:'+str(output/'code-page-probe.obj'),'/link','/MACHINE:X86','/SUBSYSTEM:CONSOLE']
-    report=dict(scope='original authored Windows API only; zero translated pairs',host=platform.platform(),compiler_version=os.environ['VCToolsVersion'],sdk=os.environ.get('WindowsSDKVersion'),compiler_sha256=sha(Path(shutil.which('cl'))),linker_sha256=sha(Path(shutil.which('link'))),sources={n:sha(output/n) for n in ['code_page_probe.c','code-page-expectations.json']},flags=flags,status='started',observations=0)
+    flags=['/nologo','/O1','/MT','/W4','/WX',str(output/source_name),'/Fe:'+str(output/'code-page-probe.exe'),'/Fo:'+str(output/'code-page-probe.obj'),'/link','/MACHINE:X86','/SUBSYSTEM:CONSOLE']
+    report=dict(scope='original authored Windows API only; zero translated pairs',host=platform.platform(),compiler_version=os.environ['VCToolsVersion'],sdk=os.environ.get('WindowsSDKVersion'),compiler_sha256=sha(Path(shutil.which('cl'))),linker_sha256=sha(Path(shutil.which('link'))),sources={n:sha(output/n) for n in [source_name,expected_name]},flags=flags,status='started',observations=0)
     def save():(output/'report.json').write_text(json.dumps(report,indent=2)+'\n',encoding='utf-8')
     save()
     try:
@@ -57,7 +57,7 @@ def observe(output):
         stdout=(output/'original.stdout').read_bytes();stderr=(output/'original.stderr').read_bytes()
         report['exit']=original.returncode;report['stdout_sha256']=hashlib.sha256(stdout).hexdigest()
         if original.returncode or stderr:raise ValueError('code-page original execution failed')
-        report.update(validate(stdout,json.loads((output/'code-page-expectations.json').read_text(encoding='utf-8'))))
+        report.update(validate(stdout,json.loads((output/expected_name).read_text(encoding='utf-8'))))
         report.update(status='matched',observations=len(report['cases']))
     except Exception as error:
         report.update(status='failed',error=type(error).__name__+': '+str(error));raise

@@ -61,11 +61,24 @@ jobs:
           $vcvars = Join-Path $install 'VC\Auxiliary\Build\vcvarsall.bat'
           cmd /c "`"$vcvars`" x86 -vcvars_ver=14.44 && python research/process/startup/observe_code_page.py %RUNNER_TEMP%/code-page-observation"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Observe frozen raw BOOL return cases
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $install = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $vcvars = Join-Path $install 'VC\Auxiliary\Build\vcvarsall.bat'
+          cmd /c "`"$vcvars`" x86 -vcvars_ver=14.44 && python research/process/startup/observe_code_page_raw.py %RUNNER_TEMP%/code-page-raw-observation"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: startup-code-page-observation
           path: ${{ runner.temp }}/code-page-observation
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: startup-code-page-raw-observation
+          path: ${{ runner.temp }}/code-page-raw-observation
   api-set-observation:
     runs-on: windows-2022
     timeout-minutes: 10
