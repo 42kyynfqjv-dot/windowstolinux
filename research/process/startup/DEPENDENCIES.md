@@ -1,6 +1,23 @@
 # Remaining entry-to-exit dependencies
 
-## Current executable checkpoint: original UTF-8 initializer returns
+## Current executable checkpoint: PTD reference publication reaches shared EH4 update
+
+Explicit-profile entry now executes original result caller40b2cc, old-reference
+decrement, new counter1 and pointer publication to UCRT PTD+72. It rejects at
+**CALL40b362 ->40aeae**, with these effects retained and initialized flag41d148
+still0. A declared per-thread-mask component separately executes real null-free
+and aligned return; original entry data is not tuned to take that branch.
+The caller continuation is single-use, and unknown byte/pointer knowledge stays
+bounded. Non-null free, error errno and exceptional cleanup remain explicit gaps.
+
+Correction:407126 is a scalar flag XCHG, not a lock acquisition. Real indexed
+lock5 belongs to the next shared EH4 updater. Next connect its original8-byte
+local allocation, copy/reference body, owned lock cleanup and RET12 using existing shared
+machinery. [Contract, evidence and review scope](LOCALE-RESULT.md).
+All c0d42a7 workflows passed; earlier original-Windows timeout causes remain
+unresolved. No new whole-PE pair, full startup/rcedit or default admission.
+
+## Previous checkpoint: original UTF-8 initializer returns
 
 Under separate explicit ACP65001 and installed-code-page profiles, original
 IsValidCodePage40b4e6 now executes a measured bounded API contract. Original UTF8

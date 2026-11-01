@@ -1,5 +1,9 @@
 # Original UTF-8 initializer and classifier
 
+This records the `c0d42a7` checkpoint. [LOCALE-RESULT.md](LOCALE-RESULT.md)
+documents the next connected caller advance and corrects the earlier description
+of `0x407126`: it exchanges a flag and does not acquire a lock.
+
 ## Executable boundary
 
 The opt-in native UTF-8 environment now executes the original
