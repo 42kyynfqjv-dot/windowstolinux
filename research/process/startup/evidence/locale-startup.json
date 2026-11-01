@@ -8,7 +8,7 @@
     "reason": "aligned stack provenance and non-authoritative return mirror require a shared activation contract"
   },
   "source_sha256": {
-    "src/crt_locale_startup.rs": "42964f9095e6a97604e39045264b377420e89d338a99e5482bae025776d8bc94",
+    "src/crt_locale_startup.rs": "b52cc6339e926a3f1b5fcb8f8b00daca28a04fb7cc8d69b7a13656a2c6663cbd",
     "src/crt_startup_table.rs": "7b4a693a2043fe1e8d2c9f52a2f09cc27e4e9ae370df6f0fba923ec9fb6e0da7",
     "src/crt_normal_frame_tests.rs": "1366d964e32e545feca815936f8d582c857eab4a757012772e2318a91844a82e",
     "research/process/startup/check_normal_wrapper.py": "79910ef5eb8e772be8d87737cc7e56bb17bd196113f50a4ce94506f6e2e5ffb8"
@@ -29,8 +29,8 @@
       "log_sha256": "1de3afd1e8e9e2863cf73bddcc81277374ad1165e87a2e105af994f4614fe332"
     },
     "clippy": {
-      "status": "passed",
-      "log_sha256": "c40e2f7952c3ab4cd1689bcaedfe44d3001ee2293410bc8030cc77944e8a57dc"
+      "status": "passed after final supplemental test",
+      "log_sha256": "71761ee2249bfededd448ed33c74fbba5edaebecd9a0bda86c38c2f53ebd7a07"
     },
     "canonical_entry_and_prefix": {
       "status": "passed",
@@ -39,14 +39,33 @@
     },
     "alignment": {
       "residues": 2,
-      "status": "passed; pointer loss and duplicate return authority rejected"
+      "status": "passed; pointer loss and duplicate return authority reject; declared aligned ordinary padding discards without known-bit fabrication",
+      "log_sha256": "9d4f6772a305df90198b977e22669fc05070a12158d152f1697bff8e9d790c96",
+      "failed_padding_hypothesis_sha256": "d37afb2c1def7664b53b2b219ba7088c72cfcaa0399cadd21db9f7534683fc8e",
+      "hypothesis_result": "known-padding requirement disproved; no extra padding blocker claimed"
+    },
+    "fresh_emission": {
+      "status": "passed",
+      "rust_sha256": "bc4f3592016033eac3f8f36d1be873eafdb21380f12578ee3895ab213fff159b",
+      "log_sha256": "14765841170f47cf44a5dc3db352d5550f31a2c42a3deab0aebbf61170ec0646",
+      "mtime_after_completed_report": true
     }
   },
   "full_replay": {
-    "status": "pending corrected full replay",
-    "failed_attempt": "/workspace/w2l-evidence/locale-prefix/replay",
-    "failure": "new import-mutation test expected one FlsGetValue name occurrence; PE contains two; both occurrences now mutated and focused canonical test passed",
-    "failure_log_sha256": "a1e220b27d908b294cba7ef57b914df87a61783ddb6349be9187e542471097e0"
+    "status": "passed",
+    "report_sha256": "ad460a47d4896ed161afc40f439805624f0c19e908406882fc750e3e7757ae0e",
+    "rust_sha256": "bc4f3592016033eac3f8f36d1be873eafdb21380f12578ee3895ab213fff159b",
+    "comparisons": 5,
+    "scope": "Live registry fixture; body EAX/flags inputs; original stack/FS/saved-state restoration only",
+    "kind": "original prolog/epilog component comparison with explicit unexecuted body boundary",
+    "log_sha256": "aae5ec246001988ab6725b6c51bcd0a8ede964d0254532564e36b3968417fbf5",
+    "production_emission_unchanged_from": "7e39ef9c0a434632e0af14e70da485987cb60fed",
+    "supplemental_alignment_test": "passed after replay; production source() unchanged and fresh emitted Rust hash matches",
+    "prior_failed_attempt": {
+      "path": "/workspace/w2l-evidence/locale-prefix/replay",
+      "failure": "new import mutator expected one FlsGetValue raw name but PE contains two; corrected both occurrences; focused and complete replay then passed",
+      "log_sha256": "a1e220b27d908b294cba7ef57b914df87a61783ddb6349be9187e542471097e0"
+    }
   },
   "new_windows_elf_pairs": 0,
   "recorded_wrapper_comparisons": {
@@ -61,7 +80,15 @@
       41260566395
     ],
     "all_jobs": "success",
-    "new_head": "not yet published"
+    "new_head": {
+      "source_checkpoint": "7e39ef9c0a434632e0af14e70da485987cb60fed",
+      "runs": [
+        41262071131,
+        41262067259,
+        41262067260
+      ],
+      "status": "in_progress at final local validation; no final-head pass claimed"
+    }
   },
   "windows_command_line_review": {
     "evidence": "command-line.json",
@@ -80,5 +107,10 @@
     "locale helper/GetACP/GetCPInfo not yet executed",
     "no full startup/rcedit/XP7 claim",
     "native close and EOF equivalence unproved"
-  ]
+  ],
+  "source_checkpoint": "7e39ef9c0a434632e0af14e70da485987cb60fed",
+  "archive": {
+    "manifest_sha256": "921a22a7266ec5243fe4b1ce816b7a4e3ebb457f1d01059bb0fc794a9a4a75e0",
+    "scope": "68 older generated native test binaries archived with verified decompression; source, PE and original Windows observations retained"
+  }
 }

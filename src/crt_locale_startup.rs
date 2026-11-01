@@ -82,7 +82,9 @@ fn original_stack_alignment_exposes_pointer_and_return_copy_limits() {
     let tail = crate::crt_ptd::raw(ALIGN_TAIL);
     let tg = Graph::decode_linear_fragment(&tail, 0x40b242).unwrap();
     let tb = crate::crt_stream_emit::emit_linear_fragment(&tg, &Default::default()).unwrap();
-    let extra=format!("fn align_prefix(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->Result<CrtValue,&'static str>{{{body}}}fn alignment_tail(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->Result<CrtValue,&'static str>{{{tb}}}");
+    let add = Graph::decode_linear_fragment(&[0x83, 0xc4, 4], 0x40b23f).unwrap();
+    let add_body = crate::crt_stream_emit::emit_linear_fragment(&add, &Default::default()).unwrap();
+    let extra=format!("fn align_prefix(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->Result<CrtValue,&'static str>{{{body}}}fn alignment_add(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->Result<CrtValue,&'static str>{{{add_body}}}fn alignment_tail(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->Result<CrtValue,&'static str>{{{tb}}}");
     crate::crt_stream_callees_tests::native(
         &extra,
         r#"
@@ -93,7 +95,9 @@ for offset in [2048,2052]{
  // writing its result. PUSH has not executed. Independent reference state
  // after mathematical alignment and ADD, not a
  // production lowering or admission bypass. Execute the original copy tail.
- c.r[4]=CrtValue::Pointer(rt.offset(stack,i64::from(CrtCpu::number(c.r[4]).unwrap()+4-stack.address())).unwrap());for n in 1..=4{rt.store(rt.offset(sp,n*4).unwrap(),32,CrtValue::scalar(n as u32)).unwrap();}
+ let aligned=rt.offset(stack,i64::from(CrtCpu::number(c.r[4]).unwrap()-stack.address())).unwrap();let padding=rt.load(aligned,32);c.r[4]=CrtValue::Pointer(aligned);let added=alignment_add(&mut rt,&mut c);
+ assert_eq!(padding,Ok(CrtValue::Scalar{bits:0,known:0}),"unknown padding/pushed data must stay unknown");added.expect("owned ordinary padding need not have known bits in the declared reference state");assert_eq!(c.r[4],CrtValue::Pointer(rt.offset(aligned,4).unwrap()));
+ c.r[4]=CrtValue::Pointer(rt.offset(aligned,4).unwrap());for n in 1..=4{rt.store(rt.offset(sp,n*4).unwrap(),32,CrtValue::scalar(n as u32)).unwrap();}
  alignment_tail(&mut rt,&mut c).expect("original mirror/callee frame writes must execute in the reference state");
  assert_eq!(rt.tags.values().filter(|&&v|v==CrtValue::ProtectedReturn(99)).count(),2);assert_eq!(c.validate_active(&rt),Err("CRT active caller lifetime/return authority"));assert_eq!(rt.load(sp,32).unwrap(),CrtValue::ProtectedReturn(99));
 }
