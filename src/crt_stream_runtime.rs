@@ -976,9 +976,11 @@ impl CrtStreamRuntime {
    let base=self.file_storage(p.cap).ok_or("CRT FILE identity")?.base;
    if (p.address-base)%56<8{self.claim_file_buffer(q,base+(p.address-base)/56*56)?;}
   }}
-  self.memory.write(p.address,&bits.to_le_bytes()[..size as usize]).map_err(|_|"CRT storage write")?;
+  // A symbolic nonzero has no backing bit pattern to write. Use one atomic
+  // forget operation rather than writing a dummy zero followed by forgetting.
+  if matches!(value,CrtValue::NonZero{..}){self.memory.forget(p.address,4).map_err(|_|"CRT nonzero scalar knowledge")?;}else{self.memory.write(p.address,&bits.to_le_bytes()[..size as usize]).map_err(|_|"CRT storage write")?;}
   for(at,_)in old{self.tags.remove(&at);}for i in 0..size{self.partial.remove(&(p.address+i));}
-  match value{CrtValue::NonZero{..}=>{self.memory.forget(p.address,4).map_err(|_|"CRT nonzero scalar knowledge")?;self.tags.insert(p.address,value);},CrtValue::Scalar{bits,known}=>{for i in 0..size{let mask=(known>>(8*i))as u8;if mask!=255{self.memory.forget(p.address+i,1).map_err(|_|"CRT scalar knowledge epoch")?;self.partial.insert(p.address+i,(((bits>>(8*i))as u8)&mask,mask));}}},_=>{self.tags.insert(p.address,value);}}
+  match value{CrtValue::NonZero{..}=>{self.tags.insert(p.address,value);},CrtValue::Scalar{bits,known}=>{for i in 0..size{let mask=(known>>(8*i))as u8;if mask!=255{self.memory.forget(p.address+i,1).map_err(|_|"CRT scalar knowledge epoch")?;self.partial.insert(p.address+i,(((bits>>(8*i))as u8)&mask,mask));}}},_=>{self.tags.insert(p.address,value);}}
   if let Some(cell)=self.errno_cell{if cell.cap==p.cap&&u64::from(p.address)<u64::from(cell.address)+4&&u64::from(cell.address)<u64::from(p.address)+u64::from(size){self.errno=self.load(cell,32)?.known_scalar().ok().map(|n|n as i32);}}
   Ok(())
  }
