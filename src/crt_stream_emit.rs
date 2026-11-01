@@ -486,6 +486,7 @@ pub(crate) fn emit_body_with_repeated_memory(
  Op::BitTest{source,bit}=>out.push_str(&format!("let v={};cpu.bit_test(rt,v,{bit})?;",read(source,roles)?)),
  Op::Exchange{address:a,register:r}=>{out.push_str(&format!("let p={};let incoming=cpu.get({},32,0)?;let old=rt.exchange_module_word(p,incoming)?;cpu.set({},32,0,old)?;",address(a,roles)?,r.index,r.index));},
  Op::Call(target)=>out.push_str(&call(pc,*target)?),
+ Op::SetByte{condition:c,destination}=>out.push_str(&format!("let v=CrtValue::scalar(u32::from(cpu.condition({})?));{}",condition(*c),write(destination,"v",roles)?)),
  Op::IndirectCall(operand)=>{out.push_str(&format!("let target={};",read(operand,roles)?));out.push_str(&indirect(pc,operand)?);},
  Op::InitializingAtomic{..}|Op::LockedExchangeAdd{..}|Op::LockedIncrement(_)|Op::FsRead(_)|Op::FsWrite(_)|Op::FsPush|Op::CpuId|Op::ReadXcr|Op::X87ClearExceptions=>out.push_str(&thread(pc,&node.op)?),
  Op::ReturnPop(bytes)=>{out.push_str(&return_hook(pc,*bytes)?.unwrap_or_else(||format!("return cpu.finish_pop(rt,{bytes});")));controlled=true;},

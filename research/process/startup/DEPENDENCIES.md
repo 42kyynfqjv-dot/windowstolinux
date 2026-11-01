@@ -1,6 +1,22 @@
 # Remaining entry-to-exit dependencies
 
-## Current executable checkpoint: narrow bytes, cookie return and program-name store
+## Current executable checkpoint: original argument count and size checks
+
+Original count-only CALL `0x406755 -> 0x406813` now executes the parser and its
+live locale classification calls. The caller passes actual counts to original
+storage helper `0x406985`, which runs its overflow checks and rejects before
+**CALL `0x4069ba -> 0x407cf0`**. Program-name publication remains complete; argc/argv
+globals remain zero and no vector is allocated/published. This advances the
+original instruction component, not default/full startup or rcedit admission.
+
+[Contract/review](ARGV-COUNT.md), [frozen expectations](evidence/argv-count-expectations.json).
+Next connect the existing original calloc/errno producer under live canonical
+heap and exception-registry authority, then the original null-free branch, return and
+second parsing/publication. Conversion-error/growth/free/cleanup and broader
+profile/equivalence gates remain explicit. Historical Windows timeout causes
+remain unresolved; no new whole-PE pairs.
+
+## Previous checkpoint: narrow bytes, cookie return and program-name store
 
 Original entry now completes the fit-domain UTF-8 write, original length store,
 image-wrapper cookie check/return and actual program-name pointer store406727.

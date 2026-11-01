@@ -14,6 +14,10 @@ pub(crate) const CONVERT_WRITE: &str =
     "8bff558bec33c05050ff7514ff75106affff750c50ff7508e8430d000083c4205dc21000";
 pub(crate) const WIDE_API: &str = "8bff558bec518b550853565781fae8fd0000740c81fae9fd0000740432dbeb02b301ff750c52e845ffffff33ff84db59598b4d248bf10f45f78365fc008b7d2084db0f457dfc740785c974038321005657ff751cff7518ff7514ff75105052ff15e05041005f5e5bc9c3";
 pub(crate) const WIDE_FLAGS: &str = "8bff558bec8b4508b9acde00003bc1773d7479b933c400003bc1771d746e83e82a74692d02c40000746283e801745d83e801745883e803eb472d35c40000744c2d6312000074452d12080000eb2db9b1de00003bc1771374332dadde0000742c83e801742783e801eb112db2de0000741b83e80174162d351f0000740f83e801740a8b450c257fffffff5dc333c05dc3";
+pub(crate) const COUNT: &str = "8bff558bec518b4514538b5d18568b7510578323008b7d08c700010000008b450c85c07408893083c00489450c32c9884dff803f22750d84c9b0220f94c147884dffeb35ff0385f674058a078806468a07478845fe0fbec050e8ea4e00005985c0740cff0385f674058a07880646478a45fe84c074198a4dff84c975b53c2074043c0975ad85f67407c646ff00eb014fc645ff008a0784c00f84c00000003c2074043c097505478a07ebf384c00f84ab0000008b4d0c85c97408893183c104894d0c8b4514ff0033d24233c0eb0247408a0f80f95c74f780f922752ea801751b8a4dff84c9740c807f0122750347eb0b8a4dff33d284c90f9445ffd1e8eb0b4885f67404c6065c46ff0385c075f18a0784c0743b807dff0075083c2074313c09742d85d2742385f674038806460fbe0750e8124e00005985c0740c47ff0385f674058a07880646ff0347e978ffffff85f67404c6060046ff03e936ffffff8b4d0c5f5e5b85c974038321008b4514ff00c9c3";
+pub(crate) const STORAGE: &str = "8bff558bec568b750881feffffff3f733983c8ff8b4d0c33d2f775103bc8732a0faf4d10c1e6028bc6f7d03bc1761b8d040e6a0150e8311300006a008bf0e88813000083c40c8bc6eb0233c05e5dc3";
+pub(crate) const BYTE_CLASSIFY: &str = "8bff558bec83ec10ff75088d4df0e8a0f3ffff0fb6550c8b45f88a4d14844c101975188b4d1085c9740d8b45f48b000fb7045085c1750433c0eb0333c040807dfc00740a8b4df083a150030000fdc9c3";
+pub(crate) const BYTE_WRAPPER: &str = "8bff558bec6a046a00ff75086a00e89dffffff83c4105dc3";
 fn guard(at: u32, bytes: &[u8]) -> String {
     format!("let p=rt.process_image_code(inputs.image,{at},{})?;if rt.memory.read(p.address(),{}).map_err(|_|\"argv code read\")?!=&{bytes:?}{{return Err(\"argv original code changed\");}}",bytes.len(),bytes.len())
 }
@@ -51,14 +55,14 @@ pub(crate) fn source() -> Result<String, String> {
     );
     out.push_str(&format!("fn argv_configure_wrapper(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:Option<&CrtNativePlatform>,epoch:Option<&mut NormalCallEpoch<'_>>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;{}{body}}}",guard(0x4069d4,&bytes)));
     let bytes = raw(CONFIGURE);
-    let mut g = crate::crt_startup_table::graph(&bytes[..(0x406755 - 0x4066d6)], 0x4066d6)?;
+    let mut g = crate::crt_startup_table::graph(&bytes[..(0x406767 - 0x4066d6)], 0x4066d6)?;
     g.nodes
         .extend(Graph::decode(&bytes[(0x40680f - 0x4066d6)..], 0x40680f)?.nodes);
     g.nodes.insert(
-        0x406755,
+        0x406767,
         Node {
-            length: 5,
-            op: Op::Reject("argv count/parser call unbound at 0x406755"),
+            length: 2,
+            op: Op::Reject("argv allocation caller result unbound"),
             successors: vec![],
         },
     );
@@ -69,6 +73,8 @@ pub(crate) fn source() -> Result<String, String> {
             Ok(match t{
   Target::Direct(0x40b42a)=>format!("let p=platform.ok_or(\"argv locale platform unbound\")?;let e=epoch.as_deref_mut().ok_or(\"argv locale registry unbound\")?;cpu.call_activation(rt,{next},0,|rt,c|locale_startup_original(rt,c,inputs,p,e))?;"),
   Target::Direct(0x40ae0d)=>format!("let p=platform.ok_or(\"argv image-name platform unbound\")?;cpu.call_activation(rt,{next},0,|rt,c|argv_image_name_original(rt,c,inputs,p))?;"),
+  Target::Direct(0x406813)=>format!("let p=platform.ok_or(\"argv count platform unbound\")?;cpu.call_activation(rt,{next},0,|rt,c|argv_count_original(rt,c,inputs,p))?;"),
+  Target::Direct(0x406985)=>format!("cpu.call_activation(rt,{next},0,|rt,c|argv_storage_original(rt,c,inputs))?;"),
   Target::Direct(0x407ccd)=>"return Err(\"argv invalid-mode errno acquisition unbound\");".into(),
   Target::Direct(0x407b4f)=>"return Err(\"argv invalid-parameter effect unbound\");".into(),
   _=>return Err(format!("argv configuration target {t:?}"))})
@@ -99,6 +105,7 @@ pub(crate) fn source() -> Result<String, String> {
         128,
     )?;
     out.push_str(&format!("fn argv_image_name_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:&CrtNativePlatform)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;{}{body}}}",guard(0x40ae0d,&bytes)));
+    out.push_str(&count_source()?);
     out.push_str(&locale_source()?);
     out.push_str(&conversion_source()?);
     Ok(out)
@@ -412,5 +419,93 @@ fn original_windows_utf8_capacity_and_error_writes_are_retained() {
  }
  "#,
         "windows-utf8-capacity",
+    );
+}
+
+fn count_source() -> Result<String, String> {
+    let mut out = String::new();
+    for (name, address, hex, budget) in [
+        ("argv_count_original", 0x406813, COUNT, 32768),
+        ("argv_byte_wrapper_original", 0x40b75b, BYTE_WRAPPER, 64),
+        ("argv_byte_classify_original", 0x40b70b, BYTE_CLASSIFY, 128),
+    ] {
+        let bytes = crate::crt_ptd::raw(hex);
+        let g = Graph::decode(&bytes, address)?;
+        let body = crate::crt_stream_emit::emit_body_with_hooks(
+            &g,
+            |pc, t| {
+                let next = pc + g.nodes[&pc].length;
+                Ok(match t{
+            Target::Direct(0x40b75b)=>format!("cpu.call_activation(rt,{next},0,|rt,c|argv_byte_wrapper_original(rt,c,inputs,platform))?;"),
+            Target::Direct(0x40b70b)=>format!("cpu.call_activation(rt,{next},0,|rt,c|argv_byte_classify_original(rt,c,inputs,platform))?;"),
+            Target::Direct(0x40aabe)=>format!("cpu.call_activation(rt,{next},4,|rt,c|locale_view_original(rt,c,inputs,platform))?;"),
+            _=>return Err(format!("argv count/classification target {t:?}"))})
+            },
+            &Default::default(),
+            budget,
+            |_, _| Err("argv count thread effect".into()),
+            |pc, _| {
+                Ok(if pc == 0x40b728 || pc == 0x40b738 || pc == 0x40b73a {
+                    // The constructor may return a live heap allocation pointer.
+                    // Only raw numeric addresses resolve through canonical image storage.
+                    "if matches!(cpu.r[0],CrtValue::Scalar{..}){cpu.r[0]=CrtValue::Pointer(rt.module_word_pointer(inputs.image,cpu.r[0])?);}".into()
+                } else {
+                    String::new()
+                })
+            },
+            |_, _| Ok(None),
+        )?;
+        out.push_str(&format!("fn {name}(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:&CrtNativePlatform)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;{}{body}}}",guard(address,&bytes)));
+    }
+    let bytes = crate::crt_ptd::raw(STORAGE);
+    let g = Graph::decode(&bytes, 0x406985)?;
+    let body = crate::crt_stream_emit::emit_body(
+        &g,
+        |_, t| {
+            Ok(match t {
+                Target::Direct(0x407cf0) => {
+                    "return Err(\"argv storage calloc producer unbound at 0x4069ba\");".into()
+                }
+                Target::Direct(0x407d50) => {
+                    "return Err(\"argv storage free effects unbound\");".into()
+                }
+                _ => return Err(format!("argv storage target {t:?}")),
+            })
+        },
+        &Default::default(),
+        128,
+    )?;
+    out.push_str(&format!("fn argv_storage_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;{}{body}}}",guard(0x406985,&bytes)));
+    Ok(out)
+}
+
+#[test]
+fn memory_setcc_uses_known_flags_and_preserves_adjacent_state() {
+    let mut prefix = String::new();
+    for (name, bytes) in [
+        ("equal", vec![0x0f, 0x94, 0x45, 0xff, 0xc3]),
+        ("not_equal", vec![0x0f, 0x95, 0x45, 0xff, 0xc3]),
+    ] {
+        let g = Graph::decode(&bytes, 0x1000).unwrap();
+        let body = crate::crt_stream_emit::emit_body(
+            &g,
+            |_, _| Err("unexpected call".into()),
+            &Default::default(),
+            8,
+        )
+        .unwrap();
+        prefix.push_str(&format!("fn {name}(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->Result<CrtValue,&'static str>{{{body}}}"));
+    }
+    crate::crt_stream_callees_tests::native(
+        &prefix,
+        r#"
+ for ne in [false,true]{for z in [Some(false),Some(true),None]{for mode in 0..3{
+  let mut rt=CrtStreamRuntime::new(7,9,0x8000,65536).unwrap();let stack=rt.map_region(0x20000,256,CrtRegionKind::Stack,Some(&[0xa5;256])).unwrap();let sp=rt.offset(stack,192).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(41)).unwrap();let mut cpu=CrtCpu::new(sp,41).unwrap();cpu.r[5]=CrtValue::Pointer(rt.offset(stack,64).unwrap());cpu.entry=cpu.r;cpu.flags=CrtFlags{cf:Some(true),zf:z,sf:None,of:Some(false)};let before=(cpu.flags.cf,cpu.flags.zf,cpu.flags.sf,cpu.flags.of);if mode==1{rt.memory.release(stack.cap,stack.owner).unwrap();}if mode==2{rt.store(rt.offset(stack,60).unwrap(),32,CrtValue::ProtectedReturn(99)).unwrap();}let got=if ne{not_equal(&mut rt,&mut cpu)}else{equal(&mut rt,&mut cpu)};
+  assert_eq!((cpu.flags.cf,cpu.flags.zf,cpu.flags.sf,cpu.flags.of),before);
+  if mode==0&&z.is_some(){assert!(got.is_ok());assert!(cpu.returned);for n in 60..68{assert_eq!(rt.load(rt.offset(stack,n).unwrap(),8).unwrap(),CrtValue::scalar(if n==63{u32::from(z.unwrap()!=ne)}else{0xa5}));}}
+  else{assert!(got.is_err());assert!(!cpu.returned);if mode==0{assert_eq!(got,Err("CRT unknown ZF"));assert_eq!(rt.load(rt.offset(stack,63).unwrap(),8).unwrap(),CrtValue::scalar(0xa5));}if mode==2{assert_eq!(rt.load(rt.offset(stack,60).unwrap(),32).unwrap(),CrtValue::ProtectedReturn(99));}}
+ }}}
+ "#,
+        "memory-setcc",
     );
 }

@@ -159,6 +159,11 @@ pub(crate) enum Op {
         dst: Reg,
         source: Operand,
     },
+    /// Byte SETcc memory destination; unknown flags remain a rejected effect.
+    SetByte {
+        condition: graph::Condition,
+        destination: Operand,
+    },
 }
 #[derive(Clone, Debug)]
 pub(crate) struct Node {
@@ -594,6 +599,22 @@ fn extended(i: &Instruction, raw: &[u8], tables: &[JumpTable<'_>]) -> Result<Op,
                 return Err("CRT IR: SETE byte register".into());
             };
             Op::Ordinary(Operation::Set(graph::Condition::Equal, dst))
+        }
+        Mnemonic::Sete | Mnemonic::Setne
+            if matches!(i.code(), Code::Sete_rm8 | Code::Setne_rm8)
+                && i.op0_kind() == OpKind::Memory =>
+        {
+            let Operand::Memory(address, _) = operand_from_move(i, 0)? else {
+                return Err("CRT IR: SETcc byte memory".into());
+            };
+            Op::SetByte {
+                condition: if i.mnemonic() == Mnemonic::Sete {
+                    graph::Condition::Equal
+                } else {
+                    graph::Condition::NotEqual
+                },
+                destination: Operand::Memory(address, 8),
+            }
         }
         Mnemonic::Ret if i.code() == Code::Retnd_imm16 && raw.len() == 3 && raw[0] == 0xc2 => {
             let bytes = i.immediate16();
