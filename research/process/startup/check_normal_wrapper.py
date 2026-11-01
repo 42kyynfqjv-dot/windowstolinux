@@ -300,6 +300,19 @@ def check(original, observation, out, compare=None):
     termination = mapped(image,0x40770c,60,executable=True)
     (out/'ptd-cxx-termination.bin').write_bytes(termination)
     file_regions['ptd-cxx-termination'] = sha(termination)
+    locale_source = Path('src/crt_locale_startup.rs').read_text()
+    for name,address in [('CALLBACK',0x40b42a),('GETTER',0x40a2ef),('HANDLER',0x414b4a),('ALIGN_PREFIX',0x40b235),('ALIGN_TAIL',0x40b242)]:
+        literal = re.search(r'const\s+'+name+r'\s*:\s*&str\s*=\s*"([0-9a-f]+)"', locale_source)
+        if literal is None:
+            raise ValueError('locale startup source constant missing: '+name)
+        raw = bytes.fromhex(literal[1])
+        if mapped(image,address,len(raw),executable=True) != raw:
+            raise ValueError('locale startup bytes differ from unchanged PE: '+name)
+        (out/('locale-startup-'+name.lower()+'.bin')).write_bytes(raw)
+        file_regions['locale-startup-'+name.lower()] = sha(raw)
+    for address,name in [(0x4150cc,'IsValidCodePage'),(0x4150d0,'GetACP'),(0x4150d4,'GetOEMCP'),(0x4150d8,'GetCPInfo')]:
+        if tuple(import_at_iat(image,address-base)) != ('kernel32.dll',name):
+            raise ValueError('locale code-page inventory import changed')
     fls_thunk = mapped(image, 0x408061, 12, executable=True)
     if fls_thunk != bytes.fromhex('8bff558bec5dff25a0504100'):
         raise ValueError('original FLS thunk changed')
@@ -433,6 +446,14 @@ def check(original, observation, out, compare=None):
     (out/'cookie-record.stderr').write_bytes(cookie_run.stderr)
     require_test_completions(cookie_run, [
         b'crt_exception_wrapper::normal_tests::canonical_image_cookie_and_original_record_initialization_compose',
+    ])
+
+    alignment_run = subprocess.run(['cargo','test','--locked','--example','crt_stream','crt_locale_startup::'],
+                                   env=mapping_env,capture_output=True,timeout=180)
+    (out/'locale-alignment.stdout').write_bytes(alignment_run.stdout)
+    (out/'locale-alignment.stderr').write_bytes(alignment_run.stderr)
+    require_test_completions(alignment_run, [
+        b'crt_locale_startup::original_stack_alignment_exposes_pointer_and_return_copy_limits',
     ])
 
     command = ['cargo', 'test', '--locked', '--example', 'crt_stream',

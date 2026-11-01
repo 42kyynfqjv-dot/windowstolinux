@@ -1,6 +1,6 @@
 # Remaining entry-to-exit dependencies
 
-## Current executable checkpoint: process-owned A/W command lines and callback9 return
+## Current executable checkpoint: callback10 prefix and required UCRT getter
 
 The explicit UTF-8 native launch (process code page65001) now captures real Linux
 argv once and constructs a canonical MSVC command line. It does not recover an
@@ -14,16 +14,20 @@ stores pointers to0x41ce74/0x41ce78, sets AL1 and returns. A later W/import/retu
 failure preserves an already completed A store. API calls invalidate unproved
 LastError knowledge. All earlier endpoint, UCRT and descriptor state remains.
 
-The next boundary is **CALL0x40c946 ->0x40b42a, initializer table index10**, before
-that callback executes. Its actual instruction/import inventory is the next gate;
-no environment/argument-array initialization or full startup is claimed.
-[Encoding, ownership, independent vectors and conformance](COMMAND-LINE.md).
-Ten unique Windows conformance cases were verified in two independent observation
-runs; final-head whole CI remains pending. Component replay remains distinct from unchanged whole-PE translation. Earlier
-thread/entropy/exception/close-EOF premises and unsupported default/rcedit/XP7 remain.
-Earlier checkpoints below are historical.
+The explicit native entry now executes callback10's three original locale-pointer
+stores and required-PTD getter `0x40a2ef`, preserving the same 868-byte UCRT heap
+identity and retiring the getter's temporary C++ record. It pushes the four
+original arguments and rejects **before CALL `0x40b460 -> 0x40b235`**. The locale
+initialized flag remains zero. This advances the connected replay without admitting
+the aligned helper, full startup, rcedit or default conversion.
 
-## Current executable checkpoint: actual native standard endpoints and callback8 return
+[Locale prefix, independently reproduced aligned-stack/return-mirror limitation,
+and bounded shared ownership scope](LOCALE-STARTUP.md). The next hard dependency is
+capability-preserving stack alignment and non-authoritative return mirrors through
+actual helper calls/epilog. Later GetACP/GetCPInfo and locale/reference effects
+remain unimplemented; no universal UTF-8 ACP premise is introduced.
+
+## Earlier checkpoint: actual native standard endpoints and callback8 return
 
 The optional native launch profile now acquires real Linux stdin/stdout/stderr as
 owned resources before entry. Process handle authority is separate from CRT
@@ -46,7 +50,7 @@ still stop before the standard initializer; default/full startup/rcedit/XP7 rema
 unsupported. Existing metadata and nonempty-inheritance limits remain.
 Earlier checkpoints below are historical.
 
-## Current executable checkpoint: native launch metadata and shared handle lifetime
+## Earlier checkpoint: native launch metadata and shared handle lifetime
 
 The optional `w2l-native-startup-metadata-v1` extension defines a native launch
 without a Windows CRT serialized inheritance block. Under this additional explicit
@@ -66,7 +70,7 @@ to all aliases; numeric reuse cannot restore old authority.
 No new Windows observation/ELF pair, default admission or full startup/rcedit claim.
 Earlier checkpoints below are historical.
 
-## Current executable checkpoint: original descriptor manager and 64 record locks
+## Earlier checkpoint: original descriptor manager and 64 record locks
 
 Callback8 now executes its EH4 prolog/lock7 and original nested manager/constructor.
 Original calloc(64,56), 64 native record initializations, original field stores,
@@ -81,7 +85,7 @@ inherited/standard-handle acquisition, callback completion and rollback are unpr
 No new Windows/ELF pair, default admission or full startup/rcedit claim.
 Earlier checkpoints below are historical.
 
-## Current executable checkpoint: locale publication and original UCRT return
+## Earlier checkpoint: locale publication and original UCRT return
 
 Original helper `0x40a00d`, replacement, module reference walker, guarded static
 child, cleanup and RET12 now execute under the live startup registry. The original
@@ -97,7 +101,7 @@ Dynamic prior-reference release, XADD, nonnull free and exceptional containment
 remain rejected. Default/full startup/rcedit are unproved; no new Windows/ELF pair.
 Earlier checkpoints below are historical.
 
-## Current executable checkpoint: first locale reference and normal EH4 cleanup
+## Earlier checkpoint: first locale reference and normal EH4 cleanup
 
 The explicit-profile original entry now executes helper `0x409efb`, including its
 live nested EH4 record, actual indexed acquisition, checked module-word LOCK INC,
@@ -112,7 +116,7 @@ walk, followed by destructor/failure closure. Exceptions within the first helper
 general concurrent atomics, XADD and full startup remain unsupported. No new
 Windows/ELF pair or default/rcedit admission. Earlier checkpoints are historical.
 
-## Current executable checkpoint: owned UCRT allocation and initializer prefix
+## Earlier checkpoint: owned UCRT allocation and initializer prefix
 
 Original entry under the explicit second-fiber profile now executes lazy sentinel
 publication, original calloc(1, 868), checked native heap allocation and publication
@@ -127,7 +131,7 @@ result. Original retry/errno, failed publication, locale helpers, ordered destru
 and normal return remain open. Default/full startup/rcedit remain unsupported;
 no new Windows/ELF pair. The following checkpoints are historical.
 
-## Current executable checkpoint: registered UCRT getter and native FLS read
+## Earlier checkpoint: registered UCRT getter and native FLS read
 
 The explicit second-fiber profile now carries the actual live `NormalCallEpoch`
 from original entry through initializer/table/callback7 into UCRT getter
@@ -149,7 +153,7 @@ heap, FLS setter and shared registry transitions with a justified UCRT object vi
 Default admission/full startup/rcedit remain unproved; no new Windows/ELF pair.
 Earlier checkpoints below are historical and superseded where stated.
 
-## Current executable checkpoint: protected second-resolver publication
+## Earlier checkpoint: protected second-resolver publication
 
 Under the explicitly enabled `w2l-native-second-fiber-20348-2398cc6a-v1`
 extension, unchanged entry now executes indexed lock CALL `0x407e92 -> 0x40bdcf`,
@@ -241,7 +245,7 @@ wrapper/export binding still rejects, so entry has allocated/published no FLS
 index. Prior lock/count effects remain. Default admission is unchanged. See
 [producer, tests and exact wrapper connection](NATIVE-FLS-PRODUCER.md).
 
-## Latest executable checkpoint: native-profile lock construction
+## Earlier checkpoint: native-profile lock construction
 
 The explicit native profile executes the original guard, indirect synchronization
 call, constructor RET and lock-count publication. The mapped lock remains live

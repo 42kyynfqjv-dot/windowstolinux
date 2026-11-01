@@ -370,3 +370,6 @@ mod crt_provider_tests;
 #[cfg(test)]
 #[path = "../src/crt_command_line_tests.rs"]
 mod crt_command_line_tests;
+
+#[path = "../src/crt_locale_startup.rs"]
+mod crt_locale_startup;

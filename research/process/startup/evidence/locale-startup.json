@@ -1,0 +1,84 @@
+{
+  "kind": "original locale startup prefix and required-PTD native component; no whole-PE translation",
+  "base_commit": "be0e52a915a4e5cd31483093b7e6bd1e4844e19a",
+  "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "next_boundary": {
+    "call": "0x40b460",
+    "target": "0x40b235",
+    "reason": "aligned stack provenance and non-authoritative return mirror require a shared activation contract"
+  },
+  "source_sha256": {
+    "src/crt_locale_startup.rs": "42964f9095e6a97604e39045264b377420e89d338a99e5482bae025776d8bc94",
+    "src/crt_startup_table.rs": "7b4a693a2043fe1e8d2c9f52a2f09cc27e4e9ae370df6f0fba923ec9fb6e0da7",
+    "src/crt_normal_frame_tests.rs": "1366d964e32e545feca815936f8d582c857eab4a757012772e2318a91844a82e",
+    "research/process/startup/check_normal_wrapper.py": "79910ef5eb8e772be8d87737cc7e56bb17bd196113f50a4ce94506f6e2e5ffb8"
+  },
+  "local_checks": {
+    "crt_stream": {
+      "passed": 300,
+      "ignored": 2,
+      "log_sha256": "f8c20d8f2166a569061bcedcb15c8d7a728f3506e9f7231f5559a5a02e966c0d"
+    },
+    "unwind_slice": {
+      "passed": 185,
+      "log_sha256": "bda53d8ad51127c48f1ace398426d7fe075f9e8c1295b01e7fa9f6849869c326"
+    },
+    "python": {
+      "run": 84,
+      "skipped": 1,
+      "log_sha256": "1de3afd1e8e9e2863cf73bddcc81277374ad1165e87a2e105af994f4614fe332"
+    },
+    "clippy": {
+      "status": "passed",
+      "log_sha256": "c40e2f7952c3ab4cd1689bcaedfe44d3001ee2293410bc8030cc77944e8a57dc"
+    },
+    "canonical_entry_and_prefix": {
+      "status": "passed",
+      "declared_state_cases": 19,
+      "log_sha256": "03483911ee061dd5618e09bd667a9b114e02dd31017462bf9db1cbfed34ae129"
+    },
+    "alignment": {
+      "residues": 2,
+      "status": "passed; pointer loss and duplicate return authority rejected"
+    }
+  },
+  "full_replay": {
+    "status": "pending corrected full replay",
+    "failed_attempt": "/workspace/w2l-evidence/locale-prefix/replay",
+    "failure": "new import-mutation test expected one FlsGetValue name occurrence; PE contains two; both occurrences now mutated and focused canonical test passed",
+    "failure_log_sha256": "a1e220b27d908b294cba7ef57b914df87a61783ddb6349be9187e542471097e0"
+  },
+  "new_windows_elf_pairs": 0,
+  "recorded_wrapper_comparisons": {
+    "count": 5,
+    "scope": "retained component observations; no whole PE"
+  },
+  "predecessor_ci": {
+    "head": "be0e52a915a4e5cd31483093b7e6bd1e4844e19a",
+    "runs": [
+      41260570454,
+      41260566356,
+      41260566395
+    ],
+    "all_jobs": "success",
+    "new_head": "not yet published"
+  },
+  "windows_command_line_review": {
+    "evidence": "command-line.json",
+    "unique_cases": 10,
+    "observed_runs": 2,
+    "scope": "independently redecoded both ZIPs; source/vector/PE hashes and exact LF archive inputs checked; not 20 unique cases or new translation pairs"
+  },
+  "retained_failure": {
+    "run": 41107853543,
+    "artifact": 13002965454,
+    "case": 19,
+    "cause": "unresolved original Windows process timeout"
+  },
+  "limits": [
+    "explicit native launch profile only; default conversion rejected",
+    "locale helper/GetACP/GetCPInfo not yet executed",
+    "no full startup/rcedit/XP7 claim",
+    "native close and EOF equivalence unproved"
+  ]
+}
