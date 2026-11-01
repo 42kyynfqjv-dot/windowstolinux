@@ -1,5 +1,5 @@
 {
-  "status": "implementation checkpoint; focused tests passed, aggregate/replay and exact-head CI pending",
+  "status": "local aggregate checks passed; full replay running; Windows probe contradiction diagnosed and observation retention fixed, fresh CI pending",
   "base_commit": "8327b319a17d48e0b89d1d665cd0347a776b1908",
   "kind": "original mapped instruction component integration; no whole-PE support",
   "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
@@ -93,19 +93,212 @@
     "canonical_ignored_component": "passed including11new modes",
     "argv_focused": 3,
     "Windows_probe": "rustc metadata typecheck passed; not linked/executed",
-    "observation_protocol_tests": 6,
+    "observation_protocol_tests": 7,
     "startup_python": {
-      "run": 95,
+      "run": 96,
       "skip": 1
     },
-    "clippy": "passed before observation-only additions; exact source check pending",
-    "fmt": "passed"
+    "clippy": "all targets passed at458490a; final observation-only source check pending",
+    "fmt": "passed",
+    "root": 182,
+    "crt": 330,
+    "crt_ignored": 2,
+    "unwind": 185,
+    "tools_python": 106,
+    "corpus_python": {
+      "run": 18,
+      "skip": 1
+    }
   },
   "source_hashes": {
-    "src/crt_argv.rs": "0faad45f98f966098fc01faf7e0cd68c228f9a0522ac68e662677bcf5720b88a",
+    "src/crt_argv.rs": "bd114f7e6ab37a1c594d89603774d56379848ecc5902e62276bfc3abc031f300",
     "src/crt_normal_frame_tests.rs": "cb576a19e42ed2a9d1b49de1013e8ff3e619a2a88ae5fd501f8c33a28a06cbf0",
     "research/process/startup/check_normal_wrapper.py": "e582230c35cc36d9b9f57aca3ddf421cefc3c2dd794c1c90c51bba206e92fe40",
-    "research/process/startup/narrow_conversion_observations.py": "54c2b03e3ed0c811d9618b15aef19b07607f840637861033b2109953c683867e",
-    "research/process/startup/test_narrow_conversion_observations.py": "cad541cfdae5a2a7bd712f03f014ed70dcb0f24a06bee0c9a3bc3b8b8bf6c3d4"
+    "research/process/startup/narrow_conversion_observations.py": "6726cd1514dc8ed5431f415c9eb263d7a36055084914094be9c1dbcba850edfc",
+    "research/process/startup/test_narrow_conversion_observations.py": "1bfd0dfdf6b14cc68f80104bddebaa7c6d0a326ae53da8a8b3a92eca7c5599cb",
+    ".github/workflows/startup-inventory.yml": "4617ea1d6e7aba0687d7436cd46aca6dc7561e5cd9c6df7ea22fc3d4499584e8"
+  },
+  "implementation_commit": "458490adbe0524e2ce49b4bb289444f8a3407dd3",
+  "base_ci": [
+    {
+      "id": 41320556799,
+      "head": "8327b319a17d48e0b89d1d665cd0347a776b1908",
+      "event": "pull_request",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41320556799"
+    },
+    {
+      "id": 41320551637,
+      "head": "8327b319a17d48e0b89d1d665cd0347a776b1908",
+      "event": "push",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41320551637"
+    },
+    {
+      "id": 41320551684,
+      "head": "8327b319a17d48e0b89d1d665cd0347a776b1908",
+      "event": "push",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41320551684"
+    }
+  ],
+  "base_source_review": [
+    {
+      "path": "src/crt_argv.rs",
+      "expected": "1be57055e99e77e744f0faad464a2cf618e738dd4679c9da6c55e4fe9669d202",
+      "actual": "1be57055e99e77e744f0faad464a2cf618e738dd4679c9da6c55e4fe9669d202",
+      "match": true
+    },
+    {
+      "path": "src/crt_stream_runtime.rs",
+      "expected": "2c4f353e1103501445d9203d59eb296b7dbe532121b1b0afddf2ffb8f6ada013",
+      "actual": "2c4f353e1103501445d9203d59eb296b7dbe532121b1b0afddf2ffb8f6ada013",
+      "match": true
+    },
+    {
+      "path": "src/crt_resident_loader.rs",
+      "expected": "284ac5bd227135fc17a38422350ea99dcfc9a4bc7f7766ede2710540552d34aa",
+      "actual": "284ac5bd227135fc17a38422350ea99dcfc9a4bc7f7766ede2710540552d34aa",
+      "match": true
+    },
+    {
+      "path": "src/crt_c_initializers.rs",
+      "expected": "0df7b09f48adf9f5c747ed4ae1aa3be68749ad760ff31c8764b8f1c43bbcd73d",
+      "actual": "0df7b09f48adf9f5c747ed4ae1aa3be68749ad760ff31c8764b8f1c43bbcd73d",
+      "match": true
+    },
+    {
+      "path": "src/crt_startup_caller.rs",
+      "expected": "e2a55cfa2d197920ec46d86dd35f58db25d7c7d62c7234c050081c69fb1301bf",
+      "actual": "e2a55cfa2d197920ec46d86dd35f58db25d7c7d62c7234c050081c69fb1301bf",
+      "match": true
+    },
+    {
+      "path": "src/crt_startup_entry.rs",
+      "expected": "a0a30abc3cc97430f8be1f1e46f45cdb6e4de548d1ea4f193d690a39e49ed22a",
+      "actual": "a0a30abc3cc97430f8be1f1e46f45cdb6e4de548d1ea4f193d690a39e49ed22a",
+      "match": true
+    },
+    {
+      "path": "src/crt_normal_frame_tests.rs",
+      "expected": "89c6183e5c3ec4bd6a5f6cdc7094d36a667d84e87489cff7b557e46e5a27ff48",
+      "actual": "89c6183e5c3ec4bd6a5f6cdc7094d36a667d84e87489cff7b557e46e5a27ff48",
+      "match": true
+    },
+    {
+      "path": "examples/crt_stream.rs",
+      "expected": "1c2c6dccac2463857cf783441c671f607898ac6b5b6056b14f0f19e62b74f9dc",
+      "actual": "1c2c6dccac2463857cf783441c671f607898ac6b5b6056b14f0f19e62b74f9dc",
+      "match": true
+    },
+    {
+      "path": "research/process/startup/check_normal_wrapper.py",
+      "expected": "b4a6d6044b6a3f75fdf268179636bc76e38eef12fbde5b43cf016c17192fc8e3",
+      "actual": "b4a6d6044b6a3f75fdf268179636bc76e38eef12fbde5b43cf016c17192fc8e3",
+      "match": true
+    },
+    {
+      "path": "research/process/startup/test_image_name_observations.py",
+      "expected": "544fc2ce18c925ccf9929211781c0e4deebf2a279732832eb70b4f49aa6e84ad",
+      "actual": "544fc2ce18c925ccf9929211781c0e4deebf2a279732832eb70b4f49aa6e84ad",
+      "match": true
+    }
+  ],
+  "next_inventory": {
+    "basis": "unchanged x86 PE instruction inventory, not execution of unbound helpers",
+    "locale_return": {
+      "locale_info_plus8_65001": 65001,
+      "file_ANSI_nonzero": 0,
+      "file_OEM_zero": 1,
+      "meaning": "CP_UTF8 versus CP_ACP/CP_OEMCP aliases; not the GetACP numeric value"
+    },
+    "actual_call_sequence": [
+      {
+        "at": "40ae79",
+        "target": "40ab89",
+        "state": "executed until nested unsupported named export"
+      },
+      {
+        "at": "407efe",
+        "target": "IAT415070 GetProcAddress AreFileApisANSI",
+        "state": "actual current rejection; provider acquired, cache still0"
+      },
+      {
+        "at": "40ae94",
+        "target": "40ad10",
+        "state": "not executed; original output record plus input wide-string and codepage"
+      },
+      {
+        "at": "40ad64",
+        "target": "40b8c5",
+        "state": "conversion size query; CP alias, flags0, input count-1, NULL output/capacity0/default/usedNULL"
+      },
+      {
+        "at": "40ad92",
+        "target": "40add2",
+        "state": "conditional capacity helper if required exceeds existing capacity; not inventoried/bound yet"
+      },
+      {
+        "at": "40ada8",
+        "target": "40ab65",
+        "state": "conversion write wrapper; original output pointer/capacity and input count-1"
+      },
+      {
+        "at": "40b924",
+        "target": "IAT4150e0 WideCharToMultiByte",
+        "state": "actual API after original flags helper40b835 and default/used-output processing; unbound"
+      },
+      {
+        "at": "40adc8",
+        "target": "output record+16 store",
+        "state": "length=result-1 only after successful original write"
+      },
+      {
+        "at": "40aea7",
+        "target": "40154c cookie check",
+        "state": "not connected from this path yet"
+      }
+    ],
+    "failure_paths": [
+      {
+        "calls": [
+          "40ad20->40adf9",
+          "40ad40->40add2"
+        ],
+        "meaning": "NULL/empty input and allocation ownership operations; unbound"
+      },
+      {
+        "calls": [
+          "40ad70/40adb1 IAT415044",
+          "40ad77/40adb8->407c71",
+          "40ad7d/40adbe->407ccd"
+        ],
+        "meaning": "actual LastError mapping and errno acquisition after query/write failure; preserve any API writes before failure"
+      },
+      {
+        "meaning": "no stable view, output permission, allocation, locale or file-mode assumption may be substituted by successful callback"
+      }
+    ],
+    "profile_limits": [
+      "native CP_ACP0 can resolve65001 only through declared profile; CP_OEMCP1 needs its own owned codepage policy",
+      "direct Windows CP65001 observations do not establish host CP_ACP equals65001",
+      "uninitialized fresh allocations remain unknown until stores",
+      "default admission/full startup/rcedit unsupported"
+    ]
+  },
+  "preserved_Windows_failure": {
+    "head": "458490adbe0524e2ce49b4bb289444f8a3407dd3",
+    "run": 41323334916,
+    "job": 124897997677,
+    "artifact": 13090501814,
+    "zip_sha256": "dd415f5644717f51408ed260a94a84c977712d1873b569141a7683f4bca842c2",
+    "failure": "outside documented UTF8 flags domain0x10 returned2 versus frozen expected0/error1004",
+    "failed_job_excerpt_sha256": "08b536decd02d6c2328740b3229b810ef219d4af3a0b609af860f46fa68e574a",
+    "raw_trace": "absent: aggregate cargo test had no W2L_EH4_EVIDENCE before failure; not reconstructed",
+    "correction": "collect all15rows before assertions; configure aggregate durable evidence directory; flags outside0/128 are observed only and remain unbound in converter; documented-domain checks unchanged",
+    "fresh_Windows_evidence": "pending; not inferred from rerun"
   }
 }

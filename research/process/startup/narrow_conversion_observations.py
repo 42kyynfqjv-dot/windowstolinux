@@ -35,9 +35,12 @@ def narrow_conversion_observations(path):
                 raise ValueError('original narrow conversion input schedule')
         if any(type(n) is not int for n in row['utf16']):
             raise ValueError('original UTF16 unit type')
-        if (type(row.get('result')) is not int or row['result'] != case['expected_return']
+        supported_flags = case['flags'] in (0, 128)
+        capacity = case['capacity']
+        if (type(row.get('result')) is not int or not 0 <= row['result'] <= max(capacity, case['expected_return'])
+                or (supported_flags and row['result'] != case['expected_return'])
                 or type(row.get('last_error')) is not int or not 0 <= row['last_error'] <= 0xffffffff
-                or (case['expected_error'] is not None and row['last_error'] != case['expected_error'])):
+                or (supported_flags and case['expected_error'] is not None and row['last_error'] != case['expected_error'])):
             raise ValueError('original narrow conversion result/error')
         data = row.get('bytes')
         capacity = case['capacity']
@@ -45,10 +48,13 @@ def narrow_conversion_observations(path):
                 or any(type(n) is not int or not 0 <= n <= 255 for n in data)
                 or data[capacity:] != [0x5a]*4):
             raise ValueError('original narrow conversion output bounds')
-        if capacity and row['result'] > 0:
+        if supported_flags and capacity and row['result'] > 0:
             payload = case['expected_payload']
             if data != payload + [0x5a]*(capacity+4-len(payload)):
                 raise ValueError('original narrow conversion output bytes')
+        # Outside documented flag domain, collect results only. The original
+        # flag16/error1004 expectation was refuted by the preserved Windows run;
+        # this does not admit flag16 in any converter binding.
         # Failure bytes INSIDE capacity are retained, not assumed unchanged.
         # Successful LastError is also unconstrained; it is not a failure code.
     return hashlib.sha256(raw).hexdigest()

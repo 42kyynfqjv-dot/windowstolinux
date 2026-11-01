@@ -360,6 +360,10 @@ jobs:
       - name: Compile original CRT text component and compare independent effects
         shell: pwsh
         run: |
+          # Retain direct API rows even if aggregate assertions fail before the
+          # normal-wrapper reproduction creates its separate evidence folder.
+          $env:W2L_EH4_EVIDENCE = "$env:RUNNER_TEMP/unwind-slice/component-api-evidence"
+          New-Item -ItemType Directory -Force $env:W2L_EH4_EVIDENCE | Out-Null
           cargo test --locked --example crt_stream
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python research/process/startup/check_normal_wrapper.py "$env:RUNNER_TEMP/unwind-slice" "$env:RUNNER_TEMP/stdio-observation" "$env:RUNNER_TEMP/unwind-slice/normal-wrapper-windows"

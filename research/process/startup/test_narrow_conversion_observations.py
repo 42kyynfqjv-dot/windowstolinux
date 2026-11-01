@@ -37,6 +37,14 @@ class NarrowConversionObservations(unittest.TestCase):
     def test_raw_noncanonical_bool_nonutf8_acp_and_failure_writes_preserved(self):
         self.assertEqual(len(self.check_rows(records())), 64)
 
+    def test_outside_supported_flag_domain_is_observed_not_normalized(self):
+        rows = records()
+        invalid = next(row for row in rows if row.get('label') == 'invalid-flags')
+        invalid.update(result=2, last_error=73, bytes=[65, 0]+[0x5a]*10)
+        self.assertEqual(len(self.check_rows(rows)), 64)
+        invalid['bytes'][-1] = 0
+        with self.assertRaises(ValueError): self.check_rows(rows)
+
     def test_missing_forged_or_corrupted_evidence_rejects(self):
         for mode in range(19):
             rows = copy.deepcopy(records())
