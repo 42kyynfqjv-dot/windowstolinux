@@ -1,0 +1,53 @@
+{
+  "scope": "Original thread-locale mode-zero component and connected entry; no whole-PE claim",
+  "regions": [
+    {
+      "name": "THREAD_LOCALE",
+      "address": "0x407158",
+      "bytes": 98,
+      "sha256": "e9abd970ad70035dac201086ca4c4c9a9383237877226ad745bc474330d4ddd1"
+    },
+    {
+      "name": "THREAD_REQUIRED",
+      "address": "0x40a2e1",
+      "bytes": 14,
+      "sha256": "8da752ce8d55b5a9deb140cd9870f6a4cb9fc8708d53266d5e35c2c4db52d572"
+    }
+  ],
+  "body_cases": 10,
+  "production_cases": 10,
+  "original_entry_boundary": "0x4015e0 CALL0x401bd5 unsupported",
+  "whole_pe_pairs": 0,
+  "new_windows_query_observations": 0,
+  "format_failures": {
+    "head": "63d1c40",
+    "runs": [
+      41355071228,
+      41355066928
+    ],
+    "job": 124993274963,
+    "fix": "18416a0"
+  },
+  "local_validation": {
+    "crt": "343 passed, 2 ignored artifact gates handled separately",
+    "canonical": "pass with original code/artifact and 10 production query cases",
+    "python": "107 tests, 1 skip",
+    "clippy": "all targets, warnings denied, pass",
+    "fmt": "cargo fmt --all -- --check pass",
+    "low_stack": "152 cases,512KiB plus64KiB environment padding pass"
+  },
+  "prior_complete_replay": {
+    "head": "63d1c40",
+    "rust_sha256": "0ed768d14c391a3cf692aac53be56386623e631e8d0c306a1a14140fa5531cf7",
+    "component_comparisons": 5,
+    "whole_pe_pairs": 0
+  },
+  "current_replay": "must run/read final pushed head separately; prior result is not final-query evidence",
+  "limits": [
+    "only mode0 query admitted",
+    "unknown decision/nonquery modes reject",
+    "required PTD termination remains unsupported",
+    "full startup/rcedit/default admission unproved",
+    "historical Windows timeout causes unresolved"
+  ]
+}

@@ -1,5 +1,8 @@
 # Owned guest FP control effects and original precision call
 
+This records checkpoint da1d3bd. See [current query integration](THREAD-LOCALE-QUERY.md)
+for later execution progress.
+
 The original `0x4076a0 -> 0x40d000` call can now execute the complete precision
 and query paths with an independently supplied, owned FP input state. The actual
 entry still has unknown initial control/MXCSR values. After its earlier FNCLEX,

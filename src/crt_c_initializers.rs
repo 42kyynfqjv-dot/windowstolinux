@@ -109,6 +109,7 @@ fn startup_c_array_platform(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&Crt
     out.push_str(&registration_source);
     out.push_str(&crate::crt_argv::source()?);
     out.push_str(&post_source()?);
+    out.push_str(&thread_locale_source()?);
     for (name, at, literal) in [
         ("cinit_app_type", 0x40662e, APP_TYPE),
         ("cinit_get_mode", 0x401bc3, GET_MODE),
@@ -218,12 +219,9 @@ fn startup_c_array_platform(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&Crt
     let g = cut_graph(
         &bytes,
         0x40155a,
-        0x4015da,
+        0x4015e0,
         &[
-            (
-                0x4015da,
-                "C initializer configuration call unbound at0x4015da",
-            ),
+            (0x4015e0, "C initializer next callback unbound at0x4015e0"),
             (0x4015fd, "C initializer fatal path unbound at 0x4015fd"),
         ],
     )?;
@@ -236,6 +234,7 @@ fn startup_c_array_platform(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&Crt
                 Target::Direct(0x4066b0) => "cinit_encode_callback",
                 Target::Direct(0x401bf9) => "cinit_post_noop",
                 Target::Direct(0x401bd8) => "cinit_fp_prefix",
+                Target::Direct(0x407158) => return Ok(format!("let e=epoch.as_deref_mut().ok_or(\"thread locale live registry absent\")?;let p=platform.ok_or(\"thread locale platform absent\")?;cpu.call_activation(rt,{},0,|rt,c|cinit_thread_locale_query(rt,c,inputs,p,e))?;",pc+g.nodes[&pc].length)),
                 Target::Direct(0x401bbf) => "argv_mode_original",
                 Target::Direct(0x4069d4) => return Ok(format!("cpu.call_activation(rt,{},0,|rt,c|argv_configure_wrapper(rt,c,inputs,platform,epoch.as_deref_mut()))?;",pc+g.nodes[&pc].length)),
                 Target::Direct(0x401b0f) => return Ok(format!("cpu.call_activation(rt,{},0,|rt,c|onexit_register_original(rt,c,inputs,epoch.as_deref_mut()))?;",pc+g.nodes[&pc].length)),
@@ -354,5 +353,87 @@ fn slist_opaque_initialization_expires_reads_and_protects_state() {
  let(mut rt,init)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();let data=rt.map_region(0x20000,512,CrtRegionKind::Module,Some(&[0x69;512])).unwrap();for n in 0..32{rt.initialize_slist_head(init,rt.offset(data,n*8).unwrap()).unwrap();}let p=rt.offset(data,256).unwrap();assert_eq!(rt.initialize_slist_head(init,p),Err("CRT SLIST capacity domain"));assert_eq!(rt.memory.read(p.address(),8).unwrap(),&[0x69;8]);let before=rt.slist_heads.values().count();rt.initialize_slist_head(init,data).unwrap();assert_eq!(rt.slist_heads.values().count(),before);
  "#,
         "slist-opaque-state",
+    );
+}
+
+pub(crate) const THREAD_LOCALE:&str="8bff558bec56e87e3100008b55088bf06a00588b8e50030000f6c1020f94c04083faff743385d2743683fa01741f83fa027415e83d0b0000c70016000000e8b409000083c8ffeb1783e1fdeb0383c902898e50030000eb07830db8c74100ff5e5dc3";
+pub(crate) const THREAD_REQUIRED: &str = "e84c00000085c00f8411d5ffffc3";
+fn thread_locale_body(
+    call: impl FnMut(u32, Target) -> Result<String, String>,
+) -> Result<String, String> {
+    let g = Graph::decode(&crate::crt_ptd::raw(THREAD_LOCALE), 0x407158)?;
+    crate::crt_stream_emit::emit_body(
+        &g,
+        call,
+        &BTreeMap::from([(0x41c7b8, "CrtRegionKind::Module".into())]),
+        128,
+    )
+}
+fn thread_locale_source() -> Result<String, String> {
+    let raw = crate::crt_ptd::raw(THREAD_REQUIRED);
+    let mut g = Graph {
+        origin: 0x40a2e1,
+        end: 0x40a2e1 + raw.len() as u32,
+        nodes: BTreeMap::new(),
+    };
+    // Decode every original instruction; the conditional external edge is an
+    // explicit rejected termination boundary, never a successful graph exit.
+    let mut at = 0;
+    for length in [5, 2, 6, 1] {
+        let pc = 0x40a2e1 + at as u32;
+        let node = Graph::decode_instruction(&raw[at..at + length], pc)?;
+        at += node.length as usize;
+        g.nodes.insert(pc, node);
+    }
+
+    let body = crate::crt_stream_emit::emit_body_with_exit(
+        &g,
+        |pc, t| {
+            if t != Target::Direct(0x40a332) {
+                return Err("thread locale PTD target".into());
+            }
+            Ok(format!("cpu.call_activation(rt,{},0,|rt,c|ptd_get_native_registered_with_lazy(rt,c,epoch,inputs,platform,|rt,c,e|ucrt_lazy_native(rt,c,inputs,platform,e)))?;",pc+g.nodes[&pc].length))
+        },
+        &Default::default(),
+        32,
+        |_, _| Err("thread locale unexpected thread effect".into()),
+        |_, _| Ok(String::new()),
+        |_, _| Ok(None),
+        Some(0x4077ff),
+    )?;
+    let terminal = "if pc==4225023{return Ok(cpu.r[0]);}";
+    if !body.contains(terminal) {
+        return Err("thread locale termination boundary missing".into());
+    }
+    let body = body.replace(
+        terminal,
+        "if pc==4225023{return Err(\"thread locale required PTD termination unbound\");}",
+    );
+    let mut out=format!("fn cinit_thread_required(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:&CrtNativePlatform,epoch:&mut NormalCallEpoch<'_>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;{}{body}}}",guard(0x40a2e1,&raw));
+    let body = thread_locale_body(|pc, t| {
+        Ok(match t{Target::Direct(0x40a2e1)=>format!("cpu.call_activation(rt,{},0,|rt,c|cinit_thread_required(rt,c,inputs,platform,epoch))?;locale_required_view(rt,platform,cpu.r[0])?;CrtCpu::pointer(cpu.r[0])?;",pc+5),_=>"return Err(\"thread locale nonquery effects unsupported\");".into()})
+    })?;
+    let bytes = crate::crt_ptd::raw(THREAD_LOCALE);
+    out.push_str(&format!("fn cinit_thread_locale_query(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:&CrtNativePlatform,epoch:&mut NormalCallEpoch<'_>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;platform.validate(rt,inputs.init)?;cpu.validate_active(rt)?;epoch.state()?;let sp=CrtCpu::pointer(cpu.r[4])?;if rt.load(rt.offset(sp,4)?,32)?.known_scalar()?!=0{{return Err(\"thread locale nonquery mode unsupported\");}}{}{body}}}",guard(0x407158,&bytes)));
+    Ok(out)
+}
+
+#[test]
+fn original_thread_locale_query_preserves_memory_and_rejects_unknown_or_stale_inputs() {
+    let body=thread_locale_body(|pc,t|Ok(match t{Target::Direct(0x40a2e1)=>format!("cpu.call_activation(rt,{},0,|rt,c|{{let value=lookup(rt)?;c.clobber(value);c.finish(rt)}})?;",pc+5),_=>"return Err(\"nonquery path\");".into()})).unwrap();
+    let extra=format!("fn query(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,lookup:&mut impl FnMut(&mut CrtStreamRuntime)->Result<CrtValue,&'static str>)->Result<CrtValue,&'static str>{{cpu.validate_active(rt)?;let sp=CrtCpu::pointer(cpu.r[4])?;if rt.load(rt.offset(sp,4)?,32)?.known_scalar()?!=0{{return Err(\"nonquery\");}}{body}}}");
+    crate::crt_stream_callees_tests::native_bounded_stack(
+        &extra,
+        r#"
+#[inline(never)]fn one(mode:u32){
+ let(mut rt,_)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();let stack=rt.map_region(0x10000,4096,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,2048).unwrap();let p=rt.map_region(0x30000,868,CrtRegionKind::ThreadData,Some(&[0;868])).unwrap();let cell=rt.offset(p,848).unwrap();
+ let value=if mode==0{CrtValue::scalar(1)}else if mode==1{CrtValue::scalar(3)}else if mode==2{CrtValue::Scalar{bits:0,known:!2}}else{CrtValue::scalar(0xffffffff)};rt.store(cell,32,value).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(73)).unwrap();rt.store(rt.offset(sp,4).unwrap(),32,if mode==3{CrtValue::Scalar{bits:0,known:0}}else if mode>=4&&mode<=7{CrtValue::scalar([1,2,3,u32::MAX][(mode-4)as usize])}else{CrtValue::scalar(0)}).unwrap();let mut cpu=CrtCpu::new(sp,73).unwrap();cpu.flags=CrtFlags{cf:Some(true),sf:Some(true),zf:Some(false),of:Some(true)};let saved=cpu.r;let mut calls=0;
+ let result=query(&mut rt,&mut cpu,&mut|rt|{calls+=1;if mode==8{rt.memory.release(p.cap,p.owner).unwrap();}if mode==9{rt.store(cell,32,CrtValue::ProtectedReturn(77))?;}Ok(CrtValue::Pointer(p))});
+ if mode==0||mode==1{assert_eq!(result,Ok(CrtValue::scalar(if mode==0{2}else{1})));assert!(cpu.returned);for i in[3,5,6,7]{assert_eq!(cpu.r[i],saved[i]);}assert_eq!((cpu.flags.cf,cpu.flags.zf,cpu.flags.sf,cpu.flags.of),(Some(false),Some(true),Some(false),Some(false)));assert_eq!(rt.load(cell,32).unwrap(),value);let before=calls;assert!(query(&mut rt,&mut cpu,&mut |_|{calls+=1;Ok(CrtValue::Pointer(p))}).is_err());assert_eq!(calls,before);}
+ else{assert!(result.is_err(),"negative query {mode}");assert!(!cpu.returned);assert_eq!(calls,if (3..=7).contains(&mode){0}else{1});if mode!=8&&mode!=9{assert_eq!(rt.load(cell,32).unwrap(),value);}}
+}
+for mode in 0..10{one(mode);}
+"#,
+        "thread-locale-query",
     );
 }

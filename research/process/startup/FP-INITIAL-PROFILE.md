@@ -1,5 +1,8 @@
 # Explicit initial FP control policy
 
+This records checkpoint 63d1c40. See [current query integration](THREAD-LOCALE-QUERY.md)
+for later execution progress.
+
 The versioned opt-in profile
 `w2l-win2022-entry-control-027f-mxcsr-1f80-v1` initializes the canonical owned
 context's control word to0x027f and MXCSR to0x1f80. It leaves status, tag,

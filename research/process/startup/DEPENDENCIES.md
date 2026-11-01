@@ -1,6 +1,17 @@
 # Remaining entry-to-exit dependencies
 
-## Current executable checkpoint: opt-in initial controls reach post-FP continuation
+## Current executable checkpoint: original thread-locale query
+
+Original mode0 CALL0x4015da→0x407158 runs its actual required-PTD wrapper,
+registered/lazy canonical getter, +848 flag read, SETE/INC, return and caller
+argument pop. Query results are1 or2; no locale mutation is admitted. Nonquery
+modes, unknown decisions, stale UCRT views and required-PTD termination reject.
+The next original boundary is **CALL0x4015e0→0x401bd5**.
+
+[Contract and tests](THREAD-LOCALE-QUERY.md). The measured opt-in FP policy remains
+separate from unknown/default admission. Full startup/rcedit is unproven.
+
+## Previous executable checkpoint: opt-in initial controls reach post-FP continuation
 
 The measured Win2022 original-entry observation has CW0x027f and MXCSR0x1f80.
 A versioned explicit profile now produces exactly those two controls in the
