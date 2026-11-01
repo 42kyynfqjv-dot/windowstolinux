@@ -1,5 +1,5 @@
 //! Original mode and argument-configuration prefix. No synthesized argv.
-use crate::crt_stream_ir::{Graph, Node, Op, Target};
+use crate::crt_stream_ir::{Graph, Target};
 use std::collections::BTreeMap;
 pub(crate) const MODE: &str = "33c040c3";
 pub(crate) const WRAPPER: &str = "8bff558bec5de9f7fcffff";
@@ -55,17 +55,7 @@ pub(crate) fn source() -> Result<String, String> {
     );
     out.push_str(&format!("fn argv_configure_wrapper(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:Option<&CrtNativePlatform>,epoch:Option<&mut NormalCallEpoch<'_>>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;{}{body}}}",guard(0x4069d4,&bytes)));
     let bytes = raw(CONFIGURE);
-    let mut g = crate::crt_startup_table::graph(&bytes[..(0x406767 - 0x4066d6)], 0x4066d6)?;
-    g.nodes
-        .extend(Graph::decode(&bytes[(0x40680f - 0x4066d6)..], 0x40680f)?.nodes);
-    g.nodes.insert(
-        0x406767,
-        Node {
-            length: 2,
-            op: Op::Reject("argv allocation caller result unbound"),
-            successors: vec![],
-        },
-    );
+    let g = Graph::decode(&bytes, 0x4066d6)?;
     let body = crate::crt_stream_emit::emit_body(
         &g,
         |pc, t| {
@@ -74,13 +64,17 @@ pub(crate) fn source() -> Result<String, String> {
   Target::Direct(0x40b42a)=>format!("let p=platform.ok_or(\"argv locale platform unbound\")?;let e=epoch.as_deref_mut().ok_or(\"argv locale registry unbound\")?;cpu.call_activation(rt,{next},0,|rt,c|locale_startup_original(rt,c,inputs,p,e))?;"),
   Target::Direct(0x40ae0d)=>format!("let p=platform.ok_or(\"argv image-name platform unbound\")?;cpu.call_activation(rt,{next},0,|rt,c|argv_image_name_original(rt,c,inputs,p))?;"),
   Target::Direct(0x406813)=>format!("let p=platform.ok_or(\"argv count platform unbound\")?;cpu.call_activation(rt,{next},0,|rt,c|argv_count_original(rt,c,inputs,p))?;"),
-  Target::Direct(0x406985)=>format!("cpu.call_activation(rt,{next},0,|rt,c|argv_storage_original(rt,c,inputs))?;"),
-  Target::Direct(0x407ccd)=>"return Err(\"argv invalid-mode errno acquisition unbound\");".into(),
+  Target::Direct(0x406985)=>format!("let p=platform.ok_or(\"argv allocation native profile unbound\")?;let e=epoch.as_deref_mut().ok_or(\"argv allocation registry unbound\")?;cpu.call_activation(rt,{next},0,|rt,c|argv_storage_original(rt,c,inputs,p,e))?;"),
+  Target::Direct(0x407ccd)=>if pc==0x4066f8{"return Err(\"argv invalid-mode errno acquisition unbound\");".into()}else{format!("let p=platform.ok_or(\"argv errno native profile unbound\")?;let e=epoch.as_deref_mut().ok_or(\"argv errno registry unbound\")?;cpu.call_activation(rt,{next},0,|rt,c|ucrt_errno_original(rt,c,inputs,p,e))?;")},
   Target::Direct(0x407b4f)=>"return Err(\"argv invalid-parameter effect unbound\");".into(),
+  Target::Direct(0x40ad05)=>"return Err(\"argv wildcard expansion effect unbound\");".into(),
+  Target::Direct(0x407d50)=>format!("cpu.call_activation(rt,{next},0,|rt,c|ucrt_free_null(rt,c,inputs))?;"),
   _=>return Err(format!("argv configuration target {t:?}"))})
         },
         &BTreeMap::from([
             (0x41ce64, "CrtRegionKind::Module".into()),
+            (0x41ce68, "CrtRegionKind::Module".into()),
+            (0x41ce6c, "CrtRegionKind::Module".into()),
             (0x41ce74, "CrtRegionKind::Module".into()),
         ]),
         256,
@@ -461,13 +455,14 @@ fn count_source() -> Result<String, String> {
     let g = Graph::decode(&bytes, 0x406985)?;
     let body = crate::crt_stream_emit::emit_body(
         &g,
-        |_, t| {
+        |pc, t| {
+            let next = pc + g.nodes[&pc].length;
             Ok(match t {
                 Target::Direct(0x407cf0) => {
-                    "return Err(\"argv storage calloc producer unbound at 0x4069ba\");".into()
+                    format!("cpu.call_activation(rt,{next},0,|rt,c|ucrt_calloc_native(rt,c,inputs,platform,epoch))?;")
                 }
                 Target::Direct(0x407d50) => {
-                    "return Err(\"argv storage free effects unbound\");".into()
+                    format!("cpu.call_activation(rt,{next},0,|rt,c|ucrt_free_null(rt,c,inputs))?;")
                 }
                 _ => return Err(format!("argv storage target {t:?}")),
             })
@@ -475,7 +470,7 @@ fn count_source() -> Result<String, String> {
         &Default::default(),
         128,
     )?;
-    out.push_str(&format!("fn argv_storage_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;{}{body}}}",guard(0x406985,&bytes)));
+    out.push_str(&format!("fn argv_storage_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:&CrtNativePlatform,epoch:&mut NormalCallEpoch<'_>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;{}{body}}}",guard(0x406985,&bytes)));
     Ok(out)
 }
 

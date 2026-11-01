@@ -968,7 +968,10 @@ impl CrtStreamRuntime {
   let size=match width{8=>1,16=>2,32=>4,_=>return Err("CRT store width")};self.valid(p,size)?;self.ordinary_file_bytes(p,size)?;
   if matches!(p.kind,CrtRegionKind::Input|CrtRegionKind::ProcessData){return Err("CRT immutable source write");}
   self.memory.validate_writable(p.cap,p.owner,p.address,size).map_err(|_|"CRT storage write")?;
-  if self.errno_cell.is_some_and(|q|q.cap==p.cap&&u64::from(p.address)<u64::from(q.address)+4&&u64::from(q.address)<u64::from(p.address)+u64::from(size))&&!matches!(value,CrtValue::Scalar{..}){return Err("CRT errno scalar field");}
+  if let Some(cell)=self.errno_cell.filter(|q|q.cap==p.cap&&u64::from(p.address)<u64::from(q.address)+4&&u64::from(q.address)<u64::from(p.address)+u64::from(size)){
+   if cell.kind==CrtRegionKind::Buffer{self.ucrt_errno_identity(cell)?;}
+   if !matches!(value,CrtValue::Scalar{..}){return Err("CRT errno scalar field");}
+  }
   let old=self.overlapping_tags(p.address,size);
   if old.iter().any(|(_,v)|matches!(v,CrtValue::OpaqueSaved(_)|CrtValue::ProtectedReturn(_)|CrtValue::ThreadHead(_))){return Err("CRT protected saved/return overwrite");}
   if !old.is_empty()&&(width!=32||old.len()!=1||old[0].0!=p.address){return Err("CRT partial pointer/handle overwrite");}
@@ -1415,8 +1418,22 @@ impl CrtStreamRuntime {
  fn bind_errno_cell(&mut self,p:CrtPointer)->Result<CrtPointer,&'static str>{
   self.valid(p,4)?;let root=self.regions.iter().find(|r|r.pointer.cap==p.cap).ok_or("CRT errno owner")?.pointer;
   let role=match p.kind{CrtRegionKind::ThreadData=>root.kind==p.kind&&p.address-root.base==16,CrtRegionKind::Module=>root.kind==p.kind&&root.size==4&&p.address==root.base,_=>false};
-  if !role||p.address%4!=0{return Err("CRT errno owner/field role");}let p=self.subrange(p,4)?;
-  let value=self.load(p,32)?;if !matches!(value,CrtValue::Scalar{..}){return Err("CRT errno initial scalar type");}
+  if !role||p.address%4!=0{return Err("CRT errno owner/field role");}self.record_errno_cell(p)
+ }
+ /// A checked UCRT field view preserves the original heap capability and layout.
+ fn ucrt_errno_identity(&self,p:CrtPointer)->Result<(),&'static str>{
+  self.valid(p,4)?;let root=self.regions.iter().find(|r|r.pointer.cap==p.cap&&r.heap&&r.file_owner.is_none()).ok_or("CRT UCRT errno allocation identity")?.pointer;
+  if p.kind!=CrtRegionKind::Buffer||p.address!=root.base.checked_add(16).ok_or("CRT UCRT errno address")?{return Err("CRT UCRT errno field offset");}
+  let view=self.heap_ptds.iter().find(|v|v.pointer==root&&v.layout==CrtPtdLayout::Ucrt).ok_or("CRT UCRT errno layout identity")?;
+  self.heap_ptd_layout_view(root,view.slot,CrtPtdLayout::Ucrt)?;
+  if self.fls.get(&view.slot.index)!=Some(&(view.slot,CrtValue::Pointer(root))){return Err("CRT UCRT errno current publication");}Ok(())
+ }
+ fn bind_ucrt_errno_cell(&mut self,p:CrtPointer)->Result<CrtPointer,&'static str>{self.ucrt_errno_identity(p)?;self.record_errno_cell(p)}
+ fn bind_image_errno_cell(&mut self,image:CrtProcessImage,p:CrtPointer)->Result<CrtPointer,&'static str>{
+  if p.kind!=CrtRegionKind::Module||self.process_image_pointer(image,p.address,4)?!=p{return Err("CRT errno canonical image field");}self.record_errno_cell(p)
+ }
+ fn record_errno_cell(&mut self,p:CrtPointer)->Result<CrtPointer,&'static str>{
+  if p.address%4!=0{return Err("CRT errno owner/field role");}let p=self.subrange(p,4)?;let value=self.load(p,32)?;if !matches!(value,CrtValue::Scalar{..}){return Err("CRT errno initial scalar type");}
   self.canonical_errno=true;self.errno_cell=Some(p);self.errno=value.known_scalar().ok().map(|n|n as i32);Ok(p)
  }
  fn set_errors(&mut self,lease:CrtLock,errno:Option<i32>,doserrno:Option<u32>)->Result<(),&'static str>{self.check_lock(lease)?;if self.canonical_errno&&self.errno_cell.is_none(){return Err("CRT canonical errno cell not yet bound");}if let Some(p)=self.errno_cell{self.store(p,32,match errno{Some(n)=>CrtValue::scalar(n as u32),None=>CrtValue::Scalar{bits:0,known:0}})?;}self.errno=errno;self.doserrno=doserrno;Ok(())}

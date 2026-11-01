@@ -1,5 +1,7 @@
 # Original argument counting and checked storage arithmetic
 
+This historical checkpoint is followed by [original calloc/publication](ARGV-CALLOC.md).
+
 ## Connected path
 
 Within the existing explicit native startup profile, original CALL

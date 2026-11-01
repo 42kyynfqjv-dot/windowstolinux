@@ -385,7 +385,7 @@ def check(original, observation, out, compare=None):
         if v['pointer_slots'] != len(v['arguments_utf8'])+1 or v['output_bytes'] != sum(len(a)+1 for a in v['arguments_utf8']):
             raise ValueError('argv independent count units')
     # Bind the new component paths to the same untouched PE, not fixture answers.
-    for module, regions in [('crt_locale_shared', [('WRAPPER',0x40aeae),('CLEANUP',0x40aeef),('BODY',0x40aefb),('COPY_S',0x40b68a)]), ('crt_locale_memcpy', [('CODE',0x403040)]), ('crt_exit_tables', [('HELPER',0x4074fc),('WRAPPER',0x407565)]), ('crt_startup_caller', [('CALLER',0x401632),('LOCK',0x401913),('FLAG',0x4021bf)]), ('crt_argv', [('MODE',0x401bbf),('WRAPPER',0x4069d4),('CONFIGURE',0x4066d6),('IMAGE_NAME',0x40ae0d),('LOCALE',0x40ab89),('FILE_ANSI',0x407fc0),('FILE_RESOLVE',0x407d96),('CONVERT',0x40ad10),('CONVERT_WRITE',0x40ab65),('WIDE_API',0x40b8c5),('WIDE_FLAGS',0x40b835),('COUNT',0x406813),('STORAGE',0x406985),('BYTE_CLASSIFY',0x40b70b),('BYTE_WRAPPER',0x40b75b)]), ('crt_onexit', [('ATEXIT', 4201231), ('COMMON', 4201185), ('GLOBAL', 4224168), ('WRAPPER', 4224293), ('MANAGER', 4223584), ('CLEANUP', 4223663), ('BODY', 4223675), ('RECALLOC', 4245584), ('REALLOC', 4263072), ('ENCODE', 4222306), ('MEMSET', 0x402370)]), ('crt_c_initializers', [('EMPTY',0x401e00),('LOOP', 4222156), ('FIRST', 4199770), ('SECOND', 4199941), ('FILE_INIT', 4211984), ('LOCALE', 4262330), ('MODE', 4243721), ('FEATURE', 4270000), ('CPP', 4199949), ('APP_TYPE', 4220462), ('GET_MODE', 4201411), ('SET_MODE', 4223062), ('ZERO', 4201404), ('GET_COMMODE', 4223487), ('ONEXIT', 4200830), ('OPTIONS', 4201474), ('OPTIONS_GET', 4199024), ('SCAN_GET', 4201468)])]:
+    for module, regions in [('crt_locale_shared', [('WRAPPER',0x40aeae),('CLEANUP',0x40aeef),('BODY',0x40aefb),('COPY_S',0x40b68a)]), ('crt_locale_memcpy', [('CODE',0x403040)]), ('crt_exit_tables', [('HELPER',0x4074fc),('WRAPPER',0x407565)]), ('crt_startup_caller', [('CALLER',0x401632),('LOCK',0x401913),('FLAG',0x4021bf)]), ('crt_ucrt_ptd', [('ERRNO',0x407ccd)]), ('crt_argv', [('MODE',0x401bbf),('WRAPPER',0x4069d4),('CONFIGURE',0x4066d6),('IMAGE_NAME',0x40ae0d),('LOCALE',0x40ab89),('FILE_ANSI',0x407fc0),('FILE_RESOLVE',0x407d96),('CONVERT',0x40ad10),('CONVERT_WRITE',0x40ab65),('WIDE_API',0x40b8c5),('WIDE_FLAGS',0x40b835),('COUNT',0x406813),('STORAGE',0x406985),('BYTE_CLASSIFY',0x40b70b),('BYTE_WRAPPER',0x40b75b)]), ('crt_onexit', [('ATEXIT', 4201231), ('COMMON', 4201185), ('GLOBAL', 4224168), ('WRAPPER', 4224293), ('MANAGER', 4223584), ('CLEANUP', 4223663), ('BODY', 4223675), ('RECALLOC', 4245584), ('REALLOC', 4263072), ('ENCODE', 4222306), ('MEMSET', 0x402370)]), ('crt_c_initializers', [('EMPTY',0x401e00),('LOOP', 4222156), ('FIRST', 4199770), ('SECOND', 4199941), ('FILE_INIT', 4211984), ('LOCALE', 4262330), ('MODE', 4243721), ('FEATURE', 4270000), ('CPP', 4199949), ('APP_TYPE', 4220462), ('GET_MODE', 4201411), ('SET_MODE', 4223062), ('ZERO', 4201404), ('GET_COMMODE', 4223487), ('ONEXIT', 4200830), ('OPTIONS', 4201474), ('OPTIONS_GET', 4199024), ('SCAN_GET', 4201468)])]:
         source = Path('src/'+module+'.rs').read_text()
         for name,address in regions:
             literal = re.search(r'const\s+'+name+r'\s*:\s*&str\s*=\s*"([0-9a-f]+)"', source)
@@ -490,6 +490,7 @@ def check(original, observation, out, compare=None):
     require_test_completions(ucrt_run, [
         b'crt_ucrt_ptd::ucrt_views_preserve_allocation_identity_and_reject_other_layouts',
         b'crt_ucrt_ptd::original_word_stores_preserve_source_flags_and_adjacent_bytes',
+        b'crt_ucrt_ptd::ucrt_errno_view_keeps_heap_identity_and_current_publication_authority',
     ])
     locale_run = subprocess.run(['cargo', 'test', '--locked', '--example', 'crt_stream', 'crt_ucrt_locale::'],
                                env=env, capture_output=True, timeout=180)
@@ -668,6 +669,7 @@ def check(original, observation, out, compare=None):
                   windows_narrow_conversion_observation_sha256=windows_narrow_observation,
                   windows_utf8_capacity_observation_sha256=windows_capacity_observation,
                   argv_count_vectors=16, argv_count_component_cases=53, argv_count_windows_original_pairs=0,
+                  argv_calloc_component_cases=18, ucrt_errno_field_cases=13, argv_mode1_publication="original native-profile component; no whole PE", argv_calloc_original_windows_pairs=0,
                   native_utf8_write_vectors=7, native_utf8_write_unsafe_modes=10, native_utf8_write_api_modes=6, original_image_write_cases=6*int(sys.platform.startswith("linux")),
                   argv_locale_native_cases=13, argv_narrow_conversion_implemented=False,
                   native_file_mode_contract_tests=1, native_utf8_query_vectors=7, native_utf8_query_api_cases=12, protection_data_word_cases=5,

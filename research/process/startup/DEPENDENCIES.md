@@ -1,6 +1,22 @@
 # Remaining entry-to-exit dependencies
 
-## Current executable checkpoint: original argument count and size checks
+## Current executable checkpoint: original calloc and argc/argv publication
+
+Original calloc now uses the canonical live process heap, actual zeroing and
+owned UCRT errno acquisition. The original NULL-free branch, second parser pass,
+argc/argv stores and configuration return execute. Connected entry rejects
+**before0x4015a6**, the first C initializer's post-argv continuation. Published
+pointers retain the actual allocation identity; no output or allocation outcome
+is supplied. This remains an explicit native-profile component, not full startup,
+default admission, rcedit or whole-PE translation.
+
+[Contract/review](ARGV-CALLOC.md), [requirements](evidence/argv-calloc-expectations.json),
+[verification](evidence/argv-calloc.json). Next bind original post-argv stack/result
+handling and actual helper calls, beginning0x4015ac->0x401bc9. Allocation resource
+failures, nonnull free/new-handler/wildcard and other existing gates remain
+explicit. Historical Windows timeout causes remain unresolved.
+
+## Previous checkpoint: original argument count and size checks
 
 Original count-only CALL `0x406755 -> 0x406813` now executes the parser and its
 live locale classification calls. The caller passes actual counts to original

@@ -1,6 +1,7 @@
 //! Original UCRT lazy acquisition; distinct from the 40-byte dispatcher PTD.
 use crate::crt_stream_ir::{Graph, Target};
 pub(crate) const CALLOC: &str = "8bff558bec568b750885f6740c6ae033d258f7f63b450c72370faf750c33c04085f60f44f0eb14e8a4f4ffff85c0742056e89a4c00005985c07415566a08ff35c8d24100ff159450410085c074d9eb0de888ffffffc7000c00000033c05e5dc3";
+pub(crate) const ERRNO: &str = "e8602600008bd0b830c1410085d28d4a100f45c1c3";
 pub(crate) const INIT: &str = "8bff558bec83ec148b450833c9416a438948188b4508c700f05e41008b45088988500300008b4508596a05c7404840c241008b45086689486c8b4508668988720100008d4dff8b450883a04c030000008d45088945f0588945f88945ec8d45f8508d45f0508d45ec50e826feffff8d45088945f48d4dff6a048d450c8945f8588945ec8945f08d45ec508d45f4508d45f050e80fffffffc9c3";
 
 pub(crate) fn source() -> Result<String, String> {
@@ -31,7 +32,9 @@ pub(crate) fn source() -> Result<String, String> {
                 Target::Direct(0x40806d) => format!("let p=rt.process_image_code(inputs.image,0x40806d,12)?;if rt.memory.read(p.address(),12).map_err(|_|\"UCRT setter code read\")?!=&{thunk:?}{{return Err(\"UCRT setter code changed\");}}rt.process_image_import(inputs.image,0x4150a4,\"kernel32.dll\",\"FlsSetValue\")?;cpu.call_activation(rt,{next},8,|rt,cpu|{{let _=(||->Result<CrtValue,&'static str>{{{pre}}})()?;platform.fls_set_call(rt,cpu,inputs.init,platform.fls_set.ok_or(\"UCRT setter provider absent\")?)}})?;"),
                 Target::Direct(0x407cf0) => format!("let fiber=rt.fiber.ok_or(\"UCRT current fiber absent\")?;let index=rt.load(rt.process_image_pointer(inputs.image,0x41c170,4)?,32)?.known_scalar()?;let slot=rt.fls.get(&index).ok_or(\"UCRT sentinel slot missing\")?.0;let ticket=rt.begin_heap_ptd_allocation(fiber,slot)?;let v=cpu.call_activation(rt,{next},0,|rt,c|ucrt_calloc_native(rt,c,inputs,platform,epoch))?;match v{{CrtValue::Pointer(p)=>rt.bind_heap_ptd_layout(ticket,p,CrtPtdLayout::Ucrt)?,CrtValue::Scalar{{bits:0,known:u32::MAX}}=>{{}},_=>return Err(\"UCRT allocation return authority\")}};"),
                 Target::Import(0x415094) => format!("rt.process_image_import(inputs.image,0x415094,\"kernel32.dll\",\"HeapAlloc\")?;cpu.call_activation(rt,{next},12,|rt,c|{{c.validate_active(rt)?;if c.r[4]!=c.entry[4]||[3,5,6,7].iter().any(|&n|c.r[n]!=c.entry[n]){{return Err(\"UCRT HeapAlloc saved frame\");}}let sp=CrtCpu::pointer(c.r[4])?;rt.offset(sp,16)?;rt.memory.validate_writable(sp.cap,sp.owner,sp.address(),16).map_err(|_|\"UCRT HeapAlloc stack permission\")?;let CrtValue::Heap(heap)=rt.load(rt.offset(sp,4)?,32)?else{{return Err(\"UCRT HeapAlloc canonical heap\")}};let flags=rt.load(rt.offset(sp,8)?,32)?.known_scalar()?;let size=rt.load(rt.offset(sp,12)?,32)?.known_scalar()?;let p=rt.native_heap_allocate(inputs.init,heap,flags,size)?;c.clobber(CrtValue::Pointer(p));c.finish_pop(rt,12)}})?;"),
-                Target::Direct(0x4071c0) | Target::Direct(0x40c9c0) | Target::Direct(0x407ccd) => "return Err(\"UCRT allocation retry/errno contract unbound\");".into(),
+                Target::Direct(0x4071c0) => format!("cpu.call_activation(rt,{next},0,|rt,c|malloc_mode_original(rt,c,inputs))?;"),
+                Target::Direct(0x407ccd) => format!("cpu.call_activation(rt,{next},0,|rt,c|ucrt_errno_original(rt,c,inputs,platform,epoch))?;"),
+                Target::Direct(0x40c9c0) => "return Err(\"UCRT allocation new-handler contract unbound\");".into(),
                 Target::Direct(0x407d50) => format!("cpu.call_activation(rt,{next},0,|rt,c|ucrt_free_null(rt,c,inputs))?;"),
                 Target::Direct(0x40a067) => format!("cpu.call_activation(rt,{next},0,|rt,c|ucrt_initialize_native(rt,c,inputs,platform,epoch))?;"),
                 Target::Direct(0x409efb) => format!("cpu.call_activation(rt,{next},12,|rt,c|ucrt_mb_acquire(rt,c,inputs,epoch))?;"),
@@ -45,7 +48,7 @@ pub(crate) fn source() -> Result<String, String> {
         let bind = if name == "ucrt_initialize_native" {
             "let sp=CrtCpu::pointer(cpu.r[4])?;let p=CrtCpu::pointer(rt.load(rt.offset(sp,4)?,32)?)?;let v=rt.heap_ptds.iter().find(|v|v.pointer==p&&v.layout==CrtPtdLayout::Ucrt).ok_or(\"UCRT initialized object layout\")?;rt.heap_ptd_layout_view(p,v.slot,CrtPtdLayout::Ucrt)?;if rt.fls.get(&v.slot.index).map(|x|x.1)!=Some(CrtValue::Pointer(p)){return Err(\"UCRT initializer unpublished object\");}"
         } else if matches!(name, "ucrt_calloc_native" | "startup_descriptor_calloc") {
-            "let sp=CrtCpu::pointer(cpu.r[4])?;if rt.load(rt.offset(sp,4)?,32)?.known_scalar()?==0||rt.load(rt.offset(sp,8)?,32)?.known_scalar()?==0{return Err(\"UCRT zero calloc request unsupported\");}"
+            "epoch.state()?;if rt.owner!=epoch.registry.identity.owner||rt.thread!=epoch.registry.identity.instance{return Err(\"calloc foreign registry/runtime\");}CrtNormalBinding::validate_cxx_head(rt,epoch)?;let sp=CrtCpu::pointer(cpu.r[4])?;if rt.load(rt.offset(sp,4)?,32)?.known_scalar()?==0||rt.load(rt.offset(sp,8)?,32)?.known_scalar()?==0{return Err(\"UCRT zero calloc request unsupported\");}"
         } else {
             ""
         };
@@ -56,6 +59,7 @@ pub(crate) fn source() -> Result<String, String> {
         };
         out.push_str(&format!("fn {name}(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:&CrtNativePlatform,epoch:&mut NormalCallEpoch<'_>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;platform.validate(rt,inputs.init)?;cpu.validate_active(rt)?;let code=rt.process_image_code(inputs.image,{origin},{})?;if rt.memory.read(code.address(),{}).map_err(|_|\"UCRT original code read\")?!=&{bytes:?}{{return Err(\"UCRT original code changed\");}}{bind}{body}}}\n",bytes.len(),bytes.len()));
     }
+    out.push_str(&errno_source()?);
     out.push_str(&crate::crt_ucrt_locale::source()?);
     out.push_str(&crate::crt_ucrt_locale_replace::source()?);
     let free=crate::crt_ptd::raw("8bff558bec837d0800742dff75086a00ff35c8d24100ff159850410085c0751856ff154450410050e895feffff598bf0e848ffffff89305e5dc3");
@@ -68,6 +72,32 @@ pub(crate) fn source() -> Result<String, String> {
     )?;
     out.push_str(&format!("fn ucrt_free_null(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;let p=rt.process_image_code(inputs.image,0x407d50,{})?;if rt.memory.read(p.address(),{}).map_err(|_|\"UCRT free code read\")?!=&{free:?}{{return Err(\"UCRT free code changed\");}}{body}}}",free.len(),free.len()));
     Ok(out)
+}
+
+fn errno_source() -> Result<String, String> {
+    let bytes = crate::crt_ptd::raw(ERRNO);
+    let g = Graph::decode(&bytes, 0x407ccd)?;
+    let body = crate::crt_stream_emit::emit_body_with_hooks(
+        &g,
+        |pc, t| {
+            if t != Target::Direct(0x40a332) {
+                return Err("UCRT errno getter target".into());
+            }
+            let next = pc + g.nodes[&pc].length;
+            Ok(format!("cpu.call_activation(rt,{next},0,|rt,c|ptd_get_native_registered_with_lazy(rt,c,epoch,inputs,platform,|rt,c,e|ucrt_lazy_native(rt,c,inputs,platform,e)))?;"))
+        },
+        &Default::default(),
+        32,
+        |_, _| Err("UCRT errno thread effect".into()),
+        |_, _| Ok(String::new()),
+        |_, pop| {
+            if pop != 0 {
+                return Err("UCRT errno RET cleanup".into());
+            }
+            Ok(Some("cpu.r[0]=CrtValue::Pointer(match cpu.r[0]{CrtValue::Pointer(p)=>rt.bind_ucrt_errno_cell(p)?,CrtValue::Scalar{bits:0x41c130,known:u32::MAX}=>{let p=rt.process_image_pointer(inputs.image,0x41c130,4)?;rt.bind_image_errno_cell(inputs.image,p)?},_=>return Err(\"UCRT errno result authority\")});return cpu.finish(rt);".into()))
+        },
+    )?;
+    Ok(format!("fn ucrt_errno_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:&CrtNativePlatform,epoch:&mut NormalCallEpoch<'_>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;epoch.state()?;if rt.owner!=epoch.registry.identity.owner||rt.thread!=epoch.registry.identity.instance{{return Err(\"errno foreign registry/runtime\");}}let p=rt.process_image_code(inputs.image,0x407ccd,{})?;if rt.memory.read(p.address(),{}).map_err(|_|\"UCRT errno code read\")?!=&{bytes:?}{{return Err(\"UCRT errno code changed\");}}{body}}}",bytes.len(),bytes.len()))
 }
 
 #[test]
@@ -133,5 +163,29 @@ for (index,run) in [(0,word_0 as fn(&mut CrtStreamRuntime,&mut CrtCpu)->Result<C
 }
 "#,
         "ucrt-word-store",
+    );
+}
+
+#[test]
+fn ucrt_errno_view_keeps_heap_identity_and_current_publication_authority() {
+    crate::crt_stream_callees_tests::native(
+        "",
+        r#"
+for mode in 0..12{
+ let(mut rt,init)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();let CrtValue::Heap(heap)=rt.native_process_heap(init).unwrap()else{panic!()};let fiber=rt.bind_fiber(9).unwrap();let index=rt.native_fls_allocate(init,None).unwrap();rt.native_fls_set(init,fiber,index.index,CrtValue::scalar(u32::MAX)).unwrap();let slot=rt.fls.get(&index.index).unwrap().0;let ticket=rt.begin_heap_ptd_allocation(fiber,slot).unwrap();let root=rt.native_heap_allocate(init,heap,8,if mode==2{40}else{868}).unwrap();rt.bind_heap_ptd_layout(ticket,root,if mode==2{CrtPtdLayout::Vcruntime}else{CrtPtdLayout::Ucrt}).unwrap();rt.native_fls_set(init,fiber,index.index,CrtValue::Pointer(root)).unwrap();let cell=rt.offset(root,16).unwrap();rt.store(cell,32,CrtValue::scalar(73)).unwrap();let caps=rt.regions.len();let old=rt.memory.read(root.address(),root.size).unwrap().to_vec();
+ if mode==1{rt.store(cell,32,CrtValue::Scalar{bits:3,known:0xf}).unwrap();}if mode==3{rt.memory.release(root.cap,root.owner).unwrap();}if mode==4{rt.thread+=1;}if mode==5{rt.fls.get_mut(&index.index).unwrap().1=CrtValue::Pointer(rt.offset(root,4).unwrap());}if mode==6{rt.heap_ptds.clear();}
+ let result=rt.bind_ucrt_errno_cell(if mode==7{rt.offset(cell,4).unwrap()}else{cell});
+ if matches!(mode,2..=7){assert!(result.is_err(),"invalid UCRT errno role {mode}");assert_eq!(rt.errno_cell,None);assert_eq!(rt.errno,None);}
+ else{let p=result.expect("owned UCRT field");assert_eq!(p.cap,root.cap);assert_eq!(p.owner,root.owner);assert_eq!(p.kind,CrtRegionKind::Buffer);assert_eq!((p.address(),p.size),(root.address()+16,4));assert_eq!(rt.regions.len(),caps);assert_eq!(rt.errno,if mode==1{None}else{Some(73)});if mode!=1{assert_eq!(rt.memory.read(root.address(),root.size).unwrap(),old);}else{assert_eq!(rt.load(cell,32).unwrap(),CrtValue::Scalar{bits:3,known:0xf});assert_eq!(rt.memory.read(cell.address(),4),Err(guest_memory::Fault::Uninitialized));}
+  if mode==8{let before=rt.load(p,32).unwrap();assert_eq!(rt.store(p,32,CrtValue::Pointer(root)),Err("CRT errno scalar field"));assert_eq!(rt.load(p,32).unwrap(),before);}
+  else if mode==9{rt.fls.get_mut(&index.index).unwrap().1=CrtValue::Pointer(rt.offset(root,4).unwrap());assert_eq!(rt.store(p,32,CrtValue::scalar(12)),Err("CRT UCRT errno current publication"));assert_eq!(rt.memory.read(p.address(),4).unwrap(),73u32.to_le_bytes());assert_eq!(rt.errno,Some(73));}
+  else if mode==10{rt.native_fls_set(init,fiber,index.index,CrtValue::scalar(0)).unwrap();assert!(rt.bind_ucrt_errno_cell(p).is_err());assert_eq!(rt.errno_cell,None);assert_eq!(rt.errno,None);}
+  else if mode==11{rt.thread+=1;assert!(rt.store(p,32,CrtValue::scalar(12)).is_err());assert_eq!(rt.errno,Some(73));}
+  else{rt.store(p,32,CrtValue::scalar(12)).unwrap();assert_eq!(rt.errno,Some(12));assert_eq!(rt.load(cell,32).unwrap(),CrtValue::scalar(12));}
+ }
+}
+let(mut rt,init)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();let mut initial=[0u8;512];initial[64..68].copy_from_slice(&79u32.to_le_bytes());let image=rt.bootstrap_main_image(init,0x400000,&initial).unwrap();let p=rt.process_image_pointer(image,0x400040,4).unwrap();let cell=rt.bind_image_errno_cell(image,p).unwrap();assert_eq!(cell.cap,p.cap);assert_eq!(rt.load(p,32).unwrap(),CrtValue::scalar(79));assert_eq!(rt.store(cell,32,CrtValue::scalar(12)),Err("CRT storage write"));assert_eq!(rt.errno,Some(79));assert!(rt.bind_image_errno_cell(image,rt.offset(p,1).unwrap()).is_err());
+ "#,
+        "ucrt-errno-view",
     );
 }
