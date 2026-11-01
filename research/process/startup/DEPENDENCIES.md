@@ -1,6 +1,23 @@
 # Remaining entry-to-exit dependencies
 
-## Current executable checkpoint: original post-argv helpers
+## Current executable checkpoint: original FP-control integer prefix
+
+Original CALL0x401be4 ->0x4076a0 now runs validation, branch/argument setup and
+actual nested CALL0x40d000. Its real low-level frame prolog executes; rejection
+is **before waiting FSTCW0x40d00b**. No FP-state effect, current-control output or
+successful return is supplied. Original argc/argv and all prior startup effects
+remain. Full/default/rcedit admission stays blocked.
+
+[Contract and bounded Astra scope](FP-ENTRY.md),
+[expectations](evidence/fp-entry-expectations.json),
+[verification](evidence/fp-entry-prefix.json). Sixteen original boundary cases
+preserve partial knowledge, failure ordering, protected returns, output bytes
+and pending/unknown guest state. Next establish initial guest FP provenance,
+waiting/control effects and the original feature-gated MXCSR path; host FP state
+is not a Windows-state substitute. Historical timeouts and prior equivalence
+gaps remain unresolved. Zero new whole-PE pairs.
+
+## Previous checkpoint: original post-argv helpers
 
 Original result/stack handling, SLIST initialization, live flag query, conditional
 callback encoding and two RET0 helpers execute after actual argc/argv publication.

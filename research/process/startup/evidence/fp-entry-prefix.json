@@ -1,0 +1,137 @@
+{
+  "kind": "original FP-control integer-prefix component; no FP-state effect or whole-PE execution",
+  "base_commit": "8815f9b25e5208d6ab6959f0492c476ff230404f",
+  "status": "canonical boundary cases, aggregates, coherent original-source replay and identical repeat emission passed; exact new-head CI remains separate",
+  "next_boundary": "before waitingFSTCW0x40d00b",
+  "connected_effects": [
+    "actual original CALL401be4->4076a0",
+    "original mask validation, conditional paths, integer argument setup",
+    "actual original CALL40d000, owned low-level frame prolog and saved registers"
+  ],
+  "cases": {
+    "original_boundary_modes": 16,
+    "successful_FP_operations": 0,
+    "new_Windows_FP_observations": 0,
+    "retained_Windows_SLIST_API_observations": 12,
+    "new_whole_PE_pairs": 0
+  },
+  "checks": {
+    "CRT": 337,
+    "CRT_ignored": 2,
+    "unwind": 185,
+    "Clippy": "passed warnings denied",
+    "format": "passed",
+    "startup_Python_tests": 101,
+    "startup_Python_skips": 1,
+    "coherent_replay": "passed",
+    "both_ignored_artifact_gates_executed": true,
+    "repeat_emission": "identical original-catalog Rust"
+  },
+  "source_sha256": {
+    "src/crt_c_initializers.rs": "39d5ee21ca1aced097bc956c429e0a356669f6e34a7d6861b544a55aadacdfb1",
+    "src/crt_normal_frame_tests.rs": "e24ccbe5e092d5a7614320ca873d4cba469a1175827955e59cfe62ab38747680",
+    "src/crt_locale_code_page.rs": "d575a89a6efb4eb1cd327ab31564ebd430186d5100e2bc9f2215d02fb7a9a050",
+    "src/crt_stream_runtime.rs": "458524f427e042ebfb565637e17a42c5d68d6a51d7ed039d1059d70565b8db8a",
+    "src/crt_resident_loader.rs": "472edfda8174b2085e889482b1378addeb00e3d31c4af068b1f565cacc7be189",
+    "research/process/startup/check_normal_wrapper.py": "711a94f04e38d541836471d1a2819f850c29dd5617f4b1ef1153d5f06f8e69e3",
+    "research/process/startup/evidence/fp-entry-expectations.json": "967c6151f84bfd60ea662b295a70457cdb12ab02cde5f276c4a7693ce4a3cc5f"
+  },
+  "primary_contracts": [
+    {
+      "name": "controlfp-s",
+      "url": "https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/controlfp-s?view=msvc-170",
+      "sha256": "27e6b8da318f572416532186e91e15564ae6958b04b4ad5b060bea6217dfe792",
+      "bytes": 60127
+    },
+    {
+      "name": "control87",
+      "url": "https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/control87-controlfp-control87-2?view=msvc-170",
+      "sha256": "56bc777b470bfc37a41d06a3c9b045ab90d9e6b75a82de1fb28f0e527f5b0ee2",
+      "bytes": 59883
+    }
+  ],
+  "review": [
+    "input/output aliases are not observed or written by unbound FP effects",
+    "original partial integer-mask knowledge preserved; unknown values not guessed",
+    "invalid mask NULLout stops at errno acquisition, nonNULLout first reaches query/FSTCW",
+    "guest x87 unknown/pending state unchanged; no host FP state use",
+    "new prefix code windows matched against unchanged frozen authored PE",
+    "post-argv SLIST header ownership and12retained Windows rows rechecked independently",
+    "SLIST initialization expires read facts while preserving module allocation identity; raw private accesses stay rejected",
+    "new FP graph uses only existing integer/stack operations and actual CALLs; waiting/control operations remain explicit rejects",
+    "word-register fixture retains152 strict cases and unchanged512KiB child limit;32KiB environment-padding failure becomes pass,64KiB padding also passes"
+  ],
+  "initial_test_correction": "Unknown new/mask words can pass a mask-filtered known-invalid-bit test; expected early rejection corrected to exact preserved argument knowledge at unbound FSTCW. Unknown output condition still rejects. No semantic gate weakened.",
+  "logs": {
+    "canonical.log": "f2afdf1ea1add38c1a382ea5fd24e285deead1152799ab1665f550bf205340ef",
+    "startup-python.log": "b5dcefe3dd995b4cf8d826c94ff83ae3f4ad7c0b4c27c27ccd044591657a10de",
+    "clippy.log": "7c86b74cebce3ad6dad5658927657416a075541f4e860428e3c391d57f4b7547",
+    "unwind.log": "d6143a99ba6011c3f9f5f143f35c466ff13991295a1737c91cdb6f38868efefc",
+    "fmt.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "crt.log": "269ec75fd1609ac6268734a573fedf2ab8c9c6861b7cba7a03dbfb83bd7d7e30",
+    "canonical-v2.log": "6253df992002cea602968094c49a72c0ae3a3c4849ba2f12cc5da48b416cebb5",
+    "replay.log": "2b2ddfbfcad27a5641161ea84dd241c01f17d13d63d5dbb25ad743bb9ede37e3",
+    "repeat.stdout": "b2e8e03418f7a0b6d13a2fec85d6de71f4f221836a72c32003111ece4a8db09d",
+    "repeat.stderr": "ab1e8ab4b828624e75e6e8c917ac437f104b9cd0b496a9d073a4a52c0abca136"
+  },
+  "limits": [
+    "no successful FP read/write or output store/return is claimed",
+    "waiting exceptions, initial-state provenance, FLDCW and MXCSR require separate shared contracts",
+    "default/fullstartup/rcedit and prior equivalence gates remain unsupported",
+    "historical Windows timeout causes remain unresolved; local generated-stack defect is separate"
+  ],
+  "full_replay": {
+    "kind": "original prolog/epilog component comparison with explicit unexecuted body boundary",
+    "scope": "Live registry fixture; body EAX/flags inputs; original stack/FS/saved-state restoration only",
+    "emitted_Rust_sha256": "65ae157162f6fabe40981b192829bd9bd9ec3e2cc328cdb242a4c5b1e581d649",
+    "frozen_PE_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+    "report_sha256": "3faf437debd3e386990d00e689dc61ec2f89f5f5f1d32a5d451953c408c38fb0",
+    "log_sha256": "2b2ddfbfcad27a5641161ea84dd241c01f17d13d63d5dbb25ad743bb9ede37e3",
+    "original_boundary_modes": 16,
+    "FP_state_effects_implemented": false,
+    "original_FP_code_hashes": {
+      "crt_c_initializers-fp_control": "f9a5368fd72d7e46ab494548a9141e3e5099be0886e5d6cd4e42a6fef415824d",
+      "crt_c_initializers-fp_word_prefix": "b6551fc288e8bcd9a8b1be586ba6fc4e34afbd83808cb81c1e3d373d139e773b"
+    },
+    "retained_Windows_wrapper_comparisons": 5,
+    "new_whole_PE_pairs": 0,
+    "repeat": {
+      "original_catalog_emission_sha256": "65ae157162f6fabe40981b192829bd9bd9ec3e2cc328cdb242a4c5b1e581d649",
+      "repeated_emission_sha256": "65ae157162f6fabe40981b192829bd9bd9ec3e2cc328cdb242a4c5b1e581d649",
+      "scope": "identical original catalog/vectors and frozen PE; component evidence only"
+    }
+  },
+  "CI_snapshot": {
+    "failed_predecessor": "1b3fef1728ceb936ee12e01ffeb18bf5e5d4d123",
+    "passed_predecessor_Rust_runs": [
+      41345077176,
+      41345071088
+    ],
+    "failed_predecessor_inventory": 41345071064,
+    "failed_job": 124967900133,
+    "repair_commit": "8815f9b25e5208d6ab6959f0492c476ff230404f",
+    "repair_runs": [
+      {
+        "id": 41347416184,
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "id": 41347410173,
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "id": 41347410243,
+        "status": "in_progress",
+        "conclusion": null
+      }
+    ],
+    "note": "Known local word-test failure reproduced and fixed; passing local checks do not infer final CI success. New FP-prefix publication needs its own exact-head readback."
+  },
+  "reproduction": {
+    "replay": "python3 research/process/startup/check_normal_wrapper.py ORIGINAL_UNWIND ORIGINAL_STDIO FRESH_OUTPUT",
+    "repeat": "canonical_image_cookie_and_original_record_initialization_compose --ignored, same original W2L_EH4_CODE/W2L_EH4_VECTORS and frozen PE; existing fresh evidence directory",
+    "scope": "original instruction and API components only; no whole-PE conversion"
+  }
+}

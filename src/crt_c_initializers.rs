@@ -28,6 +28,8 @@ pub(crate) const POST_ENCODE: &str =
 pub(crate) const POST_NOOP: &str = "c20000";
 pub(crate) const POST_FP: &str =
     "680000030068000001006a00e8b75a000083c40c85c07501c36a07e83f000000cc";
+pub(crate) const FP_CONTROL:&str="8bff558bec8b4d108b550c81e1fffff7ff8bc223c1568b7508a9e0fcf0fc742a85f6740e6a006a00e83359000083c4088906e8f6050000c70016000000e86d040000b8160000005e5dc3515285f6740fe80b59000083c408890633c05e5dc3e8fc58000083c40833c05e5dc3";
+pub(crate) const FP_WORD_PREFIX: &str = "8bff558bec83ec105356579bd97df8";
 fn cut_graph(
     bytes: &[u8],
     origin: u32,
@@ -289,17 +291,23 @@ fn post_source() -> Result<String, String> {
         ("cinit_encode_callback", 0x4066b0, POST_ENCODE),
         ("cinit_post_noop", 0x401bf9, POST_NOOP),
         ("cinit_fp_prefix", 0x401bd8, POST_FP),
+        ("cinit_fp_control_original", 0x4076a0, FP_CONTROL),
+        ("cinit_fp_word_prefix", 0x40d000, FP_WORD_PREFIX),
     ] {
         let bytes = crate::crt_ptd::raw(hex);
         let g = if name == "cinit_fp_prefix" {
             cut_graph(
                 &bytes,
                 address,
-                0x401be4,
-                &[(
-                    0x401be4,
-                    "original FP control effect unbound at0x401be4->0x4076a0",
-                )],
+                0x401be9,
+                &[(0x401be9, "original FP-control return continuation unbound")],
+            )?
+        } else if name == "cinit_fp_word_prefix" {
+            cut_graph(
+                &bytes,
+                address,
+                0x40d00b,
+                &[(0x40d00b, "startup waiting FSTCW effect unbound at0x40d00b")],
             )?
         } else {
             Graph::decode(&bytes, address)?
@@ -307,11 +315,15 @@ fn post_source() -> Result<String, String> {
         let body = crate::crt_stream_emit::emit_body(
             &g,
             |pc, target| {
-                if target != Target::Import(0x415030) {
-                    return Err("post-argv helper call".into());
-                }
                 let next = pc + g.nodes[&pc].length;
-                Ok(format!("rt.process_image_import(inputs.image,0x415030,\"kernel32.dll\",\"InitializeSListHead\")?;cpu.call_activation(rt,{next},4,|rt,c|platform.slist_head_call(rt,c,inputs.init,inputs.image))?;"))
+                Ok(match target {
+                  Target::Import(0x415030)=>format!("rt.process_image_import(inputs.image,0x415030,\"kernel32.dll\",\"InitializeSListHead\")?;cpu.call_activation(rt,{next},4,|rt,c|platform.slist_head_call(rt,c,inputs.init,inputs.image))?;"),
+                  Target::Direct(0x4076a0)=>format!("cpu.call_activation(rt,{next},0,|rt,c|cinit_fp_control_original(rt,c,inputs))?;"),
+                  Target::Direct(0x40d000)=>format!("cpu.call_activation(rt,{next},0,|rt,c|cinit_fp_word_prefix(rt,c,inputs))?;"),
+                  Target::Direct(0x407ccd)=>"return Err(\"FP invalid-mask errno acquisition unbound\");".into(),
+                  Target::Direct(0x407b4f)=>"return Err(\"FP invalid-parameter effect unbound\");".into(),
+                  _=>return Err("post-argv helper call".into())
+                })
             },
             &roles,
             128,
