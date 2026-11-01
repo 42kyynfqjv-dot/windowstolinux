@@ -128,3 +128,23 @@ equivalence, nonnull free, exceptional cleanup, XP/7 and other dependency-map
 limits remain open. Five retained Windows wrapper comparisons and 158 retained
 Windows conversion API rows are component evidence; **zero new whole-PE pairs**.
 All historical original-Windows process timeout causes remain unresolved.
+
+
+## Exact-head stack regression follow-up
+
+Final-head inventory run **41345071064**, job **124967900133**, failed the word
+register test's generated child with a stack overflow (336 passed, one failed,
+two ignored). The earlier local aggregate pass did not establish CI resolution.
+The two Rust workflows passed; the inventory failure remains preserved.
+
+A controlled local reproduction retains the same 512 KiB limit and adds 32 KiB
+of environment padding. It fails before the fix and passes afterward. Previously
+the fixture returned its large runtime/CPU tuple by value through another case
+frame. A non-inlined fixture now owns both and lends mutable references to each
+case. Selected compiler prologue sizes drop from 77,512 + 146,040 bytes to
+40 + 108,680 bytes; these are selected frames, not total peak-stack measurements.
+All 152 cases and assertions, including final checked==152, remain. The same
+binary also passes with 64 KiB environment padding and the unchanged stack limit.
+CRT337/unwind185, Clippy and formatting pass locally. New CI must verify the new
+head; this is unrelated to the unresolved Windows process timeout history.
+[Evidence](evidence/word-stack-review.json).

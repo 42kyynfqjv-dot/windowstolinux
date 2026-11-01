@@ -197,7 +197,9 @@ fn word_register_load_and_zero_extension_preserve_knowledge_flags_and_no_authori
     }
     let mut cases = String::from(
         r#"
-fn base()->(CrtStreamRuntime,CrtCpu){let(mut rt,_)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();let stack=rt.map_region(0xa000,4096,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,2048).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(99)).unwrap();let mut c=CrtCpu::new(sp,99).unwrap();c.flags=CrtFlags{cf:Some(true),zf:Some(false),sf:Some(true),of:Some(false)};(rt,c)}
+// Keep construction and each case in separate frames; never return the large
+// runtime/CPU tuple by value through both frames of this bounded-stack test.
+#[inline(never)] fn with_base(test:impl FnOnce(&mut CrtStreamRuntime,&mut CrtCpu)){let(mut rt,_)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();let stack=rt.map_region(0xa000,4096,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,2048).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(99)).unwrap();let mut c=CrtCpu::new(sp,99).unwrap();c.flags=CrtFlags{cf:Some(true),zf:Some(false),sf:Some(true),of:Some(false)};test(&mut rt,&mut c)}
 fn flags(c:&CrtCpu){assert_eq!((c.flags.cf,c.flags.zf,c.flags.sf,c.flags.of),(Some(true),Some(false),Some(true),Some(false)));}
 "#,
     );
@@ -206,9 +208,9 @@ fn flags(c:&CrtCpu){assert_eq!((c.flags.cf,c.flags.zf,c.flags.sf,c.flags.of),(So
         calls.push_str(&format!("load_case{dst}(&mut checked);"));
         cases.push_str(&format!(r#"
 #[inline(never)] fn load_case{dst}(checked:&mut u32){{
-for mode in 0..5{{let(mut rt,mut c)=base();let data=rt.map_region(0x20000,if mode==4{{4}}else{{2}},CrtRegionKind::Stack,None).unwrap();rt.store(data,16,if mode==1{{CrtValue::Scalar{{bits:0x12cd,known:0xffff00ff}}}}else{{CrtValue::scalar(0x12cd)}}).unwrap();c.r[{dst}]=CrtValue::Scalar{{bits:0xdeadbeef,known:0xff00ffff}};if {dst}==4{{c.r[4]=c.entry[4];}}c.r[2]=CrtValue::Pointer(data);let old=c.r[{dst}];let prior=c.r;
-if mode==4{{rt.store(data,32,CrtValue::ProtectedReturn(777)).unwrap();}}if mode==2{{rt.memory.release(data.cap,data.owner).unwrap();}}if mode==3{{c.r[2]=CrtValue::scalar(data.address());}}let result=load{dst}(&mut rt,&mut c);
-if mode>=2{{assert_eq!(result,Err(if mode==2{{"CRT pointer lifetime"}}else if mode==3{{"CRT scalar address lacks provenance"}}else{{"CRT partial typed-word read"}}));assert_eq!(c.r[{dst}],if mode==3&&{dst}==2{{CrtValue::scalar(data.address())}}else{{prior[{dst}]}});}}else{{result.expect("word load must execute");let upper=if {dst}==2{{0x20000}}else if {dst}==4{{0}}else{{0xdead0000}};let knowledge=if {dst}==2||{dst}==4{{0xffff0000}}else{{0xff000000}};assert_eq!(c.r[{dst}],CrtValue::Scalar{{bits:upper|if mode==1{{0xcd}}else{{0x12cd}},known:knowledge|if mode==1{{0x00ff}}else{{0xffff}}}});assert!(CrtCpu::pointer(c.r[{dst}]).is_err());let _=old;}}flags(&c);*checked+=1;
+for mode in 0..5{{with_base(|rt,c|{{let data=rt.map_region(0x20000,if mode==4{{4}}else{{2}},CrtRegionKind::Stack,None).unwrap();rt.store(data,16,if mode==1{{CrtValue::Scalar{{bits:0x12cd,known:0xffff00ff}}}}else{{CrtValue::scalar(0x12cd)}}).unwrap();c.r[{dst}]=CrtValue::Scalar{{bits:0xdeadbeef,known:0xff00ffff}};if {dst}==4{{c.r[4]=c.entry[4];}}c.r[2]=CrtValue::Pointer(data);let old=c.r[{dst}];let prior=c.r;
+if mode==4{{rt.store(data,32,CrtValue::ProtectedReturn(777)).unwrap();}}if mode==2{{rt.memory.release(data.cap,data.owner).unwrap();}}if mode==3{{c.r[2]=CrtValue::scalar(data.address());}}let result=load{dst}(rt,c);
+if mode>=2{{assert_eq!(result,Err(if mode==2{{"CRT pointer lifetime"}}else if mode==3{{"CRT scalar address lacks provenance"}}else{{"CRT partial typed-word read"}}));assert_eq!(c.r[{dst}],if mode==3&&{dst}==2{{CrtValue::scalar(data.address())}}else{{prior[{dst}]}});}}else{{result.expect("word load must execute");let upper=if {dst}==2{{0x20000}}else if {dst}==4{{0}}else{{0xdead0000}};let knowledge=if {dst}==2||{dst}==4{{0xffff0000}}else{{0xff000000}};assert_eq!(c.r[{dst}],CrtValue::Scalar{{bits:upper|if mode==1{{0xcd}}else{{0x12cd}},known:knowledge|if mode==1{{0x00ff}}else{{0xffff}}}});assert!(CrtCpu::pointer(c.r[{dst}]).is_err());let _=old;}}flags(c);*checked+=1;}});
 }}
 }}
 "#));
@@ -219,7 +221,7 @@ if mode>=2{{assert_eq!(result,Err(if mode==2{{"CRT pointer lifetime"}}else if mo
             calls.push_str(&format!("zx_case{dst}_{src}(&mut checked);"));
             cases.push_str(&format!(r#"
 #[inline(never)] fn zx_case{dst}_{src}(checked:&mut u32){{
-for partial in [false,true]{{let(mut rt,mut c)=base();c.r[{src}]=CrtValue::Scalar{{bits:0xdeadbeef,known:if partial{{0xffffff00}}else{{0x0000ffff}}}};let before=c.r;let result=zx{dst}_{src}(&mut rt,&mut c);if partial{{assert_eq!(result,Err("CRT unknown scalar bits observed"));assert_eq!(c.r,before);}}else{{result.expect("known low word must extend despite unknown upper bits");assert_eq!(c.r[{dst}],CrtValue::scalar(0xbeef));assert!(CrtCpu::pointer(c.r[{dst}]).is_err());for r in 0..8{{if r!={dst}{{assert_eq!(c.r[r],before[r]);}}}}}}flags(&c);*checked+=1;}}
+for partial in [false,true]{{with_base(|rt,c|{{c.r[{src}]=CrtValue::Scalar{{bits:0xdeadbeef,known:if partial{{0xffffff00}}else{{0x0000ffff}}}};let before=c.r;let result=zx{dst}_{src}(rt,c);if partial{{assert_eq!(result,Err("CRT unknown scalar bits observed"));assert_eq!(c.r,before);}}else{{result.expect("known low word must extend despite unknown upper bits");assert_eq!(c.r[{dst}],CrtValue::scalar(0xbeef));assert!(CrtCpu::pointer(c.r[{dst}]).is_err());for r in 0..8{{if r!={dst}{{assert_eq!(c.r[r],before[r]);}}}}}}flags(c);*checked+=1;}});}}
 }}
 "#));
         }
