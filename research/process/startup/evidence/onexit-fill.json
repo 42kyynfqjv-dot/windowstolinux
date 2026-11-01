@@ -1,6 +1,6 @@
 {
   "kind": "original onexit first publication native component checkpoint",
-  "status": "implementation checkpoint; full replay/aggregates running, final evidence will record actual outcomes",
+  "status": "local verification complete; exact final-head remote CI pending publication",
   "base_commit": "b936882eca17df22a735d344498b85109061fa9d",
   "base_ci": [
     {
@@ -31,7 +31,7 @@
   "source_hashes": {
     "src/crt_onexit.rs": "23ffc04f1d4a494b2a20586a5959874654503ae656231cfd4912852318e8aa87",
     "src/crt_stream_cpu.rs": "4dd82c554901101f7d65c69ac3e0ea1ed8b7a2daf4ea2a933072800aad5d7230",
-    "src/crt_stream_ir.rs": "4c229106494f8d0829e56a45125d197f636376abe5194699fd3c0bb16ef25683",
+    "src/crt_stream_ir.rs": "37716195a95cee4e7066b03ec094ec7cf4edaf6e7b1a50f146436a904174ae85",
     "src/crt_stream_emit.rs": "46a181037b348c98c65428321183d56e9bc65a859fb013ae0c6a2e3f97a2a1e4",
     "src/crt_repeat_copy.rs": "7b8d11b83fcded5eeae7020a028d0355ede92935402ed8f241ae712d16ee6304",
     "src/crt_normal_frame_tests.rs": "6294c7da02d78a5a8594dcacb2811073eb97d7c6a95458f545c163cd25bb965f",
@@ -47,16 +47,6 @@
   "expectations_sha256": "c8fc55731bcb8de1afba6c2bbb4cc71c44be42cbd949ccaca78a359f2dff3f4a",
   "entry_result": "one actual first registration completes through original stores and checked normal cleanup; reject before40159b ->401bbf",
   "authority_limit": "no persistent encoded allocation/callback decoding association, repeated registration/growth/invocation remain unbound; no scalar retagging",
-  "checks_completed": {
-    "canonical": "canonical-v4.log passed",
-    "byte_oracle": "5056 complete native memset vectors passed in memset-v5.log and focused-final.log",
-    "encoding": "encoding-v3.log passed:128 scalar +128 live-pointer +128 stale-alias cases, plus LEA identity",
-    "clippy": "all targets -D warnings clippy-v2.log passed"
-  },
-  "checks_running": [
-    "aggregate root/CRT/unwind",
-    "full artifact replay"
-  ],
   "whole_pe_translation_pairs": 0,
   "new_windows_pairs": 0,
   "retained_windows_wrapper_comparisons": 5,
@@ -65,24 +55,244 @@
   "local_review": "actual original graph/code guards, dedicated REP stores, unknown allocation remains unknown until actual writes, producer-bound per-store checks, numeric encoding drops pointer authority, normal cleanup checked; strict negative tests preserve partial effects",
   "next_review": "Sol: exact bytes, repeated-store gate/progress, opaque identity LEA, actual four publication stores, lifetime failures and final-head CI; next original call40159b ->401bbf",
   "local_log_sha256": {
-    "memset-v2.log": "dfc5498a6011b4736fcd2761eeb3c1c90937ae7cbf05ac83d55560c45add4b04",
-    "focused-final.log": "d3e5bd00fcdd8242519b14288b1a5950b24c1ec6087ef7d4b8a56b53522eb1a1",
-    "replay-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "canonical-v4.log": "54ae5aba588ad0c7028caceb737cdef69f16fea4e8dc892596ec9306888d918a",
-    "graph.log": "40d914b580d51ece1aa458740a82a2b852773d59a283915eb842aef5ffde1032",
-    "canonical.log": "083efd42f6e20b08511e9afa052493d4fff3e3a9648dfe3dcaef76d6b21c0921",
-    "clippy.log": "34e354d4b22467ff6159bb012b52c5e6b3e3cc7e22dd276bb26913810cefd426",
     "append-graph.log": "0a761e9aaa825bf4543fb011221ef99fcdc9320600883658bdcfe596ddebd7cb",
-    "memset-v5.log": "56d99b87c4fad12a8c64e2b39b7ed954d02b4dc991e2541ffb523d8941578300",
-    "encoding-v3.log": "fd94dfda482fa580f6fac8c279eb11f801d1ed869b35dd8529ff1f30963fa458",
+    "canonical-v2.log": "eb0fd767ae25a30fd3e4854949d6d9a0a43579e15d8dce96d51c854c5fc281e0",
     "canonical-v3.log": "bd066aec9e1501b85e50fd858a9123db383b6318be319d814fc1f9b68aa6f3c9",
+    "canonical-v4.log": "54ae5aba588ad0c7028caceb737cdef69f16fea4e8dc892596ec9306888d918a",
+    "canonical.log": "083efd42f6e20b08511e9afa052493d4fff3e3a9648dfe3dcaef76d6b21c0921",
+    "clippy-final.log": "498750a59ff958a3b50a775f0a6b2c388b4e59a431b75cb21d9a3ab1e50678ef",
     "clippy-v2.log": "cf9fccb05b8a2a4ea0b4f9dfa09c939643bb256c89b9167cce28a4b286818071",
-    "memset-v4.log": "0066fd15c786b6330fd84e579dd4419e8ee50e665d5e8c4baff9243ef616dec5",
+    "clippy.log": "34e354d4b22467ff6159bb012b52c5e6b3e3cc7e22dd276bb26913810cefd426",
+    "corpus-python.log": "eca978d94c2907799f8b4e55aa4234007fb8e11a679b0172ab6e3d1ffa6d3392",
+    "crt-initial.log": "96aeca6130053d3b0f896e619ae7dd0a6734098ea8b6737bf6e553bf6bb6cea4",
+    "crt.log": "23365558b5fae0357b2bc81220102b45eaad6c1ec41ef4f06fac1e7413bf3c1d",
     "encoding-v2.log": "ac087a327f1ed834e62d894af870346351d858b991e109083e97c07c6df5f6d3",
-    "memset-v3.log": "5e87b804a336dac53346115fb274c52fc1b14aec7665618ba6919a9f4df37a76",
-    "root.log": "4799acf33001924a6e74b166de72dd8fe5b5586fa61e8c9199402dc08555469e",
+    "encoding-v3.log": "fd94dfda482fa580f6fac8c279eb11f801d1ed869b35dd8529ff1f30963fa458",
+    "fmt-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "focused-final.log": "d3e5bd00fcdd8242519b14288b1a5950b24c1ec6087ef7d4b8a56b53522eb1a1",
+    "fresh-identical.log": "663422afd534850a8f8b87668ac8f88324a0007cbb010b9b019031f806e2f0c3",
+    "graph.log": "40d914b580d51ece1aa458740a82a2b852773d59a283915eb842aef5ffde1032",
     "memset-tests.log": "edd5f06ed606a85c4c14cab8d6d3471c85018daf8a95d09b4ad6b0990ed969bf",
-    "crt.log": "98a3cab93c46ae4d929de161a0139693c775344a4011885885324059599beff9",
-    "canonical-v2.log": "eb0fd767ae25a30fd3e4854949d6d9a0a43579e15d8dce96d51c854c5fc281e0"
+    "memset-v2.log": "dfc5498a6011b4736fcd2761eeb3c1c90937ae7cbf05ac83d55560c45add4b04",
+    "memset-v3.log": "5e87b804a336dac53346115fb274c52fc1b14aec7665618ba6919a9f4df37a76",
+    "memset-v4.log": "0066fd15c786b6330fd84e579dd4419e8ee50e665d5e8c4baff9243ef616dec5",
+    "memset-v5.log": "56d99b87c4fad12a8c64e2b39b7ed954d02b4dc991e2541ffb523d8941578300",
+    "replay-final.log": "bc166000da27627136ddcab8f049e16538a2718665e7fadfab39a7d16809f77d",
+    "root.log": "4799acf33001924a6e74b166de72dd8fe5b5586fa61e8c9199402dc08555469e",
+    "startup-python.log": "c0dbc3bd7724f8dc92f95d510aa8a45c4b83a681d5f75c0f3ad89bbec5954332",
+    "tools-python.log": "bf93723eb6837f442ad4e0b8e71a90f6b84993320eb016b5a8da64344bfdbb2f",
+    "unwind.log": "b20f2cf77dccc464080b045bc9ddfb044783b133a22d0adb24d67dc914be0204"
+  },
+  "implementation_commit": "c04a3fd75b22348c95f2b1ef10ca6093ceb96d8f",
+  "tested_changes_after_checkpoint": [
+    "generic malformed-prefix test uses unsupported F2 STOS instead of newly effect-gated F3 STOS; default emitter still rejects F3 without dedicated issuer"
+  ],
+  "checks": {
+    "root": 182,
+    "crt": 327,
+    "crt_ignored": 2,
+    "unwind": 185,
+    "artifact_checks": "both ignored gates passed separately in full replay",
+    "startup_python": {
+      "run": 89,
+      "skip": 1
+    },
+    "tools_python": {
+      "run": 106,
+      "skip": 0
+    },
+    "corpus_python": {
+      "run": 18,
+      "skip": 1
+    },
+    "clippy": "all-targets -D warnings passed",
+    "fmt": "passed",
+    "full_replay": "passed",
+    "fresh_identical_Rust": "passed"
+  },
+  "replay": {
+    "kind": "original prolog/epilog component comparison with explicit unexecuted body boundary",
+    "scope": "Live registry fixture; body EAX/flags inputs; original stack/FS/saved-state restoration only",
+    "comparisons": 5,
+    "whole_pe_translation_pairs": 0,
+    "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+    "rust_sha256": "0d1dddd3b7b7b101057b66724b487d2f4124ff51a9db26c55790f3ee27bbb330",
+    "report_sha256": "de3d3543b5a61a6068fa5a5aa81a94a63a5b3217a0a8a1f1baa512cea980ee29",
+    "source_mtime_before_ns": 1793542609708470861,
+    "source_mtime_after_ns": 1793542636819267647,
+    "observer_report_sha256": "0feb586c7170dfd7e2390cf92ce1e5efa050c3e208d6c8903312e2d054c506cc",
+    "wrapper_vectors_sha256": "6f9b74742366c0f207d397ccf8b1af4afc2d01b34fae21cafb68d38d71a6ec66"
+  },
+  "cases": {
+    "onexit_routing_declared": 24,
+    "onexit_manager": 22,
+    "first_registration_success_component_cases": 2,
+    "first_registration_from_entry": 1,
+    "memset_independent_complete_cases": 5056,
+    "encoding_scalar": 128,
+    "encoding_live_pointer": 128,
+    "encoding_stale_alias": 128,
+    "repeated_registration": "rejects nonempty without duplicate allocation; prior fields preserved",
+    "CMOV_retained_vectors": 36,
+    "new_whole_PE_pairs": 0
+  },
+  "regions": {
+    "memset": {
+      "size": 346,
+      "sha256": "3586be7f6dac27b94938fabc1acb198c1d5ef385a43c4ec5abf110bfd81b8a97"
+    },
+    "encode": {
+      "size": 31,
+      "sha256": "962c28c6e5fcbfc1c3a0c3187da15dd7985b91793f62dba84919b05672b36542"
+    },
+    "body": {
+      "size": 275,
+      "sha256": "b6160da6cd351d82f3875f277e05df9e0ea5105d212c8c5ce72be45e65011338"
+    },
+    "recalloc": {
+      "size": 109,
+      "sha256": "0273262d94cddcfd739791dd3207b09753c6af27ca207d3622da41657daafc94"
+    },
+    "realloc": {
+      "size": 105,
+      "sha256": "2fd110c1a950051a5bb24f1ea550c457ef7d7dfbd41e264548d5b4023843123c"
+    }
+  },
+  "named_gates": {
+    "onexit-contract": {
+      "stdout": "5cb63e4d6e630b783947e273ac0fc8630f3e8774adf897e7945b5220499aa5f2",
+      "stderr": "29423147df5f27152c143f40399d5189737a902b622fb79efc6e1b2754336583"
+    },
+    "cookie-record": {
+      "stdout": "c9a19c4b71728daab098570c18add60e3a85183beaa623949340ad6fe8d819b6",
+      "stderr": "29423147df5f27152c143f40399d5189737a902b622fb79efc6e1b2754336583"
+    },
+    "x87-contract": {
+      "stdout": "0e36ba16465f294e7bf156f4a1363faab5e9b7cf7b7ed40bc8c920abccab46fe",
+      "stderr": "29423147df5f27152c143f40399d5189737a902b622fb79efc6e1b2754336583"
+    },
+    "c-initializer-graph": {
+      "stdout": "64126004b775d9ee30457f6ecb992dffe5bf092ebf4b971a2f58da9dcd0a0d2d",
+      "stderr": "ab1e8ab4b828624e75e6e8c917ac437f104b9cd0b496a9d073a4a52c0abca136"
+    },
+    "startup-caller-graph": {
+      "stdout": "8f27ee93b24809fcc3df796a8fa4c85b868efcac627714b55352deda92179b1b",
+      "stderr": "ab1e8ab4b828624e75e6e8c917ac437f104b9cd0b496a9d073a4a52c0abca136"
+    },
+    "locale-alignment": {
+      "stdout": "c9e33fbf1f7cc42af371835e2820e2b87f4d8035d14b0722a391a30adc15e42b",
+      "stderr": "29423147df5f27152c143f40399d5189737a902b622fb79efc6e1b2754336583"
+    }
+  },
+  "base_source_hash_review": {
+    "head": "b936882eca17df22a735d344498b85109061fa9d",
+    "checked_source_hashes": {
+      "src/crt_onexit.rs": "a36469a0d92fab30cb4ef90ce4dcd2230fe55fbaf2546ab3f6e6288614cee7dc",
+      "src/crt_stream_ir.rs": "2bf1a189eff5fd3ee134695ac7ec3f49a274180e01ad45babb9ee9efab26ea8e",
+      "src/crt_c_initializers.rs": "bed995a96b8b8d3485f30d4727b4a4dde678c811019981e15a8a197c767ae4c8",
+      "src/crt_startup_caller.rs": "6986da9636cbbe5f70c0d8a38e070bd0dca5b0881028802ba2c11f2c95b8a1f2",
+      "src/crt_normal_frame_tests.rs": "a368e9e370ec2e37ac2edb7c2091737062bfd8b407f0fc0c914f1ca6fa02ecc8",
+      "research/process/startup/check_normal_wrapper.py": "cb20243b8b42221a8918af26063fdc634151611543d90ccac8aad2c3e3f8eb1f"
+    },
+    "unchanged_original_pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+    "review": "actual borrowed input/return/callback identity, registered manager and guarded code, eager CMOV read, semantically empty scalar encoding restriction, flags0 unknown allocation. No demonstrated predecessor runtime defect; later no-op LEA precision defect exposed by newly executed original memset."
+  },
+  "source_head_ci": [
+    {
+      "id": 41314768633,
+      "head": "c04a3fd75b22348c95f2b1ef10ca6093ceb96d8f",
+      "status": "in_progress",
+      "conclusion": null,
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41314768633"
+    },
+    {
+      "id": 41314763804,
+      "head": "c04a3fd75b22348c95f2b1ef10ca6093ceb96d8f",
+      "status": "completed",
+      "conclusion": "failure",
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41314763804"
+    },
+    {
+      "id": 41314763768,
+      "head": "c04a3fd75b22348c95f2b1ef10ca6093ceb96d8f",
+      "status": "in_progress",
+      "conclusion": null,
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41314763768"
+    }
+  ],
+  "source_startup_failure": {
+    "run": 41314763804,
+    "job": 124872350920,
+    "head": "c04a3fd75b22348c95f2b1ef10ca6093ceb96d8f",
+    "failure": "stale structural REP STOS rejection test; now decoded only with separate required store-effect issuer",
+    "lines": [
+      "2026-11-01T14:09:42.8115076Z SHA256 digest of downloaded artifact is fda51d49a246e685260af4b9daf5583a59d4588fe85d6af82e5d9c6c39da33bc",
+      "2026-11-01T14:09:57.8536603Z SHA256 digest of uploaded artifact zip is ffbae0e121edd37dc38e1d422f4c48c93f68c2339bbaef3c61240f9217e8af8b",
+      "2026-11-01T14:10:06.6487030Z SHA256 digest of uploaded artifact zip is 59171329dc55ddea279c8eb25dc7a0c0b907d8cbe9660709dacff86a07c7095c",
+      "2026-11-01T14:10:08.4678526Z SHA256 digest of uploaded artifact zip is 1fbd9a687896df2a045617b1fc784f8861a6eb712ba3d74c7f9ff01784e47672",
+      "2026-11-01T14:10:12.1309316Z SHA256 digest of uploaded artifact zip is 6e7515623c9902122edc1b49bfa44caa5f58e6cc23368d1d3f2b1b61cbbb3965",
+      "2026-11-01T14:10:15.1944079Z SHA256 digest of uploaded artifact zip is 008c5827dd8ccb49956c3d6c23b92388ba3cf15b31116fae6d2251562f983f09",
+      "2026-11-01T14:10:18.2302628Z SHA256 digest of uploaded artifact zip is 666cdbc88f975f3fa43dd982ccaf0258d92b54680c786fc0b64dbad10f2aba8e",
+      "2026-11-01T14:10:54.4513135Z SHA256 digest of uploaded artifact zip is cf6b23d1223bed5c5aac4a584822521a0e246581e80a161e04b93e4eadfe974d",
+      "2026-11-01T14:11:11.2225128Z SHA256 digest of uploaded artifact zip is 076573f6a500c4bf0e5f904219ab8e223131c130c361bf5dde3ad5545df73213",
+      "2026-11-01T14:12:53.7842862Z test crt_stream_ir::tests::malformed_control_and_unsupported_prefix_reject ... FAILED",
+      "2026-11-01T14:13:09.1210786Z ---- crt_stream_ir::tests::malformed_control_and_unsupported_prefix_reject stdout ----",
+      "2026-11-01T14:13:09.1212345Z thread 'crt_stream_ir::tests::malformed_control_and_unsupported_prefix_reject' (1188) panicked at examples\\..\\src\\crt_stream_ir.rs:1276:13:",
+      "2026-11-01T14:13:09.1213105Z [243, 171, 195]",
+      "2026-11-01T14:13:09.1214633Z     crt_stream_ir::tests::malformed_control_and_unsupported_prefix_reject",
+      "2026-11-01T14:13:09.1215885Z test result: FAILED. 323 passed; 1 failed; 2 ignored; 0 measured; 0 filtered out; finished in 97.17s",
+      "2026-11-01T14:13:13.0369766Z SHA256 digest of uploaded artifact zip is c1e855f43e10dca5214d889cb6b8dd6b4273908d729082000bc34189047f976e",
+      "2026-11-01T14:13:13.5608376Z Artifact startup-unwind-slice.zip successfully finalized. Artifact ID 13087210405"
+    ]
+  },
+  "local_failure_history": {
+    "memset-tests.log/append-graph.log": "independent harness attempted map_region(Buffer), correctly rejected; uses actual native_heap_allocate instead",
+    "memset-v2.log": "outside-write oracle treated load of unknown scalar as Err; fixed to assert unknown knowledge and memory Uninitialized",
+    "memset-v3.log": "actual no-op LEA lost opaque saved identity. Shared exact register identity form fixed; nonzero arithmetic still cannot recreate identity",
+    "memset-v4.log": "editing error placed LEA identity return in pointer-only effective-address method; compiler rejected; relocated to LEA before any successful execution",
+    "canonical.log": "replay of a now-completed call rejects earlier as inactive instead of interrupted phase; strict expected class corrected",
+    "canonical-v2.log": "new failure modes omitted from marker expectation; no runtime change",
+    "canonical-v3.log": "late protected-table write reports storage write, not generic read-permission class; oracle corrected, prior cookie/callback writes verified",
+    "focused-final.log": "encoder test cookie type was ambiguous; generated test compiler rejected; explicit u32 fixed",
+    "encoding-v2.log": "freed-region operand correctly rejects stale/foreign pointer before lifetime access; strict oracle corrected",
+    "crt-initial.log": "generic prefix test still required F3 STOS structural rejection after dedicated effect support; changed to unsupported F2, retained separate emitter issuer rejections and original failed log"
+  },
+  "inventory_next": {
+    "current_rejection": "before CALL40159b ->401bbf",
+    "next_mode_body": "XOR EAX,EAX; INC EAX; RET",
+    "following_call": "4015a1 ->4069d4 ->4066d6",
+    "observed_mode_1_next_dependency": "locale initializer then406722 ->40ae0d; GetModuleFileNameW IAT415084;261-WCHAR local output, GetLastError/errno, narrow conversion, count/allocate/parse argv and publish argc/argv",
+    "imports": {
+      "0x415084": [
+        "kernel32.dll",
+        "GetModuleFileNameW"
+      ],
+      "0x415044": [
+        "kernel32.dll",
+        "GetLastError"
+      ],
+      "0x415030": [
+        "kernel32.dll",
+        "InitializeSListHead"
+      ]
+    },
+    "evidence": "read-only instruction/import inventory only, no downstream execution claim",
+    "routing": "Sol review and next connected argument-config producer path; Astra only for concrete unresolved authority/lifetime design, no Ultra"
+  },
+  "reproduction": {
+    "commands": [
+      "cargo test --locked",
+      "cargo test --locked --example crt_stream",
+      "cargo test --locked --example unwind_slice",
+      "cargo test --locked --example crt_stream crt_onexit::",
+      "cargo clippy --locked --all-targets -- -D warnings",
+      "cargo fmt --all -- --check",
+      "PYTHONPATH=research/process/startup python3 -m unittest discover -s research/process/startup",
+      "python3 -m unittest discover -s tools",
+      "PYTHONPATH=corpus python3 -m unittest discover -s corpus",
+      "python3 research/process/startup/check_normal_wrapper.py ORIGINAL OBSERVED NEW_OUTPUT"
+    ],
+    "fresh_reemission": "W2L_EH4_CODE=OUTPUT W2L_EH4_EVIDENCE=OUTPUT W2L_EH4_VECTORS=OBSERVED/normal-wrapper-vectors.txt W2L_PE_MAPPING_INPUT=ORIGINAL/unwind.exe cargo test --locked --example crt_stream canonical_image_cookie_and_original_record_initialization_compose -- --ignored",
+    "limits": "all prior proof/stack/timeout/resource limits preserved; first fill/new operations stay bounded; resource rejection is not claimed Windows failure equivalence"
   }
 }

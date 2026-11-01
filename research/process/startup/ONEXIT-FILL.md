@@ -90,3 +90,22 @@ LEA knowledge, actual four publication stores and cleanup, lifetime failures,
 and exact-head CI. Next execution boundary is the first initializer's
 `0x40159b -> 0x401bbf`; persistent encoded-pointer decoding is a distinct hard
 ownership gate, not authority inferred from these successful stores.
+
+### Read-only inventory of the next connected scope
+
+The next target `0x401bbf` is `XOR EAX,EAX; INC EAX; RET` (returns 1).
+The following original call `0x4015a1 -> 0x4069d4` tail-jumps to `0x4066d6`.
+Its mode-1 path calls the existing locale initializer, then `0x406722 -> 0x40ae0d`.
+That wrapper actually imports **GetModuleFileNameW** at IAT `0x415084`, writes a
+261-WCHAR checked local buffer, maps failures through GetLastError/errno, and
+passes through narrow conversion helpers before its cookie epilog. It then
+feeds original argument count/allocation/parsing and argc/argv publication.
+These instructions are inventory, not newly executed or supported behavior.
+
+The next coherent scope is mode/argument-configuration execution using canonical
+process image-name and command-line producers, bounded wide/narrow conversion,
+and owned argv storage. Preserve profile-specific path/encoding semantics,
+truncation and failure effects, parser count-versus-write agreement and cleanup.
+Do not substitute the original Windows path, Linux output path, supplied argv or
+locale defaults without a declared producer contract. Sol can review and start
+this connection; escalate a concrete producer/lifetime uncertainty if necessary.

@@ -2,18 +2,20 @@
 
 ## Current executable checkpoint: original first onexit publication completes
 
-Original memset402370 now initializes the actual128-byte heap allocation, then
-4072bb executes cookie filling, actual406d62 encoding and all four callback/table
-publication stores. The original manager releases logical lock2 and completes
-checked EH4 cleanup/RET12. Original entry rejects **before CALL40159b ->401bbf**
-in the first C initializer, preserving the root frame/scope/state and prior effects.
+Original memset `0x402370` now initializes the actual 128-byte heap allocation.
+Append body `0x4072bb` executes cookie filling, original encoding `0x406d62` and
+all four callback/table publication stores. The original manager releases logical
+lock 2 and completes checked EH4 cleanup/RET12. Original entry rejects **before
+CALL `0x40159b -> 0x401bbf`** in the first C initializer, preserving its root
+frame, scope/state and prior effects.
 This is explicit-profile mapped native component execution, not whole-PE support.
 Nonempty decoding/repeated registration/growth/callback invocation still reject;
 scalar encodings never grant pointer ownership.
 
 [Contract and review](ONEXIT-FILL.md), [frozen expectations](evidence/onexit-fill-expectations.json),
-[evidence](evidence/onexit-fill.json). Next inspect/execute401bbf and its following
-call4015a1 ->4069d4 only where supported. Persistent encoded-pointer association,
+[evidence](evidence/onexit-fill.json). Next inspect/execute `0x401bbf` and following call `0x4015a1 -> 0x4069d4`
+only where supported; the downstream mode-1 path needs the original
+GetModuleFileNameW/narrow-conversion and argument-configuration connection. Persistent encoded-pointer association,
 free/resize/exception effects and all earlier broader gates remain unclosed.
 Sol can review this slice and inventory the next original call; no automatic
 Astra escalation. Predecessor b936882 exact-head three workflows passed.
