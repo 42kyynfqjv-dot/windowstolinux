@@ -360,6 +360,10 @@ mod crt_startup_table;
 mod crt_x87;
 
 #[allow(dead_code)]
+#[path = "../src/crt_argv.rs"]
+mod crt_argv;
+
+#[allow(dead_code)]
 #[path = "../src/crt_onexit.rs"]
 mod crt_onexit;
 

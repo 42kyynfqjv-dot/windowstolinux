@@ -1,0 +1,79 @@
+{
+  "kind": "original argv-mode/main-image-name native component checkpoint",
+  "status": "implementation checkpoint; aggregates and full replay running",
+  "base_commit": "d46b7b69a7e784df5fdde4b57b4d92718e142664",
+  "base_ci": [
+    {
+      "id": 41315586498,
+      "head": "d46b7b69a7e784df5fdde4b57b4d92718e142664",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41315586498"
+    },
+    {
+      "id": 41315580842,
+      "head": "d46b7b69a7e784df5fdde4b57b4d92718e142664",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41315580842"
+    },
+    {
+      "id": 41315580806,
+      "head": "d46b7b69a7e784df5fdde4b57b4d92718e142664",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41315580806"
+    }
+  ],
+  "source_hashes": {
+    "src/crt_argv.rs": "db5b916463d2396f6a61ffcc8562c05657864abdfc51408451db909f8de530ca",
+    "src/crt_stream_runtime.rs": "2c4f353e1103501445d9203d59eb296b7dbe532121b1b0afddf2ffb8f6ada013",
+    "src/crt_resident_loader.rs": "284ac5bd227135fc17a38422350ea99dcfc9a4bc7f7766ede2710540552d34aa",
+    "src/crt_c_initializers.rs": "0df7b09f48adf9f5c747ed4ae1aa3be68749ad760ff31c8764b8f1c43bbcd73d",
+    "src/crt_startup_caller.rs": "e2a55cfa2d197920ec46d86dd35f58db25d7c7d62c7234c050081c69fb1301bf",
+    "src/crt_startup_entry.rs": "a0a30abc3cc97430f8be1f1e46f45cdb6e4de548d1ea4f193d690a39e49ed22a",
+    "src/crt_normal_frame_tests.rs": "89c6183e5c3ec4bd6a5f6cdc7094d36a667d84e87489cff7b557e46e5a27ff48",
+    "examples/crt_stream.rs": "1c2c6dccac2463857cf783441c671f607898ac6b5b6056b14f0f19e62b74f9dc",
+    "research/process/startup/check_normal_wrapper.py": "e09641c0b198e9d12986a62c600632ac4a04d41f0ac202841579668370760de8"
+  },
+  "regions": {
+    "MODE": {
+      "address": "0x401bbf",
+      "size": 4,
+      "sha256": "194f81a127723ec366ff0b8410df190c0649a05808a94d5554d82de5af7f425b"
+    },
+    "WRAPPER": {
+      "address": "0x4069d4",
+      "size": 11,
+      "sha256": "5d35fea0f18f577b04e51a6c6861748c9bb8460abe150d9eff83f3e1f90f28be"
+    },
+    "CONFIGURE": {
+      "address": "0x4066d6",
+      "size": 317,
+      "sha256": "b0896d4bf16518a348b2df6fb1c29273067d117a69e67471170f033d545e0408"
+    },
+    "IMAGE_NAME": {
+      "address": "0x40ae0d",
+      "size": 161,
+      "sha256": "91f736b9e0c3f5531a596347ea5677653dc3fd6bbcdd96e4c04622bee7588af4"
+    }
+  },
+  "expectations_sha256": "f85eee6184df9e80d01ca5889bee29ac3c64037e4806a981f62eb17550236c14",
+  "original_pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "next_boundary": "before CALL40ae79 ->40ab89 after actual wide output and original output-record initialization",
+  "verified": [
+    "canonical-cases-v3.log: 20 API +5 mode scenarios and connected unchanged-entry component passed",
+    "component-v3.log:86 UTF16 output/17negative/5failed-publication and actual native acquisition passed",
+    "all-target Clippy passed"
+  ],
+  "pending": [
+    "full root/CRT/unwind aggregate checks",
+    "full artifact replay",
+    "fresh Windows API conformance CI",
+    "exact final-head CI"
+  ],
+  "evidence_limits": "zero new whole-PE Windows/ELF pairs; five retained recorded Windows wrapper comparisons are components; supplied name text cannot authorize production API; Linux image name is explicit native policy, not Windows source spelling",
+  "full_startup_rcedit_default_admission": "unsupported",
+  "historical_windows_timeouts": "preserved and unresolved",
+  "next_review": "Sol: native versus supplied authority, process lifetime/read facts, UTF16/error/ABI and alias tests, original mode/tail and final CI"
+}

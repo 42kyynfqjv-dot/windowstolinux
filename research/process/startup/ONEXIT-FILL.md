@@ -1,5 +1,8 @@
 # Original onexit fill and first publication
 
+Historical checkpoint at `d46b7b6`. The current connected argument-configuration
+and image-name boundary is in [ARGV-IMAGE-NAME.md](ARGV-IMAGE-NAME.md).
+
 ## Connected execution
 
 Under the existing explicit native, UTF-8, CPU/entropy and stationary x87

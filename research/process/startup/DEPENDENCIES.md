@@ -1,6 +1,25 @@
 # Remaining entry-to-exit dependencies
 
-## Current executable checkpoint: original first onexit publication completes
+## Current executable checkpoint: original argument mode and wide image name
+
+Original entry executes `0x401bbf`, argument-config wrapper `0x4069d4` and mode-1
+body `0x4066d6`, the original initialized locale check, and image-name wrapper
+`0x40ae0d`. An additional explicit native image-name snapshot profile binds
+GetModuleFileNameW at `0x40ae32`, writing the real 261-WCHAR checked local buffer.
+Original following field initialization executes. The next rejection is **before
+CALL `0x40ae79 -> 0x40ab89`**. Narrow output, argv parsing/publication and all
+broader startup claims remain unproved; no expected argv or Windows path is
+substituted. The previous onexit stores and root frame/state remain intact.
+
+[Contract and review](ARGV-IMAGE-NAME.md), [frozen expectations](evidence/argv-expectations.json),
+[evidence](evidence/argv-image-name.json). Next connect actual locale/code-page
+and narrow conversion producers, then original argv count/allocation/parsing
+with ownership and failure effects. Default admission/full startup/rcedit and
+nonempty onexit/growth/invocation remain unsupported. Predecessor `d46b7b6` all
+three exact-head workflows passed; historical Windows timeout causes remain
+unresolved. Sol can review/continue, escalating only a concrete hard gap.
+
+## Previous checkpoint: original first onexit publication completes
 
 Original memset `0x402370` now initializes the actual 128-byte heap allocation.
 Append body `0x4072bb` executes cookie filling, original encoding `0x406d62` and

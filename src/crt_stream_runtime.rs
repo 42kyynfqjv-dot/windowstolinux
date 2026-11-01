@@ -18,6 +18,9 @@ struct CrtNativeEndpoint {id:CrtProcessHandle,file:Option<std::fs::File>,certain
 struct CrtCommandLine {anchor:guest_memory::Capability,pid:u32,serial:u64,codepage:u32,narrow:CrtPointer,wide:CrtPointer}
 
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
+struct CrtImageName{anchor:guest_memory::Capability,image:CrtProcessImage,pid:u32,serial:u64,wide:CrtPointer,fact:guest_memory::ReadFact,native:bool}
+
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
 struct CrtDescriptorId {anchor:guest_memory::Capability,generation:u64,number:u32,handle:u32,handle_generation:u64}
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 struct CrtThreadHead {anchor:guest_memory::Capability,thread:u64,registry:u64,epoch:u64,head:[u64;3]}
@@ -215,7 +218,7 @@ struct CrtStreamRuntime {
  uncertain_allocations:Vec<CrtPointer>,completed_failed_frees:Vec<(guest_memory::Capability,u64)>,heap_ptds:Vec<CrtHeapPtdView>,fiber:Option<CrtFiber>,fls_indices:CrtFlsIndices,fls:CrtFlsValues,
  unobserved_contexts:Vec<(CrtPointer,std::rc::Rc<std::cell::Cell<bool>>)>,heap:Option<CrtHeap>,memory:guest_memory::Space,owner:u64,thread:u64,anchor:guest_memory::Capability,
  dispatchers:std::collections::BTreeMap<u64,CrtDispatcherContext>,regions:Vec<CrtRegion>,retired:Vec<CrtPointer>,tags:std::collections::BTreeMap<u32,CrtValue>,
- partial:std::collections::BTreeMap<u32,(u8,u8)>,descriptors:Vec<CrtDescriptor>,native_endpoints:Vec<CrtNativeEndpoint>,native_standards:Option<(CrtNativeStandards,[CrtStandardEntry;3])>,command_line:Option<CrtCommandLine>,
+ partial:std::collections::BTreeMap<u32,(u8,u8)>,descriptors:Vec<CrtDescriptor>,native_endpoints:Vec<CrtNativeEndpoint>,native_standards:Option<(CrtNativeStandards,[CrtStandardEntry;3])>,command_line:Option<CrtCommandLine>,image_name:Option<CrtImageName>,
  global_objects:CrtGlobalSlots<CrtPointer>,global_locks:CrtGlobalLeases,record_objects:Vec<CrtPointer>,record_locks:Vec<CrtRecordLock>,locks:Vec<CrtLock>,descriptor_locks:Vec<CrtDescriptorLock>,serial:u64,generation:u64,canonical_errno:bool,errno_cell:Option<CrtPointer>,errno:Option<i32>,doserrno:Option<u32>,last_os_error:Option<u32>,
  locale_generation:u64,locale_live:bool,initialization:Option<u64>,shutdown:Option<CrtShutdown>,closed:bool,lock_objects:std::collections::BTreeSet<u32>,
 }
@@ -249,7 +252,7 @@ impl CrtStreamRuntime {
  }
  fn from_file_storage(owner:u64,thread:u64,memory:guest_memory::Space,pointer:CrtPointer)->Result<Self,&'static str>{
   let anchor=pointer.cap;
-  Ok(Self{x87:None,file_view:pointer,main_image:None,main_image_regions:vec![],loader_cells:std::collections::BTreeMap::new(),modules:std::collections::BTreeMap::new(),module_references:CrtModuleReferences::new(),exports:std::collections::BTreeMap::new(),providers:std::collections::BTreeMap::new(),native_sync:CrtGlobalSlots::new(),uncertain_allocations:vec![],completed_failed_frees:vec![],heap_ptds:vec![],fiber:None,fls_indices:CrtFlsIndices::new(),fls:CrtFlsValues::new(),unobserved_contexts:vec![],heap:None,memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],native_endpoints:vec![],native_standards:None,command_line:None,global_objects:CrtGlobalSlots::new(),global_locks:CrtGlobalLeases::new(),record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,canonical_errno:false,errno_cell:None,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([pointer.base])})
+  Ok(Self{x87:None,file_view:pointer,main_image:None,main_image_regions:vec![],loader_cells:std::collections::BTreeMap::new(),modules:std::collections::BTreeMap::new(),module_references:CrtModuleReferences::new(),exports:std::collections::BTreeMap::new(),providers:std::collections::BTreeMap::new(),native_sync:CrtGlobalSlots::new(),uncertain_allocations:vec![],completed_failed_frees:vec![],heap_ptds:vec![],fiber:None,fls_indices:CrtFlsIndices::new(),fls:CrtFlsValues::new(),unobserved_contexts:vec![],heap:None,memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],native_endpoints:vec![],native_standards:None,command_line:None,image_name:None,global_objects:CrtGlobalSlots::new(),global_locks:CrtGlobalLeases::new(),record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,canonical_errno:false,errno_cell:None,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([pointer.base])})
  }
 
  /// Initial FILE storage is a bounded role view of the original writable
@@ -1196,6 +1199,38 @@ impl CrtStreamRuntime {
  fn command_line_pointer(&self,token:CrtCommandLine,wide:bool)->Result<CrtPointer,&'static str>{
   if self.closed||token.anchor!=self.anchor||token.pid!=std::process::id()||token.codepage!=65001||self.command_line!=Some(token){return Err("native command-line process/lifetime");}
   let p=if wide{token.wide}else{token.narrow};self.identity_range(p,p.size)?;self.memory.validate_immutable(p.cap,p.owner,p.address(),p.size).map_err(|_|"native command-line immutable lifetime")?;self.memory.read(p.address(),p.size).map_err(|_|"native command-line initialized bytes")?;Ok(p)
+ }
+ /// A declared process image-name snapshot. Supplied text is component input;
+ /// only acquire_native_image_name can publish the actual native producer.
+ fn publish_image_name(&mut self,init:CrtInitialization,image:CrtProcessImage,base:u32,text:&str,native:bool)->Result<CrtImageName,&'static str>{
+  self.initialization(init)?;self.process_image(image)?;if self.image_name.is_some()||base==0||base%4096!=0||text.is_empty()||text.contains('\0')||text.encode_utf16().count()>32766{return Err("native image name profile/size/publication");}
+  let serial=self.serial.checked_add(1).ok_or("native image name generation")?;let mut bytes=Vec::new();bytes.try_reserve_exact((text.encode_utf16().count()+1)*2).map_err(|_|"native image name encoding resource")?;for unit in text.encode_utf16().chain(std::iter::once(0)){bytes.extend_from_slice(&unit.to_le_bytes());}
+  self.regions.try_reserve(1).map_err(|_|"native image name metadata resource")?;let cap=self.memory.map_image(base,bytes.len()as u32,self.owner,guest_memory::Permissions::READ,&bytes).map_err(|_|"native image name mapping")?;
+  let wide=CrtPointer{cap,owner:guest_memory::Owner::Module(self.owner),base,address:base,size:bytes.len()as u32,kind:CrtRegionKind::ProcessData};
+  let fact=match self.memory.prove_read(cap,wide.owner,base,wide.size){Ok(f)=>f,Err(_)=>{self.memory.release(cap,wide.owner).map_err(|_|"native image name mapping rollback")?;return Err("native image name read provenance");}};
+  let value=CrtImageName{anchor:self.anchor,image,pid:std::process::id(),serial,wide,fact,native};self.regions.push(CrtRegion{pointer:wide,heap:false,file_owner:None});self.serial=serial;self.image_name=Some(value);Ok(value)
+ }
+ fn acquire_native_image_name(&mut self,init:CrtInitialization,image:CrtProcessImage,base:u32)->Result<CrtImageName,&'static str>{
+  self.initialization(init)?;self.process_image(image)?;if self.image_name.is_some(){return Err("native image name already acquired");}
+  #[cfg(target_os="linux")]{let path=std::env::current_exe().map_err(|_|"native image name acquisition failed")?;let text=path.to_str().ok_or("native image name non-UTF8 path")?;if !path.is_absolute(){return Err("native image name must be absolute");}self.publish_image_name(init,image,base,text,true)}
+  #[cfg(not(target_os="linux"))]{let _=base;Err("native image name acquisition unsupported host")}
+ }
+ fn image_name_bytes(&self,name:CrtImageName)->Result<&[u8],&'static str>{
+  if self.closed||name.anchor!=self.anchor||name.pid!=std::process::id()||self.image_name!=Some(name){return Err("native image name process/lifetime");}self.process_image(name.image)?;self.identity_range(name.wide,name.wide.size)?;self.memory.validate_immutable(name.wide.cap,name.wide.owner,name.wide.address(),name.wide.size).map_err(|_|"native image name immutable lifetime")?;self.memory.read_proven(name.fact,name.wide.owner).map_err(|_|"native image name observation expired")
+ }
+ /// Modern positive-count main-image contract only. Parameter/resource failures
+ /// outside this domain reject rather than inventing a Windows error outcome.
+ fn image_name_output(&mut self,name:CrtImageName,module:CrtValue,destination:CrtPointer,count:u32)->Result<u32,&'static str>{
+  let bytes=self.image_name_bytes(name)?;let length=(bytes.len()/2-1)as u32;match module{CrtValue::Scalar{bits:0,known:u32::MAX}=>{},CrtValue::Pointer(p)if p==self.process_image(name.image)?=>{},_=>return Err("native image name module authority")};
+  if count==0||count>32767{return Err("native image name count domain");}let extent=count.checked_mul(2).ok_or("native image name output size")?;self.valid(destination,extent)?;if !matches!(destination.kind,CrtRegionKind::Stack|CrtRegionKind::Buffer|CrtRegionKind::Module)||self.overlapping_tags(destination.address(),extent).iter().any(|(_,v)|matches!(v,CrtValue::ProtectedReturn(_)|CrtValue::OpaqueSaved(_)|CrtValue::ThreadHead(_)|CrtValue::Dispatcher(_))){return Err("native image name output role/alias");}self.memory.validate_writable(destination.cap,destination.owner,destination.address(),extent).map_err(|_|"native image name output permission")?;
+  let copied=length.min(count-1);let written=(copied+1)*2;
+  // Complete data-word overwrites discard pointer/handle authority using the
+  // existing 32-bit store. Partial symbolic-word overwrites remain unsupported.
+  for(at,value)in self.overlapping_tags(destination.address(),written){if !matches!(value,CrtValue::Scalar{..})&&(at<destination.address()||u64::from(at)+4>u64::from(destination.address())+u64::from(written)||(at-destination.address())%2!=0){return Err("native image name partial typed output unbound");}}
+  let mut i=0;while i<=copied{let p=self.offset(destination,i64::from(i)*2)?;let unit=if i==copied{CrtValue::scalar(0)}else{self.load(self.offset(name.wide,i64::from(i)*2)?,16)?};
+   if self.tags.get(&p.address()).is_some_and(|v|!matches!(v,CrtValue::Scalar{..})){let next=if i+1==copied{0}else{self.load(self.offset(name.wide,i64::from(i+1)*2)?,16)?.known_scalar()?};self.store(p,32,CrtValue::scalar(unit.known_scalar()?|(next<<16)))?;i+=2;}else{self.store(p,16,unit)?;i+=1;}
+  }
+  let truncated=length>=count;self.last_os_error=if truncated{Some(122)}else{None};Ok(if truncated{count}else{length})
  }
  /// Native launch producer. Owned duplicates pin the actual host endpoints;
  /// virtual process handle values never equal borrowed host fd numbers by design.

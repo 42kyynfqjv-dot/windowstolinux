@@ -1,0 +1,13 @@
+{
+  "frozen_before_implementation": true,
+  "original_pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "mode": "original helper returns1 with INC flags; argv parsing is not supplied expected argv",
+  "image_name_policy": "explicit Linux native launch snapshot from current_exe before guest entry, process/image-owned immutable UTF16; not Windows source-path spelling",
+  "api_domain": "GetModuleFileNameW NULL or checked main-image view, positive count, writable owned output, modern truncation contract; unsupported DLL/zero-count/XP semantics reject",
+  "api_output": "UTF16 code units; length<nSize writes text+NUL and returns length; length>=nSize writes nSize-1 units+NUL, returns nSize and LastError122; untouched output tail stays unknown",
+  "ownership": "same process/image/token, original read fact; cross-thread views may share process metadata; stale/cross-process/capability/pid or altered bytes reject before output",
+  "API_failure": "unsupported/resource acquisition rejects, never supplied guest success/NULL/error; output/ABI aliases and unknown module handles reject",
+  "partial_effects": "earlier real registration and original locale/stores survive later unbound conversion/argv operations",
+  "requirements": "original GetModuleFileNameW contract https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-getmodulefilenamew; XP differences explicitly excluded",
+  "new_whole_pe_pairs": 0
+}

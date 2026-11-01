@@ -35,7 +35,7 @@ impl CrtResidentLoader {
 /// Explicit native replacement environment, not an inferred Windows loader state.
 /// Mapping revision 1 is grounded in the x86 Windows 10.0.20348 observation.
 /// Only this named domain is supported; no generic Windows version claim follows.
-struct CrtNativePlatform {code_pages:bool,anchor:guest_memory::Capability,function:CrtFunction,fls:Option<CrtFunction>,fls_set:Option<CrtFunction>,second_fiber:bool,startup_metadata:bool,standards:Option<CrtNativeStandards>,command_line:Option<CrtCommandLine>}
+struct CrtNativePlatform {code_pages:bool,anchor:guest_memory::Capability,function:CrtFunction,fls:Option<CrtFunction>,fls_set:Option<CrtFunction>,second_fiber:bool,startup_metadata:bool,standards:Option<CrtNativeStandards>,command_line:Option<CrtCommandLine>,image_name:Option<CrtImageName>}
 impl CrtNativePlatform {
  const PROFILE:&'static str="w2l-native-sync-20348-v1";
  const CONTRACT:&'static str="api-ms-win-core-synch-l1-2-0";
@@ -68,6 +68,18 @@ impl CrtNativePlatform {
  }
  fn acquire_command_line(&mut self,rt:&mut CrtStreamRuntime,init:CrtInitialization,base:u32,codepage:u32)->Result<(),&'static str>{
   self.validate(rt,init)?;if !self.startup_metadata||self.command_line.is_some(){return Err("native command-line launch profile unbound/already acquired");}self.command_line=Some(rt.acquire_native_command_line(init,base,codepage)?);Ok(())
+ }
+ const IMAGE_NAME_PROFILE:&'static str="w2l-native-main-image-name-modern-v1";
+ /// Snapshot the actual Linux executable name before guest entry. This does
+ /// not claim the spelling of a Windows source path or XP truncation behavior.
+ fn acquire_image_name(&mut self,rt:&mut CrtStreamRuntime,init:CrtInitialization,image:CrtProcessImage,base:u32,profile:&str)->Result<(),&'static str>{
+  self.validate(rt,init)?;if profile!=Self::IMAGE_NAME_PROFILE||!self.startup_metadata||self.image_name.is_some(){return Err("native image name launch profile unbound/already acquired");}self.image_name=Some(rt.acquire_native_image_name(init,image,base)?);Ok(())
+ }
+ fn image_name_call(&self,rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,init:CrtInitialization)->Result<CrtValue,&'static str>{
+  self.validate(rt,init)?;cpu.validate_active(rt)?;if cpu.return_pop!=12||cpu.r[4]!=cpu.entry[4]||[3,5,6,7].iter().any(|&r|cpu.r[r]!=cpu.entry[r]){return Err("native image name API ABI");}let name=self.image_name.ok_or("startup native image name unbound")?;if !name.native{return Err("native image name actual acquisition unbound");}
+  let sp=CrtCpu::pointer(cpu.r[4])?;rt.offset(sp,16)?;rt.memory.validate_writable(sp.cap,sp.owner,sp.address(),16).map_err(|_|"native image name API stack permission")?;let module=rt.load(rt.offset(sp,4)?,32)?;let destination=CrtCpu::pointer(rt.load(rt.offset(sp,8)?,32)?)?;let count=rt.load(rt.offset(sp,12)?,32)?.known_scalar()?;let extent=count.checked_mul(2).ok_or("native image name output size")?;
+  if destination.cap==sp.cap&&u64::from(destination.address())<u64::from(sp.address())+16&&u64::from(sp.address())<u64::from(destination.address())+u64::from(extent){return Err("native image name API argument alias");}
+  let value=rt.image_name_output(name,module,destination,count)?;cpu.clobber(CrtValue::scalar(value));cpu.finish_pop(rt,12)
  }
  fn command_line_call(&self,rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,init:CrtInitialization,wide:bool)->Result<CrtValue,&'static str>{
   self.validate(rt,init)?;cpu.validate_active(rt)?;if cpu.return_pop!=0||cpu.r[4]!=cpu.entry[4]||[3,5,6,7].iter().any(|&r|cpu.r[r]!=cpu.entry[r]){return Err("native command-line API ABI");}let sp=CrtCpu::pointer(cpu.r[4])?;rt.memory.validate_writable(sp.cap,sp.owner,sp.address(),4).map_err(|_|"native command-line API return permission")?;
@@ -103,7 +115,7 @@ impl CrtNativePlatform {
   // guest LoadLibrary result, fabricated LastError or DLL initialization receipt.
   let ticket=rt.provider_begin(init,"kernelbase.dll",handle,1)?;
   let(_,function)=rt.provider_initialize_sync(init,&ticket,address)?;
-  Ok(Self{code_pages:false,anchor:rt.anchor,function,fls:None,fls_set:None,second_fiber:false,startup_metadata:false,standards:None,command_line:None})
+  Ok(Self{code_pages:false,anchor:rt.anchor,function,fls:None,fls_set:None,second_fiber:false,startup_metadata:false,standards:None,command_line:None,image_name:None})
  }
  /// Explicit optional native kernel32/FLS service, prepared before entry.
  fn enable_fls(&mut self,rt:&mut CrtStreamRuntime,init:CrtInitialization,handle:u32,address:u32)->Result<(),&'static str>{
