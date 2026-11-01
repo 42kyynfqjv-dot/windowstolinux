@@ -68,22 +68,34 @@ Primary contracts:
 
 ## Preserved Windows probe contradiction
 
-Checkpoint458490a startup run **41323334916**, job **124897997677**, failed:
-flag0x10 returned2 rather than the frozen documentation-derived0/error1004
+Checkpoint 458490a startup run **41323334916**, job **124897997677**, failed:
+flag 0x10 returned 2 rather than the frozen documentation-derived0/error1004
 expectation. This is a new API-observation mismatch, not a historical launch
 timeout or proof of a converter defect. That aggregate step had no evidence
 folder configured, so its failure log retains the return comparison but **no
 raw file-mode/conversion trace was uploaded** in artifact13090501814. This
 missing data is explicit; it cannot be reconstructed from the assertion.
 
-The correction collects all15 rows before assertions, retains aggregate API
-JSONL even before the reproduction gate, and treats flags outside0/128 as
+The correction collects all 15 rows before assertions, retains aggregate API
+JSONL even before the reproduction gate, and treats flags outside 0/128 as
 observations only. The original frozen expectation remains in the repository
 so the contradiction is auditable. Unsupported flags remain outside the
 converter contract. Within-domain return/error/output/guard checks remain
-strict. A separate protocol regression accepts the observed return2 but still
+strict. A separate protocol regression accepts the observed return 2 but still
 rejects writing past capacity. Fresh Windows execution must establish the full
 trace; a rerun does not erase the original failure.
+
+## Local verification
+
+182 root, 330 CRT (two artifact gates separately executed), 185 unwind tests;
+96 startup Python tests (one skip), 106 tools and 18 corpus tests (one skip),
+Clippy and formatting passed. Full runtime replay passed with five retained
+recorded Windows wrapper comparisons and zero whole-PE pairs. Fresh emission
+from the current source is byte-identical:
+7017962af3c1c24b1018af6d0da9686975a8d63b909067e31a3afa94cc06d562.
+The later probe/protocol repair does not change emitted runtime semantics.
+Fresh Windows observation retention and exact final-head CI remain a separate
+pending gate; the original flag mismatch is preserved above.
 
 ## Next connected gate and review scope
 

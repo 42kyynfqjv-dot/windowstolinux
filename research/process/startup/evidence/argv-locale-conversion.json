@@ -1,5 +1,5 @@
 {
-  "status": "local aggregate checks passed; full replay running; Windows probe contradiction diagnosed and observation retention fixed, fresh CI pending",
+  "status": "local implementation, aggregates, full runtime replay and deterministic current emission verified; corrected exact-head CI pending",
   "base_commit": "8327b319a17d48e0b89d1d665cd0347a776b1908",
   "kind": "original mapped instruction component integration; no whole-PE support",
   "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
@@ -8,37 +8,44 @@
     "LOCALE": {
       "address": "0x40ab89",
       "size": 63,
-      "sha256": "90592ec72367e52ce94ae46a193e8f94a3f6d97e942b1bfaf2812846dba3f827"
+      "sha256": "90592ec72367e52ce94ae46a193e8f94a3f6d97e942b1bfaf2812846dba3f827",
+      "disassembly_sha256": "cd683323010437b8b45761fa4ad97088bc654343b88fb359c519b1318e74d7e8"
     },
     "FILE_ANSI": {
       "address": "0x407fc0",
       "size": 31,
-      "sha256": "82f037d1955018f8f14c243d47f56cc9b3eea8420387a9b68b8eba7ddd33ed1e"
+      "sha256": "82f037d1955018f8f14c243d47f56cc9b3eea8420387a9b68b8eba7ddd33ed1e",
+      "disassembly_sha256": "20b0735e0a65c641659a2a6867128408ba7575a427be3c29847ae14bd9160a78"
     },
     "FILE_RESOLVE": {
       "address": "0x407d96",
       "size": 42,
-      "sha256": "41bd8f7a906ef88d0e83002fe1736eb6da320857101077fdc778f3fad63a7b59"
+      "sha256": "41bd8f7a906ef88d0e83002fe1736eb6da320857101077fdc778f3fad63a7b59",
+      "disassembly_sha256": "51ed14bba1da978cd8cbf797658cd8eb71dc7f371abe075d1460c6c68afcd6c6"
     },
     "CONVERT": {
       "address": "0x40ad10",
       "size": 194,
-      "sha256": "a540eadf5bace1c897f61f31bd5297e31aaa2c197438d7dcdbea2a7919b57e51"
+      "sha256": "a540eadf5bace1c897f61f31bd5297e31aaa2c197438d7dcdbea2a7919b57e51",
+      "disassembly_sha256": "34979d4b08b8e22dc9da9ac8f95930c05fb1672cdf42b465780a7fbd34ea2f9a"
     },
     "CONVERT_WRITE": {
       "address": "0x40ab65",
       "size": 36,
-      "sha256": "4762936bbc7a24994b4bcce82816655ae5ed1b0b32ae689999773f8c047b5969"
+      "sha256": "4762936bbc7a24994b4bcce82816655ae5ed1b0b32ae689999773f8c047b5969",
+      "disassembly_sha256": "d65013e663550aba394b5e0dd8f232a77c91449a5506545ecb3341f88daf0e66"
     },
     "WIDE_API": {
       "address": "0x40b8c5",
       "size": 106,
-      "sha256": "3b4e71cb3ed3e147c9ae19a3439f05539d2c16d8bf49eb8df33a875968418a0d"
+      "sha256": "3b4e71cb3ed3e147c9ae19a3439f05539d2c16d8bf49eb8df33a875968418a0d",
+      "disassembly_sha256": "00940d220178bd78222abc46f7c8e733567088e1798c53c26c290fa24d9a49ad"
     },
     "WIDE_FLAGS": {
       "address": "0x40b835",
       "size": 144,
-      "sha256": "914bfbf1455e912bd5db0f7f094bb25f6cd3f8512bc4f773b4b5fcab755d6904"
+      "sha256": "914bfbf1455e912bd5db0f7f094bb25f6cd3f8512bc4f773b4b5fcab755d6904",
+      "disassembly_sha256": "d8988cdcf4a19cbc3860377885c905457a494ffa97b662c4456db14bab0b512d"
     }
   },
   "boundary": {
@@ -92,13 +99,13 @@
   "checks": {
     "canonical_ignored_component": "passed including11new modes",
     "argv_focused": 3,
-    "Windows_probe": "rustc metadata typecheck passed; not linked/executed",
+    "Windows_probe": "current authored Rust body metadata typecheck passed; no Windows linking/execution on Linux",
     "observation_protocol_tests": 7,
     "startup_python": {
       "run": 96,
       "skip": 1
     },
-    "clippy": "all targets passed at458490a; final observation-only source check pending",
+    "clippy": "all targets -D warnings passed",
     "fmt": "passed",
     "root": 182,
     "crt": 330,
@@ -108,7 +115,9 @@
     "corpus_python": {
       "run": 18,
       "skip": 1
-    }
+    },
+    "full_runtime_replay": "passed at458490a; later changes retain/validate Windows observations and describe contracts, emitted runtime unchanged",
+    "fresh_current_source_emission": "passed; identical Rust; both ignored artifact gates separately executed in full replay"
   },
   "source_hashes": {
     "src/crt_argv.rs": "bd114f7e6ab37a1c594d89603774d56379848ecc5902e62276bfc3abc031f300",
@@ -300,5 +309,142 @@
     "raw_trace": "absent: aggregate cargo test had no W2L_EH4_EVIDENCE before failure; not reconstructed",
     "correction": "collect all15rows before assertions; configure aggregate durable evidence directory; flags outside0/128 are observed only and remain unbound in converter; documented-domain checks unchanged",
     "fresh_Windows_evidence": "pending; not inferred from rerun"
+  },
+  "verification_basis_commit": "fbde6218d817df5dbce2678a690570983dc69053",
+  "replay": {
+    "kind": "original prolog/epilog component comparison with explicit unexecuted body boundary",
+    "scope": "Live registry fixture; body EAX/flags inputs; original stack/FS/saved-state restoration only",
+    "comparisons": 5,
+    "whole_pe_translation_pairs": 0,
+    "rust_sha256": "7017962af3c1c24b1018af6d0da9686975a8d63b909067e31a3afa94cc06d562",
+    "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+    "argv_locale_native_cases": 11,
+    "argv_narrow_conversion_implemented": false,
+    "report_sha256": "855dbc6dc6b0059a5c4849c884f9e160c37c0dbef14106ff30ad513a0197db8c",
+    "fresh_source_mtime_before_ns": 1793548883999618653,
+    "fresh_source_mtime_after_ns": 1793548929797680812,
+    "observer_report_sha256": "0feb586c7170dfd7e2390cf92ce1e5efa050c3e208d6c8903312e2d054c506cc",
+    "wrapper_vectors_sha256": "6f9b74742366c0f207d397ccf8b1af4afc2d01b34fae21cafb68d38d71a6ec66"
+  },
+  "named_gate_hashes": {
+    "cookie-record": {
+      "stdout": "f48c622eed227af243675a6f119a001e51d710c0a7af1d9b8491eeb0886d6223",
+      "stderr": "29423147df5f27152c143f40399d5189737a902b622fb79efc6e1b2754336583"
+    },
+    "argv-contract": {
+      "stdout": "ab1cd3c69f1529a7c11aeba5ffe831306db40143081d9ed665781bb515c574c7",
+      "stderr": "ab1e8ab4b828624e75e6e8c917ac437f104b9cd0b496a9d073a4a52c0abca136"
+    },
+    "onexit-contract": {
+      "stdout": "36ce1eccc875d395bccd769774007ff21d50424360f12302f3eeefbafb7ba10b",
+      "stderr": "ab1e8ab4b828624e75e6e8c917ac437f104b9cd0b496a9d073a4a52c0abca136"
+    },
+    "locale-alignment": {
+      "stdout": "a28cffb21c290bf1676b7837e9b060cef08266dbe347753344fdc3791265d7f9",
+      "stderr": "ab1e8ab4b828624e75e6e8c917ac437f104b9cd0b496a9d073a4a52c0abca136"
+    },
+    "c-initializer-graph": {
+      "stdout": "30a11b6cc15d0df53b4dcf2ab6b072e992370d043f2a331c474959bd0a816061",
+      "stderr": "29423147df5f27152c143f40399d5189737a902b622fb79efc6e1b2754336583"
+    },
+    "startup-caller-graph": {
+      "stdout": "958b096da2f30e6c6da52a0fed22db13002b671c4efda8b497d3ac9291ab484a",
+      "stderr": "ab1e8ab4b828624e75e6e8c917ac437f104b9cd0b496a9d073a4a52c0abca136"
+    }
+  },
+  "source_head_ci": [
+    {
+      "id": 41323988550,
+      "head": "fbde6218d817df5dbce2678a690570983dc69053",
+      "name": "Rust CI",
+      "event": "pull_request",
+      "status": "in_progress",
+      "conclusion": null,
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41323988550"
+    },
+    {
+      "id": 41323983608,
+      "head": "fbde6218d817df5dbce2678a690570983dc69053",
+      "name": "Rust CI",
+      "event": "push",
+      "status": "in_progress",
+      "conclusion": null,
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41323983608"
+    },
+    {
+      "id": 41323983556,
+      "head": "fbde6218d817df5dbce2678a690570983dc69053",
+      "name": "Pinned startup inventory",
+      "event": "push",
+      "status": "in_progress",
+      "conclusion": null,
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41323983556"
+    }
+  ],
+  "first_checkpoint_ci_snapshot": [
+    {
+      "id": 41323340327,
+      "head": "458490adbe0524e2ce49b4bb289444f8a3407dd3",
+      "event": "pull_request",
+      "status": "in_progress",
+      "conclusion": null,
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41323340327"
+    },
+    {
+      "id": 41323334936,
+      "head": "458490adbe0524e2ce49b4bb289444f8a3407dd3",
+      "event": "push",
+      "status": "in_progress",
+      "conclusion": null,
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41323334936"
+    },
+    {
+      "id": 41323334916,
+      "head": "458490adbe0524e2ce49b4bb289444f8a3407dd3",
+      "event": "push",
+      "status": "completed",
+      "conclusion": "failure",
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41323334916"
+    }
+  ],
+  "local_logs_sha256": {
+    "458490a-windows-failed-excerpt.log": "08b536decd02d6c2328740b3229b810ef219d4af3a0b609af860f46fa68e574a",
+    "canonical-cases.log": "a8a60ed9fafb927c91beb62bdd964e44ada60bf120b56c2ecf599539ed41b9b2",
+    "canonical.log": "2638387eae03b256241aa8c235e8f792dd76b9433482b3c6ea723f4cc019656b",
+    "clippy-final.log": "337016c1777bfcb07e3db734c31fd56d862c426da5bd51fed6379ad62c372347",
+    "clippy-v2.log": "cf9fccb05b8a2a4ea0b4f9dfa09c939643bb256c89b9167cce28a4b286818071",
+    "clippy.log": "9544a2dec33e86a93e301022ecfdec0cc4a5d29aba13e557e1454936aeea0cd2",
+    "corpus-python.log": "be5cd2e0c2e74d3e635cc964e9685f2ecf6656cfef42baeac12a65a1e129931c",
+    "crt.log": "cb9961fa54ce11b897d822d86f3ea0b5c02ac602a60702f365c5de5c3979c59e",
+    "fmt-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "fmt-v2.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "fmt.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "fresh-identical.log": "b0f3483c3b11064994cd12e984d2d79e339883ca25285ca662feeef220de408f",
+    "graph.log": "6de3255cec5747570138eed5a08de64ff9a05b349be3007e6042875708afb788",
+    "protocol-v2.log": "e19a86747084065fc6026e9e5463e2291a2e56061843e8a27e0424f4fed284be",
+    "protocol.log": "e9dbc1a31936475165af55356b566005547a03914ab93e4739e4aa9949799201",
+    "replay.log": "df2f8de06159fc3d1bdd8f1971f92eff5cea5bd27efbce578cf0186cd56570db",
+    "root.log": "3f4b8d12260ebfa69da9b7ab5a7b7acc70641c3d47883039ae9711b7249316cb",
+    "startup-python-v2.log": "3c53a47d7ad7912a3bb8696cbd0e78c0719e471a636d09550b395070b7066ea1",
+    "startup-python.log": "515a577d5fd23b1e47d806a1306470f95becb9d8f459348aba5180a3067c00c3",
+    "tools-python.log": "4fca375ec3f88bb2ca698dc79fd091bd3309c045eb23555093e7c00334f144fa",
+    "unwind.log": "fd3ff6f05b1b3b3893a03a0c0b4cced9da0468bc3f10fbf735b345675558e31e",
+    "windows-conversion-typecheck-v2.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "windows-conversion-typecheck.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "reproduction": {
+    "commands": [
+      "cargo test --locked",
+      "cargo test --locked --example crt_stream",
+      "cargo test --locked --example unwind_slice",
+      "cargo clippy --locked --all-targets -- -D warnings",
+      "cargo fmt --all -- --check",
+      "PYTHONPATH=research/process/startup python3 -m unittest discover -s research/process/startup",
+      "python3 -m unittest discover -s tools",
+      "PYTHONPATH=corpus python3 -m unittest discover -s corpus",
+      "python3 research/process/startup/check_normal_wrapper.py ORIGINAL OBSERVED NEW_OUTPUT"
+    ],
+    "repeat": "W2L_EH4_CODE=OUTPUT W2L_EH4_EVIDENCE=OUTPUT W2L_EH4_VECTORS=OBSERVED/normal-wrapper-vectors.txt W2L_PE_MAPPING_INPUT=ORIGINAL/unwind.exe cargo test --locked --example crt_stream canonical_image_cookie_and_original_record_initialization_compose -- --ignored",
+    "Windows_raw": "aggregate direct API rows retained in component-api-evidence; reproduction separately retains and validates original-windows-narrow-conversion.jsonl before hashing; no whole-PE pairs"
   }
 }
