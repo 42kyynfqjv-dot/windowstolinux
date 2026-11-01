@@ -9,7 +9,10 @@ storage helper `0x406985`, which runs its overflow checks and rejects before
 globals remain zero and no vector is allocated/published. This advances the
 original instruction component, not default/full startup or rcedit admission.
 
-[Contract/review](ARGV-COUNT.md), [frozen expectations](evidence/argv-count-expectations.json).
+[Contract/review](ARGV-COUNT.md), [frozen expectations](evidence/argv-count-expectations.json),
+[verification](evidence/argv-count.json). All 53 parser/storage scenarios, 18 SETcc
+scenarios, local aggregates and full corrected replay pass. Repeated emission is
+identical; new exact-head CI remains separate from these local results.
 Next connect the existing original calloc/errno producer under live canonical
 heap and exception-registry authority, then the original null-free branch, return and
 second parsing/publication. Conversion-error/growth/free/cleanup and broader

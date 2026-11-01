@@ -79,6 +79,28 @@ whole-PE comparison is claimed. UTF-8 error-write/growth/free/errno paths,
 default admission, full startup/rcedit, native close/EOF equivalence, XP/7 and
 historical Windows timeout causes remain unresolved.
 
+## Verified checkpoint
+
+Implementation `6925ae95bb32b2dfdb0aa9bbaef0f31da676cce0` passes 182 root,
+334 CRT and 185 unwind Rust tests. Both ignored artifact-dependent CRT gates
+were separately executed by the full replay. Python suites pass 99 startup
+tests (one skip), 106 tool tests and 18 corpus tests (one skip); Clippy with
+warnings denied and formatting pass. All 53 focused scenarios and 18 SETcc
+scenarios pass. [Verification and source fingerprints](evidence/argv-count.json)
+retain the initial test-fixture/command errors and their corrections.
+
+The complete corrected-source replay passes. Repeated generator invocations
+advance the output timestamp while preserving Rust SHA-256
+`c77e8f34af9e8843f78a93b626e8f50fa247a38cf3de0fe948b04efba11b6f7a`.
+The frozen local PE remains
+`1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4`.
+Five retained comparisons remain wrapper components, not whole-PE execution.
+
+All three exact-head workflows for reviewed base `e080da1` passed. The new
+implementation's three workflows were still running at this evidence snapshot;
+later documentation-only commits need their own exact-head status. No CI pass
+is inferred from the local replay or predecessor runs.
+
 ## Next bounded integration
 
 Pass the existing live exception-registry and canonical process-heap authority
@@ -94,3 +116,18 @@ The next-call inventory identifies `0x407d50` as the existing free wrapper,
 not a new-handler mode setter. Its original NULL argument branches directly to
 return; non-NULL inputs reach HeapFree and its separate failure/errno contract.
 Reuse the existing checked null-free body when connecting this call.
+
+The allocator connection has these concrete obligations:
+
+- Read the canonical process heap from the original `0x41d2c8` cell; do not
+  acquire a descriptor allocator's separate authority.
+- The original request is `(pointer_slots * 4 + byte_storage, 1)`. A successful
+  calloc must use an actual checked allocation and its actual zeroing effects.
+  Existing test-only `success_after` inputs are not runtime acquisition.
+- Carry the live registry/normal-call epoch into original errno acquisition,
+  using the existing UCRT PTD/FLS producer on failure. Keep the distinct PTD
+  layouts and current fiber identity; do not insert a shadow errno cell.
+- Preserve the original allocator mode/retry branch. A supported first success
+  does not establish new-handler or resource-failure equivalence.
+- Execute the original NULL free branch and caller cleanup before consuming the
+  result. The second parser pass and final global stores remain later gates.
