@@ -220,7 +220,10 @@ fn startup_c_array_platform(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&Crt
         0x40155a,
         0x4015da,
         &[
-            (0x4015da, "C initializer configuration call unbound at0x4015da"),
+            (
+                0x4015da,
+                "C initializer configuration call unbound at0x4015da",
+            ),
             (0x4015fd, "C initializer fatal path unbound at 0x4015fd"),
         ],
     )?;
