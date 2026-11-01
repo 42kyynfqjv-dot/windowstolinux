@@ -51,14 +51,14 @@ pub(crate) fn source() -> Result<String, String> {
     );
     out.push_str(&format!("fn argv_configure_wrapper(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:Option<&CrtNativePlatform>,epoch:Option<&mut NormalCallEpoch<'_>>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;{}{body}}}",guard(0x4069d4,&bytes)));
     let bytes = raw(CONFIGURE);
-    let mut g = crate::crt_startup_table::graph(&bytes[..(0x406727 - 0x4066d6)], 0x4066d6)?;
+    let mut g = crate::crt_startup_table::graph(&bytes[..(0x406755 - 0x4066d6)], 0x4066d6)?;
     g.nodes
         .extend(Graph::decode(&bytes[(0x40680f - 0x4066d6)..], 0x40680f)?.nodes);
     g.nodes.insert(
-        0x406727,
+        0x406755,
         Node {
-            length: 6,
-            op: Op::Reject("argv post-image-name parsing unbound at 0x406727"),
+            length: 5,
+            op: Op::Reject("argv count/parser call unbound at 0x406755"),
             successors: vec![],
         },
     );
@@ -73,31 +73,15 @@ pub(crate) fn source() -> Result<String, String> {
   Target::Direct(0x407b4f)=>"return Err(\"argv invalid-parameter effect unbound\");".into(),
   _=>return Err(format!("argv configuration target {t:?}"))})
         },
-        &Default::default(),
+        &BTreeMap::from([
+            (0x41ce64, "CrtRegionKind::Module".into()),
+            (0x41ce74, "CrtRegionKind::Module".into()),
+        ]),
         256,
     )?;
     out.push_str(&format!("fn argv_configure_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:Option<&CrtNativePlatform>,mut epoch:Option<&mut NormalCallEpoch<'_>>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;{}{body}}}",guard(0x4066d6,&bytes)));
     let bytes = raw(IMAGE_NAME);
-    let mut g = crate::crt_startup_table::graph(&bytes[..(0x40ae99 - 0x40ae0d)], 0x40ae0d)?;
-    for (pc, reason) in [
-        (
-            0x40ae99,
-            "argv post-conversion result/epilog unbound at 0x40ae99",
-        ),
-        (
-            0x40aea2,
-            "argv failed image-name epilog unbound at 0x40aea2",
-        ),
-    ] {
-        g.nodes.insert(
-            pc,
-            Node {
-                length: 1,
-                op: Op::Reject(reason),
-                successors: vec![],
-            },
-        );
-    }
+    let g = Graph::decode(&bytes, 0x40ae0d)?;
     let body = crate::crt_stream_emit::emit_body(
         &g,
         |pc, t| {
@@ -105,6 +89,7 @@ pub(crate) fn source() -> Result<String, String> {
             Ok(match t{
   Target::Direct(0x40ab89)=>format!("cpu.call_activation(rt,{next},0,|rt,c|argv_locale_original(rt,c,inputs,platform))?;"),
   Target::Direct(0x40ad10)=>format!("cpu.call_activation(rt,{next},0,|rt,c|argv_convert_original(rt,c,inputs,platform))?;"),
+  Target::Direct(0x40154c)=>format!("cpu.call_activation(rt,{next},0,|rt,c|locale_security_original(rt,c,inputs))?;"),
   Target::Import(0x415084)=>format!("rt.process_image_import(inputs.image,0x415084,\"kernel32.dll\",\"GetModuleFileNameW\")?;cpu.call_activation(rt,{next},12,|rt,c|platform.image_name_call(rt,c,inputs.init))?;"),
   Target::Import(0x415044)=>"return Err(\"argv GetLastError failure acquisition unbound\");".into(),
   Target::Direct(0x407c71)=>"return Err(\"argv image-name error mapping unbound\");".into(),
@@ -343,7 +328,7 @@ fn conversion_source() -> Result<String, String> {
    Target::Direct(0x40b8c5)=>format!("cpu.call_activation(rt,{next},0,|rt,c|argv_wide_original(rt,c,inputs,platform))?;"),
    Target::Direct(0x40b835)=>format!("cpu.call_activation(rt,{next},0,|rt,c|argv_wide_flags_original(rt,c,inputs,platform))?;"),
    Target::Direct(0x40ab65)=>format!("cpu.call_activation(rt,{next},16,|rt,c|argv_convert_write_original(rt,c,inputs,platform))?;"),
-   Target::Import(0x4150e0)=>format!("rt.process_image_import(inputs.image,0x4150e0,\"kernel32.dll\",\"WideCharToMultiByte\")?;cpu.call_activation(rt,{next},32,|rt,c|platform.wide_query_call(rt,c,inputs.init))?;"),
+   Target::Import(0x4150e0)=>format!("rt.process_image_import(inputs.image,0x4150e0,\"kernel32.dll\",\"WideCharToMultiByte\")?;cpu.call_activation(rt,{next},32,|rt,c|platform.wide_conversion_call(rt,c,inputs.init,Some(inputs.image)))?;"),
    Target::Direct(0x40add2)=>"return Err(\"argv conversion capacity/ownership growth unbound\");".into(),
    Target::Direct(0x40adf9)=>"return Err(\"argv conversion reset/free unbound\");".into(),
    Target::Import(0x415044)|Target::Direct(0x407c71)|Target::Direct(0x407ccd)=>"return Err(\"argv conversion error/errno effects unbound\");".into(),
@@ -368,12 +353,64 @@ fn utf8_queries_preserve_byte_counts_alias_domains_unknowns_and_output_memory() 
  for mode in 0..12{let(mut rt,init)=CrtStreamRuntime::new_initializing(17,23,0x8000,131072).unwrap();let mut p=CrtNativePlatform::prepare(&mut rt,init,CrtNativePlatform::PROFILE,0x700000,0x701000).unwrap();let source=rt.map_region(0x20000,64,CrtRegionKind::Stack,None).unwrap();for(n,v)in [233,55357,56832,0].into_iter().enumerate(){rt.store(rt.offset(source,n as i64*2).unwrap(),16,CrtValue::scalar(v)).unwrap();}let stack=rt.map_region(0x30000,512,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,400).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(900+mode)).unwrap();let mut c=CrtCpu::new(sp,900+mode).unwrap();let mut args=[CrtValue::scalar(65001),CrtValue::scalar(0),CrtValue::Pointer(source),CrtValue::scalar(u32::MAX),CrtValue::scalar(0xdeadbeef),CrtValue::scalar(0),CrtValue::scalar(0),CrtValue::scalar(0)];
   if matches!(mode,1|10|11){args[0]=CrtValue::scalar(0);if mode!=10{let token=rt.publish_command_line(init,0x50000,65001,&["modeled".into()]).unwrap();p.command_line=Some(token);if mode==11{rt.memory.release(token.wide.cap,token.wide.owner).unwrap();}}}
   match mode{2=>args[1]=CrtValue::scalar(16),3=>args[0]=CrtValue::scalar(1),4=>args[5]=CrtValue::scalar(8),5=>args[6]=CrtValue::scalar(1),6=>args[3]=CrtValue::scalar(0),7=>{rt.store(source,16,CrtValue::Scalar{bits:0,known:0}).unwrap();},8=>{rt.memory.release(source.cap,source.owner).unwrap();},9=>args[1]=CrtValue::scalar(128),_=>{}}
-  for v in args.into_iter().rev(){c.push(&mut rt,v).unwrap();}rt.last_os_error=Some(73);let got=c.call_activation(&mut rt,0x430000,32,|rt,c|p.wide_query_call(rt,c,init));
+  for v in args.into_iter().rev(){c.push(&mut rt,v).unwrap();}rt.last_os_error=Some(73);let got=c.call_activation(&mut rt,0x430000,32,|rt,c|p.wide_conversion_call(rt,c,init,None));
   if mode<=1{assert_eq!(got,Ok(CrtValue::scalar(7)));assert_eq!(c.r[4],CrtValue::Pointer(sp));assert_eq!(rt.last_os_error,None);c.finish(&mut rt).unwrap();assert!(c.returned);}
-  else{assert!(got.is_err(),"query negative {mode} accepted");assert!(!c.returned);assert_eq!(rt.last_os_error,Some(73));if mode==2||mode==9{assert_eq!(got,Err("native UTF8 flags outside supported query domain"));}if mode==3{assert_eq!(got,Err("native UTF8 code-page alias unbound"));}if mode==4{assert_eq!(got,Err("native UTF8 conversion write effects unbound"));}if mode==5{assert_eq!(got,Err("native UTF8 default-character outputs unbound"));}if mode==6{assert_eq!(got,Err("native UTF8 input count outside bounded domain"));}if mode==10{assert_eq!(got,Err("native UTF8 ACP profile unbound"));}}
+  else{assert!(got.is_err(),"query negative {mode} accepted");assert!(!c.returned);assert_eq!(rt.last_os_error,Some(73));if mode==2||mode==9{assert_eq!(got,Err("native UTF8 flags outside supported query domain"));}if mode==3{assert_eq!(got,Err("native UTF8 code-page alias unbound"));}if mode==4{assert_eq!(got,Err("native UTF8 output pointer authority"));}if mode==5{assert_eq!(got,Err("native UTF8 default-character outputs unbound"));}if mode==6{assert_eq!(got,Err("native UTF8 input count outside bounded domain"));}if mode==10{assert_eq!(got,Err("native UTF8 ACP profile unbound"));}}
   assert_eq!(rt.memory.read(stack.address(),64),Err(guest_memory::Fault::Uninitialized),"query must not initialize ignored output memory");
  }
  "#,
         "utf8-query",
+    );
+}
+
+#[test]
+fn utf8_complete_writes_preserve_unknown_tails_and_reject_unsafe_authority() {
+    crate::crt_stream_callees_tests::native(
+        crate::crt_resident_loader::TYPES,
+        r#"
+ let vectors:&[(&[u16],i32,&[u8])]=&[(&[65,0],-1,&[65,0]),(&[233,55357,56832,0],-1,&[195,169,240,159,152,128,0]),(&[65,0,66],3,&[65,0,66]),(&[55296,0],-1,&[239,191,189,0]),(&[56320,0],-1,&[239,191,189,0]),(&[233,55357,56832,0],2,&[195,169,239,191,189]),(&[65,0,66,0],-1,&[65,0])];
+ for &(units,count,expected)in vectors{let(mut rt,_)=CrtStreamRuntime::new_initializing(17,23,0x8000,65536).unwrap();let block=rt.map_region(0x20000,256,CrtRegionKind::Stack,None).unwrap();for(n,&v)in units.iter().enumerate(){rt.store(rt.offset(block,n as i64*2).unwrap(),16,CrtValue::scalar(u32::from(v))).unwrap();}let output=rt.offset(block,128).unwrap();assert_eq!(rt.utf8_write(block,count,output,expected.len()as u32+3),Ok(expected.len()as u32));assert_eq!(rt.memory.read(output.address(),expected.len()as u32).unwrap(),expected);assert_eq!(rt.memory.read(output.address()+expected.len()as u32,3),Err(guest_memory::Fault::Uninitialized));for(n,&v)in units.iter().enumerate(){assert_eq!(rt.load(rt.offset(block,n as i64*2).unwrap(),16).unwrap(),CrtValue::scalar(u32::from(v)));}}
+ for mode in 0..10{let(mut rt,_)=CrtStreamRuntime::new_initializing(17,23,0x8000,65536).unwrap();let source=rt.map_region(0x20000,128,CrtRegionKind::Stack,None).unwrap();let output=rt.map_region(0x30000,128,CrtRegionKind::Stack,None).unwrap();for(n,v)in [65,66,67,0].into_iter().enumerate(){rt.store(rt.offset(source,n as i64*2).unwrap(),16,CrtValue::scalar(v)).unwrap();}let mut destination=output;let mut capacity=8;let mut original=None;
+  match mode{0=>capacity=3,1=>destination=source,2=>{rt.store(source,16,CrtValue::Scalar{bits:0,known:0}).unwrap();},3=>{rt.memory.release(source.cap,source.owner).unwrap();},4=>{rt.memory.release(output.cap,output.owner).unwrap();},5=>{let v=CrtValue::Pointer(rt.offset(source,64).unwrap());rt.store(output,32,v).unwrap();original=Some(v);destination=rt.offset(output,2).unwrap();},6=>{let v=CrtValue::ProtectedReturn(510);rt.store(output,32,v).unwrap();original=Some(v);},7=>{let v=CrtValue::Pointer(rt.offset(source,64).unwrap());rt.store(output,32,v).unwrap();original=Some(v);},8=>{assert_eq!(rt.utf8_required(source,-1),Ok(4));rt.store(source,16,CrtValue::scalar(0x4e2d)).unwrap();capacity=4;},9=>capacity=131073,_=>{}}
+  let got=rt.utf8_write(source,-1,destination,capacity);if mode==7{assert_eq!(got,Ok(4));assert_eq!(rt.load(output,32),Ok(CrtValue::scalar(0x00434241)));assert!(!rt.tags.contains_key(&output.address()));}else{assert!(got.is_err(),"unsafe write mode{mode} accepted");if let Some(old)=original{assert_eq!(rt.load(output,32),Ok(old));}else if mode!=4{assert_eq!(rt.memory.read(output.address(),8),Err(guest_memory::Fault::Uninitialized));}if mode==0||mode==8{assert_eq!(got,Err("native UTF8 insufficient-capacity effects unbound"));}}
+ }
+ for mode in 0..6{let(mut rt,init)=CrtStreamRuntime::new_initializing(17,23,0x8000,131072).unwrap();let p=CrtNativePlatform::prepare(&mut rt,init,CrtNativePlatform::PROFILE,0x700000,0x701000).unwrap();let source=rt.map_region(0x20000,64,CrtRegionKind::Stack,None).unwrap();for(n,v)in[233,55357,56832,0].into_iter().enumerate(){rt.store(rt.offset(source,n as i64*2).unwrap(),16,CrtValue::scalar(v)).unwrap();}let stack=rt.map_region(0x30000,512,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,400).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(600+mode)).unwrap();let mut c=CrtCpu::new(sp,600+mode).unwrap();let output=rt.offset(stack,32).unwrap();let args=[CrtValue::scalar(65001),CrtValue::scalar(if mode==2{128}else{0}),CrtValue::Pointer(source),CrtValue::scalar(u32::MAX),if mode==1{CrtValue::Pointer(sp)}else if mode==3{CrtValue::scalar(output.address())}else{CrtValue::Pointer(output)},CrtValue::scalar(if mode==4{2}else{8}),CrtValue::scalar(0),CrtValue::scalar(0)];for v in args.into_iter().rev(){c.push(&mut rt,v).unwrap();}rt.last_os_error=Some(73);let got=c.call_activation(&mut rt,0x430000,32,|rt,c|{if mode==5{c.r[3]=CrtValue::scalar(91);}p.wide_conversion_call(rt,c,init,None)});if mode==0{assert_eq!(got,Ok(CrtValue::scalar(7)));assert_eq!(rt.memory.read(output.address(),7).unwrap(),[195,169,240,159,152,128,0]);assert_eq!(rt.memory.read(output.address()+7,1),Err(guest_memory::Fault::Uninitialized));assert_eq!(rt.last_os_error,None);c.finish(&mut rt).unwrap();assert!(c.returned);}else{assert!(got.is_err(),"API write mode{mode}");assert_eq!(rt.last_os_error,Some(73));assert_eq!(rt.memory.read(output.address(),8),Err(guest_memory::Fault::Uninitialized));}}
+ "#,
+        "utf8-write",
+    );
+}
+
+#[cfg(windows)]
+#[test]
+fn original_windows_utf8_capacity_and_error_writes_are_retained() {
+    crate::crt_stream_callees_tests::native(
+        "",
+        r#"
+ use std::io::Write;
+ #[link(name="kernel32")]extern "system"{fn WideCharToMultiByte(cp:u32,flags:u32,input:*const u16,count:i32,out:*mut u8,capacity:i32,default:*const u8,used:*mut i32)->i32;fn SetLastError(n:u32);fn GetLastError()->u32;}
+ let mut trace=std::env::var_os("W2L_EH4_EVIDENCE").map(|d|std::fs::File::create(std::path::PathBuf::from(d).join("original-windows-utf8-capacity.jsonl")).unwrap());
+ if let Some(out)=trace.as_mut(){writeln!(out,"{{\"kind\":\"original Windows UTF8 capacity/error observations; no PE translation\",\"arch\":{:?}}}",std::env::consts::ARCH).unwrap();out.flush().unwrap();}
+ let vectors:&[(&str,&[u16],i32,&[u8],bool)]=&[
+("ascii",&[65, 66, 0],-1,&[65, 66, 0],false),
+("bmp",&[233, 20013, 0],-1,&[195, 169, 228, 184, 173, 0],false),
+("pair",&[55357, 56832, 0],-1,&[240, 159, 152, 128, 0],false),
+("mixed",&[65, 233, 55357, 56832, 66, 0],-1,&[65, 195, 169, 240, 159, 152, 128, 66, 0],false),
+("high-first",&[55296, 0],-1,&[239, 191, 189, 0],true),
+("invalid-middle",&[65, 55296, 66, 0],-1,&[65, 239, 191, 189, 66, 0],true),
+("invalid-tail",&[65, 55296],2,&[65, 239, 191, 189],true),
+("alternating",&[55296, 55296, 56320, 56320, 0],-1,&[239, 191, 189, 240, 144, 128, 128, 239, 191, 189, 0],true),
+("positive-nul",&[65, 0, 233],3,&[65, 0, 195, 169],false),];
+ let mut observations=Vec::new();
+ for &(label,input,count,payload,invalid)in vectors{for flags in [0u32,128]{for capacity in (0..=payload.len()+1).chain(std::iter::once(payload.len()+4)){let mut bytes=vec![0x5au8;capacity+4];unsafe{SetLastError(73)};let result=unsafe{WideCharToMultiByte(65001,flags,input.as_ptr(),count,if capacity==0{std::ptr::null_mut()}else{bytes.as_mut_ptr()},capacity as i32,std::ptr::null(),std::ptr::null_mut())};let last=unsafe{GetLastError()};
+ if let Some(out)=trace.as_mut(){writeln!(out,"{{\"label\":{label:?},\"utf16\":{input:?},\"input_count\":{count},\"flags\":{flags},\"capacity\":{capacity},\"result\":{result},\"last_error\":{last},\"bytes\":{bytes:?}}}").unwrap();out.flush().unwrap();}
+ eprintln!("UTF8 capacity observation: {label} flags={flags} capacity={capacity} result={result} last_error={last} bytes={bytes:?}");observations.push((label,flags,capacity,payload,invalid,result,last,bytes));
+ }}}
+ assert_eq!(observations.len(),158);
+ for(label,flags,capacity,payload,invalid,result,last,bytes)in observations{assert_eq!(&bytes[capacity..],&[0x5a;4],"{label} guard");if capacity==0{assert_eq!(bytes,vec![0x5a;4]);}
+ if !invalid||flags==0{if capacity==0||capacity>=payload.len(){assert_eq!(result,payload.len()as i32,"{label} complete/query");if capacity!=0{assert_eq!(&bytes[..payload.len()],payload);assert!(bytes[payload.len()..].iter().all(|b|*b==0x5a));}}else{assert_eq!(result,0,"{label} insufficient");assert_eq!(last,122);}}
+ else{let _=last;assert!(result>=0&&result<=payload.len()as i32,"{label} strict observation result domain");}
+ }
+ "#,
+        "windows-utf8-capacity",
     );
 }

@@ -1,0 +1,73 @@
+{
+  "status": "focused implementation and original-entry component checks passed; aggregate/replay/final-head CI pending",
+  "base_commit": "568c7ed7fbb58bf4aecb79192c30d48d1eeb5783",
+  "kind": "original mapped instruction component execution and bounded native API write; no whole-PE translation",
+  "local_frozen_pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "base_source_review": [
+    {
+      "path": "src/crt_argv.rs",
+      "sha256": "6dbf0ec2a346ce3d455476ef3a66d06fb39cfc3f38e5b7314b563d9a73398056"
+    },
+    {
+      "path": "src/crt_stream_runtime.rs",
+      "sha256": "395a8092834fdd8c33259ba35617854dbc570824125698c646c0599e889cbb72"
+    },
+    {
+      "path": "src/crt_stream_cpu.rs",
+      "sha256": "8b83843f3f16b0427814e1ada3d11339c8195477bb55997a4e4023db3c9aa885"
+    },
+    {
+      "path": "src/crt_resident_loader.rs",
+      "sha256": "1a5c3a736609f1cce4c0b93a66130a4d8431785a3fb35de5c21c023623d8fbf5"
+    },
+    {
+      "path": "src/crt_normal_frame_tests.rs",
+      "sha256": "5c7a4a3c04b34cd2fb02598b4831747a6fcab7e76e41fe503bde9600b9340ff5"
+    },
+    {
+      "path": "research/process/startup/check_normal_wrapper.py",
+      "sha256": "e73f3a827472f7f1ba314c130170ab0313376c15963bf27450d5ab81904a3938"
+    }
+  ],
+  "base_Windows_review": {
+    "head": "568c7ed7fbb58bf4aecb79192c30d48d1eeb5783",
+    "run": 41329013069,
+    "artifact": 13092314750,
+    "zip_sha256": "f1b8dcf213877c2de41244ea097f99d42cf72fd30f804056b2dfc5805ffc9c90",
+    "trace_sha256": "66b6a3c650413b25f6494901f61fde3f60a36c053c31572665b2747e059faad6",
+    "records": 15,
+    "report_sha256": "7a03517dd38b1d29b7ae37189db87085f650e6394cb728811ba74f0db6635e48",
+    "windows_pe_sha256": "6195ed300796c0f8d1e270c6008476a432259eddc991068e9dc60fc0077b4a82",
+    "rust_sha256": "9638da15f369b2625e4cbb7fd6ce918dc9e1586b1f822e54a9881e5fb510c616",
+    "scope": "15direct original-Windows API observations; five separate wrapper comparisons; zero whole-PE pairs. Windows rebuilt its own fixture, not the local frozen binary."
+  },
+  "expectations_sha256": "9b4847b45ea0dcb12362b12e5514fdabab41978962352fcf7a7cfb3afb3481bf",
+  "source_hashes": {
+    "src/crt_stream_runtime.rs": "4cc872a9be5a6fdaddff03c40e9f27886985a9b02629a9b278674ccdcb925d61",
+    "src/crt_resident_loader.rs": "da6234de3b2b0bf9ebbed44aaade7513acbe080cf5f1ed01d83f4907f1527f50",
+    "src/crt_argv.rs": "f8a6dc692c04c23a8b2b6bcd37c94faf1f1f55f7a663aca80daf588ba43a3b0b",
+    "src/crt_normal_frame_tests.rs": "69c47945b1099c6e6c150c68e1058b175c86c6499919c7059cc8489fe9124289",
+    "research/process/startup/check_normal_wrapper.py": "b6582101aa6c10b7db682e163142311b6620ea6baaa32402eb46a95f0d16ae98",
+    "research/process/startup/utf8_capacity_observations.py": "9bda7959b78aeee534f712af65ef4cd77dc5bcaa8cfc638ffadeee73a9632a8e",
+    "research/process/startup/test_utf8_capacity_observations.py": "1ad98689a2e4256ba2c5650b0e321b77f22d7f19f96f65d6a45be734bdbe1729"
+  },
+  "cases": {
+    "write_byte_vectors": 7,
+    "write_storage_scenarios": 10,
+    "write_API_scenarios": 6,
+    "original_image_wrapper_Linux_scenarios": 6,
+    "new_capacity_Windows_cases_planned": 158,
+    "new_capacity_Windows_actual": "pending; metadata typecheck not execution",
+    "base_retained_Windows_API_cases": 15,
+    "retained_recorded_Windows_wrapper_comparisons": 5,
+    "new_whole_PE_pairs": 0
+  },
+  "boundary": "before original count/parser CALL406755->406813; actual narrow data and program-name store complete, argc/argv still0",
+  "limits": [
+    "flags0 and complete-fit UTF8/declared ACP only",
+    "strict/insufficient-capacity errors are unbound, not simulated atomic failures",
+    "growth/reset/free/errno effects unbound",
+    "full startup/rcedit/default admission unsupported",
+    "historical Windows timeout causes unresolved"
+  ]
+}

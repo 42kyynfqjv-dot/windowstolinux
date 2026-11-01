@@ -527,14 +527,34 @@ impl CrtStreamRuntime {
   if self.file_mode(token)?==CrtFileApiMode::Oem{return Ok(CrtValue::scalar(0));}
   let serial=self.serial.checked_add(1).ok_or("CRT BOOL symbol serial")?;self.serial=serial;Ok(CrtValue::NonZero{anchor:self.anchor,serial})
  }
- /// Read exactly the selected UTF-16 input and count modern replacement UTF-8
- /// bytes. This is a query only: it issues no writable pointer or copy receipt.
- fn utf8_required(&self,input:CrtPointer,count:i32)->Result<u32,&'static str>{
+ /// One-call source acquisition. No query-to-copy authority is cached.
+ fn utf8_source(&self,input:CrtPointer,count:i32)->Result<(Vec<u16>,guest_memory::ReadFact),&'static str>{
   if count!= -1&&!(1..=32767).contains(&count){return Err("native UTF8 input count outside bounded domain");}
   let bound=if count== -1{32767}else{count as u32};let mut units=Vec::new();let mut terminated=false;
-  for n in 0..bound{let p=self.offset(input,i64::from(n)*2)?;let unit=self.load(p,16)?.known_scalar()? as u16;units.try_reserve(1).map_err(|_|"native UTF8 query resource")?;units.push(unit);if count== -1&&unit==0{terminated=true;break;}}
+  for n in 0..bound{let p=self.offset(input,i64::from(n)*2)?;let unit=self.load(p,16)?.known_scalar()? as u16;units.try_reserve(1).map_err(|_|"native UTF8 source resource")?;units.push(unit);if count== -1&&unit==0{terminated=true;break;}}
   if count== -1&&!terminated{return Err("native UTF8 unterminated input");}
+  let fact=self.memory.prove_read(input.cap,input.owner,input.address(),units.len()as u32*2).map_err(|_|"native UTF8 source read provenance")?;Ok((units,fact))
+ }
+ fn utf8_required(&self,input:CrtPointer,count:i32)->Result<u32,&'static str>{
+  let(units,_)=self.utf8_source(input,count)?;
   char::decode_utf16(units).try_fold(0u32,|total,c|total.checked_add(c.unwrap_or(char::REPLACEMENT_CHARACTER).len_utf8()as u32).ok_or("native UTF8 byte count overflow"))
+ }
+ /// The public Win32 error paths can write output before failure. Only the
+ /// complete-fit flags0 domain is implemented here; failures are not simulated.
+ fn utf8_write(&mut self,input:CrtPointer,count:i32,destination:CrtPointer,capacity:u32)->Result<u32,&'static str>{
+  let(units,fact)=self.utf8_source(input,count)?;let input_bytes=units.len()as u32*2;
+  let mut bytes=Vec::new();for c in char::decode_utf16(units){let c=c.unwrap_or(char::REPLACEMENT_CHARACTER);let mut text=[0;4];let encoded=c.encode_utf8(&mut text).as_bytes();bytes.try_reserve(encoded.len()).map_err(|_|"native UTF8 output resource")?;bytes.extend_from_slice(encoded);}
+  let written=u32::try_from(bytes.len()).map_err(|_|"native UTF8 byte count overflow")?;
+  if capacity==0||capacity>131072{return Err("native UTF8 output capacity domain");}
+  if written>capacity{return Err("native UTF8 insufficient-capacity effects unbound");}
+  self.valid(destination,capacity)?;self.ordinary_file_bytes(destination,capacity)?;
+  if !matches!(destination.kind,CrtRegionKind::Stack|CrtRegionKind::Buffer|CrtRegionKind::Module)||self.unobserved_contexts.iter().any(|(q,_)|q.cap==destination.cap){return Err("native UTF8 output role");}
+  if u64::from(input.address())<u64::from(destination.address())+u64::from(capacity)&&u64::from(destination.address())<u64::from(input.address())+u64::from(input_bytes){return Err("native UTF8 input/output alias");}
+  self.memory.validate_writable(destination.cap,destination.owner,destination.address(),capacity).map_err(|_|"native UTF8 output permission")?;
+  for(at,v)in self.overlapping_tags(destination.address(),written){if matches!(v,CrtValue::ProtectedReturn(_)|CrtValue::OpaqueSaved(_)|CrtValue::ThreadHead(_)|CrtValue::Dispatcher(_))||at<destination.address()||u64::from(at)+4>u64::from(destination.address())+u64::from(written){return Err("native UTF8 partial/control output unbound");}}
+  self.memory.read_proven(fact,input.owner).map_err(|_|"native UTF8 source observation expired")?;
+  let mut n=0usize;while n<bytes.len(){let p=self.offset(destination,n as i64)?;if self.tags.contains_key(&p.address()){let word=u32::from_le_bytes(bytes[n..n+4].try_into().unwrap());self.store(p,32,CrtValue::scalar(word))?;n+=4;}else{self.store(p,8,CrtValue::scalar(u32::from(bytes[n])))?;n+=1;}}
+  Ok(written)
  }
 
  fn native_api_identity(&self,f:CrtFunction)->Result<(),&'static str>{

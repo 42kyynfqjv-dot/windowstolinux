@@ -124,16 +124,15 @@ impl CrtNativePlatform {
   let result=(||{let m=rt.provider_publish(init,&ticket)?;published=Some(m);let d=rt.provider_export(init,m,m,"FlsAlloc",address)?;let alloc=rt.bind_native_fls(init,d)?;let d=rt.provider_export(init,m,m,"FlsSetValue",setter_address)?;let setter=rt.bind_native_fls_set(init,d)?;if let Some(f)=rt.fiber{rt.check_fiber(f)?;}else{rt.bind_fiber(rt.thread)?;}Ok((alloc,setter))})();
   match result{Ok((f,setter))=>{self.fls=Some(f);self.fls_set=Some(setter);Ok(())},Err(e)=>{if let Some(m)=published{rt.provider_destroy(init,m)?;}else{rt.provider_abort(init,&ticket)?;}Err(e)}}
  }
- /// Bounded modern UTF-8 size query. Writes and strict-error effects remain
- /// unbound: original Windows can write replacement bytes even on failure.
- fn wide_query_call(&self,rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,init:CrtInitialization)->Result<CrtValue,&'static str>{
+ /// Modern UTF-8 query or complete-fit write. Strict and insufficient-capacity
+ /// failure effects remain unbound; original Windows may write before failure.
+ fn wide_conversion_call(&self,rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,init:CrtInitialization,image:Option<CrtProcessImage>)->Result<CrtValue,&'static str>{
   self.validate(rt,init)?;cpu.validate_active(rt)?;
   if cpu.return_pop!=32||cpu.r[4]!=cpu.entry[4]||[3,5,6,7].iter().any(|&r|cpu.r[r]!=cpu.entry[r]){return Err("native UTF8 query ABI");}
   let sp=CrtCpu::pointer(cpu.r[4])?;rt.offset(sp,36)?;rt.memory.validate_writable(sp.cap,sp.owner,sp.address(),36).map_err(|_|"native UTF8 query stack permission")?;
   let page=rt.load(rt.offset(sp,4)?,32)?.known_scalar()?;let flags=rt.load(rt.offset(sp,8)?,32)?.known_scalar()?;
   let input=CrtCpu::pointer(rt.load(rt.offset(sp,12)?,32)?)?;let count=rt.load(rt.offset(sp,16)?,32)?.known_scalar()? as i32;
   let capacity=rt.load(rt.offset(sp,24)?,32)?.known_scalar()?;
-  if capacity!=0{return Err("native UTF8 conversion write effects unbound");}
   if flags!=0{return Err("native UTF8 flags outside supported query domain");}
   if rt.load(rt.offset(sp,28)?,32)?!=CrtValue::scalar(0)||rt.load(rt.offset(sp,32)?,32)?!=CrtValue::scalar(0){return Err("native UTF8 default-character outputs unbound");}
   if page==0{let token=self.command_line.ok_or("native UTF8 ACP profile unbound")?;rt.command_line_pointer(token,false)?;rt.command_line_pointer(token,true)?;if token.codepage!=65001{return Err("native UTF8 ACP encoding mismatch");}}
@@ -141,7 +140,11 @@ impl CrtNativePlatform {
   // cbMultiByte=0 ignores lpMultiByteStr, including a non-NULL value. It must
   // not read, initialize or issue authority for that unused output address.
   for n in 0..8{if matches!(rt.load(rt.offset(sp,4+i64::from(n)*4)?,32)?,CrtValue::ProtectedReturn(_)|CrtValue::OpaqueSaved(_)|CrtValue::ThreadHead(_)){return Err("native UTF8 query protected argument");}}
-  let result=rt.utf8_required(input,count)?;rt.last_os_error=None;cpu.clobber(CrtValue::scalar(result));cpu.finish_pop(rt,32)
+  let result=if capacity==0{rt.utf8_required(input,count)?}else{
+   let value=rt.load(rt.offset(sp,20)?,32)?;let destination=match value{CrtValue::Pointer(p)=>p,CrtValue::Scalar{bits,known:u32::MAX}=>rt.process_image_pointer(image.ok_or("native UTF8 output pointer authority")?,bits,capacity)?,_=>return Err("native UTF8 output pointer authority")};
+   if u64::from(destination.address())<u64::from(sp.address())+36&&u64::from(sp.address())<u64::from(destination.address())+u64::from(capacity){return Err("native UTF8 call-frame output alias");}
+   rt.utf8_write(input,count,destination,capacity)?
+  };rt.last_os_error=None;cpu.clobber(CrtValue::scalar(result));cpu.finish_pop(rt,32)
  }
  const FILE_MODE_PROFILE:&'static str="w2l-native-process-file-mode-v1";
  /// Explicit pre-entry native policy; not acquired Windows loader/process state.
