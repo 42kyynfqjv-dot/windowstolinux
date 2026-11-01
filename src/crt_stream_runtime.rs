@@ -192,7 +192,25 @@ impl CrtGlobalLeases {
  fn push(&mut self,value:CrtGlobalLock){self.slots[self.len]=Some(value);self.len+=1;}
  fn pop(&mut self)->Option<CrtGlobalLock>{if self.len==0{return None;}self.len-=1;self.slots[self.len].take()}
 }
+/// Knowledge of guest state, never a capture of the host floating-point unit.
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+struct CrtX87Word{bits:u16,known:u16}
+impl CrtX87Word{fn unknown()->Self{Self{bits:0,known:0}}}
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+struct CrtX87Register{bits:[u8;10],known:[u8;10]}
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+struct CrtX87State{status:CrtX87Word,control:CrtX87Word,tag:CrtX87Word,opcode:CrtX87Word,ip:[CrtValue;2],dp:[CrtValue;2],registers:[CrtX87Register;8],mxcsr:CrtValue}
+impl CrtX87State{
+ fn unknown()->Self{let word=CrtX87Word::unknown();let scalar=CrtValue::Scalar{bits:0,known:0};Self{status:word,control:word,tag:word,opcode:word,ip:[scalar;2],dp:[scalar;2],registers:[CrtX87Register{bits:[0;10],known:[0;10]};8],mxcsr:scalar}}
+ /// Intel SDM Vol2A FCLEX/FNCLEX: clear bits0..7,15; TOP is unchanged;
+ /// C0/C1/C2/C3 are undefined, so discard their knowledge, not just their values.
+ fn fnclex(&mut self){self.status=CrtX87Word{bits:self.status.bits&self.status.known&0x3800,known:(self.status.known&0x3800)|0x80ff};}
+}
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+struct CrtX87Context{anchor:guest_memory::Capability,owner:u64,thread:u64,init:CrtInitialization,fiber:Option<Option<CrtFiber>>,state:CrtX87State}
+
 struct CrtStreamRuntime {
+ x87:Option<CrtX87Context>,
  file_view:CrtPointer,main_image:Option<CrtProcessImage>,main_image_regions:Vec<CrtPointer>,loader_cells:std::collections::BTreeMap<u32,(CrtPointer,bool)>,modules:std::collections::BTreeMap<u32,CrtLoadedModule>,module_references:CrtModuleReferences,exports:std::collections::BTreeMap<u64,CrtExport>,providers:std::collections::BTreeMap<u32,CrtNativeProvider>,native_sync:CrtGlobalSlots<(CrtFunction,u32,CrtPointer)>,
  uncertain_allocations:Vec<CrtPointer>,completed_failed_frees:Vec<(guest_memory::Capability,u64)>,heap_ptds:Vec<CrtHeapPtdView>,fiber:Option<CrtFiber>,fls_indices:CrtFlsIndices,fls:CrtFlsValues,
  unobserved_contexts:Vec<(CrtPointer,std::rc::Rc<std::cell::Cell<bool>>)>,heap:Option<CrtHeap>,memory:guest_memory::Space,owner:u64,thread:u64,anchor:guest_memory::Capability,
@@ -202,6 +220,22 @@ struct CrtStreamRuntime {
  locale_generation:u64,locale_live:bool,initialization:Option<u64>,shutdown:Option<CrtShutdown>,closed:bool,lock_objects:std::collections::BTreeSet<u32>,
 }
 impl CrtStreamRuntime {
+ const X87_PROFILE:&'static str="w2l-modern-enabled-stationary-x87-v1";
+ /// Declared user-mode execution domain: x87 enabled (EM=TS=0), modern
+ /// nonwaiting semantics, no legacy DOS-compatible interrupt window. Unknown
+ /// initial bytes stay unknown. This is not Windows acquisition or a host read.
+ fn configure_x87(&mut self,init:CrtInitialization,profile:&str)->Result<(),&'static str>{
+  self.initialization(init)?;if profile!=Self::X87_PROFILE||self.x87.is_some(){return Err("CRT x87 profile unsupported/already bound");}
+  self.x87=Some(CrtX87Context{anchor:self.anchor,owner:self.owner,thread:self.thread,init,fiber:None,state:CrtX87State::unknown()});Ok(())
+ }
+ fn clear_x87_exceptions(&mut self,init:CrtInitialization)->Result<(),&'static str>{
+  self.initialization(init)?;let mut x=self.x87.ok_or("CRT x87 profile unbound")?;
+  if x.anchor!=self.anchor||x.owner!=self.owner||x.thread!=self.thread||x.init!=init{return Err("CRT x87 owner/lifetime");}
+  self.memory.validate(x.anchor,self.file_view.owner).map_err(|_|"CRT x87 storage lifetime")?;
+  if let Some(f)=self.fiber{self.check_fiber(f)?;}
+  if let Some(f)=x.fiber{if f!=self.fiber{return Err("CRT x87 stationary fiber changed");}}else{x.fiber=Some(self.fiber);}
+  x.state.fnclex();self.x87=Some(x);Ok(())
+ }
  /// This owner/thread cut creates storage only. Original instructions or an
  /// explicitly declared input state must initialize each observable field.
  fn new(owner:u64,thread:u64,file_address:u32,byte_limit:usize)->Result<Self,&'static str>{Self::file_array(owner,thread,file_address,1,byte_limit)}
@@ -215,7 +249,7 @@ impl CrtStreamRuntime {
  }
  fn from_file_storage(owner:u64,thread:u64,memory:guest_memory::Space,pointer:CrtPointer)->Result<Self,&'static str>{
   let anchor=pointer.cap;
-  Ok(Self{file_view:pointer,main_image:None,main_image_regions:vec![],loader_cells:std::collections::BTreeMap::new(),modules:std::collections::BTreeMap::new(),module_references:CrtModuleReferences::new(),exports:std::collections::BTreeMap::new(),providers:std::collections::BTreeMap::new(),native_sync:CrtGlobalSlots::new(),uncertain_allocations:vec![],completed_failed_frees:vec![],heap_ptds:vec![],fiber:None,fls_indices:CrtFlsIndices::new(),fls:CrtFlsValues::new(),unobserved_contexts:vec![],heap:None,memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],native_endpoints:vec![],native_standards:None,command_line:None,global_objects:CrtGlobalSlots::new(),global_locks:CrtGlobalLeases::new(),record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,canonical_errno:false,errno_cell:None,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([pointer.base])})
+  Ok(Self{x87:None,file_view:pointer,main_image:None,main_image_regions:vec![],loader_cells:std::collections::BTreeMap::new(),modules:std::collections::BTreeMap::new(),module_references:CrtModuleReferences::new(),exports:std::collections::BTreeMap::new(),providers:std::collections::BTreeMap::new(),native_sync:CrtGlobalSlots::new(),uncertain_allocations:vec![],completed_failed_frees:vec![],heap_ptds:vec![],fiber:None,fls_indices:CrtFlsIndices::new(),fls:CrtFlsValues::new(),unobserved_contexts:vec![],heap:None,memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],native_endpoints:vec![],native_standards:None,command_line:None,global_objects:CrtGlobalSlots::new(),global_locks:CrtGlobalLeases::new(),record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,canonical_errno:false,errno_cell:None,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([pointer.base])})
  }
 
  /// Initial FILE storage is a bounded role view of the original writable

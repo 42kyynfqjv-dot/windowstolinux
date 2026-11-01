@@ -42,6 +42,8 @@ pub(crate) enum Op {
     SignDividend,
     CpuId,
     ReadXcr,
+    /// Consumer must bind guest x87 state and an enabled modern user-mode domain.
+    X87ClearExceptions,
     XmmZero(u8),
     XmmLoad {
         destination: u8,
@@ -283,6 +285,9 @@ fn extended(i: &Instruction, raw: &[u8], tables: &[JumpTable<'_>]) -> Result<Op,
             destination,
             source,
         });
+    }
+    if raw == [0xdb, 0xe2] && i.code() == Code::Fnclex {
+        return Ok(Op::X87ClearExceptions);
     }
     if raw == [0x0f, 0xa2] && i.code() == Code::Cpuid {
         return Ok(Op::CpuId);
@@ -882,6 +887,7 @@ impl Graph {
                     Op::Call(_)
                         | Op::CpuId
                         | Op::ReadXcr
+                        | Op::X87ClearExceptions
                         | Op::IndirectCall(_)
                         | Op::FsRead(_)
                         | Op::FsWrite(_)

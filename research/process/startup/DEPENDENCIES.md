@@ -1,6 +1,24 @@
 # Remaining entry-to-exit dependencies
 
-## Current executable checkpoint: guarded C-array enters original setup callback
+## Current executable checkpoint: explicit x87 effect and empty preinitializer return
+
+With the additional declared modern-enabled stationary x87 profile, original
+entry executes FNCLEX40158a with actual guest status effects and unknown C0..C3,
+then the original equal-bound empty helper401e00 and actual PUSH401591. It rejects
+**before CALL401596 ->401b0f**, preserving the callback argument401e2c, scope0,
+state1, caller frames and prior effects. Unconfigured/default domains still stop
+before FNCLEX. Guest x87 state is not host FPU state or a Windows capture.
+
+[Contract/review scope](X87-STARTUP.md), [frozen expectations](evidence/x87-expectations.json),
+[evidence](evidence/x87-startup.json). Next connect original onexit registration
+401b0f/401ae1 and encoded callback ownership/failure effects, without executing
+or skipping registration as a stub. Sol review/inventory first; no automatic
+escalation. All other floating instructions, full startup/formatter/rcedit,
+default admission and broader equivalence remain unsupported. Native42 Linux
+instruction observations are not Windows/whole-PE comparisons. Historical
+original-Windows timeout causes remain unresolved.
+
+## Previous checkpoint: guarded C-array enters original setup callback
 
 Explicit-profile original entry executes CALL401673/406ccc, skips the null,
 validates the real guard and runs the first callback40155a through app/filemode/

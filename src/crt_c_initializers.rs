@@ -3,6 +3,8 @@ use crate::crt_stream_ir::{Graph, Node, Op, Target};
 use std::collections::BTreeMap;
 pub(crate) const LOOP: &str =
     "8bff558bec568b750857eb178b3e85ff740e8bcfff1528514100ffd785c0750a83c6043b750c75e433c05f5e5dc3";
+pub(crate) const EMPTY: &str =
+    "5356bec0b14100bbc0b141003bf37319578b3e85ff740a8bcfff1528514100ffd783c6043bf372e95f5e5bc3";
 pub(crate) const FIRST:&str="566a01e8cc500000e85c06000050e8e95a0000e84a0600008bf0e8865c00006a018930e8fc03000083c40c5e84c07473dbe2e86f080000682c1e4000e874050000e81f06000050e82e540000595985c07551e818060000e86906000085c0740b68bc1b4000e8ec50000059e82f060000e82a060000e804060000e8e305000050e8795b000059e8f005000084c07405e8ae560000e8c9050000e85407000085c07501c36a07e833060000cc";
 pub(crate) const SECOND: &str = "e8f805000033c0c3";
 pub(crate) const FILE_INIT:&str="a12ccd4100566a035e85c07507b800020000eb063bc67d078bc6a32ccd41006a0450e8b93700006a00a330cd4100e80d38000083c40c833d30cd410000752b6a045689352ccd4100e8933700006a00a330cd4100e8e737000083c40c833d30cd410000750583c8ff5ec35733ffbe80c041006a0068a00f00008d462050e8e73a0000a130cd41008bd7c1fa068934b88bc783e03f6bc8388b049508cf41008b44081883f8ff740983f8fe740485c07507c74610feffffff83c6384781fe28c1410075af5f33c05ec3";
@@ -181,13 +183,31 @@ fn startup_c_array_real(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntr
         256,
     )?;
     out.push_str(&format!("fn cinit_onexit_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;{} {body}}}",guard(0x40197e,&bytes)));
+    let bytes = raw(EMPTY);
+    let g = crate::crt_startup_table::graph(&bytes, 0x401e00)?;
+    let body = crate::crt_stream_emit::emit_body_with_indirect(
+        &g,
+        |_, _| Ok("return Err(\"C initializer nonempty preinitializer guard unbound\");".into()),
+        &Default::default(),
+        128,
+        |_, _| Err("preinitializer thread effect".into()),
+        |_, _| Ok(String::new()),
+        |_, _| Ok(None),
+        None,
+        |_, _, _| Ok(None),
+        |_, _| Ok("return Err(\"C initializer nonempty preinitializer callback unbound\");".into()),
+    )?;
+    out.push_str(&format!("fn cinit_empty_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;{} {body}}}",guard(0x401e00,&bytes)));
     let bytes = raw(FIRST);
     let g = cut_graph(
         &bytes,
         0x40155a,
-        0x40158a,
+        0x401596,
         &[
-            (0x40158a, "startup x87 FNCLEX state unbound at 0x40158a"),
+            (
+                0x401596,
+                "C initializer onexit registration unbound at 0x401596",
+            ),
             (0x4015fd, "C initializer fatal path unbound at 0x4015fd"),
         ],
     )?;
@@ -195,6 +215,7 @@ fn startup_c_array_real(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntr
         &g,
         |pc, t| {
             let callee = match t {
+                Target::Direct(0x401e00) => "cinit_empty_original",
                 Target::Direct(0x40662e) => "cinit_app_type",
                 Target::Direct(0x401bc3) => "cinit_get_mode",
                 Target::Direct(0x407056) => "cinit_set_mode",
@@ -210,7 +231,12 @@ fn startup_c_array_real(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntr
         },
         &Default::default(),
         256,
-        |_, _| Err("first C initializer thread effect".into()),
+        |_, op| {
+            if *op != Op::X87ClearExceptions {
+                return Err("first C initializer thread effect".into());
+            }
+            Ok("inputs.validate(rt)?;cpu.validate_active(rt)?;if rt.x87.is_none(){return Err(\"startup x87 FNCLEX state unbound at 0x40158a\");}rt.clear_x87_exceptions(inputs.init)?;".into())
+        },
         |pc, _| {
             Ok(if pc == 0x40157b {
                 "cpu.r[0]=CrtValue::Pointer(rt.module_word_pointer(inputs.image,cpu.r[0])?);".into()

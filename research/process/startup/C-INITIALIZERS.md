@@ -1,6 +1,9 @@
 # Original guarded C-initializer array
 
-## Executable boundary and evidence
+This records the reviewed 3b0bcf9 boundary. The next connected explicit-profile
+x87 effect and current boundary are documented in [X87-STARTUP.md](X87-STARTUP.md).
+
+## Historical executable boundary and evidence
 
 The unchanged authored PE, under the existing explicit native-platform and ACP
 65001 profiles, now calls the original array walker at `0x401673 -> 0x406ccc`.

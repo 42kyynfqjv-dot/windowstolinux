@@ -1,0 +1,78 @@
+{
+  "scope": "explicit-profile guest x87 effect and original startup component; no whole-PE admission",
+  "reviewed_predecessor": "3b0bcf927299592e1e32972dc6c54ee864287df3",
+  "predecessor_exact_head_CI": [
+    {
+      "id": 41303752543,
+      "head": "3b0bcf927299592e1e32972dc6c54ee864287df3",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 41303748714,
+      "head": "3b0bcf927299592e1e32972dc6c54ee864287df3",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 41303748803,
+      "head": "3b0bcf927299592e1e32972dc6c54ee864287df3",
+      "status": "completed",
+      "conclusion": "success"
+    }
+  ],
+  "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "source_hashes": {
+    "src/crt_x87.rs": "edc5e5892aa59dcde3169a66f2a0964d0c38b142d0c8d09f21a0603822ee0695",
+    "src/crt_stream_runtime.rs": "29bcf9d191efac2a7ebfb12eaf41f2399f693598763a83b7813ec07e3776c363",
+    "src/crt_stream_ir.rs": "29969a70be3d95672890325cded128c05b6a6cadc724755b64cdd06417b18298",
+    "src/crt_stream_emit.rs": "c9dc41de2953bb932d7097845d194b4ee3550a3c601a318899d90b7ea5912685",
+    "src/crt_c_initializers.rs": "17f83813456405f844ae24aea41e4dcd1527926f61430dbe8d1109e013c4bb22",
+    "src/crt_normal_frame_tests.rs": "67f2d24fc66c291839b4a0eddb88908f52ec5b947fff6a2392f6eb5fad0e93f8",
+    "research/process/startup/check_normal_wrapper.py": "fd9854851b240f1761887d4cef6b409cb9509e3eafc121fcf8ed44b29ee402e7",
+    "research/process/startup/inventory_x87.py": "41d80e71cce415d89f87a811b465681c1ca77fd755adea4844888147aa0afc94"
+  },
+  "profile": "w2l-modern-enabled-stationary-x87-v1",
+  "profile_limits": "declared modern user-mode x87 available/enabled EM=TS=0; excludes legacy DOS-compatible interrupt window; unknown initial bytes, not OS acquisition or host FPU capture; current stationary thread/fiber only",
+  "primary_sources": {
+    "primary_url": "https://www.intel.com/content/dam/www/public/us/en/documents/manuals/64-ia-32-architectures-software-developer-vol-2a-manual.pdf",
+    "pdf_sha256": "71f69c75ae9ce3d4a103333266ac2f22d44f097e5b32279931151d7598993545",
+    "section": "Vol.2A3-321..322,FCLEX/FNCLEX",
+    "extracted_section_sha256": "ed472b8a401ce475e173c44980db3695585a847857e6509553da132924ba3864"
+  },
+  "expectations_sha256": "322018c34577b1811f8d5c8f6a29ae0370dd68b1ce9248e637406cf9ef8da588",
+  "inventory_sha256": "8ff76b019d53c5a09e4bee3ef5a6f7fac34f0069cf9906d60179719c1b44d72b",
+  "linear_floating_inventory_entries": 264,
+  "native_Linux_x86_64_instruction_observations": {
+    "cases": 42,
+    "scope": "authored isolated native probe; not original Windows observations or translated PE pairs",
+    "raw_path": "x87-native-linux-observations.txt",
+    "raw_sha256": "36b0cc89614f053303f5c456a3d2d188bbe9efe730c9cc04a9fc6cd396eaa280"
+  },
+  "independent_cases": {
+    "status_control": 262144,
+    "partial_knowledge": 7,
+    "context_lifecycle": 11,
+    "emitted_call_modes": 7,
+    "additional_original_body_cases": 4,
+    "all_original_body_cases": 16,
+    "waiting_and_unbound_forms_rejected": true
+  },
+  "effect": "known-zero status80ff; preserve only existing TOP3800; discard undefined C0/C1/C2/C3 knowledge4700; control/tag/data/IP/DP/opcode/MXCSR/integer flags/XMM unchanged",
+  "new_entry_boundary": "before CALL401596 ->401b0f; actual FNCLEX and empty helper401e00 returned, original PUSH401591 retained callback401e2c",
+  "original_order_limit": "only first C callback prefix reached, five later callbacks not executed in unchanged-entry order",
+  "new_whole_PE_windows_elf_pairs": 0,
+  "retained_recorded_windows_wrapper_component_pairs": 5,
+  "focused_tests": "five x87 tests and canonical original-entry artifact check passed",
+  "checks": {
+    "root": 182,
+    "crt": 322,
+    "crt_ignored": 2,
+    "unwind": 185,
+    "all_targets_clippy": "passed"
+  },
+  "full_replay": "in progress at source checkpoint; exact final evidence follows",
+  "review": "No demonstrated predecessor C-array lifetime/guard/order/result defect; strict expected success/failure tests retained. New x87 consumer uses explicit runtime/init/owner and default emission still rejects. No formal approval.",
+  "local_failure": "initial lifetime oracle mislabeled retired anchor as initialization owner/lifetime; actual storage-lifetime rejection occurs first; corrected expectation only, failed log retained. A local edit-script assertion aborted before writing normal-frame test changes; inspected/reapplied, no work lost.",
+  "limits": "full startup/formatter/rcedit/default admission, other x87/waiting operations, actual Windows capture/delivery, cleanup/free and broader equivalence remain unsupported; historical original-Windows timeouts unresolved"
+}

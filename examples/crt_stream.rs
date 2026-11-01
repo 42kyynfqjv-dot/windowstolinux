@@ -355,6 +355,10 @@ mod crt_startup_locks;
 #[path = "../src/crt_startup_table.rs"]
 mod crt_startup_table;
 
+#[cfg(test)]
+#[path = "../src/crt_x87.rs"]
+mod crt_x87;
+
 #[allow(dead_code)]
 #[path = "../src/crt_c_initializers.rs"]
 mod crt_c_initializers;
