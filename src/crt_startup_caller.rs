@@ -31,6 +31,7 @@ fn lock_graph() -> Result<Graph, String> {
     })
 }
 pub(crate) fn source() -> Result<String, String> {
+    let array_source = crate::crt_c_initializers::source()?;
     let flag = crate::crt_ptd::raw(FLAG);
     let g = Graph::decode(&flag, 0x4021bf)?;
     let body = crate::crt_stream_emit::emit_body_with_hooks(
@@ -49,6 +50,7 @@ pub(crate) fn source() -> Result<String, String> {
         |_, _| Ok(None),
     )?;
     let mut out=format!("fn startup_runtime_flag(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;{} {body}}}",guard(0x4021bf,&flag));
+    out.push_str(&array_source);
     let lock = crate::crt_ptd::raw(LOCK);
     let g = lock_graph()?;
     let body = crate::crt_stream_emit::emit_body(
@@ -89,7 +91,7 @@ pub(crate) fn source() -> Result<String, String> {
     let body = crate::crt_stream_emit::emit_body_with_store(
         &g,
         |pc, t| {
-            Ok(match(pc,t){(0x401647,Target::Direct(0x401913))=>"startup_caller_frame(rt,cpu,epoch,binding)?;cpu.call_activation(rt,0x40164c,0,|rt,c|startup_runtime_lock(rt,c,inputs))?;startup_caller_frame(rt,cpu,epoch,binding)?;".into(),(0x401673,Target::Direct(0x406ccc))=>"return Err(\"startup C-initializer table unbound at 0x401673\");".into(),_=>return Err("startup caller call target".into())})
+            Ok(match(pc,t){(0x401647,Target::Direct(0x401913))=>"startup_caller_frame(rt,cpu,epoch,binding)?;cpu.call_activation(rt,0x40164c,0,|rt,c|startup_runtime_lock(rt,c,inputs))?;startup_caller_frame(rt,cpu,epoch,binding)?;".into(),(0x401673,Target::Direct(0x406ccc))=>"startup_caller_frame(rt,cpu,epoch,binding)?;if binding.image(rt,cpu,epoch)?.try_level!=0||rt.load(rt.process_image_pointer(inputs.image,0x41cc7c,4)?,32)?!=CrtValue::scalar(1){return Err(\"C initializer caller phase\");}cpu.call_activation(rt,0x401678,0,|rt,c|startup_c_array_real(rt,c,inputs))?;startup_caller_frame(rt,cpu,epoch,binding)?;".into(),_=>return Err("startup caller call target".into())})
         },
         &roles,
         128,

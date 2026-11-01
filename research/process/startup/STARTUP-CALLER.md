@@ -1,6 +1,9 @@
 # Original caller after initializer completion
 
-## New executable boundary
+This records the reviewed dd255f2 boundary. The subsequent connected array
+execution and current rejection are documented in [C-INITIALIZERS.md](C-INITIALIZERS.md).
+
+## Historical executable boundary
 
 Under the existing explicit native platform and ACP 65001 profiles, the unchanged
 authored PE still completes its 16-entry initializer table (12 non-null callbacks,

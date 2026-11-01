@@ -356,6 +356,10 @@ mod crt_startup_locks;
 mod crt_startup_table;
 
 #[allow(dead_code)]
+#[path = "../src/crt_c_initializers.rs"]
+mod crt_c_initializers;
+
+#[allow(dead_code)]
 #[path = "../src/crt_startup_caller.rs"]
 mod crt_startup_caller;
 

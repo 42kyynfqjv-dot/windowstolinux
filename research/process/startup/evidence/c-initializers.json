@@ -1,0 +1,137 @@
+{
+  "scope": "original-entry component plus separately declared C-array and callback tests; not whole-PE translation",
+  "reviewed_predecessor": "dd255f23a86d380d9e24c13c019bf6db51bb7ec0",
+  "predecessor_exact_head_CI": {
+    "41298661677": "success",
+    "41298657052": "success",
+    "41298657042": "success"
+  },
+  "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "source_hashes": {
+    "src/crt_c_initializers.rs": "89df0c825aaff3e96c33b602c786a2078d1eebff5cd8e053ab001c4ef7e32bde",
+    "src/crt_startup_caller.rs": "510491ed05d52b87838ffac87889e37bd700804a063517e7267241592ad6d971",
+    "src/crt_normal_frame_tests.rs": "59c5e0ff88f6bffc5361ce880fbd34b10f63a1ade070cff7ba0bee5983f73662",
+    "research/process/startup/check_normal_wrapper.py": "3b8be1e4d6660b0a7367d0350fca89ef03f6146094c21a0b16f3afa9bea295b7",
+    "research/process/startup/evidence/c-initializer-expectations.json": "4e0741a68aac1cc912d41cb857b1f2bde46703fb3f987e02ddf3868b495d6070"
+  },
+  "regions": {
+    "LOOP": {
+      "address": "0x406ccc",
+      "length": 46,
+      "sha256": "c54b63ff32dafdbb673918e9972681b0e2dd38904c9de8931aca0426f44bfa5a"
+    },
+    "FIRST": {
+      "address": "0x40155a",
+      "length": 171,
+      "sha256": "2dd83e44be5b5a6c72f6bea4afabf1252886a6b37c7a4f092e94f5483dae6344"
+    },
+    "SECOND": {
+      "address": "0x401605",
+      "length": 8,
+      "sha256": "860ee8cc93f6dae6941954d1f6258a4e991e2010620d3505a2c85cc0795db540"
+    },
+    "FILE_INIT": {
+      "address": "0x404510",
+      "length": 200,
+      "sha256": "aba9fe49299ebaab26678e88ce15eb3bcdee84636fa95231ea1fe75c353f8827"
+    },
+    "LOCALE": {
+      "address": "0x4109ba",
+      "length": 12,
+      "sha256": "c81c121a8dfc3d767fdf1da6c06b6e1000fa45592da09ac79b5a620ccde19cc8"
+    },
+    "MODE": {
+      "address": "0x40c109",
+      "length": 22,
+      "sha256": "b574e61938e249462c825b8b7ad7bfe6403ae27192e34762bfffb2455d3f3e98"
+    },
+    "FEATURE": {
+      "address": "0x4127b0",
+      "length": 16,
+      "sha256": "15e30c5d2773ac22ce5a792b441e159b44dfbc5f9d2147d009f1c82f509bde53"
+    },
+    "CPP": {
+      "address": "0x40160d",
+      "length": 18,
+      "sha256": "96dedec7735731363bfa5c03f20a7e6be3948fca31501922cfea20eba3273e3d"
+    },
+    "APP_TYPE": {
+      "address": "0x40662e",
+      "length": 15,
+      "sha256": "d707790980727be478bc9b877464fddef5ed1ce2fa6793ebccfacb5ea5ee03bf"
+    },
+    "GET_MODE": {
+      "address": "0x401bc3",
+      "length": 6,
+      "sha256": "7515c2aa59fe3196956446e2f0ba640cc09ab3a6092cc8d3b2a2186f18d59e38"
+    },
+    "SET_MODE": {
+      "address": "0x407056",
+      "length": 61,
+      "sha256": "dfa09abbc38af28b07a02bc69afacbed2bc4e2be53ad5dc1891020f849f07f91"
+    },
+    "ZERO": {
+      "address": "0x401bbc",
+      "length": 3,
+      "sha256": "4bc724f3b1d0caf4fe369c18cba3102e6c4ea057f63fe1587e3973134a7f755e"
+    },
+    "GET_COMMODE": {
+      "address": "0x4071ff",
+      "length": 6,
+      "sha256": "63704eae36e6cb7889da1eec1b44b22cc6f80c0aebe7d25dadeddc2a22350a76"
+    },
+    "ONEXIT": {
+      "address": "0x40197e",
+      "length": 135,
+      "sha256": "bf632bd511b89a381802f16d70f05594fa23d1ba47b1d1542b58fac75fb6acc9"
+    },
+    "OPTIONS": {
+      "address": "0x401c02",
+      "length": 29,
+      "sha256": "c8a94e4cad0254a4fa65947fb98523b6c839f9cc43ed07038ce8137cf362c994"
+    },
+    "OPTIONS_GET": {
+      "address": "0x401270",
+      "length": 6,
+      "sha256": "5172e7e28acb1042ceefd68bc16e8ee6fc00c8ac54dcb0f0bb2dd396061307e6"
+    },
+    "SCAN_GET": {
+      "address": "0x401bfc",
+      "length": 6,
+      "sha256": "90a576e61771a6bf016551ef08b3352e4c3a5bc00debec6352d2f30459a614b4"
+    }
+  },
+  "c_array": {
+    "begin": "0x41513c",
+    "end": "0x415158",
+    "words": [
+      "0x0",
+      "0x40155a",
+      "0x401605",
+      "0x404510",
+      "0x4109ba",
+      "0x40c109",
+      "0x4127b0"
+    ]
+  },
+  "original_entry_next_rejection": "before FNCLEX0x40158a; x87 state unmodeled",
+  "actual_normal_order": "only first callback prefix entered; no later callback executed",
+  "declared_traversal_cases": 28,
+  "declared_replay_rejections": 28,
+  "separately_declared_original_callback_cases": 12,
+  "constructor_cases": 16,
+  "new_whole_PE_Windows_ELF_pairs": 0,
+  "retained_recorded_Windows_wrapper_component_comparisons": 5,
+  "focused_canonical_test": "passed",
+  "focused_canonical_log_sha256": "d15e4144e637beb41c3718f9eb5b71629d42324b9dbe4dc08181d7c43fff8c58",
+  "clippy": "passed all-targets -D warnings",
+  "demonstrated_fixed_defect": "Ending initialization inside a callback allowed advancement; validate owner after protected callback before further iteration. Mode23 strictly rejects after first callback and retains its prior marker write.",
+  "local_failed_experiments": {
+    "graph.log": "6e49fe4cf6b98486061a6811d406bc51276516f984a08c115e3c88c71e558a14",
+    "canonical-real-2.log": "329d3b927e506cef0e9881057facb06138d5b22f6ff2f4991d44d5391d796f8f",
+    "canonical-initial.log": "217bef08c4aa0a38c146cddc48dfcf357a2ef6583f3e1b76c6c5d08c91b3fed0",
+    "canonical-real.log": "042b725e7949b8439c576c217160a85bb6b10369246334dfa7b7609c45348470"
+  },
+  "partial_validation": "full replay and aggregate checks running; exact new-head CI not yet started",
+  "limits": "No limits raised. All prior unsupported startup/default admission/formatter/rcedit, free/error, exceptional delivery and broader equivalence gaps remain; original-Windows timeout causes unresolved."
+}

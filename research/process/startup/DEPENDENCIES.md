@@ -1,6 +1,26 @@
 # Remaining entry-to-exit dependencies
 
-## Current executable checkpoint: caller activates scope and reaches C-array initializer
+## Current executable checkpoint: guarded C-array enters original setup callback
+
+Explicit-profile original entry executes CALL401673/406ccc, skips the null,
+validates the real guard and runs the first callback40155a through app/filemode/
+commode and distinct onexit-sentinel initialization. It rejects **before x87
+FNCLEX40158a**; no x87 environment is modeled. Scope0/state1, array arguments,
+caller frames and prior effects remain live. Other five callbacks are fully
+inventoried; two supported bodies execute only in separately declared arrays,
+and FILE/locale/raw-BOOL consumers remain explicitly rejected. No later callback
+is skipped or assumed successful in actual entry order.
+
+[Contract/inventory/review scope](C-INITIALIZERS.md),
+[frozen expectations](evidence/c-initializer-expectations.json),
+[evidence](evidence/c-initializers.json). Next gate is coherent shared x87
+state/environment semantics and remaining first-callback instructions, requiring
+a bounded deeper design pass rather than erasing FNCLEX. Sol review/CI can run
+first. Default admission, full startup/formatter/rcedit, cleanup/delivery and
+broader equivalence remain unsupported; zero new whole-PE pairs. Historical
+original-Windows timeout causes remain unresolved.
+
+## Previous checkpoint: caller activates scope and reaches C-array initializer
 
 Explicit-profile original entry now executes POP401632, AL branch, BL/local
 writes, scope-2 ->0, real CALL401647/401913 and its live flag getter4021bf. The
