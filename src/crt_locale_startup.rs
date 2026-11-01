@@ -1,5 +1,5 @@
 //! Original locale callback prefix and registered required-PTD acquisition.
-//! The aligned multibyte frame remains rejected before entry.
+//! The aligned frame executes; its first locale body call remains rejected.
 use crate::crt_stream_ir::{Graph, Target};
 pub(crate) const CALLBACK:&str="803d48d1410000753cc70540d1410040c24100c7053cd1410068c54100c70538d1410060c44100e899eeffff6840d14100506a016afde8d0fdffff83c410c60548d1410001b001c3";
 pub(crate) const GETTER:&str="6a00b84a4b4100e86d9f00008365fc00a170c1410083f8ff741550e852ddffff85c0740b83f8ff740fe8379f0000c3e8cbfeffff85c075f1e8d3d4ffff";
@@ -11,7 +11,7 @@ pub(crate) fn source() -> Result<String, String> {
         &g,
         |pc, target| {
             let next = pc + g.nodes[&pc].length;
-            Ok(match target{Target::Direct(0x40a2ef)=>format!("cpu.call_activation(rt,{next},0,|rt,c|locale_required_ptd(rt,c,inputs,platform,epoch))?;"),Target::Direct(0x40b235)=>"return Err(\"locale aligned multibyte frame unbound at 0x40b460\");".into(),_=>return Err("locale callback unexpected target".into())})
+            Ok(match target{Target::Direct(0x40a2ef)=>format!("cpu.call_activation(rt,{next},0,|rt,c|locale_required_ptd(rt,c,inputs,platform,epoch))?;"),Target::Direct(0x40b235)=>format!("cpu.call_activation(rt,{next},0,|rt,c|locale_aligned_prefix(rt,c,inputs))?;"),_=>return Err("locale callback unexpected target".into())})
         },
         &std::collections::BTreeMap::from([
             (0x41d148, "CrtRegionKind::Module".into()),
@@ -66,42 +66,109 @@ pub(crate) fn source() -> Result<String, String> {
     let handler = crate::crt_ptd::raw(HANDLER);
     out.push_str(&format!("fn locale_required_ptd(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:&CrtNativePlatform,epoch:&mut NormalCallEpoch<'_>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;platform.validate(rt,inputs.init)?;cpu.validate_active(rt)?;epoch.state()?;CrtNormalBinding::validate_cxx_head(rt,epoch)?;for(address,expected)in[(0x40a2efu32,&{bytes:?}[..]),(0x414268,&{prolog:?}[..]),(0x414254,&{epilog:?}[..]),(0x414b4a,&{handler:?}[..])]{{let p=rt.process_image_code(inputs.image,address,expected.len()as u32)?;if rt.memory.read(p.address(),expected.len()as u32).map_err(|_|\"required PTD code read\")?!=expected{{return Err(\"required PTD code changed\");}}}}let mut frame:Option<CrtPtdFrame>=None;let mut binding:Option<CrtCxxChainBinding>=None;{body}}}"));
     out.push_str("fn locale_required_view(rt:&CrtStreamRuntime,_platform:&CrtNativePlatform,value:CrtValue)->Result<(),&'static str>{match value{CrtValue::Pointer(p)=>{let view=rt.heap_ptds.iter().find(|v|v.pointer==p&&v.layout==CrtPtdLayout::Ucrt).ok_or(\"required PTD UCRT allocation view\")?;rt.heap_ptd_layout_view(p,view.slot,CrtPtdLayout::Ucrt)?;if rt.fls.get(&view.slot.index).map(|x|x.1)!=Some(value){return Err(\"required PTD publication changed\");}Ok(())},CrtValue::Scalar{bits:0|u32::MAX,known:u32::MAX}=>Ok(()),_=>Err(\"required PTD value authority\")}}\n");
+    let prefix = crate::crt_ptd::raw(ALIGNED_FRAME);
+    let body = crate::crt_aligned_activation::prefix(&prefix, 0x40b235)?;
+    out.push_str(&format!("fn locale_aligned_prefix(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;let p=rt.process_image_code(inputs.image,0x40b235,{})?;if rt.memory.read(p.address(),{}).map_err(|_|\"locale aligned code read\")?!=&{prefix:?}{{return Err(\"locale aligned code changed\");}}let mut aligned=CrtAlignedActivation::begin(rt,cpu)?;let _=(||->Result<CrtValue,&'static str>{{{body}}})()?;aligned.live(rt,cpu)?;return Err(\"locale body helper unbound at 0x40b25a -> 0x40b38a\");}}",prefix.len(),prefix.len()));
     Ok(out)
 }
 
+pub(crate) const ALIGNED_FRAME: &str =
+    "8bff538bdc515183e4f883c404558b6b04896c24048bec81ec380200005657ff7314ff7310";
 #[cfg(test)]
-const ALIGN_PREFIX: &str = "8bff538bdc515183e4f883c40455";
-#[cfg(test)]
-const ALIGN_TAIL: &str = "558b6b04896c24048bec81ec380200005657ff7314ff7310";
+const ALIGNED_EPILOG: &str = "8be55d8be35bc3";
 
 #[test]
-fn original_stack_alignment_exposes_pointer_and_return_copy_limits() {
-    let prefix = crate::crt_ptd::raw(ALIGN_PREFIX);
-    let g = Graph::decode_linear_fragment(&prefix, 0x40b235).unwrap();
-    let body = crate::crt_stream_emit::emit_linear_fragment(&g, &Default::default()).unwrap();
-    let tail = crate::crt_ptd::raw(ALIGN_TAIL);
-    let tg = Graph::decode_linear_fragment(&tail, 0x40b242).unwrap();
-    let tb = crate::crt_stream_emit::emit_linear_fragment(&tg, &Default::default()).unwrap();
-    let add = Graph::decode_linear_fragment(&[0x83, 0xc4, 4], 0x40b23f).unwrap();
-    let add_body = crate::crt_stream_emit::emit_linear_fragment(&add, &Default::default()).unwrap();
-    let extra=format!("fn align_prefix(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->Result<CrtValue,&'static str>{{{body}}}fn alignment_add(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->Result<CrtValue,&'static str>{{{add_body}}}fn alignment_tail(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->Result<CrtValue,&'static str>{{{tb}}}");
+fn original_aligned_frame_keeps_unique_return_authority() {
+    let bytes = crate::crt_ptd::raw(ALIGNED_FRAME);
+    let prefix = crate::crt_aligned_activation::prefix(&bytes, 0x40b235).unwrap();
+    let epilog = crate::crt_ptd::raw(ALIGNED_EPILOG);
+    let graph = Graph::decode(&epilog, 0x40b383).unwrap();
+    let tail = crate::crt_stream_emit::emit_body_with_hooks(
+        &graph,
+        |_, _| Err("epilog call".into()),
+        &Default::default(),
+        32,
+        |_, _| Err("epilog FS".into()),
+        |_, _| Ok(String::new()),
+        |_, pop| {
+            assert_eq!(pop, 0);
+            Ok(Some("return aligned.finish(rt,cpu);".into()))
+        },
+    )
+    .unwrap();
+    let mut small = bytes.clone();
+    small[25..29].copy_from_slice(&32u32.to_le_bytes());
+    let small = crate::crt_aligned_activation::prefix(&small, 0x1000).unwrap();
+    let extra = format!(
+        r#"
+fn original_prefix(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,aligned:&mut CrtAlignedActivation,small:bool)->Result<CrtValue,&'static str>{{if small{{{small}}}else{{{prefix}}}}}
+fn original_epilog(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,aligned:&mut CrtAlignedActivation)->Result<CrtValue,&'static str>{{{tail}}}
+// An independent declared body for frame/return conformance, not locale work.
+fn frame(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,depth:u32,small:bool)->Result<CrtValue,&'static str>{{
+ let mut aligned=CrtAlignedActivation::begin(rt,cpu)?;
+ original_prefix(rt,cpu,&mut aligned,small)?;aligned.live(rt,cpu)?;
+ let mirror=aligned.mirror.unwrap();assert_eq!(rt.load(mirror,32)?,CrtValue::scalar(aligned.pc));assert!(CrtCpu::pointer(rt.load(mirror,32)?).is_err());
+ assert_eq!(rt.tags.values().filter(|&&v|v==CrtValue::ProtectedReturn(cpu.return_id)).count(),1);
+ if depth>0{{for i in 0..4{{cpu.push(rt,CrtValue::scalar(i))?;}}cpu.call_activation(rt,0x123400+depth,0,|rt,child|{{assert!(aligned.live(rt,child).is_err());frame(rt,child,depth-1,!small)}})?;cpu.discard(rt,16)?;aligned.live(rt,cpu)?;}}
+ cpu.discard(rt,8)?;cpu.r[7]=cpu.pop(rt)?;cpu.r[6]=cpu.pop(rt)?;
+ let value=original_epilog(rt,cpu,&mut aligned)?;assert!(aligned.live(rt,cpu).is_err());assert!(aligned.finish(rt,cpu).is_err());Ok(value)
+}}
+"#
+    );
     crate::crt_stream_callees_tests::native(
         &extra,
         r#"
-for offset in [2048,2052]{
- let(mut rt,_)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();let stack=rt.map_region(0xa000,4096,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,offset).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(99)).unwrap();let mut c=CrtCpu::new(sp,99).unwrap();c.clobber(CrtValue::scalar(0));let old=c.entry;
- assert_eq!(align_prefix(&mut rt,&mut c),Err("CRT pointer provenance"));assert!(!c.returned);assert_eq!(c.steps,7);assert!(matches!(c.r[4],CrtValue::Scalar{known:u32::MAX,..}));assert_eq!(CrtCpu::number(c.r[4]).unwrap(),(sp.address()-12)&!7);assert_eq!(rt.load(sp,32).unwrap(),CrtValue::ProtectedReturn(99));assert_eq!(rt.load(rt.offset(sp,-4).unwrap(),32).unwrap(),old[3]);assert_eq!(c.r[3],CrtValue::Pointer(rt.offset(sp,-4).unwrap()));
- // AND loses pointer authority; the following ADD rejects in discard before
- // writing its result. PUSH has not executed. Independent reference state
- // after mathematical alignment and ADD, not a
- // production lowering or admission bypass. Execute the original copy tail.
- let aligned=rt.offset(stack,i64::from(CrtCpu::number(c.r[4]).unwrap()-stack.address())).unwrap();let padding=rt.load(aligned,32);c.r[4]=CrtValue::Pointer(aligned);let added=alignment_add(&mut rt,&mut c);
- assert_eq!(padding,Ok(CrtValue::Scalar{bits:0,known:0}),"unknown padding/pushed data must stay unknown");added.expect("owned ordinary padding need not have known bits in the declared reference state");assert_eq!(c.r[4],CrtValue::Pointer(rt.offset(aligned,4).unwrap()));
- c.r[4]=CrtValue::Pointer(rt.offset(aligned,4).unwrap());for n in 1..=4{rt.store(rt.offset(sp,n*4).unwrap(),32,CrtValue::scalar(n as u32)).unwrap();}
- alignment_tail(&mut rt,&mut c).expect("original mirror/callee frame writes must execute in the reference state");
- assert_eq!(rt.tags.values().filter(|&&v|v==CrtValue::ProtectedReturn(99)).count(),2);assert_eq!(c.validate_active(&rt),Err("CRT active caller lifetime/return authority"));assert_eq!(rt.load(sp,32).unwrap(),CrtValue::ProtectedReturn(99));
+for offset in [8192,8196]{for small in [false,true]{
+ let(mut rt,_)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();let stack=rt.map_region(0xa000,16384,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,offset).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(99)).unwrap();let mut c=CrtCpu::new(sp,99).unwrap();c.clobber(CrtValue::scalar(71));
+ assert!(CrtAlignedActivation::begin(&rt,&c).is_err());
+ for n in 1..=4{c.push(&mut rt,CrtValue::scalar(n)).unwrap();}
+ let original=c.r;let result=c.call_activation(&mut rt,0x40b465,0,|rt,child|frame(rt,child,2,small));
+ assert_eq!(result,Ok(CrtValue::scalar(71)));assert_eq!(c.r,original);c.discard(&mut rt,16).unwrap();assert_eq!(c.finish(&mut rt),Ok(CrtValue::scalar(71)));assert!(rt.tags.values().all(|v|!matches!(v,CrtValue::ProtectedReturn(_))));
+}}
+// Independent malformed/lifetime cases: no successful-return fallback.
+for mode in 0..18{
+ let(mut rt,_)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();let stack=rt.map_region(0xa000,16384,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,8192).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(99)).unwrap();let mut c=CrtCpu::new(sp,99).unwrap();c.clobber(CrtValue::scalar(71));for n in 1..=4{c.push(&mut rt,CrtValue::scalar(n)).unwrap();}
+ let result=c.call_activation(&mut rt,0x1005,0,|rt,cpu|{
+  let mut aligned=CrtAlignedActivation::begin(rt,cpu).expect("negative fixture begins with actual CALL authority");original_prefix(rt,cpu,&mut aligned,false).expect("negative fixture prefix must execute");aligned.live(rt,cpu).expect("negative fixture starts live");let mirror=aligned.mirror.unwrap();let entry=aligned.entry;
+  match mode{
+   0=>{rt.store(mirror,32,CrtValue::scalar(0x1006))?;aligned.live(rt,cpu)?;},
+   1=>{rt.tags.remove(&entry.address());rt.store(entry,32,CrtValue::scalar(aligned.pc))?;aligned.live(rt,cpu)?;},
+   2=>{rt.memory.release(entry.cap,entry.owner).unwrap();aligned.live(rt,cpu)?;},
+   3=>{cpu.return_site=Some((cpu.return_id+1,aligned.pc));aligned.live(rt,cpu)?;},
+   4=>{aligned.copy_return(rt,cpu,mirror,CrtValue::ProtectedReturn(cpu.return_id))?;},
+   5=>{cpu.return_site=None;aligned.live(rt,cpu)?;},
+   6=>{let other=rt.map_region(0x10000,4096,CrtRegionKind::Stack,None)?;let mut fresh=CrtAlignedActivation{anchor:rt.anchor,thread:rt.thread,fiber:rt.fiber,entry,identity:cpu.return_id,pc:aligned.pc,mirror:None,done:false};fresh.copy_return(rt,cpu,other,CrtValue::ProtectedReturn(cpu.return_id))?;},
+   7=>{let mut fresh=CrtAlignedActivation{anchor:rt.anchor,thread:rt.thread,fiber:rt.fiber,entry,identity:cpu.return_id,pc:aligned.pc,mirror:None,done:false};fresh.copy_return(rt,cpu,entry,CrtValue::ProtectedReturn(cpu.return_id))?;},
+   8=>{let mut fresh=CrtAlignedActivation{anchor:rt.anchor,thread:rt.thread,fiber:rt.fiber,entry,identity:cpu.return_id,pc:aligned.pc,mirror:None,done:false};fresh.copy_return(rt,cpu,mirror,CrtValue::scalar(aligned.pc))?;},
+   9=>{let failed=cpu.call_activation(rt,0x2000,0,|rt,child|{child.push(rt,CrtValue::scalar(42))?;Err("unproved child unwind")});assert_eq!(failed,Err("unproved child unwind"));assert_eq!(rt.load(CrtCpu::pointer(cpu.r[4])?,32)?,CrtValue::scalar(42));aligned.live(rt,cpu)?;},
+   10=>{cpu.discard(rt,8)?;cpu.r[7]=cpu.pop(rt)?;cpu.r[6]=cpu.pop(rt)?;cpu.r[6]=CrtValue::scalar(0);return original_epilog(rt,cpu,&mut aligned);},
+   11=>{rt.store(rt.offset(entry,-600)?,32,CrtValue::scalar(55))?;let failed:Result<(),&str>=Err("unproved nonlocal cleanup");assert!(failed.is_err());assert_eq!(rt.load(rt.offset(entry,-600)?,32)?,CrtValue::scalar(55));return Err("unproved nonlocal cleanup");},
+   12=>{rt.thread+=1;aligned.live(rt,cpu)?;},
+   13=>{let (other,_)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();aligned.live(&other,cpu)?;},
+   14=>{rt.bind_fiber(rt.thread)?;aligned.live(rt,cpu)?;},
+   15=>{cpu.r[4]=CrtValue::Pointer(mirror);return aligned.finish(rt,cpu);},
+   16=>{cpu.discard(rt,8)?;cpu.r[7]=cpu.pop(rt)?;cpu.r[6]=cpu.pop(rt)?;cpu.r[3]=CrtValue::Pointer(rt.offset(entry,-32)?);return original_epilog(rt,cpu,&mut aligned);},
+   17=>{rt.memory.release(rt.anchor,rt.file_view.owner).unwrap();aligned.live(rt,cpu)?;},
+   _=>unreachable!()
+  }
+  panic!("negative aligned mode {mode} unexpectedly continued");
+ });let expected=match mode{0=>"CRT aligned return mirror changed",1=>"CRT active caller lifetime/return authority",2=>"CRT pointer lifetime",3|5|9|12|13|14=>"CRT aligned activation lifetime",4|6|7|8=>"CRT aligned return copy authority/range",10=>"CRT callee saved restoration",11=>"unproved nonlocal cleanup",15|16=>"CRT caller stack identity",17=>"CRT aligned runtime lifetime",_=>unreachable!()};assert_eq!(result,Err(expected),"negative aligned mode {mode}");assert!(!c.returned);
 }
+// Insufficient local extent fails after, not before, the original mirror store.
+{
+ let(mut rt,_)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();let stack=rt.map_region(0xa000,128,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,96).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(99)).unwrap();let mut c=CrtCpu::new(sp,99).unwrap();c.clobber(CrtValue::scalar(71));for n in 1..=4{c.push(&mut rt,CrtValue::scalar(n)).unwrap();}
+ let result=c.call_activation(&mut rt,0x3005,0,|rt,child|{let mut aligned=CrtAlignedActivation::begin(rt,child)?;original_prefix(rt,child,&mut aligned,false)});assert_eq!(result,Err("CRT pointer complete range/identity"));assert!(!c.returned);let bp=CrtCpu::pointer(c.r[5]).unwrap();assert_eq!(rt.load(rt.offset(bp,4).unwrap(),32).unwrap(),CrtValue::scalar(0x3005));let source=rt.load(rt.offset(CrtCpu::pointer(c.r[3]).unwrap(),4).unwrap(),32).unwrap();assert!(matches!(source,CrtValue::ProtectedReturn(_)));assert_eq!(rt.tags.values().filter(|&&v|v==source).count(),1);
+}
+// Alignment retains only existing, live, in-range stack capabilities.
+let(mut rt,_)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();let stack=rt.map_region(0xa004,4096,CrtRegionKind::Stack,None).unwrap();let mut c=CrtCpu::new(stack,99).unwrap();
+assert!(c.binary(&rt,4,CrtValue::Pointer(stack),CrtValue::scalar(!7),32).is_err());
+let p=rt.offset(stack,16).unwrap();let aligned=c.binary(&rt,4,CrtValue::Pointer(p),CrtValue::scalar(!7),32).unwrap();assert_eq!(CrtCpu::pointer(aligned).unwrap(),rt.offset(p,-4).unwrap());assert_eq!((c.flags.cf,c.flags.of,c.flags.zf,c.flags.sf),(Some(false),Some(false),Some(false),Some(false)));
+assert!(matches!(c.binary(&rt,4,CrtValue::scalar(p.address()),CrtValue::scalar(!7),32).unwrap(),CrtValue::Scalar{..}));
+assert!(matches!(c.binary(&rt,4,CrtValue::Pointer(p),CrtValue::scalar(0xffff_fffa),32).unwrap(),CrtValue::Scalar{..}));
+assert!(matches!(c.binary(&rt,4,CrtValue::Pointer(p),CrtValue::Scalar{bits:!7,known:!1},32).unwrap(),CrtValue::Scalar{..}));
+assert!(matches!(c.binary(&rt,4,CrtValue::Pointer(p),CrtValue::scalar(!7),16).unwrap(),CrtValue::Scalar{..}));
+rt.store(rt.offset(p,-4).unwrap(),32,CrtValue::ProtectedReturn(123)).unwrap();assert_eq!(c.binary(&rt,4,CrtValue::Pointer(p),CrtValue::scalar(!7),32),Err("CRT alignment crosses protected stack"));rt.memory.release(stack.cap,stack.owner).unwrap();assert!(c.binary(&rt,4,CrtValue::Pointer(p),CrtValue::scalar(!7),32).is_err());
 "#,
-        "original-aligned-frame-limits",
+        "aligned-return-authority",
     );
 }

@@ -1,6 +1,6 @@
 # Remaining entry-to-exit dependencies
 
-## Current executable checkpoint: callback10 prefix and required UCRT getter
+## Current executable checkpoint: callback10 aligned activation
 
 The explicit UTF-8 native launch (process code page65001) now captures real Linux
 argv once and constructs a canonical MSVC command line. It does not recover an
@@ -16,16 +16,22 @@ LastError knowledge. All earlier endpoint, UCRT and descriptor state remains.
 
 The explicit native entry now executes callback10's three original locale-pointer
 stores and required-PTD getter `0x40a2ef`, preserving the same 868-byte UCRT heap
-identity and retiring the getter's temporary C++ record. It pushes the four
-original arguments and rejects **before CALL `0x40b460 -> 0x40b235`**. The locale
-initialized flag remains zero. This advances the connected replay without admitting
-the aligned helper, full startup, rcedit or default conversion.
+identity and retiring the getter's temporary C++ record. The actual CALL enters
+`0x40b235`, preserves stack authority through alignment, stores non-authoritative
+return-address bits in the compiler mirror, allocates the local frame, and pushes
+the first body's arguments. It rejects **before CALL `0x40b25a -> 0x40b38a`**.
+The locale initialized flag remains zero. This is connected component replay,
+not full startup, rcedit or default admission.
 
-[Locale prefix, independently reproduced aligned-stack/return-mirror limitation,
-and bounded shared ownership scope](LOCALE-STARTUP.md). The next hard dependency is
-capability-preserving stack alignment and non-authoritative return mirrors through
-actual helper calls/epilog. Later GetACP/GetCPInfo and locale/reference effects
-remain unimplemented; no universal UTF-8 ACP premise is introduced.
+[Shared aligned activation and exact next helper](LOCALE-STARTUP.md). The next
+executable dependency is `0x40b38a`: an original EH4/lock5-protected UCRT multibyte
+reference getter/replacement with decrement/free, publication, increment and
+cleanup effects. Existing reference/registry machinery should be reused; the
+inventoried LOCK XADD at0x40b3d8 additionally needs shared old-value/flag effects
+and is not yet supported by CRT IR. This body remains unexecuted. Its
+termination path and later GetACP/GetCPInfo remain unimplemented; no universal
+UTF-8 ACP premise or successful body callback is introduced. Aligned-frame
+nonlocal cleanup is still unsupported, independently of tested normal epilog.
 
 ## Earlier checkpoint: actual native standard endpoints and callback8 return
 

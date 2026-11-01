@@ -872,6 +872,6 @@ fn bind_main_continuation(rt:&CrtStreamRuntime,r:&ThreadRegistry,m:&Machine,s:&C
  for(&offset,word)in &s.image.words{if let FrameWord::Saved(reg,_)=word{if ![3,5,6,7].contains(reg)||!seen.insert(*reg){return Err("Main continuation original saved schema");}entry[*reg as usize]=*s.protected.get(&offset).ok_or("Main continuation saved authority")?;}}
  if seen!=std::collections::BTreeSet::from([3,5,6,7])||rt.load(s.entry,32)?!=CrtValue::ProtectedReturn(s.return_id)||rt.tags.values().filter(|&&v|v==CrtValue::ProtectedReturn(s.return_id)).count()!=1{return Err("Main continuation original root");}
  // All validation precedes the change. No observed register array is authority.
- cpu.entry=entry;cpu.return_id=s.return_id;cpu.return_pop=0;cpu.validate_active(rt)
+ cpu.entry=entry;cpu.return_id=s.return_id;cpu.return_site=None;cpu.return_pop=0;cpu.validate_active(rt)
 }
 "#;

@@ -8,9 +8,38 @@ impl CrtFlags{fn unknown()->Self{Self{cf:None,zf:None,sf:None,of:None}}}
 /// including DF=0. It is not a capture of unknown Windows thread flags.
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 enum CrtAbi{Cdecl32Forward}
-struct CrtCpu{abi:CrtAbi,r:[CrtValue;8],xmm:[[CrtValue;4];8],entry:[CrtValue;8],flags:CrtFlags,return_id:u64,steps:u32,returned:bool,return_pop:u16}
+struct CrtCpu{abi:CrtAbi,r:[CrtValue;8],xmm:[[CrtValue;4];8],entry:[CrtValue;8],flags:CrtFlags,return_id:u64,return_site:Option<(u64,u32)>,steps:u32,returned:bool,return_pop:u16}
+/// A compiler-proved aligned frame may copy CALL return bits into ordinary
+/// storage. Only the original protected slot authorizes RET. No entry-boundary
+/// CPU with an unknown numeric continuation can issue this lease.
+struct CrtAlignedActivation{anchor:guest_memory::Capability,thread:u64,fiber:Option<CrtFiber>,entry:CrtPointer,identity:u64,pc:u32,mirror:Option<CrtPointer>,done:bool}
+impl CrtAlignedActivation{
+ fn begin(rt:&CrtStreamRuntime,cpu:&CrtCpu)->Result<Self,&'static str>{
+  cpu.validate_active(rt)?;rt.memory.validate(rt.anchor,rt.file_view.owner).map_err(|_|"CRT aligned runtime lifetime")?;let entry=CrtCpu::pointer(cpu.entry[4])?;
+  let (identity,pc)=cpu.return_site.ok_or("CRT aligned return bits unavailable")?;
+  if identity!=cpu.return_id||pc==0||cpu.r[4]!=cpu.entry[4]||entry.address()%4!=0{return Err("CRT aligned entry identity");}
+  Ok(Self{anchor:rt.anchor,thread:rt.thread,fiber:rt.fiber,entry,identity,pc,mirror:None,done:false})
+ }
+ fn live(&self,rt:&CrtStreamRuntime,cpu:&CrtCpu)->Result<(),&'static str>{
+  if self.anchor!=rt.anchor||self.thread!=rt.thread||self.fiber!=rt.fiber||self.done||cpu.return_id!=self.identity||cpu.return_site!=Some((self.identity,self.pc))||cpu.entry[4]!=CrtValue::Pointer(self.entry){return Err("CRT aligned activation lifetime");}
+  cpu.validate_active(rt)?;rt.memory.validate(self.anchor,rt.file_view.owner).map_err(|_|"CRT aligned runtime lifetime")?;
+  if let Some(p)=self.mirror{if rt.load(p,32)?!=CrtValue::scalar(self.pc){return Err("CRT aligned return mirror changed");}}
+  Ok(())
+ }
+ fn copy_return(&mut self,rt:&mut CrtStreamRuntime,cpu:&CrtCpu,destination:CrtPointer,value:CrtValue)->Result<(),&'static str>{
+  self.live(rt,cpu)?;let sp=CrtCpu::pointer(cpu.r[4])?;
+  if self.mirror.is_some()||value!=CrtValue::ProtectedReturn(self.identity)||destination.cap!=self.entry.cap||destination.owner!=self.entry.owner||destination.kind!=CrtRegionKind::Stack||destination.address()%4!=0||destination.address()<sp.address()||destination.address().checked_add(4).is_none_or(|end|end>self.entry.address()){
+   return Err("CRT aligned return copy authority/range");
+  }
+  rt.store(destination,32,CrtValue::scalar(self.pc))?;self.mirror=Some(destination);Ok(())
+ }
+ fn finish(&mut self,rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->Result<CrtValue,&'static str>{
+  self.live(rt,cpu)?;if self.mirror.is_none(){return Err("CRT aligned mirror missing");}
+  let value=cpu.finish(rt)?;self.done=true;Ok(value)
+ }
+}
 impl CrtCpu{
- fn new(sp:CrtPointer,return_id:u64)->Result<Self,&'static str>{if sp.kind!=CrtRegionKind::Stack||return_id==0{return Err("CRT cpu entry authority");}let mut r=std::array::from_fn(|i|CrtValue::OpaqueSaved(i as u8));r[4]=CrtValue::Pointer(sp);Ok(Self{abi:CrtAbi::Cdecl32Forward,r,xmm:[[CrtValue::Scalar{bits:0,known:0};4];8],entry:r,flags:CrtFlags::unknown(),return_id,steps:0,returned:false,return_pop:0})}
+ fn new(sp:CrtPointer,return_id:u64)->Result<Self,&'static str>{if sp.kind!=CrtRegionKind::Stack||return_id==0{return Err("CRT cpu entry authority");}let mut r=std::array::from_fn(|i|CrtValue::OpaqueSaved(i as u8));r[4]=CrtValue::Pointer(sp);Ok(Self{abi:CrtAbi::Cdecl32Forward,r,xmm:[[CrtValue::Scalar{bits:0,known:0};4];8],entry:r,flags:CrtFlags::unknown(),return_id,return_site:None,steps:0,returned:false,return_pop:0})}
  /// Bound stdcall adapter; index is the proven native global-object slot,
  /// not an extra guest argument. Original code/target binding remains required.
  fn native_sync_call(&mut self,rt:&mut CrtStreamRuntime,init:CrtInitialization,function:CrtFunction,index:u32)->Result<CrtValue,&'static str>{
@@ -132,11 +161,13 @@ impl CrtCpu{
   let identity=generation|(1u64<<63);
   if rt.tags.values().any(|v|*v==CrtValue::ProtectedReturn(identity)){return Err("CRT call identity collision");}
   rt.generation=generation;self.push(rt,CrtValue::ProtectedReturn(identity))?;
-  let mut child=Self{abi:self.abi,r:self.r,xmm:self.xmm,entry:self.r,flags:self.flags,return_id:identity,steps:self.steps,returned:false,return_pop};
+  let mut child=Self{abi:self.abi,r:self.r,xmm:self.xmm,entry:self.r,flags:self.flags,return_id:identity,return_site:Some((identity,continuation)),steps:self.steps,returned:false,return_pop};
   let result=callee(rt,&mut child);
   self.r=child.r;self.xmm=child.xmm;self.flags=child.flags;self.steps=child.steps;
-  let value=result?;
-  if !child.returned||self.r[4]!=CrtValue::Pointer(expected_after)||value!=self.r[0]||rt.tags.values().any(|v|*v==CrtValue::ProtectedReturn(identity)){return Err("CRT callee missing exact protected RET");}
+  // A failed/incomplete nested activation leaves its original effects visible,
+  // but cannot continue to certify the parent's aligned-return observation.
+  let value=match result{Ok(v)=>v,Err(error)=>{self.return_site=None;return Err(error);}};
+  if !child.returned||self.r[4]!=CrtValue::Pointer(expected_after)||value!=self.r[0]||rt.tags.values().any(|v|*v==CrtValue::ProtectedReturn(identity)){self.return_site=None;return Err("CRT callee missing exact protected RET");}
   Ok(value)
  }
  fn condition(&self,kind:u8)->Result<bool,&'static str>{let z=||self.flags.zf.ok_or("CRT unknown ZF");let c=||self.flags.cf.ok_or("CRT unknown CF");let s=||self.flags.sf.ok_or("CRT unknown SF");let o=||self.flags.of.ok_or("CRT unknown OF");Ok(match kind{0=>z()?,1=>!z()?,2=>c()?,3=>!c()?&&!z()?,4=>c()?||z()?,5=>!c()?,6=>s()?!=o()?,7=>z()?||(s()?!=o()?),8=>!z()?&&(s()?==o()?),9=>s()?==o()?,10=>s()?,11=>!s()?,_=>return Err("CRT condition kind")})}
@@ -146,6 +177,17 @@ impl CrtCpu{
   if width==32&&kind==4{if let (CrtValue::Heap(h),CrtValue::Scalar{bits:0,known:u32::MAX})|(CrtValue::Scalar{bits:0,known:u32::MAX},CrtValue::Heap(h))=(a,b){rt.heap_identity(h)?;self.flags=CrtFlags{cf:Some(false),of:Some(false),zf:Some(true),sf:Some(false)};return Ok(CrtValue::scalar(0));}}
   if width==32&&kind==8{if let(CrtValue::Heap(x),CrtValue::Heap(y))=(a,b){if x!=y{return Err("CRT distinct opaque heap comparison");}rt.heap_identity(x)?;self.flags=CrtFlags{cf:Some(false),of:Some(false),zf:Some(false),sf:None};return Ok(CrtValue::Scalar{bits:0,known:0});}}
 
+  // Clearing low address bits can retain an existing stack capability only.
+  // This is checked same-object arithmetic, never a scalar-to-pointer cast.
+  if width==32&&kind==4{if let(CrtValue::Pointer(p),CrtValue::Scalar{bits:mask,known:u32::MAX})=(a,b){
+   let alignment=(!mask).checked_add(1);
+   if p.kind==CrtRegionKind::Stack&&alignment.is_some_and(|n|n>=4&&n.is_power_of_two()){
+    let address=p.address()&mask;let q=rt.offset(p,i64::from(address)-i64::from(p.address()))?;
+    rt.valid(q,p.address()-address)?;
+    if rt.overlapping_tags(q.address(),p.address()-address).iter().any(|(_,v)|matches!(v,CrtValue::ProtectedReturn(_)|CrtValue::OpaqueSaved(_)|CrtValue::ThreadHead(_))){return Err("CRT alignment crosses protected stack");}
+    self.flags=CrtFlags{cf:Some(false),of:Some(false),zf:Some(address==0),sf:Some(address&0x80000000!=0)};return Ok(CrtValue::Pointer(q));
+   }
+  }}
   if matches!(kind,3|4|5|8){let(x,kx)=Self::bits(a)?;let(y,ky)=Self::bits(b)?;let(bits,known)=match kind{3=>(x^y,kx&ky),4|8=>(x&y,(kx&ky)|(kx&!x)|(ky&!y)),5=>(x|y,(kx&ky)|(kx&x)|(ky&y)),_=>unreachable!()};let bits=bits&mask;let known=(known&mask)|!mask;let sign=1u32<<(width-1);self.flags=CrtFlags{cf:Some(false),of:Some(false),zf:if bits&known&mask!=0{Some(false)}else if known==u32::MAX{Some(true)}else{None},sf:if known&sign!=0{Some(bits&sign!=0)}else{None}};return Ok(CrtValue::Scalar{bits,known});}
   let x=Self::number(a)?&mask;let y=Self::number(b)?&mask;let sign=1u32<<(width-1);
   let (bits,cf,of)=match kind{1=>{let n=u64::from(x)+u64::from(y);let r=n as u32&mask;(r,n>u64::from(mask),(!(x^y)&(x^r)&sign)!=0)},2|7=>{let r=x.wrapping_sub(y)&mask;(r,x<y,((x^y)&(x^r)&sign)!=0)},3=>(x^y,false,false),4|8=>(x&y,false,false),5=>(x|y,false,false),6=>{let borrow=u32::from(self.flags.cf.ok_or("CRT unknown borrow")?);let r=x.wrapping_sub(y).wrapping_sub(borrow)&mask;(r,u64::from(x)<u64::from(y)+u64::from(borrow),((x^y)&(x^r)&sign)!=0)},_=>return Err("CRT binary kind")};
