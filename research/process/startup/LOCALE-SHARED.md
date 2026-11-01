@@ -1,5 +1,9 @@
 # Original shared locale update and normal return
 
+Historical checkpoint `ce55f54`; the [exit-table continuation](EXIT-TABLES.md)
+now supersedes its next-boundary description. The distinct old-global heap
+free-failure regression also extends the inherited result corpus from27 to28.
+
 ## Executable boundary
 
 Under the existing explicit native platform, ACP 65001 and installed-code-page

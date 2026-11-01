@@ -1,6 +1,25 @@
 # Remaining entry-to-exit dependencies
 
-## Current executable checkpoint: shared locale updater returns
+## Current executable checkpoint: initializer table completes; startup prefix remains open
+
+Explicit-profile unchanged entry now runs callback15 at407565 and both original
+exit-table helpers4074fc, initializes separate tables41ce88/41ce94, completes the
+initializer loop and returns to **401632**. It explicitly rejects before that
+original POP ECX. The argument and outer EH4 frame remain live; no full startup
+return or ordinary conversion is claimed. The paired401bd5 cleanup is the actual
+AL=1/RET no-op, not table draining/freeing. Prior stores survive later rejection.
+[Contract and review scope](EXIT-TABLES.md), [evidence](evidence/exit-tables.json).
+
+Next lift the caller's POP/TEST/branches and scope activation, then CALL401647 to
+401913. That helper first reads live41d2f0 via4021bf; its nonzero path needs owned
+FS:[18]/StackBase and CMPXCHG. Do not assume a flag value or expand authority.
+Sol can handle the bounded caller/flag path; justify any deeper thread/atomic
+ownership design before escalation. Existing default admission/full startup,
+formatter/rcedit, non-null freeing, exceptional delivery/cleanup and all broader
+resource/encoding/XP7 equivalence gaps remain unsupported. Historical original
+Windows timeout causes are unresolved; exact-head CI is tracked in SUB-579.
+
+## Previous checkpoint: shared locale updater returns
 
 Explicit-profile original entry now completes callback10: real EH4 wrapper40aeae,
 lock5, checked257/256-byte copies, global/private reference replacement, unlock,
