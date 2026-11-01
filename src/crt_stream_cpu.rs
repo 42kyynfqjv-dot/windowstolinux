@@ -70,24 +70,25 @@ impl CrtCpu{
   let flags=rt.load(rt.offset(sp,8)?,32)?.known_scalar()?;let size=rt.load(rt.offset(sp,12)?,32)?.known_scalar()?;
   let p=rt.native_heap_allocate(init,heap,flags,size)?;self.clobber(CrtValue::Pointer(p));self.finish_pop(rt,12)
  }
- /// REP MOVSD within the explicit forward-cdecl ABI. Scalar knowledge and data
+ /// Forward REP MOVSB/MOVSD within the explicit cdecl ABI. Scalar knowledge and data
  /// pointer aliases are copied, never control authority. Each completed word
  /// commits its write and cursor/count progress; a later rejection retains it.
- fn repeat_move_dwords(&mut self,rt:&mut CrtStreamRuntime,max_words:u32)->Result<(),&'static str>{
-  self.validate_active(rt)?;
+ fn repeat_move_dwords(&mut self,rt:&mut CrtStreamRuntime,max_words:u32)->Result<(),&'static str>{self.repeat_move_units(rt,32,max_words)}
+ fn repeat_move_units(&mut self,rt:&mut CrtStreamRuntime,width:u8,max_words:u32)->Result<(),&'static str>{
+  self.validate_active(rt)?;if !matches!(width,8|32){return Err("CRT repeated copy width");}let stride=u32::from(width)/8;
   if self.abi!=CrtAbi::Cdecl32Forward||max_words==0||max_words>262144{return Err("CRT repeated copy ABI/count domain");}
   let mut remaining=self.r[1].known_scalar()?;
   if remaining>max_words{return Err("CRT repeated copy count bound");}
   while remaining!=0{
    self.tick(u32::MAX)?;
    let src=Self::pointer(self.r[6])?;let dst=Self::pointer(self.r[7])?;
-   let value=rt.load(src,32)?;
+   let value=rt.load(src,width)?;
    if matches!(value,CrtValue::ProtectedReturn(_)|CrtValue::OpaqueSaved(_)|CrtValue::ThreadHead(_)|CrtValue::Dispatcher(_)){return Err("CRT repeated copy control authority");}
-   rt.store(dst,32,value)?;
+   rt.store(dst,width,value)?;
    // Effective-address formation preserves the old capability and bounds. It
    // never resolves an out-of-range next address into an unrelated allocation.
-   self.r[6]=CrtValue::Pointer(rt.effective_address(src,src.address().wrapping_add(4))?);
-   self.r[7]=CrtValue::Pointer(rt.effective_address(dst,dst.address().wrapping_add(4))?);
+   self.r[6]=CrtValue::Pointer(rt.effective_address(src,src.address().wrapping_add(stride))?);
+   self.r[7]=CrtValue::Pointer(rt.effective_address(dst,dst.address().wrapping_add(stride))?);
    remaining-=1;self.r[1]=CrtValue::scalar(remaining);
   }Ok(())
  }
@@ -98,6 +99,9 @@ impl CrtCpu{
   let old=rt.exchange_initializing_scalar(init,image,p,value,add)?;
   if add{self.binary(rt,1,CrtValue::scalar(old),CrtValue::scalar(value),32)?;}
   self.r[register]=CrtValue::scalar(old);Ok(())
+ }
+ fn increment_initializing_scalar(&mut self,rt:&mut CrtStreamRuntime,init:CrtInitialization,image:CrtProcessImage,p:CrtPointer)->Result<(),&'static str>{
+  let old=rt.exchange_initializing_scalar(init,image,p,1,true)?;let cf=self.flags.cf;self.binary(rt,1,CrtValue::scalar(old),CrtValue::scalar(1),32)?;self.flags.cf=cf;Ok(())
  }
  fn exchange_add_reference(&mut self,rt:&mut CrtStreamRuntime,init:CrtInitialization,image:CrtProcessImage,lease:CrtGlobalLock,p:CrtPointer,register:usize)->Result<(),&'static str>{
   let addend=self.r.get(register).ok_or("CRT XADD register")?.known_scalar()?;
@@ -250,6 +254,17 @@ impl CrtCpu{
   self.flags=CrtFlags{cf:Some(cf),zf:Some(bits==0),sf:Some(bits&sign!=0),of:Some(of)};
   if width==32&&matches!(kind,1|2){match(a,b){(CrtValue::Pointer(p),CrtValue::Scalar{known:u32::MAX,..})=>return Ok(CrtValue::Pointer(rt.offset(p,if kind==1{i64::from(y as i32)}else{-i64::from(y as i32)})?)),(CrtValue::Scalar{known:u32::MAX,..},CrtValue::Pointer(p))if kind==1=>return Ok(CrtValue::Pointer(rt.offset(p,i64::from(x as i32))?)),(CrtValue::Pointer(p),CrtValue::Pointer(q))if kind==2=>return Ok(CrtValue::scalar(rt.difference(p,q)?)),_=>{}}}
   Ok(CrtValue::scalar(bits))
+ }
+ /// CDQ changes EDX only; an unknown sign stays unknown, not zero.
+ fn vector_load(&mut self,rt:&CrtStreamRuntime,dst:u8,p:CrtPointer,width:u8,aligned:bool)->Result<(),&'static str>{
+  if dst>=8||!matches!(width,64|128){return Err("CRT vector load form");}rt.valid(p,u32::from(width)/8)?;if aligned&&p.address()%16!=0{return Err("CRT vector alignment");}let mut words=[CrtValue::scalar(0);4];for (i,w)in words.iter_mut().enumerate().take(usize::from(width)/32){*w=rt.load(rt.offset(p,i as i64*4)?,32)?;if !matches!(w,CrtValue::Scalar{..}){return Err("CRT vector typed data unbound");}}self.xmm[usize::from(dst)]=words;Ok(())
+ }
+ fn vector_store(&self,rt:&mut CrtStreamRuntime,src:u8,p:CrtPointer,width:u8,aligned:bool)->Result<(),&'static str>{
+  if src>=8||!matches!(width,64|128){return Err("CRT vector store form");}let size=u32::from(width)/8;rt.valid(p,size)?;if matches!(p.kind,CrtRegionKind::File|CrtRegionKind::Descriptor|CrtRegionKind::Input|CrtRegionKind::ProcessData){return Err("CRT vector destination role unbound");}if aligned&&p.address()%16!=0{return Err("CRT vector alignment");}rt.memory.validate_writable(p.cap,p.owner,p.address(),size).map_err(|_|"CRT vector write permission")?;if !rt.overlapping_tags(p.address(),size).is_empty(){return Err("CRT vector typed destination unbound");}for i in 0..usize::from(width)/32{let CrtValue::Scalar{..}=self.xmm[usize::from(src)][i]else{return Err("CRT vector typed data unbound");};rt.ordinary_file_bytes(rt.offset(p,i as i64*4)?,4)?;}
+  for i in 0..usize::from(width)/32{rt.store(rt.offset(p,i as i64*4)?,32,self.xmm[usize::from(src)][i])?;}Ok(())
+ }
+ fn bit_test(&mut self,rt:&CrtStreamRuntime,value:CrtValue,bit:u8)->Result<(),&'static str>{
+  if bit>=32{return Err("CRT bit-test index");}match value{CrtValue::Pointer(p)=>rt.identity_range(p,0)?,CrtValue::Module(m)=>rt.module_identity(m)?,CrtValue::Function(f)=>rt.function_identity(f,None)?,CrtValue::ProcessHandle(h)=>{rt.native_endpoint(h)?;},CrtValue::Handle(h)=>{rt.descriptor(h)?;},_=>{}}let(bits,known)=Self::bits(value)?;let mask=1u32<<bit;self.flags.cf=if known&mask!=0{Some(bits&mask!=0)}else{None};self.flags.of=None;self.flags.sf=None;Ok(())
  }
  /// CDQ changes EDX only; an unknown sign stays unknown, not zero.
  fn sign_dividend(&mut self)->Result<(),&'static str>{let(bits,known)=Self::bits(self.r[0])?;self.r[2]=if known&0x80000000!=0{CrtValue::scalar(if bits&0x80000000!=0{u32::MAX}else{0})}else{CrtValue::Scalar{bits:0,known:0}};Ok(())}

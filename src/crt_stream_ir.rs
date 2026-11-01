@@ -21,6 +21,8 @@ pub(crate) enum SignedCondition {
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum Op {
+    /// An explicit unsupported component boundary, never a successful effect.
+    Reject(&'static str),
     Ordinary(Operation),
     Exchange {
         address: graph::Address,
@@ -41,6 +43,22 @@ pub(crate) enum Op {
     CpuId,
     ReadXcr,
     XmmZero(u8),
+    XmmLoad {
+        destination: u8,
+        address: graph::Address,
+        width: u8,
+        aligned: bool,
+    },
+    XmmStore {
+        source: u8,
+        address: graph::Address,
+        width: u8,
+        aligned: bool,
+    },
+    XmmCopy {
+        destination: u8,
+        source: u8,
+    },
     XmmStoreLow64 {
         source: u8,
         address: graph::Address,
@@ -92,6 +110,10 @@ pub(crate) enum Op {
         operation: graph::Binary,
         destination: Reg,
         source: Operand,
+    },
+    BitTest {
+        source: Operand,
+        bit: u8,
     },
     DecrementMemory(Operand),
     StoreString {
@@ -189,9 +211,18 @@ pub(crate) struct ByteTable<'a> {
     pub bytes: &'a [u8],
 }
 fn extended(i: &Instruction, raw: &[u8], tables: &[JumpTable<'_>]) -> Result<Op, String> {
-    if i.has_rep_prefix() || i.has_repne_prefix() {
-        if raw == [0xf3, 0xa5] && i.mnemonic() == Mnemonic::Movsd {
-            return Ok(Op::RepeatCopyString { width: 32 });
+    if (i.has_rep_prefix() || i.has_repne_prefix())
+        && !matches!(
+            i.code(),
+            Code::Movdqu_xmm_xmmm128 | Code::Movdqu_xmmm128_xmm | Code::Movq_xmm_xmmm64
+        )
+    {
+        if (raw == [0xf3, 0xa5] && i.mnemonic() == Mnemonic::Movsd)
+            || (raw == [0xf3, 0xa4] && i.mnemonic() == Mnemonic::Movsb)
+        {
+            return Ok(Op::RepeatCopyString {
+                width: if raw[1] == 0xa4 { 8 } else { 32 },
+            });
         }
         return Err("CRT IR: repeated instruction outside domain".into());
     }
@@ -258,6 +289,69 @@ fn extended(i: &Instruction, raw: &[u8], tables: &[JumpTable<'_>]) -> Result<Op,
     }
     if raw == [0x0f, 0x01, 0xd0] && i.code() == Code::Xgetbv {
         return Ok(Op::ReadXcr);
+    }
+    if i.code() == Code::Bt_rm32_imm8
+        && i.immediate8() < 32
+        && i.segment_prefix() == Register::None
+        && !i.has_lock_prefix()
+    {
+        return Ok(Op::BitTest {
+            source: operand_from_move(i, 0)?,
+            bit: i.immediate8(),
+        });
+    }
+    if i.segment_prefix() == Register::None && !i.has_lock_prefix() {
+        let load = matches!(
+            i.code(),
+            Code::Movdqa_xmm_xmmm128 | Code::Movdqu_xmm_xmmm128 | Code::Movq_xmm_xmmm64
+        );
+        let store = matches!(
+            i.code(),
+            Code::Movdqa_xmmm128_xmm | Code::Movdqu_xmmm128_xmm | Code::Movq_xmmm64_xmm
+        );
+        if load || store {
+            if i.op0_kind() == OpKind::Register
+                && i.op1_kind() == OpKind::Register
+                && !matches!(i.code(), Code::Movq_xmm_xmmm64 | Code::Movq_xmmm64_xmm)
+            {
+                return Ok(Op::XmmCopy {
+                    destination: xmm(i.op0_register())?,
+                    source: xmm(i.op1_register())?,
+                });
+            }
+            let memory = if load { 1 } else { 0 };
+            let register = if load { 0 } else { 1 };
+            if i.op_kind(memory) == OpKind::Memory && i.op_kind(register) == OpKind::Register {
+                let Operand::Memory(address, _) = operand_from_move(i, memory)? else {
+                    return Err("CRT vector memory form".into());
+                };
+                let width = if matches!(i.code(), Code::Movq_xmm_xmmm64 | Code::Movq_xmmm64_xmm) {
+                    64
+                } else {
+                    128
+                };
+                let aligned = matches!(
+                    i.code(),
+                    Code::Movdqa_xmm_xmmm128 | Code::Movdqa_xmmm128_xmm
+                );
+                let index = xmm(i.op_register(register))?;
+                return Ok(if load {
+                    Op::XmmLoad {
+                        destination: index,
+                        address,
+                        width,
+                        aligned,
+                    }
+                } else {
+                    Op::XmmStore {
+                        source: index,
+                        address,
+                        width,
+                        aligned,
+                    }
+                });
+            }
+        }
     }
     // Only legacy, non-faulting SSE/SSE2 forms under an explicit enabled-SSE
     // execution premise. No general SIMD or floating-point contract follows.

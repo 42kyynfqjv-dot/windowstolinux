@@ -55,6 +55,18 @@ fn repeated_copy_requires_dedicated_effect_and_exact_supported_encoding() {
             .unwrap_err(),
         "CRT emit repeated copy effect unbound"
     );
+    let byte = Graph::decode(&[0xf3, 0xa4, 0xc3], 0x1000).unwrap();
+    assert!(matches!(
+        byte.nodes[&0x1000].op,
+        Op::RepeatCopyString { width: 8 }
+    ));
+    assert!(crate::crt_stream_emit::emit_body(
+        &byte,
+        |_, _| Err("call".into()),
+        &Default::default(),
+        8
+    )
+    .is_err());
     // An old catch-all thread hook cannot silently erase a new REP operation.
     assert_eq!(
         crate::crt_stream_emit::emit_body_with_hooks(
@@ -71,7 +83,6 @@ fn repeated_copy_requires_dedicated_effect_and_exact_supported_encoding() {
     );
     for bytes in [
         &[0xf2, 0xa5, 0xc3][..],
-        &[0xf3, 0xa4, 0xc3],
         &[0xf3, 0x66, 0xa5, 0xc3],
         &[0x67, 0xf3, 0xa5, 0xc3],
         &[0x64, 0xf3, 0xa5, 0xc3],

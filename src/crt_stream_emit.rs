@@ -451,6 +451,8 @@ pub(crate) fn emit_body_with_repeat_copy(
         let mut controlled = false;
         match &node.op{
  Op::NumericArithmetic{operation,destination,source:o}=>{let left=register(*destination);out.push_str(&format!("let a={};let b={};let v=cpu.binary_number(rt,{},a,b)?;{}",read(&left,roles)?,read(o,roles)?,binary(*operation),write(&left,"v",roles)?));},
+ Op::Reject(reason)=>out.push_str(&format!("return Err({reason:?});")),
+ Op::BitTest{source,bit}=>out.push_str(&format!("let v={};cpu.bit_test(rt,v,{bit})?;",read(source,roles)?)),
  Op::Exchange{address:a,register:r}=>{out.push_str(&format!("let p={};let incoming=cpu.get({},32,0)?;let old=rt.exchange_module_word(p,incoming)?;cpu.set({},32,0,old)?;",address(a,roles)?,r.index,r.index));},
  Op::Call(target)=>out.push_str(&call(pc,*target)?),
  Op::IndirectCall(operand)=>{out.push_str(&format!("let target={};",read(operand,roles)?));out.push_str(&indirect(pc,operand)?);},
@@ -458,6 +460,9 @@ pub(crate) fn emit_body_with_repeat_copy(
  Op::ReturnPop(bytes)=>{out.push_str(&return_hook(pc,*bytes)?.unwrap_or_else(||format!("return cpu.finish_pop(rt,{bytes});")));controlled=true;},
  Op::RotateRightCl(dst)=>{let o=register(*dst);out.push_str(&format!("let count=cpu.get(1,8,0)?;let v=cpu.rotate_right32({},count)?;{}",read(&o,roles)?,write(&o,"v",roles)?));},
  Op::SignDividend=>out.push_str("cpu.sign_dividend()?;"),
+ Op::XmmLoad{destination,address:a,width,aligned}=>out.push_str(&format!("let p={};cpu.vector_load(rt,{destination},p,{width},{aligned})?;",address(a,roles)?)),
+ Op::XmmStore{source,address:a,width,aligned}=>out.push_str(&format!("let p={};cpu.vector_store(rt,{source},p,{width},{aligned})?;",address(a,roles)?)),
+ Op::XmmCopy{destination,source}=>out.push_str(&format!("cpu.xmm[{destination}]=cpu.xmm[{source}];")),
  Op::XmmZero(index)=>out.push_str(&format!("cpu.xmm[{index}]=[CrtValue::scalar(0);4];")),
  Op::XmmStoreLow64{source,address:a}=>out.push_str(&format!("let p={};rt.store_stack_pair(p,[cpu.xmm[{source}][0],cpu.xmm[{source}][1]])?;",address(a,roles)?)),
  Op::AddCarry{destination,source:operand}=>out.push_str(&format!("let a={};let b={};let v=cpu.add_carry(a,b)?;{}",read(destination,roles)?,read(operand,roles)?,write(destination,"v",roles)?)),
