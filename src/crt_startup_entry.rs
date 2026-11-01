@@ -50,6 +50,7 @@ pub(crate) fn source(regions: &[Vec<u8>], helper: &[u8]) -> Result<String, Strin
     let layout=format!("fn startup_layout()->CrtNormalLayout{{CrtNormalLayout{{low:{},bp:{},record:{},scope_slot:{},level:{},saved_sp:{},guard:{},saved:vec!{:?},scope:0x41b238,handler:0x402210,cookie_address:0x41c000,pop:0}}}}",l.low,l.frame_pointer,l.record,l.scope_slot,l.level_slot,l.saved_sp,l.guard,saved);
     let mut out = p.emit("startup_helper")?;
     out.push_str(&crate::crt_startup_table::source()?);
+    out.push_str(&crate::crt_startup_caller::source()?);
     out.push_str(&format!(
         "fn startup_helper_code()->Vec<u8>{{vec!{helper:?}}}"
     ));
@@ -147,7 +148,7 @@ fn startup_connected_platform(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&C
  if let Some(p)=platform{p.validate(rt,inputs.init)?;}
  inputs.validate(rt)?;let root=rt.process_image(inputs.image)?;let nt=rt.load(rt.offset(root,0x3c)?,32)?.known_scalar()?;let rva=rt.load(rt.offset(root,i64::from(nt)+40)?,32)?.known_scalar()?;
  if root.address().checked_add(rva)!=Some(0x4017a4){return Err("startup original PE entry identity");}
- startup_shim(rt,cpu,inputs,backend,features,platform)?;let mut binding=CrtNormalBinding::bind_initializing(rt,cpu,epoch,startup_layout(),inputs.init)?;startup_prefix(rt,cpu,inputs,backend,features,platform,epoch,&mut binding)?;Err("startup original continuation unbound at 0x401632")
+ startup_shim(rt,cpu,inputs,backend,features,platform)?;let mut binding=CrtNormalBinding::bind_initializing(rt,cpu,epoch,startup_layout(),inputs.init)?;startup_prefix(rt,cpu,inputs,backend,features,platform,epoch,&mut binding)?;startup_post_initializer(rt,cpu,inputs,epoch,&mut binding)
 }"#);
     Ok(out)
 }
