@@ -1,6 +1,10 @@
 # Explicit guest x87 startup state
 
-## New connected boundary
+This records the reviewed dcf7882 boundary. The subsequent onexit routing,
+registered allocation prefix and current rejection are documented in
+[ONEXIT-REGISTRATION.md](ONEXIT-REGISTRATION.md).
+
+## Historical connected boundary
 
 With the additional declared `w2l-modern-enabled-stationary-x87-v1` profile,
 the unchanged authored entry executes original **FNCLEX at `0x40158a`**, then

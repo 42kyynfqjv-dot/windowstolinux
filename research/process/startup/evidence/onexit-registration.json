@@ -1,0 +1,155 @@
+{
+  "scope": "original onexit routing and registered allocation prefix; not completed callback registration or whole-PE admission",
+  "reviewed_predecessor": "dcf78822b1fc098536383367cd39f7473fd27e31",
+  "predecessor_exact_head_CI": [
+    {
+      "id": 41307421773,
+      "head": "dcf78822b1fc098536383367cd39f7473fd27e31",
+      "status": "completed",
+      "conclusion": "failure",
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41307421773"
+    },
+    {
+      "id": 41307416497,
+      "head": "dcf78822b1fc098536383367cd39f7473fd27e31",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41307416497"
+    },
+    {
+      "id": 41307416563,
+      "head": "dcf78822b1fc098536383367cd39f7473fd27e31",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41307416563"
+    }
+  ],
+  "predecessor_original_timeout": {
+    "head": "dcf78822b1fc098536383367cd39f7473fd27e31",
+    "run": 41307421773,
+    "job": 124850559514,
+    "artifact": 13084081086,
+    "artifact_zip_sha256": "c652de609c8759e640c571028a08062bf5f81c5ac303b405dd5b2089a93408f7",
+    "same_generated_original_PE": true,
+    "case": 5,
+    "pe_sha256": "d607cfafa70820bd501cfcaffb6be1c8c272471601458da3605e2c69956ff109",
+    "output": "433035",
+    "expected_output": "433035",
+    "timeout_seconds": 15,
+    "poll_at_timeout": null,
+    "observer_identity_verified": true,
+    "alive": true,
+    "cpu_seconds": 0.0,
+    "threads": [
+      {
+        "tid": 3480,
+        "cycle": false,
+        "nodes": [
+          {
+            "object_type": 8,
+            "object_status": 2,
+            "tid": 3480,
+            "wait_ms": 19899,
+            "context_switches": 2
+          }
+        ]
+      }
+    ],
+    "exit_after_kill": 1,
+    "meaning": "Original Windows PE produced expected C05 bytes but remained alive at timeout. WCT reported thread object_type8/object_status2 without a cycle, not a proven cause or native PC/stack diagnosis. No evidence this PE executed new converter x87 code.",
+    "no_retry_or_limit_change": true,
+    "file_sha256": {
+      "stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "process-state.stdout": "7dc94a27c9306b40984c1bf29cd868951ac8765bc366f6ecd15c25e2456bc5b4",
+      "program.bin": "d607cfafa70820bd501cfcaffb6be1c8c272471601458da3605e2c69956ff109",
+      "process-state.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "launch.json": "fab68ad964ab4d2e3b285d42c28f72ef50d2ed993953cf9deed781425426b5fe",
+      "stdout": "12754373b28abdbee8c79cc020264cdb3c756fc07e3d7a2d9aef6d8e8c53ff53"
+    }
+  },
+  "predecessor_review": "No demonstrated FNCLEX guest-state or ownership defect. Mask80ff is cleared/known, TOP3800 retains existing knowledge, undefined conditions4700 lose knowledge; default/unbound and stale contexts reject. Preserved original Windows timeout does not establish x87 instruction-equivalence failure.",
+  "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "source_hashes": {
+    "src/crt_onexit.rs": "a36469a0d92fab30cb4ef90ce4dcd2230fe55fbaf2546ab3f6e6288614cee7dc",
+    "src/crt_stream_ir.rs": "2bf1a189eff5fd3ee134695ac7ec3f49a274180e01ad45babb9ee9efab26ea8e",
+    "src/crt_c_initializers.rs": "bed995a96b8b8d3485f30d4727b4a4dde678c811019981e15a8a197c767ae4c8",
+    "src/crt_startup_caller.rs": "6986da9636cbbe5f70c0d8a38e070bd0dca5b0881028802ba2c11f2c95b8a1f2",
+    "src/crt_normal_frame_tests.rs": "a368e9e370ec2e37ac2edb7c2091737062bfd8b407f0fc0c914f1ca6fa02ecc8",
+    "research/process/startup/check_normal_wrapper.py": "cb20243b8b42221a8918af26063fdc634151611543d90ccac8aad2c3e3f8eb1f"
+  },
+  "frozen_expectations_sha256": "2b94b0dd3d4ab8a0f41aead13c2d7e8419075adf59f0ee55e40d2c9af891a819",
+  "regions": {
+    "ATEXIT": {
+      "address": "0x401b0f",
+      "size": 21,
+      "sha256": "480dab692673738ed8a27fc691619b57a7ff361a9b84b45c53473ccf8452120e"
+    },
+    "COMMON": {
+      "address": "0x401ae1",
+      "size": 46,
+      "sha256": "bd42c781325ea9ef974ee78430f240ae536d19f45c1d5b6c4c705f379e42ca68"
+    },
+    "GLOBAL": {
+      "address": "0x4074a8",
+      "size": 22,
+      "sha256": "67240cedb8677c9b7076953aab3087e4c769b6718d3267563e3b7bcbed8e122c"
+    },
+    "WRAPPER": {
+      "address": "0x407525",
+      "size": 51,
+      "sha256": "b8780aac9f8ae7520151b8b8ff8511dcf3f0c81928ed57d514d3399428ab1499"
+    },
+    "MANAGER": {
+      "address": "0x407260",
+      "size": 76,
+      "sha256": "ad6e7b3f62ab8b6422f06b0267c015e5ad6fc947ac6bf2d6f53915fdbbf4af7b"
+    },
+    "CLEANUP": {
+      "address": "0x4072af",
+      "size": 12,
+      "sha256": "b37dfa7cc60709a754f924b88432209956d652613c6e8f914b684b416680ed71"
+    },
+    "BODY": {
+      "address": "0x4072bb",
+      "size": 275,
+      "sha256": "b6160da6cd351d82f3875f277e05df9e0ea5105d212c8c5ce72be45e65011338"
+    },
+    "RECALLOC": {
+      "address": "0x40c850",
+      "size": 109,
+      "sha256": "0273262d94cddcfd739791dd3207b09753c6af27ca207d3622da41657daafc94"
+    },
+    "REALLOC": {
+      "address": "0x410ca0",
+      "size": 105,
+      "sha256": "2fd110c1a950051a5bb24f1ea550c457ef7d7dfbd41e264548d5b4023843123c"
+    },
+    "ENCODE": {
+      "address": "0x406d62",
+      "size": 31,
+      "sha256": "962c28c6e5fcbfc1c3a0c3187da15dd7985b91793f62dba84919b05672b36542"
+    }
+  },
+  "actual_entry_next_rejection": "before CALL40c8ae ->402370 original memset",
+  "prior_effects": [
+    "actual routing cc88 UINTMAX selects ce88 table",
+    "actual stack/reference setup, registered12-byte EH4 scope41b500 and logical lock2",
+    "original decode/growth32 entries and NULL recalloc ->realloc ->malloc path",
+    "actual canonical128-byte allocation with all bytes unknown",
+    "callback argument/scopes/frames/lock/x87 and earlier initializer effects retained; encoded table unchanged"
+  ],
+  "completed_native_registrations": 0,
+  "new_whole_PE_Windows_ELF_pairs": 0,
+  "retained_recorded_Windows_wrapper_component_comparisons": 5,
+  "cases": {
+    "routing_declared": 24,
+    "registered_manager": 17,
+    "conditional_memory_selection": 36,
+    "repeated_request_fixture": "401e2c,401605,401e2c with declared manager-result cut, not published callbacks",
+    "live_encoded_buffer_negative": "real64-byte allocation and correct scalar encodings reject without producer-bound association",
+    "actual_resource_failure": "exhausted existing64-region policy; native allocation rejects without guest NULL/errno fabrication",
+    "reentry": "actual partial allocation cannot repeat on the same activation"
+  },
+  "partial_checks": "focused canonical artifact and both onexit named tests passed;182root/324CRT(two ignored artifact gates separately in replay)/185unwind, all-target Clippy and Python suites passed; full replay running at source checkpoint",
+  "limits": "whole startup/formatter/rcedit/default admission remain unsupported; actual memset, nonempty encoded pointer authority, encoding/publication, resize, callback execution/draining and exceptional cleanup remain unbound. Historical original-Windows timeout causes unresolved. No limits raised."
+}

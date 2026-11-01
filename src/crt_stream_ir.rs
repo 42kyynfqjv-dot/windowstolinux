@@ -741,11 +741,22 @@ fn extended(i: &Instruction, raw: &[u8], tables: &[JumpTable<'_>]) -> Result<Op,
                 source: operand_from_move(i, 1)?,
             }
         }
-        Mnemonic::Cmovne if i.op0_kind() == OpKind::Register => Op::ConditionalMove {
-            condition: graph::Condition::NotEqual,
-            dst: full(i.op0_register())?,
-            source: operand_from_move(i, 1)?,
-        },
+        Mnemonic::Cmove | Mnemonic::Cmovne | Mnemonic::Cmova
+            if matches!(
+                i.code(),
+                Code::Cmove_r32_rm32 | Code::Cmovne_r32_rm32 | Code::Cmova_r32_rm32
+            ) =>
+        {
+            Op::ConditionalMove {
+                condition: match i.mnemonic() {
+                    Mnemonic::Cmove => graph::Condition::Equal,
+                    Mnemonic::Cmova => graph::Condition::Above,
+                    _ => graph::Condition::NotEqual,
+                },
+                dst: full(i.op0_register())?,
+                source: operand_from_move(i, 1)?,
+            }
+        }
         Mnemonic::Movsx if i.code() == Code::Movsx_r32_rm8 && i.op1_kind() == OpKind::Register => {
             let mut copy = *i;
             copy.set_code(Code::Movzx_r32_rm8);

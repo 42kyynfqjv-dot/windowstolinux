@@ -41,6 +41,7 @@ fn cut_graph(
     Ok(g)
 }
 pub(crate) fn source() -> Result<String, String> {
+    let registration_source = crate::crt_onexit::source()?;
     let raw = crate::crt_ptd::raw;
     let bytes = raw(LOOP);
     let g = crate::crt_startup_table::graph(&bytes, 0x406ccc)?;
@@ -89,10 +90,12 @@ impl CrtCArray{{
  fn cursor(&self,rt:&CrtStreamRuntime,cpu:&CrtCpu)->Result<usize,&'static str>{{let p=CrtCpu::pointer(cpu.r[6])?;rt.valid(p,4)?;if p.cap!=self.begin.cap||p.owner!=self.begin.owner||p.base!=self.begin.base||p.size!=self.begin.size{{return Err("C-array cursor identity");}}let delta=p.address().checked_sub(self.begin.address()).filter(|n|*n%4==0&&((*n/4)as usize)<self.len).ok_or("C-array cursor extent")?;Ok((delta/4)as usize)}}
 }}
 fn startup_c_array(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,callback:&mut impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu,usize,CrtPointer)->Result<CrtValue,&'static str>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;if cpu.return_pop!=0||cpu.r[4]!=cpu.entry[4]||[3,5,6,7].iter().any(|&r|cpu.r[r]!=cpu.entry[r]){{return Err("C-array entry phase/ABI");}}let table=CrtCArray::bind(rt,cpu,inputs.image)?;table.validate(rt,inputs.image)?;let mut completed=[false;64];let mut guarded:Option<(usize,CrtPointer)>=None;let mut failure:Option<CrtValue>=None;{body}}}
-fn startup_c_array_real(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs)->Result<CrtValue,&'static str>{{startup_c_array(rt,cpu,inputs,&mut |rt,c,_,target|match target.address(){{0x40155a=>cinit_first_original(rt,c,inputs),0x401605=>cinit_second_original(rt,c,inputs),0x40c109=>cinit_default_mode(rt,c,inputs),0x404510=>Err("C initializer FILE allocation/lock composition unbound"),0x4109ba=>Err("C initializer locale epoch composition unbound"),0x4127b0=>Err("C initializer raw feature BOOL storage unbound"),_=>Err("C initializer callback unbound")}})}}
+fn startup_c_array_real(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs)->Result<CrtValue,&'static str>{{startup_c_array_context(rt,cpu,inputs,None)}}
+fn startup_c_array_context(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,mut epoch:Option<&mut NormalCallEpoch<'_>>)->Result<CrtValue,&'static str>{{startup_c_array(rt,cpu,inputs,&mut |rt,c,_,target|match target.address(){{0x40155a=>cinit_first_context(rt,c,inputs,epoch.as_deref_mut()),0x401605=>cinit_second_original(rt,c,inputs),0x40c109=>cinit_default_mode(rt,c,inputs),0x404510=>Err("C initializer FILE allocation/lock composition unbound"),0x4109ba=>Err("C initializer locale epoch composition unbound"),0x4127b0=>Err("C initializer raw feature BOOL storage unbound"),_=>Err("C initializer callback unbound")}})}}
 "#,
         guard = guard(0x406ccc, &bytes).replace("inputs.image", "image")
     );
+    out.push_str(&registration_source);
     for (name, at, literal) in [
         ("cinit_app_type", 0x40662e, APP_TYPE),
         ("cinit_get_mode", 0x401bc3, GET_MODE),
@@ -202,11 +205,11 @@ fn startup_c_array_real(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntr
     let g = cut_graph(
         &bytes,
         0x40155a,
-        0x401596,
+        0x40159b,
         &[
             (
-                0x401596,
-                "C initializer onexit registration unbound at 0x401596",
+                0x40159b,
+                "C initializer post-registration continuation unbound",
             ),
             (0x4015fd, "C initializer fatal path unbound at 0x4015fd"),
         ],
@@ -215,6 +218,7 @@ fn startup_c_array_real(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntr
         &g,
         |pc, t| {
             let callee = match t {
+                Target::Direct(0x401b0f) => return Ok(format!("cpu.call_activation(rt,{},0,|rt,c|onexit_register_original(rt,c,inputs,epoch.as_deref_mut()))?;",pc+g.nodes[&pc].length)),
                 Target::Direct(0x401e00) => "cinit_empty_original",
                 Target::Direct(0x40662e) => "cinit_app_type",
                 Target::Direct(0x401bc3) => "cinit_get_mode",
@@ -246,7 +250,7 @@ fn startup_c_array_real(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntr
         },
         |_, _| Ok(None),
     )?;
-    out.push_str(&format!("fn cinit_first_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;{} {body}}}",guard(0x40155a,&bytes)));
+    out.push_str(&format!("fn cinit_first_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs)->Result<CrtValue,&'static str>{{cinit_first_context(rt,cpu,inputs,None)}}fn cinit_first_context(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,mut epoch:Option<&mut NormalCallEpoch<'_>>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;{} {body}}}",guard(0x40155a,&bytes)));
     out.push_str(&format!("fn cinit_loop_bytes()->Vec<u8>{{vec!{:?}}}fn cinit_first_bytes()->Vec<u8>{{vec!{bytes:?}}}",raw(LOOP)));
     Ok(out)
 }

@@ -1,0 +1,11 @@
+{
+  "before_implementation": true,
+  "scope": "original onexit wrapper, manager/lock/body-prefix and actual first NULL-reallocation producer; no claim of completed registration if later primitive rejects",
+  "routing": "401b0f ->401ae1 observes41cc88 sentinel UINTMAX ->4074a8 -> table41ce88 ->407525 ->407260; distinct input/reference identities, no table substitutions",
+  "return_semantics": "onexit common returns original callback bits iff manager result0, otherwise0; atexit wrapper returns0 iff common result nonzero, otherwise UINTMAX. Component effect cuts are explicitly labeled, not successful native registrations.",
+  "manager": "original EH4 scope41b500 size12 and live lock2, actual cleanup4072af and RET12; failure preserves effects and must not pretend cleanup ran",
+  "body": "original read/decode begin/end/cap with ROR(encoded XORcookie,cookie&31); initial cookie words decode0; compute count32 and128-byte first growth; no stored pointer authority is created by numbers",
+  "resources": "NULL realloc uses actual original410ca0 ->408730 malloc with canonical live HeapAlloc. Newly allocated bytes unknown. NonNULL resize/size/error paths reject. Actual memset402370 must execute original instructions or reject, never zero-initialize by assumption. Encoded publication and repeat registration need live producer-bound allocation/table/callback authority.",
+  "tests": "strict positive/negative wrapper statuses with explicit manager cut, actual unchanged-entry partial effects; callback alias/unknown/null/stale code/return, table identity, cookie changes and repeated attempts; actualallocation failure retainslock/frame/table state, no success receipts",
+  "next_if_blocked": "precise original memset/store and encoded allocation lifetime/publication/resize proof gate, established by actual entry not guessed from later inventory"
+}

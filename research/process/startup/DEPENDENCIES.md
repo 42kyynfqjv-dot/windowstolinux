@@ -1,6 +1,26 @@
 # Remaining entry-to-exit dependencies
 
-## Current executable checkpoint: explicit x87 effect and empty preinitializer return
+## Current executable checkpoint: original onexit manager reaches real allocation
+
+Original entry now executes401596/401b0f/401ae1, sentinel routing to table41ce88,
+actual407525 reference setup, registered EH4 manager407260, logical lock2 and
+append-prefix decoding/growth. First NULL recalloc reaches original malloc and
+allocates128 unknown bytes from the canonical heap. It rejects **before original
+memset CALL40c8ae ->402370**, preserving the active frame/lock, callback argument,
+unchanged encoded table and prior startup/x87 effects. No callback is published.
+The default/unconfigured x87 domain still rejects earlier; no whole-PE support.
+
+[Contract/review scope](ONEXIT-REGISTRATION.md),
+[frozen expectations](evidence/onexit-expectations.json),
+[evidence](evidence/onexit-registration.json). Next close actual memset effects
+and producer-bound encoded allocation/callback publication, then resize/lifetime
+and normal cleanup. A real live-buffer encoding test currently rejects without
+such authority; do not promote decoded numbers into pointers. Sol review first;
+bounded Astra High for this concrete ownership integration if useful, no Ultra.
+Predecessor dcf7882 had a preserved original-Windows case5timeout; its other two
+workflows passed. That and all historical timeout causes remain unresolved.
+
+## Previous checkpoint: explicit x87 effect and empty preinitializer return
 
 With the additional declared modern-enabled stationary x87 profile, original
 entry executes FNCLEX40158a with actual guest status effects and unknown C0..C3,
