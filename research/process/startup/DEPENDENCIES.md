@@ -18,8 +18,8 @@ The next boundary is **CALL0x40c946 ->0x40b42a, initializer table index10**, bef
 that callback executes. Its actual instruction/import inventory is the next gate;
 no environment/argument-array initialization or full startup is claimed.
 [Encoding, ownership, independent vectors and conformance](COMMAND-LINE.md).
-Fresh Windows probe observations and final-head CI are pending until measured;
-component replay remains distinct from unchanged whole-PE translation. Earlier
+Ten unique Windows conformance cases were verified in two independent observation
+runs; final-head whole CI remains pending. Component replay remains distinct from unchanged whole-PE translation. Earlier
 thread/entropy/exception/close-EOF premises and unsupported default/rcedit/XP7 remain.
 Earlier checkpoints below are historical.
 

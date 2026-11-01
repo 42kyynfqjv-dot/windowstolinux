@@ -96,3 +96,41 @@ as a distinct input-byte variant, not falsely labeled byte-identical. Attributes
 now enforce LF for startup manifests. The observer archives and compiles its copied
 C/manifest inputs and reads the copied vectors, so a subsequent artifact contains
 the exact compiled/compared inputs. Fresh final-head conformance remains a CI gate.
+
+
+## Completed local and byte-frozen Windows verification
+
+The complete local replay passed, as did a later explicit emission with a fresh
+mtime and identical Rust SHA256
+`d64a6dad254c580ee56db41ef4b34e8f5a144190599d49759e46f5b7fa19abfe`.
+PE remains1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4.
+The five recorded Windows wrapper comparisons remain component evidence; neither
+the new native API cases nor the probe observations are whole-PE translation pairs.
+
+Follow-up job124711930713/run41260275742 at1779a18 also matched all ten cases.
+Artifact13064488864 has ZIP SHA256
+a883e7abacd0f62e6befc2d6563dbf1c4ea8a59dffe0cab777f99c647adc252f.
+Every stdout was independently redecoded and every archived compiled C/manifest/
+vector byte matched the repository and its reported hash. The observed PE is
+851f578ab7ab77904dd08f163f4d6cc70e6b50d4f7cd7dc3ebd0ca4a6f52b5f7,
+unchanged throughout those ten executions. The previous run used a separate PE
+and remains a repeated observation of the same ten cases, not ten additional
+compatibility scenarios. Both were Windows20348/MSVC14.44.35207/SDK10.0.26100.0,
+with actual ACP65001, stable A/W pointers and exact Unicode/quoting/argv outcomes.
+
+[Source, PE/Rust/report/log hashes and both Windows provenance records](evidence/command-line.json).
+No new resource failure occurred; older generated binaries were archived with
+round-trip hash checks before replay, preserving source and Windows diagnostics.
+Historical Windows case19 remains unresolved. Final-head whole CI must be checked
+separately; successful probe jobs are not a full workflow pass or merge approval.
+
+The next original callback is locale/multibyte initialization, not yet environment
+construction:40b42a stores static pointers, calls required UCRT getter40a2ef, then
+40b235. Its -3 code-page selection reaches GetACP via40afbc; it must agree with the
+same declared process65001 profile. Disassembly also shows an eight-byte realigned
+stack frame at40b235 and locale/reference effects. Those are implementation/proof
+prerequisites, not an observed decoder rejection: execution still stops before the
+callback. Inventory the whole scope before implementation and preserve borrowed
+PTD ownership, saved ESP/EBX, initialization/reference updates and failure cleanup.
+Sol can perform review/inventory; a genuinely new aligned-frame ownership problem
+may warrant bounded Astra reasoning. No Ultra, formal approval, merge or release.
