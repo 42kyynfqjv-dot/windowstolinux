@@ -210,6 +210,13 @@ impl CrtCpu{
   Ok(value)
  }
  fn condition(&self,kind:u8)->Result<bool,&'static str>{let z=||self.flags.zf.ok_or("CRT unknown ZF");let c=||self.flags.cf.ok_or("CRT unknown CF");let s=||self.flags.sf.ok_or("CRT unknown SF");let o=||self.flags.of.ok_or("CRT unknown OF");Ok(match kind{0=>z()?,1=>!z()?,2=>c()?,3=>!c()?&&!z()?,4=>c()?||z()?,5=>!c()?,6=>s()?!=o()?,7=>z()?||(s()?!=o()?),8=>!z()?&&(s()?==o()?),9=>s()?==o()?,10=>s()?,11=>!s()?,_=>return Err("CRT condition kind")})}
+ /// Numeric address cancellation drops authority; it never resolves a scalar.
+ fn binary_number(&mut self,rt:&CrtStreamRuntime,kind:u8,a:CrtValue,b:CrtValue)->Result<CrtValue,&'static str>{
+  if !matches!(kind,1|2){return Err("CRT numeric arithmetic kind");}
+  for v in [a,b]{if let CrtValue::Pointer(p)=v{rt.identity_range(p,0)?;}}
+  let x=Self::number(a)?;let y=Self::number(b)?;
+  self.binary(rt,kind,CrtValue::scalar(x),CrtValue::scalar(y),32)
+ }
  fn binary(&mut self,rt:&CrtStreamRuntime,kind:u8,a:CrtValue,b:CrtValue,width:u8)->Result<CrtValue,&'static str>{
   if kind==0{return Ok(b);}for v in [a,b]{match v{CrtValue::Module(m)=>rt.module_identity(m)?,CrtValue::Function(f)=>rt.function_identity(f,None)?,_=>{}}}let mask=Self::mask(width)?;
   // AND with a known zero destroys an opaque heap value without exposing bits.

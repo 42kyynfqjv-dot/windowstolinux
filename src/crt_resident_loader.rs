@@ -35,7 +35,7 @@ impl CrtResidentLoader {
 /// Explicit native replacement environment, not an inferred Windows loader state.
 /// Mapping revision 1 is grounded in the x86 Windows 10.0.20348 observation.
 /// Only this named domain is supported; no generic Windows version claim follows.
-struct CrtNativePlatform {anchor:guest_memory::Capability,function:CrtFunction,fls:Option<CrtFunction>,fls_set:Option<CrtFunction>,second_fiber:bool,startup_metadata:bool,standards:Option<CrtNativeStandards>,command_line:Option<CrtCommandLine>}
+struct CrtNativePlatform {code_pages:bool,anchor:guest_memory::Capability,function:CrtFunction,fls:Option<CrtFunction>,fls_set:Option<CrtFunction>,second_fiber:bool,startup_metadata:bool,standards:Option<CrtNativeStandards>,command_line:Option<CrtCommandLine>}
 impl CrtNativePlatform {
  const PROFILE:&'static str="w2l-native-sync-20348-v1";
  const CONTRACT:&'static str="api-ms-win-core-synch-l1-2-0";
@@ -83,13 +83,27 @@ impl CrtNativePlatform {
   let sp=CrtCpu::pointer(cpu.r[4])?;rt.memory.validate_writable(sp.cap,sp.owner,sp.address(),4).map_err(|_|"native code-page return permission")?;
   rt.last_os_error=None;cpu.clobber(CrtValue::scalar(token.codepage));cpu.finish(rt)
  }
+ /// Installed-code-page results are a separate versioned OS contract, not ACP.
+ const CODE_PAGE_PROFILE:&'static str="w2l-native-installed-codepages-20348-raw-v1";
+ fn enable_code_pages(&mut self,rt:&CrtStreamRuntime,init:CrtInitialization,profile:&str)->Result<(),&'static str>{
+  self.validate(rt,init)?;if self.code_pages||profile!=Self::CODE_PAGE_PROFILE{return Err("native installed code-page profile unsupported/already enabled");}self.code_pages=true;Ok(())
+ }
+ fn valid_code_page_call(&self,rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,init:CrtInitialization)->Result<CrtValue,&'static str>{
+  self.validate(rt,init)?;if !self.code_pages{return Err("native installed code-page profile unbound");}cpu.validate_active(rt)?;
+  if cpu.return_pop!=4||cpu.r[4]!=cpu.entry[4]||[3,5,6,7].iter().any(|&r|cpu.r[r]!=cpu.entry[r]){return Err("native installed code-page ABI");}
+  let sp=CrtCpu::pointer(cpu.r[4])?;rt.offset(sp,8)?;rt.memory.validate_writable(sp.cap,sp.owner,sp.address(),8).map_err(|_|"native installed code-page stack permission")?;
+  let page=rt.load(rt.offset(sp,4)?,32)?.known_scalar()?;
+  let result=match page{65001=>1,u32::MAX=>0,_=>return Err("native installed code-page query outside measured profile")};
+  // The profile binds raw BOOL; LastError is not promised by the public contract.
+  rt.last_os_error=None;cpu.clobber(CrtValue::scalar(result));cpu.finish_pop(rt,4)
+ }
  fn prepare(rt:&mut CrtStreamRuntime,init:CrtInitialization,profile:&str,handle:u32,address:u32)->Result<Self,&'static str>{
   rt.initialization(init)?;if profile!=Self::PROFILE{return Err("native platform profile unsupported");}
   // Native bootstrap executes before guest entry. A failed bootstrap issues no
   // guest LoadLibrary result, fabricated LastError or DLL initialization receipt.
   let ticket=rt.provider_begin(init,"kernelbase.dll",handle,1)?;
   let(_,function)=rt.provider_initialize_sync(init,&ticket,address)?;
-  Ok(Self{anchor:rt.anchor,function,fls:None,fls_set:None,second_fiber:false,startup_metadata:false,standards:None,command_line:None})
+  Ok(Self{code_pages:false,anchor:rt.anchor,function,fls:None,fls_set:None,second_fiber:false,startup_metadata:false,standards:None,command_line:None})
  }
  /// Explicit optional native kernel32/FLS service, prepared before entry.
  fn enable_fls(&mut self,rt:&mut CrtStreamRuntime,init:CrtInitialization,handle:u32,address:u32)->Result<(),&'static str>{
@@ -312,5 +326,27 @@ for mode in 0..10{
 }
 "#,
         "startup-metadata-native-profile-abi",
+    );
+}
+
+#[test]
+fn installed_code_page_catalog_is_distinct_from_acp_and_rejects_unmeasured_queries() {
+    crate::crt_stream_callees_tests::native_bounded_stack(
+        TYPES,
+        r#"
+#[inline(never)] fn query(mode:u32){
+ let(mut rt,init)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();let mut p=CrtNativePlatform::prepare(&mut rt,init,CrtNativePlatform::PROFILE,0x700000,0x701000).unwrap();
+ assert!(p.command_line.is_none());assert!(!p.code_pages);assert!(p.enable_code_pages(&rt,init,"unmeasured-profile").is_err());assert!(!p.code_pages);
+ if mode!=3{p.enable_code_pages(&rt,init,CrtNativePlatform::CODE_PAGE_PROFILE).unwrap();assert!(p.enable_code_pages(&rt,init,CrtNativePlatform::CODE_PAGE_PROFILE).is_err());}
+ let stack=rt.map_region(0xa000,4096,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,2048).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(77)).unwrap();let mut c=CrtCpu::new(sp,77).unwrap();c.return_pop=4;
+ let page=if mode==1{u32::MAX}else if mode==2{1252}else{65001};rt.store(rt.offset(sp,4).unwrap(),32,if mode==4{CrtValue::Scalar{bits:page,known:0}}else if mode==12{CrtValue::Pointer(stack)}else{CrtValue::scalar(page)}).unwrap();
+ if mode==5{let(other,_)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();p.anchor=other.anchor;}if mode==6{rt.provider_destroy(init,p.function.module).unwrap();}if mode==7{rt.end_initialization(init).unwrap();}if mode==8{c.return_pop=0;}if mode==9{c.r[3]=CrtValue::scalar(12);}if mode==10{c.return_id+=1;}if mode==11{rt.memory.release(stack.cap,stack.owner).unwrap();}if mode==13{rt.bind_fiber(rt.thread).unwrap();}if mode==14{rt.thread+=1;}
+ rt.last_os_error=Some(71);let before=c.r;let generation=rt.generation;let result=p.valid_code_page_call(&mut rt,&mut c,init);
+ if matches!(mode,0|1|13){assert_eq!(result,Ok(CrtValue::scalar(u32::from(mode!=1))));assert!(c.returned);assert_eq!(c.r[4],CrtValue::Pointer(rt.offset(sp,8).unwrap()));for r in [3,5,6,7]{assert_eq!(c.r[r],before[r]);}assert_eq!(rt.last_os_error,None);assert!(c.r[1].known_scalar().is_err());assert_eq!((c.flags.cf,c.flags.zf,c.flags.sf,c.flags.of),(None,None,None,None));assert!(p.valid_code_page_call(&mut rt,&mut c,init).is_err());}
+ else{let expected=match mode{2=>"native installed code-page query outside measured profile",3=>"native installed code-page profile unbound",4|12=>"CRT scalar knowledge/type",5=>"native platform process identity",6=>"CRT unloaded module",7|14=>"CRT initialization owner/lifetime",8|9=>"native installed code-page ABI",10=>"CRT active caller lifetime/return authority",11=>"CRT pointer lifetime",_=>unreachable!()};assert_eq!(result,Err(expected),"catalog mode {mode}");assert!(!c.returned);assert_eq!(c.r,before);assert_eq!(rt.last_os_error,Some(71));assert_eq!(rt.generation,generation);}
+}
+for mode in 0..15{query(mode);}
+"#,
+        "installed-code-page-catalog",
     );
 }

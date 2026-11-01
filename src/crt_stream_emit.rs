@@ -450,6 +450,7 @@ pub(crate) fn emit_body_with_repeat_copy(
         let mut out = before(pc, &node.op)?;
         let mut controlled = false;
         match &node.op{
+ Op::NumericArithmetic{operation,destination,source:o}=>{let left=register(*destination);out.push_str(&format!("let a={};let b={};let v=cpu.binary_number(rt,{},a,b)?;{}",read(&left,roles)?,read(o,roles)?,binary(*operation),write(&left,"v",roles)?));},
  Op::Exchange{address:a,register:r}=>{out.push_str(&format!("let p={};let incoming=cpu.get({},32,0)?;let old=rt.exchange_module_word(p,incoming)?;cpu.set({},32,0,old)?;",address(a,roles)?,r.index,r.index));},
  Op::Call(target)=>out.push_str(&call(pc,*target)?),
  Op::IndirectCall(operand)=>{out.push_str(&format!("let target={};",read(operand,roles)?));out.push_str(&indirect(pc,operand)?);},

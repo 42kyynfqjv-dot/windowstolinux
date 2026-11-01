@@ -1,5 +1,8 @@
 # Original locale initializer and validation boundary
 
+This records the earlier `0f6a9c3`/`63b4afb` checkpoint. The connected API,
+UTF-8 helper and cookie-return advance is documented in [LOCALE-UTF8.md](LOCALE-UTF8.md).
+
 ## Connected original instructions
 
 Under the explicit native UTF-8 profile, entry now executes the original CALL at

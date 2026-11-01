@@ -1,0 +1,218 @@
+{
+  "timestamp_utc": "2026-11-01T07:30:35.614897+00:00",
+  "scope": "connected original CRT instructions under separate explicit native ACP65001 and installed-code-page profiles; zero new whole-PE Windows/ELF pairs; startup/rcedit/default admission unsupported",
+  "reviewed_base": "63b4afbab1fe492a997efbec1b36bc8625483bd5",
+  "source_hashes_bound_to": "enclosing commit; no application name/hash dispatch introduced",
+  "source_sha256": {
+    "src/crt_locale_code_page.rs": "89b9934c5397f3bf3ec44a9daff1153ca5d259441a9d21b1c35325fbbcb1916a",
+    "src/crt_locale_startup.rs": "bbbb45eb431016b2d23db6f4c200e0a969af1ddc77bd5b870ce32b22e3d9ae98",
+    "src/crt_normal_frame_tests.rs": "5b477c58d703c94cf16a48ce4be48d1d8adbcabf83a34de6c6f736d60163327f",
+    "src/crt_resident_loader.rs": "60bb4ff32723089bca12e880118e8ed61e016e500f85b51234fb0de59e0d6957",
+    "src/crt_stream_cpu.rs": "c0e68695a97c46acc6365e168750b6178d4a5f66367ba1fc6d7705d2ca1a09dd",
+    "src/crt_stream_emit.rs": "1e57c37ec0d4c6ff8912408caaf44aa9866cec039c2bdbf2843f3dcea29dd00a",
+    "src/crt_stream_ir.rs": "454c94de9da0fb9ef7c734853612fd8253139adf241beeabd54cf47a0ea881f5",
+    "src/crt_stream_callees_tests.rs": "cdf3bc92e4eb527356b5745d1b6b6ba11df62f7007c2a1afa4bf35c9961916b0",
+    "research/process/startup/check_normal_wrapper.py": "ed553d47fb720023a457265c5cf472c3bded62b3fec88cbcf9d8fb403827bd0a",
+    "research/process/startup/code_page_raw_probe.c": "6bbfb85b0f3b0f326aae92152d478de00195a17708ffb156a9c378f1326a6812",
+    "research/process/startup/code-page-raw-expectations.json": "00e8fed3ef350dfd342c87f23cf933b60d41cac488741bcc49a7a12cc5f73d52",
+    "research/process/startup/code-page-raw-frozen.json": "babd2e3265aa0b5640c90e8f103d65ce6827eb57ed01bbf2ee74c7c4f86902a2",
+    "research/process/startup/observe_code_page.py": "f889a4f989a0978138a030ccc1b405c755e32572e7071a5fd70643c48f856b1e",
+    "research/process/startup/observe_code_page_raw.py": "9c73ddf17965aef477f79a1c586e5fdef7b7458518b430a25423abd14f7967fb",
+    "research/process/startup/test_code_page.py": "cb9e983189227d283f633cbe153b5b78a4b514cc95ef4af3d4fde8ea3a3fe6ee",
+    "Cargo.lock": "b57ce0bbee252e9480a33413eeccc166dbc2bcf3a368467b117de81bd776523e"
+  },
+  "next_boundary": {
+    "pc": "0x40b2cc",
+    "operation": "original caller MOV EDI,EAX after actual initializer return",
+    "still_unexecuted": "result handling, lock407126, old-reference decrement/free, new-reference publication, shared update40aeae and aligned cleanup/return",
+    "state": "initialized flag41d148=0; original second-selector clear41d144 retained; old references unchanged"
+  },
+  "api_contract": {
+    "profile": "w2l-native-installed-codepages-20348-raw-v1",
+    "supported_raw_results": {
+      "65001": 1,
+      "4294967295": 0
+    },
+    "other_queries": "reject before result, not invented FALSE",
+    "last_error": "unknown after API; observed preservation is not a promised contract",
+    "acp": "independent opt-in65001 environment; observer ACP1252 is not target default evidence",
+    "provenance": "locale-utf8-windows.json; raw probe frozen/pushed9664382 before binding"
+  },
+  "shared_numeric_arithmetic": {
+    "operations": "qualified original register32 ADD/SUB only; default pointer arithmetic unchanged",
+    "authority": "live source identity required; result scalar, never address lookup; unknown/control values reject",
+    "value_flag_vectors": 21,
+    "stale_source_vectors": 21,
+    "alias_and_unknown_vectors": 2,
+    "qualifier_rejections": [
+      "memory read",
+      "ESP destination",
+      "MOV",
+      "LEA",
+      "duplicate qualification"
+    ]
+  },
+  "initializer_contract": {
+    "initializer": "0x40b485/517 bytes",
+    "classifier": "0x40b090/421 bytes",
+    "security": "0x40154c/14 bytes",
+    "effects": "actual original stores/loops and protected returns; untouched unknown bytes stay unknown; no synthesized locale tables",
+    "unsupported": "other codepage/NLS paths and cookie-failure behavior reject; caller publication remains unbound",
+    "independent_cases": 49,
+    "bases": [
+      "0x20010",
+      "0x31034",
+      "0x620078",
+      "0x70000084"
+    ],
+    "api_contract_cases": 15,
+    "retained_locale_cases": 45,
+    "retained_word_cases": 152,
+    "initializer_sha256": "887987a5a42bd44677e0586dc71eb3e00f4290058f7cee321bdadf18598fa4e1",
+    "initializer_call_sha256": "2e8bb647af3d79dca36c658e3988fe3d8e3d778bf3860c3587688eaba41dce66",
+    "classifier_sha256": "cb3f4973e619e2bc442141ede5a3671e6a0928e54c6d2eaad09222c02f48edb5",
+    "security_sha256": "fe7d9d63849704c000bf3b2bd78617127b54a1a00005d72f3263cae87bf49fad"
+  },
+  "review_findings": {
+    "raw_BOOL": "prior probe normalized BOOL; distinct raw probe and magic required before binding literal result",
+    "failure_order": "stale pointee transports without dereference; API precedes rejection at first access, retaining unknown LastError",
+    "test_oracles": "reference count belongs to caller, offset24 is DWORD not WORD; readonly IAT mutation moved to raw input before mapping; strict failures retained",
+    "implementation": "numeric result at40b1ef drops authority rather than weakening generic pointer bounds; both original security checks execute; no demonstrated predecessor REP/stack repair defect"
+  },
+  "checks": {
+    "root_passed": 182,
+    "crt_example_passed": 310,
+    "crt_example_ignored": 2,
+    "ignored_scope": "both artifact checks executed successfully in complete replay; canonical check repeated with fresh identical Rust",
+    "unwind_example_passed": 185,
+    "startup_python": {
+      "run": 89,
+      "skip": 1
+    },
+    "tools_python": {
+      "run": 106,
+      "skip": 0
+    },
+    "corpus_python": {
+      "run": 18,
+      "skip": 1
+    },
+    "clippy_all_targets": "passed",
+    "fmt": "passed"
+  },
+  "replay": {
+    "kind": "original prolog/epilog component comparison with explicit unexecuted body boundary",
+    "scope": "Live registry fixture; body EAX/flags inputs; original stack/FS/saved-state restoration only",
+    "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+    "rust_sha256": "321fa661b0bc87ed50989b164de72e2a7fc588257491b3ba8c447285c4d99c15",
+    "comparisons": 5,
+    "report_sha256": "feb163b81cf6066c6df5f13f98d895370782f23f279a55d415d67ff5edd631c0",
+    "new_whole_pe_windows_elf_pairs": 0,
+    "fresh_identical_rust": true,
+    "emission_mtime_before_ns": 1793518060320213758,
+    "emission_mtime_after_ns": 1793518100794409188,
+    "original_observation_report_sha256": "0feb586c7170dfd7e2390cf92ce1e5efa050c3e208d6c8903312e2d054c506cc",
+    "original_wrapper_vectors_sha256": "6f9b74742366c0f207d397ccf8b1af4afc2d01b34fae21cafb68d38d71a6ec66"
+  },
+  "named_gates": {
+    "installed-code-pages": {
+      "stdout": "8c9704531c293ae63e8aff7efd3d4d580a40a0ff60dc1e993556f6776c9d2f4e",
+      "stderr": "29423147df5f27152c143f40399d5189737a902b622fb79efc6e1b2754336583"
+    },
+    "word-register": {
+      "stdout": "ca75f12f42ad76cc8eede3f3c354d1bad05211fd4d1095b087a951121b195c72",
+      "stderr": "ab1e8ab4b828624e75e6e8c917ac437f104b9cd0b496a9d073a4a52c0abca136"
+    },
+    "repeated-copy": {
+      "stdout": "952b37b9f6be44bfe80ce401167a9fee888d183b73a1ed5dd82553d7e84764f5",
+      "stderr": "ab1e8ab4b828624e75e6e8c917ac437f104b9cd0b496a9d073a4a52c0abca136"
+    },
+    "native-uninitialized": {
+      "stdout": "0b91ba73b754228729f887b8a94031c19bcb926f3cf4cc242312f84acaf88760",
+      "stderr": "ab1e8ab4b828624e75e6e8c917ac437f104b9cd0b496a9d073a4a52c0abca136"
+    },
+    "cookie-record": {
+      "stdout": "43805ba6afd313ab6462345229974ce5a686ccbd67dcbb91d1feb0b2216a9b74",
+      "stderr": "29423147df5f27152c143f40399d5189737a902b622fb79efc6e1b2754336583"
+    }
+  },
+  "reviewed_base_exact_head_ci": [
+    {
+      "id": 41280529924,
+      "name": "Rust CI",
+      "event": "pull_request",
+      "status": "completed",
+      "conclusion": "success",
+      "head_sha": "63b4afbab1fe492a997efbec1b36bc8625483bd5",
+      "html_url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41280529924"
+    },
+    {
+      "id": 41280526566,
+      "name": "Rust CI",
+      "event": "push",
+      "status": "completed",
+      "conclusion": "success",
+      "head_sha": "63b4afbab1fe492a997efbec1b36bc8625483bd5",
+      "html_url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41280526566"
+    },
+    {
+      "id": 41280526633,
+      "name": "Pinned startup inventory",
+      "event": "push",
+      "status": "completed",
+      "conclusion": "success",
+      "head_sha": "63b4afbab1fe492a997efbec1b36bc8625483bd5",
+      "html_url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41280526633"
+    }
+  ],
+  "interim_probe_ci": "locale-utf8-windows.json: two passed workflows and separately preserved PR original hello timeout; historical failures not erased",
+  "final_head_ci": "pending after publication; exact run references will be recorded in existing SUB-579; no final-head green claim in this snapshot",
+  "log_sha256": {
+    "canonical-adversarial-fixed.log": "9b1006bdda111f09c3b6689a3ffbda232a1a74369a293d2ad021b6dd6b868b1e",
+    "canonical-adversarial.log": "61294c4a475a61be45fbb9f864e7b77be9d2b93ef6034b6f8d43bf1c9a66db15",
+    "canonical-effect-order.log": "11eb25564dbe3d541c1ffc5f5b5c4e4147eaabbf12d80e219e431087270b7566",
+    "canonical-final.log": "8c26964eb97e0a663649f380d77ef02a7d9ea5ecd543499e3b81c3d818797ba4",
+    "canonical-first.log": "5cacd4a1f8f6b54d8059d25bb769c53f894ae06fa3eda7b12e9f3a7647c4bb28",
+    "canonical-iat-mutation.log": "7f37486db469ae7411cbd03157c24557a34d602dca61c0f03d11ec3ba12f2570",
+    "canonical-multibase.log": "7894eda40d65163212fb8f8ba7a967b42da25519b8cf4257014ec923effb252e",
+    "canonical-order-diagnostic.log": "01b6a0ac6d09f5dd229e8225129db0c521baa0121d92307c788e4074b5f62527",
+    "canonical-width-corrected.log": "00ccbbefa2e0d0af6951bd9534e56a6e25bac580413c425f5f472accbc76fb7c",
+    "catalog.log": "f1650d15acd5abcfd64a184c7304f10cb70d5f3547d91fd2f8e661e9f72b92fd",
+    "clippy-final.log": "3648941dafbb1ff4532a4e90bd367650f0d38d3210c1b3efc6492252305d31df",
+    "clippy.log": "70801c253ae7eba12782a7efd8ab58a5434950c6d326d32c46d0a6e379c42c57",
+    "crt-all.log": "bfdfbebdf6da5ac26bef0b9002f9d7324f5244ddae86e37a415a142a206f4868",
+    "crt-final.log": "da931502c84a64b1f473c6e508cc3cfa4cdec9d6600eb780cd77ba7382d2a909",
+    "fmt.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "graph-detail.log": "94e7b8474291cc2d1bdab53217d419cac88286eb4cd4409f3177955432bc72b6",
+    "graph-detail2.log": "79ce4b5b4ff90fca6589e970bf09099f8f68905dd818fd338b69b14a29a8e276",
+    "graph-fixed.log": "eb5bc56a6ca0413f0ba7fba02dff534fd8ba83aadefb1f9a2136c8dabf023f98",
+    "graph.log": "4293d14807a0d9d16cb9cc75b14ccd7aadbb1979dce0150e8bbb7e7d5b4baca2",
+    "interim-hello-job.log": "a916f808c78bb019e43748ffa06aa13f14c99574c7bad3144ea6818ce485fb47",
+    "numeric.log": "9fc61349580b00c87053f9cadfa69051db4d341dfefb4b335b76f2e69c57a5e6",
+    "python-corpus.log": "efc0a197096164499cea1e50256308f5d929b0d1677e1ed779e8cb1193d14d77",
+    "python-startup.log": "6e3be0d7c209482d75952959df03d861884a5dcde058f10e0f8aaa755a360185",
+    "python-tools.log": "295ff23f181712047194e376ce0568f3ce7dc1d9599248a0b94095fd2e8bbb78",
+    "raw-code-page-job.log": "ba0e4b7b5a10e6b4812f5132475c956a9a5e5c48ce6404791fa9822de6fad456",
+    "raw-freeze-tests.log": "6273232de4d3ef7acd4ecafa5c86beeeb974f56586b21089a2990b3f72facbe6",
+    "repeat-identical.log": "8d7b12d8aea7055d302034e041fdebae3e9efe314bd9ce83a487054b68e4f1c7",
+    "replay.log": "1b64b0816e8946340319c5e4a9ccb096b29f7740a2d888208f614a656c57d239",
+    "root-final.log": "ce3c658ccb3e028eda896b1401d01ce4fe52dd3b201a23937fc39ff47baa5440",
+    "unwind-all.log": "7c8f31929a5f87fe6874d4a7d06b4495a8309e3ca590d16591b5dd85ab29e897",
+    "unwind-final.log": "1b1611e7489ada8edc1732afdb7992ca7946a9fcdafd58a300639310b08d5019"
+  },
+  "reproduction": {
+    "env": "CARGO_INCREMENTAL=0 CARGO_NET_OFFLINE=true TMPDIR=/workspace/w2l-build-tmp W2L_Z3=/workspace/.tools/w2l-z3/bin/z3; configured Rust toolchain",
+    "commands": [
+      "cargo test --locked",
+      "cargo test --locked --example crt_stream",
+      "cargo test --locked --example unwind_slice",
+      "cargo clippy --locked --all-targets -- -D warnings",
+      "cargo fmt --all -- --check",
+      "PYTHONPATH=research/process/startup python3 -m unittest discover -s research/process/startup",
+      "python3 -m unittest discover -s tools",
+      "PYTHONPATH=corpus python3 -m unittest discover -s corpus",
+      "python3 research/process/startup/check_normal_wrapper.py ORIGINAL_DIRECTORY OBSERVER_DIRECTORY NEW_OUTPUT_DIRECTORY"
+    ],
+    "limits": "unchanged; previous generated word cases remain split/noninline; Linux child512KiB; all152 checked; no Windows timeout or stack increase"
+  }
+}

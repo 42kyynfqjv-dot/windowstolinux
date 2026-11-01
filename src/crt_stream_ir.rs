@@ -79,6 +79,13 @@ pub(crate) enum Op {
         destination: Operand,
         source: Reg,
     },
+    /// Consumer discards address authority at an original register arithmetic
+    /// result. This qualifier cannot skip reads or grant a memory capability.
+    NumericArithmetic {
+        operation: graph::Binary,
+        destination: Reg,
+        source: Operand,
+    },
     DecrementMemory(Operand),
     StoreString {
         width: u8,
@@ -667,6 +674,32 @@ pub(crate) fn normalize(i: &Instruction, raw: &[u8]) -> Result<Op, String> {
     extended(i, raw, &[])
 }
 impl Graph {
+    pub(crate) fn numeric_result(&mut self, pc: u32) -> Result<(), String> {
+        let node = self
+            .nodes
+            .get_mut(&pc)
+            .ok_or("CRT numeric result missing instruction")?;
+        let Op::Ordinary(Operation::Binary(
+            operation @ (graph::Binary::Add | graph::Binary::Sub),
+            Operand::Reg(destination),
+            source @ (Operand::Reg(_) | Operand::Immediate(_)),
+        )) = &node.op
+        else {
+            return Err("CRT numeric result register arithmetic only".into());
+        };
+        if destination.width != 32
+            || destination.index >= 4
+            || matches!(source,Operand::Reg(r) if r.width!=32)
+        {
+            return Err("CRT numeric result width/destination".into());
+        }
+        node.op = Op::NumericArithmetic {
+            operation: *operation,
+            destination: *destination,
+            source: source.clone(),
+        };
+        Ok(())
+    }
     /// Structural lowering of one exactly bounded original instruction. This
     /// supplies no reachability, ownership or call-effect proof.
     #[allow(dead_code)] // Shared bounded-path compiler; not all standalone slices use it.

@@ -1,6 +1,22 @@
 # Remaining entry-to-exit dependencies
 
-## Current executable checkpoint: original initializer reaches validation API
+## Current executable checkpoint: original UTF-8 initializer returns
+
+Under separate explicit ACP65001 and installed-code-page profiles, original
+IsValidCodePage40b4e6 now executes a measured bounded API contract. Original UTF8
+stores/classifier40b090 loops and both cookie checks/returns execute on canonical
+owned storage. Caller rejects at **0x40b2cc**, before result/reference/publication
+or cleanup. Unknown bytes stay unknown; changed code/IAT/ownership rejects with
+earlier effects preserved. No new whole-PE Windows/ELF pair or default admission.
+[Scope, raw Windows results and review gates](LOCALE-UTF8.md).
+
+Next execute the original result handling, reference replacement/publication and
+cleanup. Other code pages/NLS, freeing, exceptional cleanup and the broader gaps
+below remain unsupported. ACP1252 on the separate Windows observer is not target
+ACP evidence. Interim9664382 PR CI's original imported hello timeout remains
+unresolved separately from previous launches; push/startup CI at that head passed.
+
+## Previous checkpoint: original initializer reaches validation API
 
 Under the explicit65001 profile, original CALL40b2c7 and initializer40b485 execute
 cookie/frame setup, the existing selector and five-entry table search. Execution
