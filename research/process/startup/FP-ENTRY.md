@@ -1,4 +1,7 @@
-# Original FP-control caller: integer prefix only
+# Original FP-control caller: integer prefix checkpoint
+
+This records `bf95b1f`. See [owned FP effects and current boundary](FP-OWNED-CONTROL.md)
+for the subsequent implementation; the historical evidence below is retained.
 
 ## Connected execution
 

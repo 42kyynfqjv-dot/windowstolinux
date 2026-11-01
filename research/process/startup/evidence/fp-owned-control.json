@@ -1,0 +1,64 @@
+{
+  "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "regions": [
+    {
+      "name": "FP_WORD_PREFIX",
+      "address": "0x40d000",
+      "bytes": 906,
+      "sha256": "27b8fc534fb47dcf02415dd80d34ca42f636983bb33b499e43738d5ea3c6bea3"
+    },
+    {
+      "name": "FP_WORD_CONVERT",
+      "address": "0x40d390",
+      "bytes": 242,
+      "sha256": "4e2f4e95d8f3a5bcf8a5191999c669941fdba039ff368b833c9568f64ee4b691"
+    },
+    {
+      "name": "FP_CONTROL",
+      "address": "0x4076a0",
+      "bytes": 108,
+      "sha256": "f9a5368fd72d7e46ab494548a9141e3e5099be0886e5d6cd4e42a6fef415824d"
+    },
+    {
+      "name": "POST_FP",
+      "address": "0x401bd8",
+      "bytes": 33,
+      "sha256": "021f5a3f174be0d0123fb31d69652ed7644cd7c4e3fba6246d694969ddd76799"
+    }
+  ],
+  "scope": "Owned FP instruction and original-helper component execution; no initial Windows FP capture or whole-PE translation",
+  "actual_entry_boundary": "0x40d013 MOVZX ECX,BX: initial control remains unknown",
+  "original_control_cases": 18,
+  "owned_effect_cases": 23,
+  "emitted_wait_store_cases": 4,
+  "native_instruction_comparisons": 12,
+  "windows_fp_observations": "pending new workflow; no observed count claimed",
+  "whole_pe_pairs": 0,
+  "linux_observations_sha256": "e065835cbeab5d4cdfd39fb9e44d9c22f4f5e871eb4859f29d81682d5a3d9be4",
+  "probe_source_sha256": "e0f65b42159bb16de8fe22a6b5615d7f1368827d99a331354bb220ec19bded30",
+  "wait_manual": {
+    "url": "https://www.intel.com/content/dam/www/public/us/en/documents/manuals/64-ia-32-architectures-software-developer-vol-2c-manual.pdf",
+    "sha256": "eb6b8645764f417ee1ccfb4f3df5b24e0a9d0ba488317b1e9d437d0a4e735e91"
+  },
+  "limitations": [
+    "initial FP acquisition unproved",
+    "FLDCW deferred unmasking unsupported",
+    "SSE no-DAZ profile requires known snapshot",
+    "EH4/DAZ loader unsupported",
+    "historical Windows timeouts unresolved"
+  ],
+  "review_findings": [
+    "FWAIT also makes C0-C3 undefined; corrected from Intel Vol2C before publication",
+    "read-only negative fixture corrected to module-owned mapping; original failed log retained"
+  ],
+  "verification": {
+    "focused_FP_tests": 9,
+    "previous_CRT_aggregate": "340 pass / 2 ignored, before final WAIT correction and added native comparison",
+    "unwind": 185,
+    "python": "103 tests, 1 skip",
+    "clippy": "pass all targets warnings denied",
+    "canonical": "passed before final WAIT correction; coherent final replay required",
+    "word_low_stack": "all152 pass,512KiB with64KiB environment padding",
+    "prior_head_CI": "bf95b1f all3 workflows passed"
+  }
+}

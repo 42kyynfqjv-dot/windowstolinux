@@ -1,6 +1,22 @@
 # Remaining entry-to-exit dependencies
 
-## Current executable checkpoint: original FP-control integer prefix
+## Current executable checkpoint: owned FP effects, initial control still unknown
+
+The original precision/query call returns through real instructions in supplied
+FP-state component tests, including the MXCSR observation and branch around the
+unsupported EH4/DAZ loader. Actual entry now executes FWAIT at0x40d00b and
+FNSTCW at0x40d00c; **MOVZX ECX,BX at0x40d013** rejects unknown initial control
+knowledge. No known initial FP state is acquired or fabricated. The existing
+explicit native profile does not establish Windows loader FP state.
+
+[Contract, evidence and review scope](FP-OWNED-CONTROL.md). Next close original
+entry FP provenance, then review partial-knowledge lowering and connected return.
+Deferred unmasking, unknown MXCSR, EH4/DAZ and failure termination remain explicit
+rejections. Full startup/rcedit/default admission and historical timeout causes
+remain unresolved. Zero new whole-PE pairs.
+
+## Previous checkpoint: original FP-control integer prefix
+
 
 Original CALL0x401be4 ->0x4076a0 now runs validation, branch/argument setup and
 actual nested CALL0x40d000. Its real low-level frame prolog executes; rejection

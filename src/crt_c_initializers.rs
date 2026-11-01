@@ -29,7 +29,8 @@ pub(crate) const POST_NOOP: &str = "c20000";
 pub(crate) const POST_FP: &str =
     "680000030068000001006a00e8b75a000083c40c85c07501c36a07e83f000000cc";
 pub(crate) const FP_CONTROL:&str="8bff558bec8b4d108b550c81e1fffff7ff8bc223c1568b7508a9e0fcf0fc742a85f6740e6a006a00e83359000083c4088906e8f6050000c70016000000e86d040000b8160000005e5dc3515285f6740fe80b59000083c408890633c05e5dc3e8fc58000083c40833c05e5dc3";
-pub(crate) const FP_WORD_PREFIX: &str = "8bff558bec83ec105356579bd97df8";
+pub(crate) const FP_WORD_PREFIX: &str = "8bff558bec83ec105356579bd97df8668b5df80fb7cb83e101c1e1048bd183ca08f6c3040f44d18bca83c904f6c3080f44ca8bd183ca02f6c3100f44d18bca83c901f6c3200f44ca8bf181ce00000800f6c3020f44f10fb7cb8bc18bd625000c00003d00080000771d741385c074243d00040000751d81ca00010000eb1581ca00020000eb0d3d000c0000750681ca0003000081e100030000741081f900020000750e81ca00000100eb0681ca000002008b7d0c8bca0fb7c381c900000400a9001000008bf78b4508f7d60f44ca23c723f10bf03bf10f84c900000056e8ae02000083c404668945fcd96dfc9bd97dfc668b5dfc0fb7cb83e1010fb7f3c1e1048bc68bd183ca08f6c3040f44d18bca83c904f6c3080f44ca8bd183ca02f6c3100f44d18bca83c901f6c3200f44ca8bd181ca00000800f6c3020f44d125000c00008bca3d00080000771d741385c074243d00040000751d81c900010000eb1581c900020000eb0d3d000c0000750681c90003000081e600030000741081fe00020000750e81c900000100eb0681c9000002008bf10fb7c381ce00000400a9001000000f44f1833db8cc4100010f8ccf01000081e71f030803897d0c0fae5df08b7df08bcfc1e9038bc783e1108bd183ca08f7c7000200000f44d18bca83c904f7c7000400000f44ca8bd183ca02f7c7000800000f44d18bca83c901f7c7001000000f44ca8bd981cb00000800f7c7000100000f44d925006000008bd33d00400000771d741385c074243d00200000751d81ca00010000eb1581ca00020000eb0d3d00600000750681ca0003000081e74080000083ef40741d81efc07f0000740d83ef40751681ca00000001eb0e81ca00000003eb0681ca000000028b4d0c8bc1234d08f7d023c20bc13bc20f84d200000050e879fbffff508945f4e8703a000083c4080fae5df48b7df48bcfc1e9038bc783e1108bd183ca08f7c7000200000f44d18bca83c904f7c7000400000f44ca8bd183ca02f7c7000800000f44d18bca83c901f7c7001000000f44ca8bd981cb00000800f7c7000100000f44d925006000008bd33d00400000771d741385c074243d00200000751d81ca00010000eb1581ca00020000eb0d3d00600000750681ca0003000081e74080000083ef40741d81efc07f0000740d83ef40751681ca00000001eb0e81ca00000003eb0681ca000000028bc233d60bc68bc881c900000080f7c21f0308005f5e0f45c15b8be55dc35f8bc65e5b8be55dc3";
+pub(crate) const FP_WORD_CONVERT: &str = "8bff558bec5356578b7d088bf7c1ee048bd783e6018bdf8bc683c804f6c2080fb7c88bc60f44c80fb7d18bc283c808f6c3040fb7c88bc20f44c80fb7d18bc283c810f6c3020fb7c88bc20f44c80fb7d18bc283c820f6c3010fb7c88bc20f44c80fb7d18bc283c802f7c7000008000fb7c88bc20f44c88bd781e2000300000fb7c181fa00020000771e74158bc885d2742881fa0001000075200d00040000eb160d00080000eb0f8bc881fa0003000075080d000c00000fb7c88bc72500000300740f3d00000100750e81c900020000eb0681c9000300000fb7c98bc10d00100000f7c3000004005f0fb7c05e0f44c15b5dc3";
 fn cut_graph(
     bytes: &[u8],
     origin: u32,
@@ -283,8 +284,9 @@ fn original_c_array_and_first_prefix_have_explicit_effect_boundaries() {
 
 fn post_source() -> Result<String, String> {
     let mut out = String::new();
-    let roles =
-        BTreeMap::from([0x41c000, 0x41c048, 0x41cd3c].map(|a| (a, "CrtRegionKind::Module".into())));
+    let roles = BTreeMap::from(
+        [0x41c000, 0x41c048, 0x41cd3c, 0x41ccb8].map(|a| (a, "CrtRegionKind::Module".into())),
+    );
     for (name, address, hex) in [
         ("cinit_slist_original", 0x401bc9, POST_SLIST),
         ("cinit_post_flag", 0x401c1f, POST_FLAG),
@@ -293,26 +295,20 @@ fn post_source() -> Result<String, String> {
         ("cinit_fp_prefix", 0x401bd8, POST_FP),
         ("cinit_fp_control_original", 0x4076a0, FP_CONTROL),
         ("cinit_fp_word_prefix", 0x40d000, FP_WORD_PREFIX),
+        ("cinit_fp_word_convert", 0x40d390, FP_WORD_CONVERT),
     ] {
         let bytes = crate::crt_ptd::raw(hex);
         let g = if name == "cinit_fp_prefix" {
             cut_graph(
                 &bytes,
                 address,
-                0x401be9,
-                &[(0x401be9, "original FP-control return continuation unbound")],
-            )?
-        } else if name == "cinit_fp_word_prefix" {
-            cut_graph(
-                &bytes,
-                address,
-                0x40d00b,
-                &[(0x40d00b, "startup waiting FSTCW effect unbound at0x40d00b")],
+                0x401bf1,
+                &[(0x401bf1, "original FP-control failure termination unbound")],
             )?
         } else {
             Graph::decode(&bytes, address)?
         };
-        let body = crate::crt_stream_emit::emit_body(
+        let body = crate::crt_stream_emit::emit_body_with_thread(
             &g,
             |pc, target| {
                 let next = pc + g.nodes[&pc].length;
@@ -320,13 +316,16 @@ fn post_source() -> Result<String, String> {
                   Target::Import(0x415030)=>format!("rt.process_image_import(inputs.image,0x415030,\"kernel32.dll\",\"InitializeSListHead\")?;cpu.call_activation(rt,{next},4,|rt,c|platform.slist_head_call(rt,c,inputs.init,inputs.image))?;"),
                   Target::Direct(0x4076a0)=>format!("cpu.call_activation(rt,{next},0,|rt,c|cinit_fp_control_original(rt,c,inputs))?;"),
                   Target::Direct(0x40d000)=>format!("cpu.call_activation(rt,{next},0,|rt,c|cinit_fp_word_prefix(rt,c,inputs))?;"),
+                  Target::Direct(0x40d390)=>format!("cpu.call_activation(rt,{next},0,|rt,c|cinit_fp_word_convert(rt,c,inputs))?;"),
+                  Target::Direct(0x40ce10)|Target::Direct(0x410d10)=>"return Err(\"FP MXCSR change/EH4 loader unsupported\");".into(),
                   Target::Direct(0x407ccd)=>"return Err(\"FP invalid-mask errno acquisition unbound\");".into(),
                   Target::Direct(0x407b4f)=>"return Err(\"FP invalid-parameter effect unbound\");".into(),
                   _=>return Err("post-argv helper call".into())
                 })
             },
             &roles,
-            128,
+            1024,
+            |pc, op| crate::crt_stream_emit::fp_effect(pc, op, &roles, "inputs.init"),
         )?;
         let extra = if name == "cinit_slist_original" {
             ",platform:&CrtNativePlatform"

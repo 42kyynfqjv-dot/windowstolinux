@@ -217,10 +217,11 @@ impl CrtX87State{
  fn fnclex(&mut self){self.status=CrtX87Word{bits:self.status.bits&self.status.known&0x3800,known:(self.status.known&0x3800)|0x80ff};}
 }
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
-struct CrtX87Context{anchor:guest_memory::Capability,owner:u64,thread:u64,init:CrtInitialization,fiber:Option<Option<CrtFiber>>,state:CrtX87State}
+struct CrtX87Context{anchor:guest_memory::Capability,owner:u64,thread:u64,init:CrtInitialization,fiber:Option<Option<CrtFiber>>,state:CrtX87State,mxcsr_mask:Option<u32>}
 
 struct CrtStreamRuntime {
- x87:Option<CrtX87Context>,
+ // Diagnostic instruction address only; never grants state authority.
+ fp_boundary:Option<u32>,x87:Option<CrtX87Context>,
  file_view:CrtPointer,main_image:Option<CrtProcessImage>,main_image_regions:Vec<CrtPointer>,loader_cells:std::collections::BTreeMap<u32,(CrtPointer,bool)>,modules:std::collections::BTreeMap<u32,CrtLoadedModule>,module_references:CrtModuleReferences,exports:std::collections::BTreeMap<u64,CrtExport>,providers:std::collections::BTreeMap<u32,CrtNativeProvider>,native_sync:CrtGlobalSlots<(CrtFunction,u32,CrtPointer)>,slist_heads:Box<CrtGlobalSlots<CrtSListHead>>,
  uncertain_allocations:Vec<CrtPointer>,completed_failed_frees:Vec<(guest_memory::Capability,u64)>,heap_ptds:Vec<CrtHeapPtdView>,fiber:Option<CrtFiber>,fls_indices:CrtFlsIndices,fls:CrtFlsValues,
  unobserved_contexts:Vec<(CrtPointer,std::rc::Rc<std::cell::Cell<bool>>)>,heap:Option<CrtHeap>,memory:guest_memory::Space,owner:u64,thread:u64,anchor:guest_memory::Capability,
@@ -236,15 +237,60 @@ impl CrtStreamRuntime {
  /// initial bytes stay unknown. This is not Windows acquisition or a host read.
  fn configure_x87(&mut self,init:CrtInitialization,profile:&str)->Result<(),&'static str>{
   self.initialization(init)?;if profile!=Self::X87_PROFILE||self.x87.is_some(){return Err("CRT x87 profile unsupported/already bound");}
-  self.x87=Some(CrtX87Context{anchor:self.anchor,owner:self.owner,thread:self.thread,init,fiber:None,state:CrtX87State::unknown()});Ok(())
+  self.x87=Some(CrtX87Context{anchor:self.anchor,owner:self.owner,thread:self.thread,init,fiber:None,state:CrtX87State::unknown(),mxcsr_mask:None});Ok(())
  }
- fn clear_x87_exceptions(&mut self,init:CrtInitialization)->Result<(),&'static str>{
+ fn x87_context(&self,init:CrtInitialization)->Result<CrtX87Context,&'static str>{
   self.initialization(init)?;let mut x=self.x87.ok_or("CRT x87 profile unbound")?;
   if x.anchor!=self.anchor||x.owner!=self.owner||x.thread!=self.thread||x.init!=init{return Err("CRT x87 owner/lifetime");}
   self.memory.validate(x.anchor,self.file_view.owner).map_err(|_|"CRT x87 storage lifetime")?;
   if let Some(f)=self.fiber{self.check_fiber(f)?;}
   if let Some(f)=x.fiber{if f!=self.fiber{return Err("CRT x87 stationary fiber changed");}}else{x.fiber=Some(self.fiber);}
-  x.state.fnclex();self.x87=Some(x);Ok(())
+  Ok(x)
+ }
+ fn clear_x87_exceptions(&mut self,init:CrtInitialization)->Result<(),&'static str>{let mut x=self.x87_context(init)?;x.state.fnclex();self.x87=Some(x);Ok(())}
+ // Pending delivery is unsupported, not simulated. Unknown bits cannot prove
+ // absence. A masked flag or a known-clear flag proves each exception absent.
+ fn wait_x87(&mut self,init:CrtInitialization)->Result<(),&'static str>{
+  let mut x=self.x87_context(init)?;let s=x.state.status;let c=x.state.control;
+  let absent=(s.known&!s.bits)|(c.known&c.bits);
+  if (s.known&s.bits)&(c.known&!c.bits)&0x3f!=0{return Err("CRT pending x87 exception delivery unsupported");}
+  if absent&0x3f!=0x3f{return Err("CRT x87 pending exception knowledge");}
+  // ES is separately observable. Inconsistent/unknown summary state is not
+  // silently reconciled by deriving a guessed hardware environment.
+  if s.known&0x80==0||s.bits&0x80!=0{return Err("CRT x87 exception summary unsupported");}
+  x.state.status.known&=!0x4700;x.state.status.bits&=x.state.status.known;
+  self.x87=Some(x);Ok(())
+ }
+ fn store_x87_control(&mut self,init:CrtInitialization,p:CrtPointer)->Result<(),&'static str>{
+  let mut x=self.x87_context(init)?;let w=x.state.control;
+  self.store(p,16,CrtValue::Scalar{bits:u32::from(w.bits&w.known),known:u32::from(w.known)|0xffff0000})?;
+  x.state.status.known&=!0x4700;x.state.status.bits&=x.state.status.known;self.x87=Some(x);Ok(())
+ }
+ fn load_x87_control(&mut self,init:CrtInitialization,p:CrtPointer)->Result<(),&'static str>{
+  let mut x=self.x87_context(init)?;
+  // Bounded clean-exception domain. Deferred unmasking/summary updates remain
+  // rejected before reading/loading until their complete contract is proved.
+  if x.state.status.known&0x80ff!=0x80ff||x.state.status.bits&0x80ff!=0{return Err("CRT FLDCW nonclean exception state unsupported");}
+  let value=self.load(p,16)?.known_scalar()?;
+  // Modern documented fields only; bit6 reads as one. Reserved precision01
+  // and other reserved input bits stay outside this domain.
+  if value&!0x1f7f!=0||value&0x300==0x100{return Err("CRT FLDCW reserved control unsupported");}
+  x.state.control=CrtX87Word{bits:(value as u16)|0x40,known:0xffff};
+  x.state.status.known&=!0x4700;x.state.status.bits&=x.state.status.known;self.x87=Some(x);Ok(())
+ }
+ // An explicit guest instruction domain, not a capture of host register state.
+ fn configure_mxcsr_profile(&mut self,init:CrtInitialization,profile:&str)->Result<(),&'static str>{
+  let mut x=self.x87_context(init)?;if profile!="w2l-enabled-sse-no-daz-v1"||x.mxcsr_mask.is_some(){return Err("CRT MXCSR profile unsupported/already bound");}
+  x.mxcsr_mask=Some(0xffbf);self.x87=Some(x);Ok(())
+ }
+ fn store_mxcsr(&mut self,init:CrtInitialization,p:CrtPointer)->Result<(),&'static str>{
+  let x=self.x87_context(init)?;
+  // Only an established scalar snapshot may be observed. The state producer
+  // must establish enabled SSE and reserved/optional bits; no host default.
+  let value=x.state.mxcsr.known_scalar()?;
+  let mask=x.mxcsr_mask.ok_or("CRT MXCSR enabled-state profile unbound")?;
+  if value&!mask!=0{return Err("CRT MXCSR reserved bits unsupported");}
+  self.store(p,32,CrtValue::scalar(value))?;self.x87=Some(x);Ok(())
  }
  /// This owner/thread cut creates storage only. Original instructions or an
  /// explicitly declared input state must initialize each observable field.
@@ -259,7 +305,7 @@ impl CrtStreamRuntime {
  }
  fn from_file_storage(owner:u64,thread:u64,memory:guest_memory::Space,pointer:CrtPointer)->Result<Self,&'static str>{
   let anchor=pointer.cap;
-  Ok(Self{x87:None,file_view:pointer,main_image:None,main_image_regions:vec![],loader_cells:std::collections::BTreeMap::new(),modules:std::collections::BTreeMap::new(),module_references:CrtModuleReferences::new(),exports:std::collections::BTreeMap::new(),providers:std::collections::BTreeMap::new(),native_sync:CrtGlobalSlots::new(),slist_heads:Box::new(CrtGlobalSlots::new()),uncertain_allocations:vec![],completed_failed_frees:vec![],heap_ptds:vec![],fiber:None,fls_indices:CrtFlsIndices::new(),fls:CrtFlsValues::new(),unobserved_contexts:vec![],heap:None,memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],native_endpoints:vec![],native_standards:None,command_line:None,image_name:None,file_mode:None,global_objects:CrtGlobalSlots::new(),global_locks:CrtGlobalLeases::new(),record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,canonical_errno:false,errno_cell:None,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([pointer.base])})
+  Ok(Self{fp_boundary:None,x87:None,file_view:pointer,main_image:None,main_image_regions:vec![],loader_cells:std::collections::BTreeMap::new(),modules:std::collections::BTreeMap::new(),module_references:CrtModuleReferences::new(),exports:std::collections::BTreeMap::new(),providers:std::collections::BTreeMap::new(),native_sync:CrtGlobalSlots::new(),slist_heads:Box::new(CrtGlobalSlots::new()),uncertain_allocations:vec![],completed_failed_frees:vec![],heap_ptds:vec![],fiber:None,fls_indices:CrtFlsIndices::new(),fls:CrtFlsValues::new(),unobserved_contexts:vec![],heap:None,memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],native_endpoints:vec![],native_standards:None,command_line:None,image_name:None,file_mode:None,global_objects:CrtGlobalSlots::new(),global_locks:CrtGlobalLeases::new(),record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,canonical_errno:false,errno_cell:None,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([pointer.base])})
  }
 
  /// Initial FILE storage is a bounded role view of the original writable

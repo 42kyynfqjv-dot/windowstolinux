@@ -44,6 +44,10 @@ pub(crate) enum Op {
     ReadXcr,
     /// Consumer must bind guest x87 state and an enabled modern user-mode domain.
     X87ClearExceptions,
+    X87Wait,
+    X87StoreControl(graph::Address),
+    X87LoadControl(graph::Address),
+    StoreMxcsr(graph::Address),
     XmmZero(u8),
     XmmFromDword {
         destination: u8,
@@ -313,6 +317,28 @@ fn extended(i: &Instruction, raw: &[u8], tables: &[JumpTable<'_>]) -> Result<Op,
     }
     if raw == [0xdb, 0xe2] && i.code() == Code::Fnclex {
         return Ok(Op::X87ClearExceptions);
+    }
+    if raw == [0x9b] && i.code() == Code::Wait {
+        return Ok(Op::X87Wait);
+    }
+    if matches!(
+        i.code(),
+        Code::Fnstcw_m2byte | Code::Fldcw_m2byte | Code::Stmxcsr_m32
+    ) && i.segment_prefix() == Register::None
+        && i.op0_kind() == OpKind::Memory
+        && !i.has_lock_prefix()
+        && !i.has_rep_prefix()
+        && !i.has_repne_prefix()
+        && (raw.first() == Some(&0xd9) || raw.starts_with(&[0x0f, 0xae]))
+    {
+        let Operand::Memory(address, _) = operand_from_move(i, 0)? else {
+            return Err("CRT FP memory address".into());
+        };
+        return Ok(match i.code() {
+            Code::Fnstcw_m2byte => Op::X87StoreControl(address),
+            Code::Fldcw_m2byte => Op::X87LoadControl(address),
+            _ => Op::StoreMxcsr(address),
+        });
     }
     if raw == [0x0f, 0xa2] && i.code() == Code::Cpuid {
         return Ok(Op::CpuId);
@@ -959,6 +985,10 @@ impl Graph {
                         | Op::CpuId
                         | Op::ReadXcr
                         | Op::X87ClearExceptions
+                        | Op::X87Wait
+                        | Op::X87StoreControl(_)
+                        | Op::X87LoadControl(_)
+                        | Op::StoreMxcsr(_)
                         | Op::IndirectCall(_)
                         | Op::FsRead(_)
                         | Op::FsWrite(_)

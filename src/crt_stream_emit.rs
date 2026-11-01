@@ -488,7 +488,7 @@ pub(crate) fn emit_body_with_repeated_memory(
  Op::Call(target)=>out.push_str(&call(pc,*target)?),
  Op::SetByte{condition:c,destination}=>out.push_str(&format!("let v=CrtValue::scalar(u32::from(cpu.condition({})?));{}",condition(*c),write(destination,"v",roles)?)),
  Op::IndirectCall(operand)=>{out.push_str(&format!("let target={};",read(operand,roles)?));out.push_str(&indirect(pc,operand)?);},
- Op::InitializingAtomic{..}|Op::LockedExchangeAdd{..}|Op::LockedIncrement(_)|Op::FsRead(_)|Op::FsWrite(_)|Op::FsPush|Op::CpuId|Op::ReadXcr|Op::X87ClearExceptions=>out.push_str(&thread(pc,&node.op)?),
+ Op::InitializingAtomic{..}|Op::LockedExchangeAdd{..}|Op::LockedIncrement(_)|Op::FsRead(_)|Op::FsWrite(_)|Op::FsPush|Op::CpuId|Op::ReadXcr|Op::X87ClearExceptions|Op::X87Wait|Op::X87StoreControl(_)|Op::X87LoadControl(_)|Op::StoreMxcsr(_)=>out.push_str(&thread(pc,&node.op)?),
  Op::ReturnPop(bytes)=>{out.push_str(&return_hook(pc,*bytes)?.unwrap_or_else(||format!("return cpu.finish_pop(rt,{bytes});")));controlled=true;},
  Op::RotateRightCl(dst)=>{let o=register(*dst);out.push_str(&format!("let count=cpu.get(1,8,0)?;let v=cpu.rotate_right32({},count)?;{}",read(&o,roles)?,write(&o,"v",roles)?));},
  Op::SignDividend=>out.push_str("cpu.sign_dividend()?;"),
@@ -671,4 +671,29 @@ mod terminal_path_tests {
                 .is_err()
         );
     }
+}
+
+/// Only invoked by a consumer that binds the live guest FP context. No host FP.
+pub(crate) fn fp_effect(
+    pc: u32,
+    op: &Op,
+    roles: &BTreeMap<u32, String>,
+    init: &str,
+) -> Result<String, String> {
+    let effect = match op {
+        Op::X87Wait => format!("rt.wait_x87({init})?;"),
+        Op::X87StoreControl(a) => format!(
+            "let p={};rt.store_x87_control({init},p)?;",
+            address(a, roles)?
+        ),
+        Op::X87LoadControl(a) => format!(
+            "let p={};rt.load_x87_control({init},p)?;",
+            address(a, roles)?
+        ),
+        Op::StoreMxcsr(a) => format!("let p={};rt.store_mxcsr({init},p)?;", address(a, roles)?),
+        _ => return Err("unbound guest FP effect".into()),
+    };
+    Ok(format!(
+        "cpu.validate_active(rt)?;rt.fp_boundary=Some({pc});{effect}"
+    ))
 }
