@@ -43,3 +43,39 @@ fn environment_api_preflights_stack_saved_state_and_matching_free_abi() {
         "environment-API",
     );
 }
+
+#[test]
+fn environment_conversion_reacquires_snapshot_and_preserves_unknown_output_on_rejection() {
+    crate::crt_stream_callees_tests::native_bounded_stack(
+        crate::crt_resident_loader::TYPES,
+        r#"
+#[inline(never)]fn one(mode:u32){
+ let(mut rt,init)=CrtStreamRuntime::new_initializing(7,9,0x8000,131072).unwrap();
+ let platform=CrtNativePlatform::prepare(&mut rt,init,CrtNativePlatform::PROFILE,0x700000,0x701000).unwrap();
+ let entries=if mode==1{vec![]}else{vec![("W2L_A".into(),"雪😀".into()),("W2L_B".into(),"".into())]};
+ rt.declare_environment(init,"w2l-controlled-environment-v1",0x20000,&entries).unwrap();
+ let source=rt.environment_snapshot(init).unwrap();
+ let expected=if mode==1{b"\0".as_slice()}else{"W2L_A=雪😀\0W2L_B=\0\0".as_bytes()};
+ let count=if mode==1{1}else{source.size/2};
+ let stack=rt.map_region(0x40000,1024,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,512).unwrap();
+ rt.store(sp,32,CrtValue::ProtectedReturn(73)).unwrap();
+ for(i,value)in [CrtValue::scalar(65001),CrtValue::scalar(0),CrtValue::Pointer(source),CrtValue::scalar(if mode==11{u32::MAX}else{count}),CrtValue::Scalar{bits:0,known:0},CrtValue::scalar(0),CrtValue::scalar(0),CrtValue::scalar(0)].into_iter().enumerate(){rt.store(rt.offset(sp,4+i as i64*4).unwrap(),32,value).unwrap();}
+ let mut query=CrtCpu::new(sp,73).unwrap();query.return_pop=32;
+ let required=platform.wide_conversion_call(&mut rt,&mut query,init,None).unwrap().known_scalar().unwrap();assert!(query.returned);
+ if mode!=11{assert_eq!(required as usize,expected.len());}else{assert!(required<(expected.len()as u32));}
+ let CrtValue::Heap(heap)=rt.native_process_heap(init).unwrap()else{panic!()};let output=rt.native_heap_allocate(init,heap,0,required+4).unwrap();
+ assert!(rt.load(output,8).unwrap().known_scalar().is_err());
+ let target=if mode==4{source}else if mode==6{sp}else{output};
+ let input=if mode==8{rt.subrange(source,2).unwrap()}else{source};
+ if mode==2{rt.free_environment_snapshot(init,source).unwrap();}if mode==5{rt.free_allocation(output).unwrap();}if mode==10{rt.end_initialization(init).unwrap();}
+ rt.store(sp,32,CrtValue::ProtectedReturn(74)).unwrap();
+ for(i,value)in [CrtValue::scalar(65001),CrtValue::scalar(0),CrtValue::Pointer(input),CrtValue::scalar(if mode==7{32768}else if mode==9{u32::MAX-1}else{count}),CrtValue::Pointer(target),CrtValue::scalar(if mode==3{required-1}else if mode==11{required}else{required+4}),CrtValue::scalar(0),CrtValue::scalar(0)].into_iter().enumerate(){rt.store(rt.offset(sp,4+i as i64*4).unwrap(),32,value).unwrap();}
+ let mut copy=CrtCpu::new(sp,74).unwrap();copy.return_pop=32;let got=platform.wide_conversion_call(&mut rt,&mut copy,init,None);
+ if mode==0||mode==1{assert_eq!(got,Ok(CrtValue::scalar(expected.len()as u32)));assert!(copy.returned);assert_eq!(rt.memory.read(output.address(),expected.len()as u32).unwrap(),expected);for n in expected.len()as u32..output.size{assert!(rt.load(rt.offset(output,i64::from(n)).unwrap(),8).unwrap().known_scalar().is_err());}}
+ else{let expected_error=match mode{2|5=>"CRT stale/foreign pointer",3|11=>"native UTF8 insufficient-capacity effects unbound",4=>"native UTF8 output role",6=>"native UTF8 call-frame output alias",7|9=>"native UTF8 input count outside bounded domain",8=>"CRT pointer complete range/identity",10=>"CRT initialization owner/lifetime",_=>unreachable!()};assert_eq!(got,Err(expected_error),"conversion rejection{mode}");assert!(!copy.returned);if mode!=5{assert!(rt.load(output,8).unwrap().known_scalar().is_err());}}
+ if mode!=2{assert!(rt.load(source,16).is_ok());}
+}for mode in 0..12{one(mode);}
+"#,
+        "environment-conversion",
+    );
+}

@@ -1,6 +1,18 @@
 # Remaining entry-to-exit dependencies
 
-## Current executable checkpoint: original UTF16 scanner and count
+## Current executable checkpoint: original environment conversion and release
+
+The controlled native-profile path executes both original conversion calls,
+original malloc, NULL-free and matching wide-snapshot free. It returns a distinct
+initialized narrow buffer through the real epilog. Source aliases expire;
+output heap identity remains live. The next boundary is **0x406a22**, before
+caller result handling/environment-table construction. No table is published.
+
+[Contracts, review correction and tests](ENVIRONMENT-CONVERSION.md). CP_ACP maps
+only through the existing checked65001 profile. No real environment is logged.
+Full propagation/startup/rcedit/default admission remain unsupported.
+
+## Previous executable checkpoint: original UTF16 scanner and count
 
 The controlled-launch path executes the original helper at0x40b92f, returns
 through CALL0x40b980, then executes its caller's byte difference, word-count

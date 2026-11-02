@@ -19,7 +19,7 @@ pub(crate) const ZERO: &str = "33c0c3";
 pub(crate) const TRUE_BYTE: &str = "b001c3";
 pub(crate) const ENV_THUNK: &str = "e96afdffff";
 pub(crate) const ENV_PREFIX: &str = "833d48ce410000740333c0c356e80d4a0000e8444f0000";
-pub(crate) const ENV_PRODUCER_PREFIX: &str = "8bff558bec515156ff15e45041008bf085f60f84850000005356e8aaffffff33db2bc653535353d1f8505653538945f8";
+pub(crate) const ENV_PRODUCER_PREFIX: &str = "8bff558bec515156ff15e45041008bf085f60f84850000005356e8aaffffff33db2bc653535353d1f8505653538945f8e82affffff83c4248945fc85c0750b56ff15e850410033c0eb525750e879cdffff8bf8595385ff7511e88cc3ffff5956ff15e850410033c0eb3153ff75fc57ff75f8565353e8e5feffff83c42085c0750857e863c3ffffeb0853e85bc3ffff8bdf5956ff15e85041008bc35f5b5ec9c3";
 pub(crate) const ENV_SCAN: &str = "8bff558bec8b55085733ff66393a7421568bca8d7102668b0183c102663bc775f52bced1f98d144a83c20266393a75e15e8d42025f5dc3";
 pub(crate) const GET_COMMODE: &str = "b884ce4100c3";
 pub(crate) const ONEXIT:&str="558bec803d85cc4100007404b0015dc3568b750885f6740583fe017562e81f08000085c0742685f675226888cc4100e84a5b00005985c0750f6894cc4100e83b5b00005985c0742b32c0eb3083c9ff890d88cc4100890d8ccc4100890d90cc4100890d94cc4100890d98cc4100890d9ccc4100c60585cc410001b0015e5dc36a05e833020000cc";
@@ -548,21 +548,7 @@ fn environment_prefix_observes_init_flag_and_preserves_prior_callback_failure_ef
 
 fn environment_producer_source() -> Result<String, String> {
     let bytes = crate::crt_ptd::raw(ENV_PRODUCER_PREFIX);
-    let g = cut_graph(
-        &bytes,
-        0x40b966,
-        0x40b996,
-        &[
-            (
-                0x40b996,
-                "original environment conversion query unbound at0x40b996",
-            ),
-            (
-                0x40ba03,
-                "environment NULL failure continuation unsupported",
-            ),
-        ],
-    )?;
+    let g = Graph::decode(&bytes, 0x40b966)?;
     let body = crate::crt_stream_emit::emit_body(
         &g,
         |pc, target| {
@@ -572,13 +558,18 @@ fn environment_producer_source() -> Result<String, String> {
                     pc + g.nodes[&pc].length
                 ));
             }
-            if target != Target::Import(0x4150e4) {
-                return Err("environment producer unexpected import".into());
-            }
-            Ok(format!("rt.process_image_import(inputs.image,0x4150e4,\"kernel32.dll\",\"GetEnvironmentStringsW\")?;cpu.call_activation(rt,{},0,|rt,c|platform.environment_call(rt,c,inputs.init,false))?;",pc+g.nodes[&pc].length))
+            let next = pc + g.nodes[&pc].length;
+            Ok(match target{
+                Target::Direct(0x40b8c5)=>format!("cpu.call_activation(rt,{next},0,|rt,c|argv_wide_original(rt,c,inputs,platform))?;"),
+                Target::Direct(0x408730)=>format!("cpu.call_activation(rt,{next},0,|rt,c|malloc_original_native(rt,c,inputs))?;"),
+                Target::Direct(0x407d50)=>format!("cpu.call_activation(rt,{next},0,|rt,c|ucrt_free_null(rt,c,inputs))?;"),
+                Target::Import(0x4150e4)=>format!("rt.process_image_import(inputs.image,0x4150e4,\"kernel32.dll\",\"GetEnvironmentStringsW\")?;cpu.call_activation(rt,{next},0,|rt,c|platform.environment_call(rt,c,inputs.init,false))?;"),
+                Target::Import(0x4150e8)=>format!("rt.process_image_import(inputs.image,0x4150e8,\"kernel32.dll\",\"FreeEnvironmentStringsW\")?;cpu.call_activation(rt,{next},4,|rt,c|platform.environment_call(rt,c,inputs.init,true))?;"),
+                _=>return Err("environment producer unexpected call".into())
+            })
         },
         &Default::default(),
-        64,
+        256,
     )?;
     Ok(format!("fn cinit_env_producer_prefix(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:&CrtNativePlatform)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;{}{body}}}",guard(0x40b966,&bytes)))
 }

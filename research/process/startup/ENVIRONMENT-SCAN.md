@@ -1,5 +1,8 @@
 # Original UTF16 environment scan
 
+This records checkpoint f6cd2af. See [ENVIRONMENT-CONVERSION.md](ENVIRONMENT-CONVERSION.md)
+for the subsequent connected producer and current boundary.
+
 The controlled-launch path executes the unchanged helper at **0x40b92f** from
 CALL0x40b980. Its original loads, comparisons, loops, pointer arithmetic and
 protected return lower through the shared checked instruction emitter. The
