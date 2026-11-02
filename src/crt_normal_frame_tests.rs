@@ -3703,8 +3703,11 @@ fn map_local_wrapper(rt:&mut CrtStreamRuntime)->RegistryResult<()>{{rt.map_regio
         let inner_search_normalizer=crate::selection::prove_code_identity(&normalizer,0x414a1b,&std::collections::BTreeSet::from([0x41ccb8]),0xe0424242).unwrap();
         let inner_search_guard=crate::handler_guard::prove_guard(&guard,0x4021d0,&security,0x40154c,0x41c000,[-2,0,-48,0],&inner).unwrap();
         let inner_search_callees=crate::crt_owned_search::SearchCallees{normalizer:&inner_search_normalizer,guard:&inner_search_guard,context:&context_proof};
-        let inner_search_emitted=crate::crt_owned_search::emit_live_return(crate::crt_owned_search::Input{proof:&inner_search,origin:prefix.end,code:&handler_complete[prefix_bytes.len()..],table_va:0x41b1d0,table:&inner_search_table,bridge:0x402800,filters:&Default::default()},&prefix,&inner_search_callees,"original_inner_search_return").unwrap_err();
-        assert_eq!(inner_search_emitted,"CRT path: repeated instruction requires loop proof");
+        let inner_search_emitted=crate::crt_owned_search::emit_live_return(crate::crt_owned_search::Input{proof:&inner_search,origin:prefix.end,code:&handler_complete[prefix_bytes.len()..],table_va:0x41b1d0,table:&inner_search_table,bridge:0x402800,filters:&Default::default()},&prefix,&inner_search_callees,"original_inner_search_return").expect("finite original Inner search visits");
+        assert!(inner_search_emitted.contains("CRT trace occurrence mismatch"));
+        let mut changed_inner_table=inner_search_table.clone();changed_inner_table[28]^=1;
+        assert_eq!(crate::crt_owned_search::emit_live_return(crate::crt_owned_search::Input{proof:&inner_search,origin:prefix.end,code:&handler_complete[prefix_bytes.len()..],table_va:0x41b1d0,table:&changed_inner_table,bridge:0x402800,filters:&Default::default()},&prefix,&inner_search_callees,"changed_inner_scope").unwrap_err(),"live search: entry/table/level contract");
+
         let outer_search_table=bytes_hex(crate::crt_startup_caller::OUTER_SCOPE);
         let outer_search=crate::handler_dispatch::prove_dispatch(&handler_complete[prefix_bytes.len()..],prefix.end,&prefix,dispatch_bindings,crate::handler_dispatch::Entry::Search,&outer_search_table,0,0xe0424242,&Default::default(),&filter_layout,&std::collections::BTreeSet::from([0x401222])).unwrap();
         assert_eq!((outer_search.initial_level,outer_search.final_level),(0,0));

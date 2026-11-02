@@ -209,7 +209,7 @@ pub(crate) fn emit_proved_path_with_store(
     before: impl FnMut(u32, &Op) -> Result<String, String>,
     store: impl FnMut(u32, &Address, u8) -> Result<Option<String>, String>,
 ) -> Result<String, String> {
-    emit_path(path, call, roles, before, store, None)
+    emit_path(path, call, roles, before, store, None, false)
 }
 
 /// A separately proved terminal RET. The original opcode supplies cleanup;
@@ -229,6 +229,44 @@ pub(crate) fn emit_proved_return_path(
         before,
         |_, _, _| Ok(None),
         Some(expected_cleanup),
+        false,
+    )
+}
+
+/// Finite original instruction visits established by the scope-chain walker.
+/// There is no caller-supplied loop bound or permission for arbitrary cycles.
+#[cfg(test)] // The handler certificate and connected search compiler share this component gate.
+pub(crate) fn emit_dispatch_return_trace(
+    proof: &super::handler_dispatch::DispatchProof,
+    call: impl FnMut(u32, Target) -> Result<String, String>,
+    roles: &BTreeMap<u32, String>,
+    before: impl FnMut(u32, &Op) -> Result<String, String>,
+) -> Result<String, String> {
+    if proof.initial_level != proof.final_level
+        || !matches!(
+            proof.actions.last(),
+            Some(super::handler_dispatch::Action::ReturnDisposition { pc, value: 1 }) if proof.instructions.last().is_some_and(|s|s.pc==*pc)
+        )
+    {
+        return Err("CRT trace: scope/disposition certificate".into());
+    }
+    let path: Vec<_> = proof
+        .instructions
+        .iter()
+        .map(|s| PathStep {
+            pc: s.pc,
+            bytes: &s.bytes,
+            next: s.next,
+        })
+        .collect();
+    emit_path(
+        &path,
+        call,
+        roles,
+        before,
+        |_, _, _| Ok(None),
+        Some(0),
+        true,
     )
 }
 
@@ -239,24 +277,31 @@ fn emit_path(
     mut before: impl FnMut(u32, &Op) -> Result<String, String>,
     store: impl FnMut(u32, &Address, u8) -> Result<Option<String>, String>,
     return_cleanup: Option<u16>,
+    trace: bool,
 ) -> Result<String, String> {
     if path.is_empty() || path.len() > 2048 {
         return Err("CRT path: instruction budget".into());
     }
     let mut nodes: BTreeMap<u32, super::crt_stream_ir::Node> = BTreeMap::new();
-    let mut expected = BTreeMap::new();
+    let mut expected: BTreeMap<u32, Vec<(usize, Option<u32>)>> = BTreeMap::new();
+    let mut original_bytes: BTreeMap<u32, &[u8]> = BTreeMap::new();
     let mut end = 0;
     for (index, step) in path.iter().enumerate() {
         let mut node = Graph::decode_instruction(step.bytes, step.pc)?;
-        if nodes.contains_key(&step.pc) {
+        let repeated = nodes.contains_key(&step.pc);
+        if repeated && !trace {
             return Err("CRT path: repeated instruction requires loop proof".into());
         }
+        if repeated && original_bytes[&step.pc] != step.bytes {
+            return Err("CRT trace: changed repeated instruction".into());
+        }
         let instruction_end = step.pc + node.length;
-        if nodes
-            .range(..step.pc)
-            .next_back()
-            .is_some_and(|(&pc, previous)| pc + previous.length > step.pc)
-            || nodes.range(step.pc..instruction_end).next().is_some()
+        if !repeated
+            && (nodes
+                .range(..step.pc)
+                .next_back()
+                .is_some_and(|(&pc, previous)| pc + previous.length > step.pc)
+                || nodes.range(step.pc..instruction_end).next().is_some())
         {
             return Err("CRT path: overlapping instruction cuts".into());
         }
@@ -283,8 +328,18 @@ fn emit_path(
             return Err("CRT path: original successor mismatch".into());
         }
         end = end.max(step.pc + node.length);
-        expected.insert(step.pc, step.next);
-        node.successors = step.next.into_iter().collect();
+        expected
+            .entry(step.pc)
+            .or_default()
+            .push((index + 1, step.next));
+        original_bytes.insert(step.pc, step.bytes);
+        let mut successors: Vec<_> = step.next.into_iter().collect();
+        if let Some(previous) = nodes.get(&step.pc) {
+            successors.extend(&previous.successors);
+        }
+        successors.sort_unstable();
+        successors.dedup();
+        node.successors = successors;
         nodes.insert(step.pc, node);
     }
     let graph = Graph {
@@ -318,10 +373,26 @@ fn emit_path(
                 _ => None,
             };
             let mut code = String::new();
+            if trace {
+                let arms = expected[&pc]
+                    .iter()
+                    .map(|(visit, next)| format!("{visit}=>{next:?},"))
+                    .collect::<String>();
+                code.push_str(&format!("let proved_next:Option<u32>=match local_steps{{{arms}_=>return Err(\"CRT trace occurrence mismatch\"),}};"));
+            }
             if let Some((kind, target)) = branch {
-                let next = expected[&pc].ok_or("CRT path: branch without proved edge")?;
+                let next = if trace {
+                    "proved_next.ok_or(\"CRT trace missing edge\")?".into()
+                } else {
+                    format!(
+                        "{}u32",
+                        expected[&pc][0]
+                            .1
+                            .ok_or("CRT path: branch without proved edge")?
+                    )
+                };
                 let fallthrough = pc + graph.nodes[&pc].length;
-                code.push_str(&format!("if (if cpu.condition({kind})?{{{target}u32}}else{{{fallthrough}u32}})!={next}u32{{return Err(\"CRT branch disagrees with semantic proof\");}}"));
+                code.push_str(&format!("if (if cpu.condition({kind})?{{{target}u32}}else{{{fallthrough}u32}})!={next}{{return Err(\"CRT branch disagrees with semantic proof\");}}"));
             }
             code.push_str(&before(pc, op)?);
             Ok(code)

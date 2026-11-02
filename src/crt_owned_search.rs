@@ -323,8 +323,8 @@ pub(crate) fn emit_live_return(
         });
     }
     let mut consumed = 0;
-    let body = crt_stream_emit::emit_proved_return_path(
-        &path,
+    let body = crt_stream_emit::emit_dispatch_return_trace(
+        input.proof,
         |pc, target| {
             if calls.get(&pc).copied().map(Target::Direct) != Some(target) {
                 return Err("live search: unbound original call".into());
@@ -340,7 +340,6 @@ pub(crate) fn emit_live_return(
                 "let rt=&mut *frame.rt;".into()
             })
         },
-        0,
     )?;
     if consumed != calls.len() {
         return Err("live search: unused guard effect".into());

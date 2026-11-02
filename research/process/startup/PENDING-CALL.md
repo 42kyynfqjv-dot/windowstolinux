@@ -97,3 +97,33 @@ Same-event object allocation, partial flag knowledge, Normal predecessor views
 and actual Inner-to-Outer advancement are still unimplemented. Production still
 stops at the protected RaiseException CALL; the first delivery acceptance target
 has not been reached. No delivery gate or context knowledge was widened by this correction.
+
+## Finite original search visits
+
+The bounded return emitter now consumes the actual DispatchProof instruction
+visits. The semantic scope-chain walker rejects repeated abstract states and
+traces above 2048 instructions. Lowering derives its exact instruction budget
+from that successful proof, checks original successors and byte-identical repeated
+instructions, and retains disjoint instruction boundaries. Each PC has one
+instruction body but a list of allowed visit positions and edges. Every runtime
+visit checks its position before the instruction's memory effects; conditional
+edges additionally evaluate and check the real flags on that occurrence. The
+terminal RET must match the proof's terminal disposition and position.
+
+The old acyclic emitters keep their duplicate-PC rejection. There is no public
+raw-path flag or caller-supplied loop bound. Calls and memory operations still
+use the original lowering and existing bound effects. The original Inner search
+at level 1 now passes return emission; its frame's live level remains 1 while its
+scope cursor walks both finally-only rows. Changed scope bytes reject separately.
+
+Independent native loop tests execute actual arithmetic, stores and branches:
+normal completion, early-edge disagreement, shortened budget and wrong occurrence.
+They check exact failures, no successful return on failure, and preservation of
+preceding stores. Compile-time tests reject changed repeated bytes and invalid
+successors, and retain the old duplicate-PC negative case.
+
+These tests close the finite-trace emission prerequisite, not object acquisition
+or production handler delivery. Runtime-owned same-event record/context storage,
+observed search-phase flag knowledge and selected Normal predecessor views remain
+unimplemented. Original startup still stops with its RaiseException CALL suspended;
+Inner-to-Outer advancement and all restoration remain outside admission.

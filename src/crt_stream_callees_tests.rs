@@ -203,3 +203,123 @@ let mut rt=CrtStreamRuntime::new(7,9,0x4000,32768).unwrap();rt.map_region(0x41c0
         "security-call",
     );
 }
+
+#[cfg(test)]
+mod dispatch_trace_tests {
+    use crate::crt_stream_emit::{emit_dispatch_return_trace, emit_proved_return_path, PathStep};
+    use std::collections::BTreeMap;
+    #[test]
+    fn finite_visits_check_each_edge_occurrence_and_bound_before_later_effects() {
+        use crate::handler_dispatch::{Action, DispatchProof, InstructionStep};
+        let base = 0x400100;
+        let words: [(u32, &[u8]); 6] = [
+            (base, &[0x83, 0xc0, 1]),
+            (base + 3, &[0x89, 2]),
+            (base + 5, &[0x83, 0xf8, 3]),
+            (base + 8, &[0x72, 0xf6]),
+            (base + 10, &[0xb8, 1, 0, 0, 0]),
+            (base + 15, &[0xc3]),
+        ];
+        let mut instructions = Vec::new();
+        for visit in 0..3 {
+            for i in 0..4 {
+                instructions.push(InstructionStep {
+                    pc: words[i].0,
+                    bytes: words[i].1.to_vec(),
+                    next: Some(if i == 3 {
+                        if visit < 2 {
+                            base
+                        } else {
+                            base + 10
+                        }
+                    } else {
+                        words[i + 1].0
+                    }),
+                });
+            }
+        }
+        instructions.push(InstructionStep {
+            pc: base + 10,
+            bytes: vec![0xb8, 1, 0, 0, 0],
+            next: Some(base + 15),
+        });
+        instructions.push(InstructionStep {
+            pc: base + 15,
+            bytes: vec![0xc3],
+            next: None,
+        });
+        let mut proof = DispatchProof {
+            event_code: 0,
+            source_table: vec![],
+            actions: vec![Action::ReturnDisposition {
+                pc: base + 15,
+                value: 1,
+            }],
+            instructions,
+            initial_level: 0,
+            final_level: 0,
+            temporary_bytes: 0,
+            call_depths: vec![],
+            unexecuted_calls: vec![],
+        };
+        let emit = |p: &DispatchProof| {
+            emit_dispatch_return_trace(
+                p,
+                |_, _| Err("no calls".into()),
+                &BTreeMap::new(),
+                |_, _| Ok(String::new()),
+            )
+        };
+        let good = emit(&proof).unwrap();
+        let path: Vec<_> = proof
+            .instructions
+            .iter()
+            .map(|s| PathStep {
+                pc: s.pc,
+                bytes: &s.bytes,
+                next: s.next,
+            })
+            .collect();
+        assert_eq!(
+            emit_proved_return_path(
+                &path,
+                |_, _| unreachable!(),
+                &BTreeMap::new(),
+                |_, _| Ok(String::new()),
+                0
+            )
+            .unwrap_err(),
+            "CRT path: repeated instruction requires loop proof"
+        );
+        proof.instructions[4].bytes = vec![0x83, 0xc0, 2];
+        assert_eq!(
+            emit(&proof).unwrap_err(),
+            "CRT trace: changed repeated instruction"
+        );
+        proof.instructions[4].bytes = words[0].1.to_vec();
+        proof.instructions[3].next = Some(base + 10);
+        assert_eq!(
+            emit(&proof).unwrap_err(),
+            "CRT path: original successor mismatch"
+        );
+        proof.instructions[3].next = Some(base);
+        for (mode, body) in [
+            (0, good.clone()),
+            (1, good.clone()),
+            (2, good.replace("local_steps>=14", "local_steps>=13")),
+            (
+                3,
+                good.replace(
+                    "let proved_next:Option<u32>",
+                    "if local_steps==5{local_steps=6;}let proved_next:Option<u32>",
+                ),
+            ),
+        ] {
+            crate::crt_stream_callees_tests::native(&format!("fn run(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->Result<CrtValue,&'static str>{{{body}}}"),&format!(r#"
+let mut rt=CrtStreamRuntime::new(7,9,0x4000,32768).unwrap();let stack=rt.map_region(0x8000,64,CrtRegionKind::Stack,None).unwrap();let marker=rt.map_region(0x9000,4,CrtRegionKind::Result,None).unwrap();rt.store(stack,32,CrtValue::ProtectedReturn(17)).unwrap();let mut cpu=CrtCpu::new(stack,17).unwrap();cpu.r[0]=CrtValue::scalar(if {mode}==1{{2}}else{{0}});cpu.r[2]=CrtValue::Pointer(marker);let result=run(&mut rt,&mut cpu);
+match {mode}{{0=>{{assert_eq!(result,Ok(CrtValue::scalar(1)));assert!(cpu.returned);}},1=>{{assert_eq!(result,Err("CRT branch disagrees with semantic proof"));assert!(!cpu.returned);}},2=>{{assert_eq!(result,Err("CRT original graph instruction bound"));assert!(!cpu.returned);}},3=>{{assert_eq!(result,Err("CRT trace occurrence mismatch"));assert!(!cpu.returned);}},_=>unreachable!()}};
+assert_eq!(rt.load(marker,32).unwrap(),CrtValue::scalar(if {mode}==3{{1}}else{{3}}));
+"#),&format!("trace-{mode}"));
+        }
+    }
+}

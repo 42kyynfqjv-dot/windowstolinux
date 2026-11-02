@@ -11,10 +11,10 @@ No handler delivery, captured Windows registers, cleanup or resumption is admitt
 Five retained Windows component comparisons and zero whole-PE pairs remain.
 
 [Producer proof, ownership, tests and exact delivery limits](PENDING-CALL.md).
-The next original Inner search additionally needs occurrence-bound loop emission:
-its two finally-only rows revisit PCs. The corrected return emitter preserves the
-proved live scope level; the existing acyclic path emitter still rejects Inner.
-Object acquisition and Normal predecessor dispatch remain unimplemented.
+Original Inner search now has finite occurrence-bound return emission derived
+from the original scope-chain proof. Live scope level and original visit edges
+remain checked; acyclic callers retain their duplicate-PC rejection. Object
+acquisition and Normal predecessor dispatch remain unimplemented.
 [Earlier application handoff](APPLICATION-HANDOFF.md).
 
 ## Previous executable checkpoint: Outer entered under live Main
