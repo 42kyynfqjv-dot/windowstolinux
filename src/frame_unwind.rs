@@ -312,7 +312,7 @@ fn prove_composition(
         })
         .transpose()?;
     if let Some(prefix) = &prefix_proof {
-        prefix.require_search_flags(0)?;
+        prefix.require_search_flags(0, u32::from(prefix.exception_flags_mask))?;
         if prefix.handler_allocation != 28
             || prefix.owner_pair_offset != -20
             || prefix.handler_pair_offset != -28

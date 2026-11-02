@@ -62,10 +62,11 @@ impl PrefixProof {
     pub fn normalizer_front(&self) -> &str {
         &self.front
     }
-    /// Full zero flags is the admitted incoming domain, even though the code
-    /// tests a subset. A nonzero flag is never silently interpreted as search.
-    pub fn require_search_flags(&self, flags: u32) -> Result<(), String> {
-        if flags != 0 {
+    /// Only bits observed by the decoded TEST establish search fallthrough.
+    /// Unknown or nonzero tested bits reject; other bits grant no knowledge.
+    pub fn require_search_flags(&self, bits: u32, known: u32) -> Result<(), String> {
+        let tested = u32::from(self.exception_flags_mask);
+        if known & tested != tested || bits & tested != 0 {
             return Err("handler prefix unwind/other flags outside proved domain".into());
         }
         Ok(())
@@ -577,9 +578,32 @@ mod tests {
         );
         assert_eq!((p.owner_pair_offset, p.handler_pair_offset), (-20, -28));
         assert_eq!(p.exception_flags_branch, b.installer_va + 0x5a);
-        assert!(p.require_search_flags(0).is_ok());
-        for flags in [1, 2, 4, 0x20, 0x40, 0x80, 0x100, u32::MAX] {
-            assert!(p.require_search_flags(flags).is_err());
+        assert!(p.require_search_flags(0, 0x66).is_ok());
+        for bits in [0, 1, 0x80, 0x100, !0x66] {
+            assert!(p.require_search_flags(bits, 0x66).is_ok());
+        }
+        for bit in [2, 4, 0x20, 0x40] {
+            assert!(p.require_search_flags(0, 0x66 ^ bit).is_err());
+        }
+
+        for flags in [2, 4, 0x20, 0x40, u32::MAX] {
+            assert!(p.require_search_flags(flags, u32::MAX).is_err());
+        }
+    }
+    #[test]
+    fn partial_search_flags_match_all_possible_original_test_outcomes() {
+        let (bytes, bindings) = fixture();
+        let proof = prove_prefix(&bytes, 0x1000, &bindings).unwrap();
+        for known in 0..=255u32 {
+            for bits in 0..=255u32 {
+                let all_fall_through = (0..=255u32)
+                    .filter(|candidate| candidate & known == bits & known)
+                    .all(|candidate| candidate & 0x66 == 0);
+                assert_eq!(
+                    proof.require_search_flags(bits, known).is_ok(),
+                    all_fall_through
+                );
+            }
         }
     }
     #[test]

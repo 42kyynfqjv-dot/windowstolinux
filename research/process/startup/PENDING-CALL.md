@@ -127,3 +127,17 @@ or production handler delivery. Runtime-owned same-event record/context storage,
 observed search-phase flag knowledge and selected Normal predecessor views remain
 unimplemented. Original startup still stops with its RaiseException CALL suspended;
 Inner-to-Outer advancement and all restoration remain outside admission.
+
+## Search flag knowledge prerequisite
+
+The prefix proof and return emitter now require only the bits selected by the
+original TEST mask (0x66) to be known and clear. The dispatcher begins search
+with exactly that mask, rather than full-zero knowledge. Reads of other record
+flag bits still reject in the semantic interpreter. An independent exhaustive
+byte-completion oracle checks that admission agrees with every possible value
+of unknown bits; every missing tested bit and every set tested bit rejects.
+
+This changes the instruction-proof domain only. The existing object validator
+still requires its older supplied record contract, including flags and nested
+link. Production object acquisition and Normal predecessor views remain closed;
+this prerequisite does not issue delivery, capture or resumption authority.

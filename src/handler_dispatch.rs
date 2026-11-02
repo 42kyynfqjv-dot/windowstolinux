@@ -564,11 +564,11 @@ pub(crate) fn prove_dispatch(
     }
     let (mut pc, event_flags) = match entry {
         Entry::Search => {
-            prefix.require_search_flags(0)?;
+            prefix.require_search_flags(0, u32::from(prefix.exception_flags_mask))?;
             (
                 origin,
                 KnownFlags {
-                    mask: u32::MAX,
+                    mask: u32::from(prefix.exception_flags_mask),
                     value: 0,
                 },
             )

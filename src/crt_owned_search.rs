@@ -387,7 +387,7 @@ fn {name}(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,objects:&CrtNormalObjec
  let result=(||{{
  frame.validate()?;objects.validate(frame.event,frame.rt,frame.epoch)?;{name}_bytes(frame.rt)?;
  if frame.binding.layout.handler!={entry}||frame.scope_address()!={table_va}||frame.state.level!= {initial_level}
-  ||frame.rt.load(frame.rt.offset(objects.record,4)?,32)?.known_scalar()?!=0{{return Err("live search handler/scope/flags contract");}}
+  ||!matches!(frame.rt.load(frame.rt.offset(objects.record,4)?,32)?,CrtValue::Scalar{{bits,known}} if known&{search_mask}=={search_mask}&&bits&{search_mask}==0){{return Err("live search handler/scope/flags contract");}}
  frame.preflight_bridge(cpu,{temporary})?;
  let local_low=frame.rt.offset(CrtCpu::pointer(cpu.entry[4])?,-{temporary})?;
  {source}
@@ -402,7 +402,8 @@ fn {name}(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,objects:&CrtNormalObjec
 }}
 "#,
         temporary = prefix.temporary_bytes,
-        initial_level = input.proof.initial_level
+        initial_level = input.proof.initial_level,
+        search_mask = u32::from(prefix.exception_flags_mask)
     ))
 }
 
