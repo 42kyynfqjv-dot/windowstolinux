@@ -474,7 +474,7 @@ fn environment_prefix_source() -> Result<String, String> {
             }
             if t == Target::Direct(0x407d50) {
                 return Ok(format!(
-                    "cpu.call_activation(rt,{},0,|rt,c|ucrt_free_null(rt,c,inputs))?;",
+                    "cpu.call_activation(rt,{},0,|rt,c|ucrt_free_native(rt,c,inputs))?;",
                     pc + 5
                 ));
             }
@@ -651,6 +651,9 @@ fn environment_table_source() -> Result<String, String> {
                 },
             );
         }
+        if start == 0x407770 {
+            crate::crt_stream_emit::bind_address_relation(&mut graph, 0x4077a8, 0x4077b0, 12, 4)?;
+        }
         let body = crate::crt_stream_emit::emit_body(
             &graph,
             |pc, target| {
@@ -659,7 +662,7 @@ fn environment_table_source() -> Result<String, String> {
     Target::Direct(0x407cf0)=>format!("cpu.call_activation(rt,{next},0,|rt,c|ucrt_calloc_native(rt,c,inputs,platform,epoch))?;"),
     Target::Direct(0x407770)=>format!("cpu.call_activation(rt,{next},0,|rt,c|cinit_environment_string_copy(rt,c,inputs,platform,epoch))?;"),
     Target::Direct(0x406b4a)=>format!("cpu.call_activation(rt,{next},0,|rt,c|cinit_environment_table_cleanup(rt,c,inputs,platform,epoch))?;"),
-    Target::Direct(0x407d50)=>format!("cpu.call_activation(rt,{next},0,|rt,c|ucrt_free_null(rt,c,inputs))?;"),
+    Target::Direct(0x407d50)=>format!("cpu.call_activation(rt,{next},0,|rt,c|ucrt_free_native(rt,c,inputs))?;"),
     Target::Direct(0x407ccd|0x407b4f|0x407b5f)=>"return Err(\"environment string-copy errno/invalid-parameter effect unbound\");".into(),
     _=>return Err(format!("environment table unexpected target{target:?}"))
    })
@@ -699,5 +702,92 @@ fn original_string_copy_exposes_cross_allocation_address_cancellation_without_gr
 }for mode in 0..6{one(mode);}
 "#,
         "environment-copy-address-gap",
+    );
+}
+
+#[test]
+fn checked_original_copy_binds_live_arguments_and_preserves_partial_effects() {
+    let mut graph = Graph::decode(&crate::crt_ptd::raw(ENV_STRING_COPY), 0x407770).unwrap();
+    crate::crt_stream_emit::bind_address_relation(&mut graph, 0x4077a8, 0x4077b0, 12, 4).unwrap();
+    let body = crate::crt_stream_emit::emit_body(
+        &graph,
+        |_, _| Ok("return Err(\"copy error contract unbound\");".into()),
+        &Default::default(),
+        256,
+    )
+    .unwrap();
+    let extra=format!("fn copy(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->Result<CrtValue,&'static str>{{cpu.validate_active(rt)?;{body}}}");
+    crate::crt_stream_callees_tests::native_bounded_stack(
+        &extra,
+        r#"
+#[inline(never)]fn one(mode:u32){
+ let(mut rt,init)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();let CrtValue::Heap(heap)=rt.native_process_heap(init).unwrap()else{panic!()};let stack=rt.map_region(0x40000,1024,CrtRegionKind::Stack,None).unwrap();
+ let root=rt.native_heap_allocate(init,heap,0,8).unwrap();let source=if mode==2{rt.offset(root,2).unwrap()}else if mode==3{rt.subrange(root,1).unwrap()}else{root};let target=if mode==1{root}else{rt.native_heap_allocate(init,heap,0,4).unwrap()};
+ for(i,b)in [65,66,0].into_iter().enumerate(){rt.store(rt.offset(root,if mode==2{2+i as i64}else{i as i64}).unwrap(),8,if mode==4&&i==1{CrtValue::Scalar{bits:0,known:0}}else{CrtValue::scalar(b)}).unwrap();}
+ let sp=rt.offset(stack,512).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(91)).unwrap();for(i,v)in [CrtValue::Pointer(target),CrtValue::scalar(if mode==5{1}else{4}),CrtValue::Pointer(source)].into_iter().enumerate(){rt.store(rt.offset(sp,4+i as i64*4).unwrap(),32,v).unwrap();}let mut c=CrtCpu::new(sp,91).unwrap();let saved=c.r;
+ if mode==6{rt.free_allocation(root).unwrap();}if mode==7{rt.free_allocation(target).unwrap();}
+ let got=copy(&mut rt,&mut c);
+ if mode<=2{assert_eq!(got,Ok(CrtValue::scalar(0)));assert!(c.returned);assert_eq!(rt.memory.read(target.address(),3).unwrap(),&[65,66,0]);for n in[3,5,6,7]{assert_eq!(c.r[n],saved[n]);}assert!(copy(&mut rt,&mut c).is_err());}
+ else{assert_eq!(got,Err(match mode{3=>"CRT pointer complete range/identity",4=>"CRT unknown ZF",5=>"copy error contract unbound",6|7=>"CRT stale/foreign pointer",_=>unreachable!()}));assert!(!c.returned);if mode==3||mode==4{assert_eq!(rt.load(target,8),Ok(CrtValue::scalar(65)));assert!(rt.load(rt.offset(target,2).unwrap(),8).unwrap().known_scalar().is_err());}if mode==5{assert_eq!(rt.load(target,8),Ok(CrtValue::scalar(0)));}}
+}for mode in 0..8{one(mode);}
+"#,
+        "checked-original-copy",
+    );
+}
+
+#[test]
+fn address_relation_revalidates_call_roots_arguments_and_numeric_operands() {
+    crate::crt_stream_callees_tests::native_bounded_stack(
+        "",
+        r#"
+#[inline(never)]fn one(mode:u32){
+ let(mut rt,init)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();let CrtValue::Heap(heap)=rt.native_process_heap(init).unwrap()else{panic!()};let source=rt.native_heap_allocate(init,heap,8,8).unwrap();let dest=rt.native_heap_allocate(init,heap,8,8).unwrap();rt.store(source,32,CrtValue::scalar(0x12345678)).unwrap();let stack=rt.map_region(0x40000,1024,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,512).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(91)).unwrap();rt.store(rt.offset(sp,4).unwrap(),32,CrtValue::Pointer(dest)).unwrap();rt.store(rt.offset(sp,8).unwrap(),32,CrtValue::Pointer(source)).unwrap();let mut c=CrtCpu::new(sp,91).unwrap();c.r[3]=CrtValue::Pointer(source);c.r[2]=CrtValue::Pointer(dest);c.r[7]=CrtValue::Pointer(dest);
+ let (relation,value)=CrtAddressRelation::subtract(&rt,&mut c,3,2,8,4).unwrap();assert_eq!(value,CrtValue::scalar(source.address().wrapping_sub(dest.address())));assert_eq!(c.flags.cf,Some(source.address()<dest.address()));assert_eq!(c.flags.zf,Some(source.address()==dest.address()));c.r[3]=value;let before=(c.flags.cf,c.flags.zf,c.flags.sf,c.flags.of);
+ match mode{1=>rt.free_allocation(source).unwrap(),2=>rt.free_allocation(dest).unwrap(),3=>{rt.store(rt.offset(sp,8).unwrap(),32,CrtValue::Pointer(dest)).unwrap();},4=>c.r[3]=CrtValue::scalar(CrtCpu::number(value).unwrap()^1),5=>c.r[7]=CrtValue::Pointer(source),6=>c.r[7]=CrtValue::Pointer(rt.subrange(dest,4).unwrap()),7=>rt.thread+=1,8=>{rt.bind_fiber(rt.thread).unwrap();},9=>{c.return_id=92;rt.tags.insert(sp.address(),CrtValue::ProtectedReturn(92));},10=>c.returned=true,11=>{rt.free_allocation(source).unwrap();let _new=rt.native_heap_allocate(init,heap,8,8).unwrap();},12=>c.r[7]=CrtValue::Pointer(rt.offset(dest,8).unwrap()),13=>c.r[3]=CrtValue::Scalar{bits:CrtCpu::number(value).unwrap(),known:0},14=>{rt.store(rt.offset(sp,4).unwrap(),32,CrtValue::scalar(dest.address())).unwrap();},_=>{}}
+ let got=relation.load(&rt,&c,3,7,32);if mode==0{assert_eq!(got,Ok(CrtValue::scalar(0x12345678)));assert_eq!(c.address(&rt,Some(3),Some(7),1,0,None),Err("CRT pointer complete range/identity"));}else{assert!(got.is_err(),"relation negative{mode}");}assert_eq!((c.flags.cf,c.flags.zf,c.flags.sf,c.flags.of),before);
+}for mode in 0..15{one(mode);}
+"#,
+        "checked-address-relation",
+    );
+}
+
+#[test]
+fn address_relation_binding_rejects_changed_instruction_operands() {
+    let original = crate::crt_ptd::raw(ENV_STRING_COPY);
+    for (pc, offset, value) in [
+        (0x4077a8, 0usize, 0x03u8),
+        (0x4077b0, 0, 0x88),
+        (0x4077b0, 2, 0x4e),
+    ] {
+        let mut bytes = original.clone();
+        bytes[(pc - 0x407770) as usize + offset] = value;
+        if let Ok(mut graph) = Graph::decode(&bytes, 0x407770) {
+            assert!(crate::crt_stream_emit::bind_address_relation(
+                &mut graph, 0x4077a8, 0x4077b0, 12, 4
+            )
+            .is_err());
+        }
+    }
+}
+
+#[test]
+fn checked_relation_lowers_unrelated_registers_and_word_load_without_host_pointer_casts() {
+    let bytes = crate::crt_ptd::raw("558bec5356578b5d0c8b75088bfe2bde668b043b5f5e5b5dc3");
+    let mut graph = Graph::decode(&bytes, 0x1000).unwrap();
+    crate::crt_stream_emit::bind_address_relation(&mut graph, 0x100e, 0x1010, 8, 4).unwrap();
+    let body = crate::crt_stream_emit::emit_body(
+        &graph,
+        |_, _| Err("independent word helper has no calls".into()),
+        &Default::default(),
+        32,
+    )
+    .unwrap();
+    let extra=format!("fn word(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->Result<CrtValue,&'static str>{{{body}}}");
+    crate::crt_stream_callees_tests::native_bounded_stack(
+        &extra,
+        r#"
+for reverse in [false,true]{let(mut rt,init)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();let CrtValue::Heap(heap)=rt.native_process_heap(init).unwrap()else{panic!()};let a=rt.native_heap_allocate(init,heap,8,2).unwrap();let b=rt.native_heap_allocate(init,heap,8,2).unwrap();let(src,dst)=if reverse{(b,a)}else{(a,b)};rt.store(src,16,CrtValue::scalar(0x5678)).unwrap();let stack=rt.map_region(0x40000,1024,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,512).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(91)).unwrap();rt.store(rt.offset(sp,4).unwrap(),32,CrtValue::Pointer(dst)).unwrap();rt.store(rt.offset(sp,8).unwrap(),32,CrtValue::Pointer(src)).unwrap();let mut c=CrtCpu::new(sp,91).unwrap();c.r[0]=CrtValue::scalar(0xaabb0000);let saved=c.r;assert_eq!(word(&mut rt,&mut c),Ok(CrtValue::scalar(0xaabb5678)));assert_eq!(c.flags.cf,Some(src.address()<dst.address()));assert_eq!(c.flags.zf,Some(false));assert_eq!(rt.load(dst,16),Ok(CrtValue::scalar(0)));for r in[3,5,6,7]{assert_eq!(c.r[r],saved[r]);}}
+"#,
+        "independent-word-relation",
     );
 }

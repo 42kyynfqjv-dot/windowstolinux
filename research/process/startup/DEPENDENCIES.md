@@ -1,6 +1,19 @@
 # Remaining entry-to-exit dependencies
 
-## Current executable checkpoint: original table allocations and precise copy/free gates
+## Current executable checkpoint: owned environment table and temporary release
+
+The original controlled native-profile entry now reaches **0x4015ee** after
+constructing and publishing the empty or nonempty environment vector and freeing
+its temporary narrow buffer. Checked original address recomposition preserves
+source capability bounds; separate string allocations survive both snapshot and
+temporary retirement. Original cleanup executes ordered frees with prior effects
+retained on later rejection.
+
+[Contract, evidence and independent Sol review scope](ENVIRONMENT-TABLE.md).
+Native resource rejection is not a guest Windows failure observation. Full
+startup/rcedit/default admission and historical timeout causes remain unresolved.
+
+## Previous executable checkpoint: original table allocations and precise copy/free gates
 
 Original caller0x406a22 reaches the real table builder. Nonempty input counts,
 allocates a distinct zeroed vector and first string, then rejects at original

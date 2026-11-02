@@ -1,0 +1,40 @@
+{
+  "regions_sha256": {
+    "ENV_PREFIX": "f9654b2ab15e94e69ee368e55a8914c4560a62b7a520bc71161320fd5648567c",
+    "ENV_TABLE": "346076e3201d8488ba938e203786bcfcb2682e623a0e6cf39402969502e37d83",
+    "ENV_TABLE_CLEANUP": "b8a90c97d546def2dfb9a5a5dd4f1a71de80942ad220d8e54955dc678efa2b1e",
+    "ENV_STRING_COPY": "a8da9dcc32e4a402a9ed399bce931934dd263596c59b889be45861320548c636"
+  },
+  "source_policy": "synthetic only; no real environment read/logged",
+  "new_windows_pairs": 0,
+  "whole_pe_pairs": 0,
+  "scope": "Original controlled-profile environment construction, publication and native temporary release; component execution",
+  "reviewed_head": "1ff75de7143568568d3a4ff80db9a9ccc835f598",
+  "boundary": "0x4015ee original post-environment continuation unbound",
+  "builder_cases": 18,
+  "original_entry_variants": 2,
+  "checked_copy_cases": 8,
+  "relation_lifetime_cases": 15,
+  "independent_word_load_cases": 2,
+  "native_release_cases": 9,
+  "retained_numeric_only_cases": 6,
+  "canonical_rust_sha256": "615683a652eef9f96fa90c000fe1e2919d98f1f5840dc3c344e3c44ae6562f9b",
+  "limitations": [
+    "No new Windows or whole-PE pairs",
+    "Native resource rejection does not establish Windows FALSE/LastError/errno equivalence",
+    "Failed registry epoch cannot authorize subsequent cleanup",
+    "Copy-error termination and exceptional cleanup unsupported",
+    "Full startup/rcedit/default admission unsupported",
+    "Historical Windows timeouts unresolved"
+  ],
+  "validation": {
+    "canonical": "empty/nonempty entry and eighteen builder cases passed locally",
+    "final_head": "full aggregate, low-stack, committed-source replay and CI tracked separately",
+    "crt": "355 aggregate passes plus separately passed independent word helper (356 distinct tests); two artifact gates separately handled",
+    "python": "114 tests, one skip",
+    "clippy": "all targets, warnings denied, pass",
+    "fmt": "cargo fmt --all -- --check and git diff --check pass",
+    "low_stack": "all 152 word cases, 512 KiB child limit plus 64 KiB environment padding, pass"
+  },
+  "reviewed_manifest_files_matching_exact_commit_blobs": 555
+}

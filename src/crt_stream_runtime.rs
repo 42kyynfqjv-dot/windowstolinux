@@ -1250,6 +1250,18 @@ impl CrtStreamRuntime {
   self.memory.heap_free(self.memory.process_heap(),0,p.base).map_err(|_|"CRT allocation lifetime")?;self.regions.remove(index);self.retired.push(root);self.heap_ptds.retain(|v|v.pointer.cap!=root.cap);
   self.tags.retain(|&at,_|at<root.base||u64::from(at)>=u64::from(root.base)+u64::from(root.size));self.partial.retain(|&at,_|at<root.base||u64::from(at)>=u64::from(root.base)+u64::from(root.size));Ok(())
  }
+ /// Actual release in the explicit native owned-heap domain. Bookkeeping
+ /// capacity is reserved before Space releases storage; rejected requests are
+ /// not fabricated Windows FALSE/LastError observations. The independent
+ /// supplied-failure model and original errno route retain their stricter policy.
+ fn native_heap_free(&mut self,init:CrtInitialization,heap:CrtHeap,flags:u32,p:CrtPointer)->Result<(CrtValue,CrtHeapFreeEffect),&'static str>{
+  self.initialization(init)?;self.heap_identity(heap)?;self.valid(p,0)?;
+  if flags!=0||p.kind!=CrtRegionKind::Buffer||p.address()!=p.base||!self.regions.iter().any(|r|r.pointer==p&&r.heap&&r.file_owner.is_none()){return Err("CRT native HeapFree whole owned buffer");}
+  let serial=self.serial.checked_add(1).ok_or("CRT HeapFree serial")?;
+  self.free_allocation(p)?;
+  self.serial=serial;self.last_os_error=None;
+  Ok((CrtValue::NonZero{anchor:self.anchor,serial},CrtHeapFreeEffect{anchor:self.anchor,thread:self.thread,serial,pointer:p,failed:false}))
+ }
  /// Apply a supplied synchronous HeapFree outcome only to an owned whole
  /// Buffer. FALSE gives no documented unchanged-content/lifetime guarantee.
  /// Keep the underlying allocation charged and revoke every dereference fact.

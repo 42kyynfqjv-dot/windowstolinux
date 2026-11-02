@@ -42,6 +42,36 @@ impl CrtAlignedActivation{
   let value=cpu.finish(rt)?;self.done=true;Ok(value)
  }
 }
+/// Local to one emitted graph invocation. It is never a CrtValue, memory tag,
+/// public pointer conversion, or transferable continuation receipt.
+struct CrtAddressRelation { anchor:guest_memory::Capability,thread:u64,fiber:Option<CrtFiber>,entry:CrtPointer,identity:u64,source:CrtPointer,destination:CrtPointer,source_arg:u32,destination_arg:u32,register:usize,bits:u32 }
+impl CrtAddressRelation {
+ fn subtract(rt:&CrtStreamRuntime,cpu:&mut CrtCpu,source_register:usize,destination_register:usize,source_arg:u32,destination_arg:u32)->Result<(Self,CrtValue),&'static str>{
+  cpu.validate_active(rt)?;
+  if source_register>=8||destination_register>=8||source_register==destination_register||source_register==4||destination_register==4||source_arg==destination_arg||[source_arg,destination_arg].iter().any(|n|*n==0||*n>256||*n%4!=0){return Err("CRT relation operand contract");}
+  let entry=CrtCpu::pointer(cpu.entry[4])?;let source=CrtCpu::pointer(cpu.r[source_register])?;let destination=CrtCpu::pointer(cpu.r[destination_register])?;
+  rt.identity_range(source,0)?;rt.identity_range(destination,0)?;
+  if rt.load(rt.offset(entry,i64::from(source_arg))?,32)?!=CrtValue::Pointer(source)||rt.load(rt.offset(entry,i64::from(destination_arg))?,32)?!=CrtValue::Pointer(destination){return Err("CRT relation argument identity");}
+  // Compute the original SUB flags and result from observed addresses. No
+  // register obtains pointer authority from this scalar displacement.
+  let value=cpu.binary_number(rt,2,CrtValue::Pointer(source),CrtValue::Pointer(destination))?;
+  let relation=Self{anchor:rt.anchor,thread:rt.thread,fiber:rt.fiber,entry,identity:cpu.return_id,source,destination,source_arg,destination_arg,register:source_register,bits:value.known_scalar()?};Ok((relation,value))
+ }
+ fn load(&self,rt:&CrtStreamRuntime,cpu:&CrtCpu,displacement:usize,cursor:usize,width:u8)->Result<CrtValue,&'static str>{
+  cpu.validate_active(rt)?;
+  if rt.closed||self.anchor!=rt.anchor||self.thread!=rt.thread||self.fiber!=rt.fiber||self.identity!=cpu.return_id||cpu.entry[4]!=CrtValue::Pointer(self.entry)||displacement!=self.register||cursor>=8||cpu.r[displacement]!=CrtValue::scalar(self.bits){return Err("CRT relation activation/operand lifetime");}
+  rt.identity_range(self.source,0)?;rt.identity_range(self.destination,0)?;
+  if rt.load(rt.offset(self.entry,i64::from(self.source_arg))?,32)?!=CrtValue::Pointer(self.source)||rt.load(rt.offset(self.entry,i64::from(self.destination_arg))?,32)?!=CrtValue::Pointer(self.destination){return Err("CRT relation argument changed");}
+  let current=CrtCpu::pointer(cpu.r[cursor])?;
+  if (CrtPointer{address:self.destination.address(),..current})!=self.destination{return Err("CRT relation cursor authority");}
+  rt.identity_range(current,0)?;
+  let delta=current.address().checked_sub(self.destination.address()).ok_or("CRT relation backwards cursor")?;
+  let source=rt.offset(self.source,i64::from(delta))?;
+  if current.address().wrapping_add(self.bits)!=source.address(){return Err("CRT relation address arithmetic");}
+  // Read only through the original source bounds, including partial knowledge.
+  rt.load(source,width)
+ }
+}
 impl CrtCpu{
  fn new(sp:CrtPointer,return_id:u64)->Result<Self,&'static str>{if sp.kind!=CrtRegionKind::Stack||return_id==0{return Err("CRT cpu entry authority");}let mut r=std::array::from_fn(|i|CrtValue::OpaqueSaved(i as u8));r[4]=CrtValue::Pointer(sp);Ok(Self{abi:CrtAbi::Cdecl32Forward,r,xmm:[[CrtValue::Scalar{bits:0,known:0};4];8],entry:r,flags:CrtFlags::unknown(),return_id,return_site:None,steps:0,returned:false,return_pop:0})}
  /// Bound stdcall adapter; index is the proven native global-object slot,

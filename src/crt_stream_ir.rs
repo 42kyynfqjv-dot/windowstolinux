@@ -126,6 +126,20 @@ pub(crate) enum Op {
         destination: Reg,
         source: Operand,
     },
+    /// Consumer-qualified original SUB; the result remains scalar. The local
+    /// relation can authorize only a matching load in the same live activation.
+    AddressDifference {
+        source: Reg,
+        destination: Reg,
+        source_arg: u32,
+        destination_arg: u32,
+    },
+    RelatedLoad {
+        destination: Reg,
+        displacement: Reg,
+        cursor: Reg,
+        width: u8,
+    },
     BitTest {
         source: Operand,
         bit: u8,

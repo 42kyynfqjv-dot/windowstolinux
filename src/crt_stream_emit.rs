@@ -3,6 +3,84 @@
 use super::crt_stream_ir::{Graph, Op, SignedCondition, Target};
 use super::graph::{Address, Binary, Condition, Operand, Operation, Reg};
 use std::collections::BTreeMap;
+/// Bind an original SUB and recomposed MOV without replacing either effect.
+/// Runtime checks bind both operands to live argument capabilities. Numeric-only
+/// arithmetic and ordinary address formation retain their existing restrictions.
+pub(crate) fn bind_address_relation(
+    graph: &mut Graph,
+    sub: u32,
+    load: u32,
+    source_arg: u32,
+    destination_arg: u32,
+) -> Result<(), String> {
+    if source_arg == destination_arg
+        || [source_arg, destination_arg]
+            .iter()
+            .any(|n| *n == 0 || *n > 256 || *n % 4 != 0)
+    {
+        return Err("CRT relation argument contract".into());
+    }
+    let Op::Ordinary(Operation::Binary(
+        Binary::Sub,
+        Operand::Reg(source),
+        Operand::Reg(destination),
+    )) = graph.nodes.get(&sub).ok_or("CRT relation SUB missing")?.op
+    else {
+        return Err("CRT relation original SUB mismatch".into());
+    };
+    if source.width != 32
+        || destination.width != 32
+        || source.shift != 0
+        || destination.shift != 0
+        || source.index == destination.index
+        || source.index == 4
+        || destination.index == 4
+    {
+        return Err("CRT relation register contract".into());
+    }
+    let Op::Ordinary(Operation::Binary(
+        Binary::Move,
+        Operand::Reg(output),
+        Operand::Memory(ref address, width),
+    )) = graph
+        .nodes
+        .get(&load)
+        .ok_or("CRT relation load missing")?
+        .op
+    else {
+        return Err("CRT relation original load mismatch".into());
+    };
+    let cursor = match (address.base, address.index) {
+        (Some(a), Some(b)) if a == source.index && b != a => b,
+        (Some(a), Some(b)) if b == source.index && a != b => a,
+        _ => return Err("CRT relation address operands".into()),
+    };
+    if address.scale != 1
+        || address.displacement != 0
+        || !matches!(width, 8 | 16 | 32)
+        || output.width != width
+        || cursor == 4
+    {
+        return Err("CRT relation load shape".into());
+    }
+    graph.nodes.get_mut(&sub).unwrap().op = Op::AddressDifference {
+        source,
+        destination,
+        source_arg,
+        destination_arg,
+    };
+    graph.nodes.get_mut(&load).unwrap().op = Op::RelatedLoad {
+        destination: output,
+        displacement: source,
+        cursor: Reg {
+            index: cursor,
+            width: 32,
+            shift: 0,
+        },
+        width,
+    };
+    Ok(())
+}
 fn condition(c: Condition) -> u8 {
     match c {
         Condition::Equal => 0,
@@ -476,11 +554,22 @@ pub(crate) fn emit_body_with_repeated_memory(
     let terminal = exit
         .map(|exit| format!("if pc=={exit}{{return Ok(cpu.r[0]);}}"))
         .unwrap_or_default();
-    let mut source=format!("let mut pc={}u32;let mut local_steps=0u32;loop{{{terminal}if local_steps>={step_budget}{{return Err(\"CRT original graph instruction bound\");}}local_steps+=1;cpu.tick(u32::MAX)?;match pc{{",graph.origin);
+    let relation = if graph
+        .nodes
+        .values()
+        .any(|n| matches!(n.op, Op::AddressDifference { .. } | Op::RelatedLoad { .. }))
+    {
+        "let mut address_relation:Option<CrtAddressRelation>=None;"
+    } else {
+        ""
+    };
+    let mut source=format!("{relation}let mut pc={}u32;let mut local_steps=0u32;loop{{{terminal}if local_steps>={step_budget}{{return Err(\"CRT original graph instruction bound\");}}local_steps+=1;cpu.tick(u32::MAX)?;match pc{{",graph.origin);
     for (&pc, node) in &graph.nodes {
         let mut out = before(pc, &node.op)?;
         let mut controlled = false;
         match &node.op{
+ Op::AddressDifference{source,destination,source_arg,destination_arg}=>out.push_str(&format!("if address_relation.is_some(){{return Err(\"CRT repeated address relation\");}}let (relation,v)=CrtAddressRelation::subtract(rt,cpu,{},{},{source_arg},{destination_arg})?;cpu.set({},32,0,v)?;address_relation=Some(relation);",source.index,destination.index,source.index)),
+ Op::RelatedLoad{destination,displacement,cursor,width}=>out.push_str(&format!("let v=address_relation.as_ref().ok_or(\"CRT missing address relation\")?.load(rt,cpu,{},{},{width})?;cpu.set({},{},{},v)?;",displacement.index,cursor.index,destination.index,destination.width,destination.shift)),
  Op::NumericArithmetic{operation,destination,source:o}=>{let left=register(*destination);out.push_str(&format!("let a={};let b={};let v=cpu.binary_number(rt,{},a,b)?;{}",read(&left,roles)?,read(o,roles)?,binary(*operation),write(&left,"v",roles)?));},
  Op::Reject(reason)=>out.push_str(&format!("return Err({reason:?});")),
  Op::BitTest{source,bit}=>out.push_str(&format!("let v={};cpu.bit_test(rt,v,{bit})?;",read(source,roles)?)),
