@@ -8,7 +8,83 @@ pub(crate) const FLAG: &str = "33c03905f0d241000f95c0c3";
 pub(crate) const CALLBACK_CELLS: &str = "e86c0500008bf033ff393e741b56e8380300005984c074108b36576a02578bceff1528514100ffd6e84a0500008bf0393e741356e8120300005984c07408ff36e81b59000059";
 pub(crate) const INIT_CELL: &str = "b8f8d24100c3";
 pub(crate) const DTOR_CELL: &str = "b8f4d24100c3";
+pub(crate) const MAIN_ARGS: &str = "e8835500008bf8e8a65900008b30e8995900005756ff30";
+pub(crate) const ENV_GET: &str = "a154ce410085c0750ae849fdffffa354ce4100c3";
+pub(crate) const ENV_FALLBACK: &str =
+    "a148ce410085c0752239054cce41007418e81600000085c07409e87b01000085c07506a148ce4100c333c0c3";
+pub(crate) const ARGC_CELL: &str = "b868ce4100c3";
+pub(crate) const ARGV_CELL: &str = "b86cce4100c3";
 pub(crate) const SCOPE: &str = "feffffff00000000ccffffff00000000feffffff491740005d174000";
+fn argument_source() -> Result<String, String> {
+    let mut out = String::new();
+    for (name, at, raw) in [
+        ("startup_argc_cell", 0x4070ac, ARGC_CELL),
+        ("startup_argv_cell", 0x4070b2, ARGV_CELL),
+    ] {
+        let bytes = crate::crt_ptd::raw(raw);
+        let g = Graph::decode(&bytes, at)?;
+        let body = crate::crt_stream_emit::emit_body(
+            &g,
+            |_, _| Err("argument cell getter call".into()),
+            &Default::default(),
+            8,
+        )?;
+        out.push_str(&format!("fn {name}(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;if cpu.return_pop!=0||cpu.r[4]!=cpu.entry[4]||[3,5,6,7].iter().any(|&r|cpu.r[r]!=cpu.entry[r]){{return Err(\"argument cell getter entry ABI\");}}{}{body}}}",guard(at,&bytes)));
+    }
+    for (name, at, raw) in [
+        ("startup_environment_fallback", 0x4069df, ENV_FALLBACK),
+        ("startup_environment_get", 0x406c88, ENV_GET),
+    ] {
+        let bytes = crate::crt_ptd::raw(raw);
+        let g = Graph::decode(&bytes, at)?;
+        let body = crate::crt_stream_emit::emit_body(
+            &g,
+            |pc, target| {
+                Ok(match target {
+                Target::Direct(0x4069df) if pc==0x406c91 => "cpu.call_activation(rt,0x406c96,0,|rt,c|startup_environment_fallback(rt,c,inputs,platform,epoch.as_deref_mut()))?;".into(),
+                Target::Direct(0x406a0b) if pc==0x4069f0 => "let p=platform.ok_or(\"environment fallback platform unbound\")?;let e=epoch.as_deref_mut().ok_or(\"environment fallback registry unbound\")?;cpu.call_activation(rt,0x4069f5,0,|rt,c|cinit_environment_prefix(rt,c,inputs,p,e))?;".into(),
+                Target::Direct(0x406b79) if pc==0x4069f9 => "cpu.call_activation(rt,0x4069fe,0,|_,_|Err(\"startup wide environment copy unbound at 0x406b79\"))?;return Err(\"unexpected wide environment copy return\");".into(),
+                _ => return Err("environment getter call identity".into()),
+            })
+            },
+            &BTreeMap::from_iter(
+                [0x41ce48, 0x41ce4c, 0x41ce54].map(|a| (a, "CrtRegionKind::Module".into())),
+            ),
+            64,
+        )?;
+        out.push_str(&format!("fn {name}(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:Option<&CrtNativePlatform>,mut epoch:Option<&mut NormalCallEpoch<'_>>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;if cpu.return_pop!=0||cpu.r[4]!=cpu.entry[4]||[3,5,6,7].iter().any(|&r|cpu.r[r]!=cpu.entry[r]){{return Err(\"environment getter entry ABI\");}}{}{body}}}",guard(at,&bytes)));
+    }
+    let bytes = crate::crt_ptd::raw(MAIN_ARGS);
+    let g = crate::crt_startup_table::graph(&bytes, 0x401700)?;
+    let body = crate::crt_stream_emit::emit_body_with_store(
+        &g,
+        |pc, target| {
+            Ok(match (pc,target) {
+            (0x401700,Target::Direct(0x406c88))=>"cpu.call_activation(rt,0x401705,0,|rt,c|startup_environment_get(rt,c,inputs,platform,Some(epoch)))?;".into(),
+            (0x401707,Target::Direct(0x4070b2))=>"cpu.call_activation(rt,0x40170c,0,|rt,c|startup_argv_cell(rt,c,inputs))?;".into(),
+            (0x40170e,Target::Direct(0x4070ac))=>"cpu.call_activation(rt,0x401713,0,|rt,c|startup_argc_cell(rt,c,inputs))?;".into(),
+            _=>return Err("Main argument caller target".into()),
+        })
+        },
+        &Default::default(),
+        32,
+        |_, _| Err("Main argument thread effect".into()),
+        |pc, _| {
+            Ok(match pc {
+                0x40170c | 0x401715 => {
+                    let address = if pc == 0x40170c { 0x41ce6c } else { 0x41ce68 };
+                    format!("let p=rt.module_word_pointer(inputs.image,cpu.r[0])?;if p!=rt.process_image_pointer(inputs.image,{address},4)?{{return Err(\"argument cell live identity\");}}cpu.r[0]=CrtValue::Pointer(p);")
+                }
+                _ => String::new(),
+            })
+        },
+        |_, _| Err("Main argument unexpected return".into()),
+        Some(0x401717),
+        |_, _, _| Err("Main argument unexpected store".into()),
+    )?;
+    out.push_str(&format!("fn startup_main_arguments(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:Option<&CrtNativePlatform>,epoch:&mut NormalCallEpoch<'_>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;{}{body}}}",guard(0x401700,&bytes)));
+    Ok(out)
+}
 // The mapped words are read at the original CMPs. Neither getter supplies their
 // values, nor does this prefix grant authority to call a non-NULL value.
 fn callback_source() -> Result<String, String> {
@@ -118,6 +194,7 @@ pub(crate) fn source() -> Result<String, String> {
     let mut out=format!("fn startup_runtime_flag(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;{} {body}}}",guard(0x4021bf,&flag));
     out.push_str(&array_source);
     out.push_str(&callback_source()?);
+    out.push_str(&argument_source()?);
     let lock = crate::crt_ptd::raw(LOCK);
     let g = lock_graph()?;
     let body = crate::crt_stream_emit::emit_body(
@@ -239,7 +316,7 @@ pub(crate) fn source() -> Result<String, String> {
         },
     )?;
     out.push_str(r#"fn startup_caller_frame(rt:&CrtStreamRuntime,cpu:&CrtCpu,epoch:&NormalCallEpoch<'_>,binding:&CrtNormalBinding)->Result<(),&'static str>{binding.authority(rt,epoch)?;let image=binding.image(rt,cpu,epoch)?;epoch.validate_image(binding.id.ok_or("startup caller missing normal frame")?,&image)}"#);
-    out.push_str(&format!("fn startup_post_initializer(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>,binding:&mut CrtNormalBinding)->Result<CrtValue,&'static str>{{startup_post_initializer_platform(rt,cpu,inputs,epoch,binding,None)}}fn startup_post_initializer_platform(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>,binding:&mut CrtNormalBinding,platform:Option<&CrtNativePlatform>)->Result<CrtValue,&'static str>{{startup_post_initializer_observed(rt,cpu,inputs,epoch,binding,platform,None)}}fn startup_post_initializer_observed(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>,binding:&mut CrtNormalBinding,platform:Option<&CrtNativePlatform>,features:Option<&CrtFeatureObservation>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;startup_caller_frame(rt,cpu,epoch,binding)?;let arg=binding.at(rt,binding.layout.low-4)?;if cpu.r[4]!=CrtValue::Pointer(arg)||rt.load(arg,32)?!=CrtValue::scalar(1){{return Err(\"startup caller argument/phase\");}}if binding.image(rt,cpu,epoch)?.try_level!= -2{{return Err(\"startup caller scope phase\");}}{}let _=(||->Result<CrtValue,&'static str>{{{body}}})()?;startup_caller_frame(rt,cpu,epoch,binding)?;startup_callback_cells(rt,cpu,inputs)?;startup_caller_frame(rt,cpu,epoch,binding)?;Err(\"startup environment getter unbound at 0x401700\")}}",guard(0x401632,&bytes)));
+    out.push_str(&format!("fn startup_post_initializer(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>,binding:&mut CrtNormalBinding)->Result<CrtValue,&'static str>{{startup_post_initializer_platform(rt,cpu,inputs,epoch,binding,None)}}fn startup_post_initializer_platform(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>,binding:&mut CrtNormalBinding,platform:Option<&CrtNativePlatform>)->Result<CrtValue,&'static str>{{startup_post_initializer_observed(rt,cpu,inputs,epoch,binding,platform,None)}}fn startup_post_initializer_observed(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>,binding:&mut CrtNormalBinding,platform:Option<&CrtNativePlatform>,features:Option<&CrtFeatureObservation>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;startup_caller_frame(rt,cpu,epoch,binding)?;let arg=binding.at(rt,binding.layout.low-4)?;if cpu.r[4]!=CrtValue::Pointer(arg)||rt.load(arg,32)?!=CrtValue::scalar(1){{return Err(\"startup caller argument/phase\");}}if binding.image(rt,cpu,epoch)?.try_level!= -2{{return Err(\"startup caller scope phase\");}}{}let _=(||->Result<CrtValue,&'static str>{{{body}}})()?;startup_caller_frame(rt,cpu,epoch,binding)?;startup_callback_cells(rt,cpu,inputs)?;startup_caller_frame(rt,cpu,epoch,binding)?;startup_main_arguments(rt,cpu,inputs,platform,epoch)?;startup_caller_frame(rt,cpu,epoch,binding)?;Err(\"startup Main call unbound at 0x401717\")}}",guard(0x401632,&bytes)));
     out.push_str(&format!("fn startup_caller_bytes()->Vec<u8>{{vec!{bytes:?}}}fn startup_release_bytes()->Vec<u8>{{vec!{release:?}}}fn startup_runtime_lock_bytes()->Vec<u8>{{vec!{lock:?}}}fn startup_runtime_flag_bytes()->Vec<u8>{{vec!{flag:?}}}"));
     Ok(out)
 }

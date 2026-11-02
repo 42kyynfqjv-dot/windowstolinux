@@ -1,6 +1,16 @@
 # Remaining entry-to-exit dependencies
 
-## Current executable checkpoint: original callback-cell getters and NULL decisions
+## Current executable checkpoint: original Main argument preparation
+
+The controlled native-profile entry executes the original environment getter,
+argv/argc cell getters, live loads and ordered pushes. It stops **before Main
+CALL 0x401717** with envp/argv/argc on the live guest stack; Main has not run.
+The fallback reuses the original checked environment producer. Unknown/stale
+payload transport grants no dereference or Main-call authority.
+
+[Producer contracts, failure ordering and next Main scope](STARTUP-ARGUMENTS.md).
+
+## Previous executable checkpoint: original callback-cell getters and NULL decisions
 
 The controlled native-profile entry executes both original getters and reads
 both live mapped callback cells. Both NULL branches reach **before CALL0x401700
