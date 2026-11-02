@@ -233,9 +233,11 @@ impl CrtX87State{
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 struct CrtX87Context{anchor:guest_memory::Capability,owner:u64,thread:u64,init:CrtInitialization,fiber:Option<Option<CrtFiber>>,state:CrtX87State,mxcsr_mask:Option<u32>}
 
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+enum CrtUnhandledFilter{Unobserved,Default,Guest(CrtProcessImage,CrtPointer)}
 struct CrtStreamRuntime {
  // Diagnostic instruction address only; never grants state authority.
- environment:Option<Box<CrtEnvironment>>,fp_boundary:Option<u32>,x87:Option<CrtX87Context>,
+ unhandled_filter:CrtUnhandledFilter,environment:Option<Box<CrtEnvironment>>,fp_boundary:Option<u32>,x87:Option<CrtX87Context>,
  file_view:CrtPointer,main_image:Option<CrtProcessImage>,main_image_regions:Vec<CrtPointer>,loader_cells:std::collections::BTreeMap<u32,(CrtPointer,bool)>,modules:std::collections::BTreeMap<u32,CrtLoadedModule>,module_references:CrtModuleReferences,exports:std::collections::BTreeMap<u64,CrtExport>,providers:std::collections::BTreeMap<u32,CrtNativeProvider>,native_sync:CrtGlobalSlots<(CrtFunction,u32,CrtPointer)>,slist_heads:Box<CrtGlobalSlots<CrtSListHead>>,
  uncertain_allocations:Vec<CrtPointer>,completed_failed_frees:Vec<(guest_memory::Capability,u64)>,heap_ptds:Vec<CrtHeapPtdView>,fiber:Option<CrtFiber>,fls_indices:CrtFlsIndices,fls:CrtFlsValues,
  unobserved_contexts:Vec<(CrtPointer,std::rc::Rc<std::cell::Cell<bool>>)>,heap:Option<CrtHeap>,memory:guest_memory::Space,owner:u64,thread:u64,anchor:guest_memory::Capability,
@@ -331,7 +333,7 @@ impl CrtStreamRuntime {
  }
  fn from_file_storage(owner:u64,thread:u64,memory:guest_memory::Space,pointer:CrtPointer)->Result<Self,&'static str>{
   let anchor=pointer.cap;
-  Ok(Self{environment:None,fp_boundary:None,x87:None,file_view:pointer,main_image:None,main_image_regions:vec![],loader_cells:std::collections::BTreeMap::new(),modules:std::collections::BTreeMap::new(),module_references:CrtModuleReferences::new(),exports:std::collections::BTreeMap::new(),providers:std::collections::BTreeMap::new(),native_sync:CrtGlobalSlots::new(),slist_heads:Box::new(CrtGlobalSlots::new()),uncertain_allocations:vec![],completed_failed_frees:vec![],heap_ptds:vec![],fiber:None,fls_indices:CrtFlsIndices::new(),fls:CrtFlsValues::new(),unobserved_contexts:vec![],heap:None,memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],native_endpoints:vec![],native_standards:None,command_line:None,image_name:None,file_mode:None,global_objects:CrtGlobalSlots::new(),global_locks:CrtGlobalLeases::new(),record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,canonical_errno:false,errno_cell:None,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:CrtFileLockSet::first(pointer.base)?})
+  Ok(Self{unhandled_filter:CrtUnhandledFilter::Unobserved,environment:None,fp_boundary:None,x87:None,file_view:pointer,main_image:None,main_image_regions:vec![],loader_cells:std::collections::BTreeMap::new(),modules:std::collections::BTreeMap::new(),module_references:CrtModuleReferences::new(),exports:std::collections::BTreeMap::new(),providers:std::collections::BTreeMap::new(),native_sync:CrtGlobalSlots::new(),slist_heads:Box::new(CrtGlobalSlots::new()),uncertain_allocations:vec![],completed_failed_frees:vec![],heap_ptds:vec![],fiber:None,fls_indices:CrtFlsIndices::new(),fls:CrtFlsValues::new(),unobserved_contexts:vec![],heap:None,memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],native_endpoints:vec![],native_standards:None,command_line:None,image_name:None,file_mode:None,global_objects:CrtGlobalSlots::new(),global_locks:CrtGlobalLeases::new(),record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,canonical_errno:false,errno_cell:None,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:CrtFileLockSet::first(pointer.base)?})
  }
 
  /// Initial FILE storage is a bounded role view of the original writable
@@ -427,6 +429,17 @@ impl CrtStreamRuntime {
   // failed protection/output operation preserves both bytes and tags atomically.
   for(at,_)in old{self.tags.remove(&at);}for n in 0..4{self.partial.remove(&(output.address()+n));}Ok(())
  }
+ /// Registration is a process-owned exchange, never exception dispatch authority.
+ fn unhandled_filter_value(&self)->Result<CrtValue,&'static str>{
+  if self.closed{return Err("CRT process filter lifetime");}self.memory.validate(self.anchor,self.file_view.owner).map_err(|_|"CRT process filter storage lifetime")?;
+  match self.unhandled_filter{CrtUnhandledFilter::Unobserved=>Ok(CrtValue::Scalar{bits:0,known:0}),CrtUnhandledFilter::Default=>Ok(CrtValue::scalar(0)),CrtUnhandledFilter::Guest(image,p)=>{if self.process_image_code(image,p.address(),1)?!=p{return Err("CRT process filter code identity");}Ok(CrtValue::Pointer(p))}}
+ }
+ fn exchange_unhandled_filter(&mut self,init:CrtInitialization,target:Option<(CrtProcessImage,CrtPointer)>)->Result<CrtValue,&'static str>{
+  self.initialization(init)?;let previous=self.unhandled_filter_value()?;
+  let next=if let Some((image,p))=target{if p.kind!=CrtRegionKind::Module||self.process_image_code(image,p.address(),1)?!=p{return Err("CRT process filter target identity");}CrtUnhandledFilter::Guest(image,p)}else{CrtUnhandledFilter::Default};
+  self.unhandled_filter=next;self.last_os_error=None;Ok(previous)
+ }
+ fn unhandled_filter_delivery(&self)->Result<(),&'static str>{self.unhandled_filter_value()?;Err("CRT unhandled exception delivery unbound")}
  fn process_image_code(&self,token:CrtProcessImage,address:u32,size:u32)->Result<CrtPointer,&'static str>{
   let p=self.process_image_pointer(token,address,size)?;self.memory.validate_executable(p.cap,p.owner,address,size).map_err(|_|"CRT process image code permission")?;Ok(p)
  }

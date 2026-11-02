@@ -11,6 +11,10 @@ pub(crate) const FILE_INIT:&str="a12ccd4100566a035e85c07507b800020000eb063bc67d0
 pub(crate) const LOCALE: &str = "e86baaffff0fb6c083f001c3";
 pub(crate) const MODE: &str = "833dbcd2410000750ac705bcd241000040000033c0c3";
 pub(crate) const FEATURE: &str = "6a0aff151c504100a3fcd2410033c0c3";
+pub(crate) const VOID_LOOP: &str =
+    "8bff558bec568b75083b750c741a578b3e85ff740a8bcfff1528514100ffd783c6043b750c75e85f5e5dc3";
+pub(crate) const FILTER_REGISTER: &str = "689f1d4000ff1510504100c3";
+pub(crate) const NEW_MODE: &str = "8bff558bec8b450885c0741a83f8017415e8e70a0000c70016000000e85e09000083c8ff5dc3b980ce410087015dc3";
 pub(crate) const CPP: &str = "e881070000e8a505000050e8b35b000059c3";
 pub(crate) const APP_TYPE: &str = "8bff558bec8b4508a338cd41005dc3";
 pub(crate) const GET_MODE: &str = "b800400000c3";
@@ -62,6 +66,7 @@ pub(crate) fn source() -> Result<String, String> {
     let registration_source = crate::crt_onexit::source()?;
     let raw = crate::crt_ptd::raw;
     let bytes = raw(LOOP);
+    let void_bytes = raw(VOID_LOOP);
     let g = crate::crt_startup_table::graph(&bytes, 0x406ccc)?;
     let body = crate::crt_stream_emit::emit_body_with_indirect(
         &g,
@@ -95,15 +100,16 @@ pub(crate) fn source() -> Result<String, String> {
     )?;
     let mut out = format!(
         r#"
-struct CrtCArray{{begin:CrtPointer,len:usize,words:[u32;64],arguments:CrtPointer,values:[CrtValue;2]}}
+struct CrtCArray{{begin:CrtPointer,len:usize,words:[u32;64],arguments:CrtPointer,values:[CrtValue;2],void:bool}}
 impl CrtCArray{{
- fn bind(rt:&CrtStreamRuntime,cpu:&CrtCpu,image:CrtProcessImage)->Result<Self,&'static str>{{
+ fn bind(rt:&CrtStreamRuntime,cpu:&CrtCpu,image:CrtProcessImage)->Result<Self,&'static str>{{Self::bind_kind(rt,cpu,image,false)}}
+ fn bind_kind(rt:&CrtStreamRuntime,cpu:&CrtCpu,image:CrtProcessImage,void:bool)->Result<Self,&'static str>{{
   let sp=CrtCpu::pointer(cpu.r[4])?;let arguments=rt.offset(sp,4)?;let values=[rt.load(arguments,32)?,rt.load(rt.offset(arguments,4)?,32)?];let begin=rt.module_word_pointer(image,values[0])?;let end=CrtCpu::number(values[1])?;let size=end.checked_sub(begin.address()).filter(|n|*n<=256&&*n%4==0).ok_or("C-array bound/alignment")?;if begin.address()%4!=0||rt.process_image_pointer(image,begin.address(),size.max(1))?!=begin{{return Err("C-array canonical extent");}}rt.memory.validate_immutable(begin.cap,begin.owner,begin.address(),size.max(1)).map_err(|_|"C-array table permission")?;
-  let mut words=[0;64];for(i,w)in words.iter_mut().take((size/4)as usize).enumerate(){{*w=rt.load(rt.offset(begin,(i*4)as i64)?,32)?.known_scalar()?;}}Ok(Self{{begin,len:(size/4)as usize,words,arguments,values}})
+  let mut words=[0;64];for(i,w)in words.iter_mut().take((size/4)as usize).enumerate(){{*w=rt.load(rt.offset(begin,(i*4)as i64)?,32)?.known_scalar()?;}}Ok(Self{{begin,len:(size/4)as usize,words,arguments,values,void}})
  }}
  fn validate(&self,rt:&CrtStreamRuntime,image:CrtProcessImage)->Result<(),&'static str>{{
   if rt.process_image_pointer(image,self.begin.address(),(self.len as u32*4).max(1))?!=self.begin||rt.load(self.arguments,32)?!=self.values[0]||rt.load(rt.offset(self.arguments,4)?,32)?!=self.values[1]{{return Err("C-array owner/arguments changed");}}rt.memory.validate_immutable(self.begin.cap,self.begin.owner,self.begin.address(),(self.len as u32*4).max(1)).map_err(|_|"C-array table permission")?;
-  for(i,value)in self.words[..self.len].iter().enumerate(){{if rt.load(rt.offset(self.begin,(i*4)as i64)?,32)?.known_scalar()?!=*value{{return Err("C-array table changed");}}}}{guard}Ok(())
+  for(i,value)in self.words[..self.len].iter().enumerate(){{if rt.load(rt.offset(self.begin,(i*4)as i64)?,32)?.known_scalar()?!=*value{{return Err("C-array table changed");}}}}if self.void{{{void_guard}}}else{{{guard}}}Ok(())
  }}
  fn cursor(&self,rt:&CrtStreamRuntime,cpu:&CrtCpu)->Result<usize,&'static str>{{let p=CrtCpu::pointer(cpu.r[6])?;rt.valid(p,4)?;if p.cap!=self.begin.cap||p.owner!=self.begin.owner||p.base!=self.begin.base||p.size!=self.begin.size{{return Err("C-array cursor identity");}}let delta=p.address().checked_sub(self.begin.address()).filter(|n|*n%4==0&&((*n/4)as usize)<self.len).ok_or("C-array cursor extent")?;Ok((delta/4)as usize)}}
 }}
@@ -113,7 +119,8 @@ fn startup_c_array_context(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtE
 fn startup_c_array_platform(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,mut epoch:Option<&mut NormalCallEpoch<'_>>,platform:Option<&CrtNativePlatform>)->Result<CrtValue,&'static str>{{startup_c_array_observed(rt,cpu,inputs,epoch,platform,None)}}
 fn startup_c_array_observed(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,mut epoch:Option<&mut NormalCallEpoch<'_>>,platform:Option<&CrtNativePlatform>,features:Option<&CrtFeatureObservation>)->Result<CrtValue,&'static str>{{startup_c_array(rt,cpu,inputs,&mut |rt,c,_,target|match target.address(){{0x40155a=>cinit_first_platform(rt,c,inputs,epoch.as_deref_mut(),platform),0x401605=>cinit_second_original(rt,c,inputs),0x40c109=>cinit_default_mode(rt,c,inputs),0x404510=>{{let e=epoch.as_deref_mut().ok_or("FILE registry absent")?;let p=platform.ok_or("FILE platform absent")?;cinit_file_original(rt,c,inputs,p,e)}},0x4109ba=>{{let e=epoch.as_deref_mut().ok_or("locale initializer registry absent")?;let p=platform.ok_or("locale initializer platform absent")?;cinit_locale_original(rt,c,inputs,p,e)}},0x4127b0=>cinit_feature_original(rt,c,inputs,features.ok_or("C initializer feature observation absent")?),_=>Err("C initializer callback unbound")}})}}
 "#,
-        guard = guard(0x406ccc, &bytes).replace("inputs.image", "image")
+        guard = guard(0x406ccc, &bytes).replace("inputs.image", "image"),
+        void_guard = guard(0x406ca1, &void_bytes).replace("inputs.image", "image")
     );
     let feature = raw(FEATURE);
     let graph = Graph::decode(&feature, 0x4127b0)?;
@@ -130,6 +137,7 @@ fn startup_c_array_observed(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&Crt
         16,
     )?;
     out.push_str(&format!("fn cinit_feature_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,features:&CrtFeatureObservation)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;features.validate(rt)?;cpu.validate_active(rt)?;{} {body}}}", guard(0x4127b0,&feature)));
+    out.push_str(&cpp_source()?);
     out.push_str(&registration_source);
     out.push_str(&crate::crt_argv::source()?);
     out.push_str(&post_source()?);
@@ -932,4 +940,102 @@ for mode in 0..6{let(mut rt,_)=CrtStreamRuntime::new_initializing(7,9,0x8000,655
 "#,
         "locale-initializer-reuse",
     );
+}
+
+fn cpp_source() -> Result<String, String> {
+    let bytes = crate::crt_ptd::raw(VOID_LOOP);
+    let graph = crate::crt_startup_table::graph(&bytes, 0x406ca1)?;
+    let body = crate::crt_stream_emit::emit_body_with_indirect(
+        &graph,
+        |pc, target| {
+            if pc != 0x406cb8 || target != Target::Import(0x415128) {
+                return Err("void-array guard import".into());
+            }
+            Ok("table.validate(rt,inputs.image)?;let index=table.cursor(rt,cpu)?;if completed[index]||(0..index).any(|j|table.words[j]!=0&&!completed[j]){return Err(\"void-array callback order\");}let address=cpu.r[7].known_scalar()?;if cpu.r[1].known_scalar()?!=address||address!=table.words[index]{return Err(\"void-array guard register target\");}let code=rt.process_image_code(inputs.image,address,1)?;let p=rt.process_image_pointer(inputs.image,0x415128,4)?;let guard=rt.process_image_code(inputs.image,0x401bf9,3)?;if rt.load(p,32)?.known_scalar()?!=0x401bf9||rt.memory.read(guard.address(),3).map_err(|_|\"void-array guard read\")?!=[0xc2,0,0]{return Err(\"void-array guard identity\");}cpu.call_activation(rt,0x406cbe,0,startup_original_guard)?;guarded=Some((index,code));".into())
+        },
+        &Default::default(),
+        4096,
+        |_, _| Err("void-array thread effect".into()),
+        |pc, _| {
+            Ok(if pc == 0x406caa {
+                "if CrtCpu::number(cpu.r[6])?!=table.begin.address(){return Err(\"void-array initial cursor\");}cpu.r[6]=CrtValue::Pointer(table.begin);".into()
+            } else {
+                String::new()
+            })
+        },
+        |_, pop| {
+            if pop != 0 {
+                return Err("void-array RET cleanup".into());
+            }
+            Ok(Some("table.validate(rt,inputs.image)?;if (0..table.len).any(|j|table.words[j]!=0&&!completed[j]){return Err(\"void-array incomplete traversal\");}return cpu.finish(rt);".into()))
+        },
+        None,
+        |_, _, _| Ok(None),
+        |pc, _| {
+            if pc != 0x406cbe {
+                return Err("void-array indirect call".into());
+            }
+            Ok("table.validate(rt,inputs.image)?;let index=table.cursor(rt,cpu)?;let(expected,code)=guarded.take().ok_or(\"void-array missing/replayed guard\")?;let address=target.known_scalar()?;if expected!=index||code!=rt.process_image_code(inputs.image,address,1)?||address!=table.words[index]{return Err(\"void-array callback target changed\");}cpu.call_activation(rt,0x406cc0,0,|rt,c|callback(rt,c,index,code))?;inputs.validate(rt)?;table.validate(rt,inputs.image)?;completed[index]=true;".into())
+        },
+    )?;
+    let mut out = format!("fn startup_cpp_array(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,callback:&mut impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu,usize,CrtPointer)->Result<CrtValue,&'static str>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;if cpu.return_pop!=0||cpu.r[4]!=cpu.entry[4]||[3,5,6,7].iter().any(|&r|cpu.r[r]!=cpu.entry[r]){{return Err(\"void-array entry phase/ABI\");}}let table=CrtCArray::bind_kind(rt,cpu,inputs.image,true)?;table.validate(rt,inputs.image)?;let mut completed=[false;64];let mut guarded:Option<(usize,CrtPointer)>=None;{body}}}\nfn startup_cpp_array_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs)->Result<CrtValue,&'static str>{{startup_cpp_array(rt,cpu,inputs,&mut |rt,c,_,target|match target.address(){{0x40160d=>cinit_cpp_original(rt,c,inputs),_=>Err(\"void-array original callback unbound\")}})}}");
+    // The ABI adapter acquires only a checked pointer into this process image.
+    // The process slot grants no authority to execute an unhandled callback.
+    out.push_str(r#"fn cinit_filter_api(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs)->Result<CrtValue,&'static str>{inputs.validate(rt)?;cpu.validate_active(rt)?;if cpu.return_pop!=4||cpu.r[4]!=cpu.entry[4]||[3,5,6,7].iter().any(|&r|cpu.r[r]!=cpu.entry[r]){return Err("process filter stdcall frame");}let sp=CrtCpu::pointer(cpu.r[4])?;rt.offset(sp,8)?;rt.memory.validate_writable(sp.cap,sp.owner,sp.address(),8).map_err(|_|"process filter stack permission")?;rt.ordinary_file_bytes(sp,8)?;let value=rt.load(rt.offset(sp,4)?,32)?;let target=if value==CrtValue::scalar(0){None}else{let p=rt.module_word_pointer(inputs.image,value)?;if rt.process_image_code(inputs.image,p.address(),1)?!=p{return Err("process filter argument identity");}Some((inputs.image,p))};let previous=rt.exchange_unhandled_filter(inputs.init,target)?;cpu.clobber(previous);cpu.finish_pop(rt,4)}"#);
+    for (name, at, literal) in [
+        ("cinit_filter_register", 0x401d93, FILTER_REGISTER),
+        ("cinit_cpp_original", 0x40160d, CPP),
+        ("cinit_new_mode", 0x4071d0, NEW_MODE),
+    ] {
+        let bytes = crate::crt_ptd::raw(literal);
+        let mut graph = Graph::decode(&bytes, at)?;
+        if at == 0x4071d0 {
+            graph.initializing_atomic(0x4071fb)?;
+        }
+        let body = crate::crt_stream_emit::emit_body_with_hooks(
+            &graph,
+            |pc, target| {
+                let (callee, pop) = match target {
+                    Target::Direct(0x401d93) => ("cinit_filter_register", 0),
+                    Target::Direct(0x401bbc) => ("cinit_zero", 0),
+                    Target::Direct(0x4071d0) => ("cinit_new_mode", 0),
+                    Target::Import(0x415010) if pc == 0x401d98 => ("cinit_filter_api", 4),
+                    Target::Direct(0x407ccd | 0x407b4f) => {
+                        return Ok(
+                            "return Err(\"new-mode invalid-parameter effects unbound\");".into(),
+                        )
+                    }
+                    _ => return Err("CPP initializer call identity".into()),
+                };
+                Ok(format!(
+                    "cpu.call_activation(rt,{},{pop},|rt,c|{callee}(rt,c,inputs))?;",
+                    pc + graph.nodes[&pc].length
+                ))
+            },
+            &BTreeMap::from([(0x41ce80, "CrtRegionKind::Module".into())]),
+            128,
+            |_, op| {
+                let Op::InitializingAtomic {
+                    destination: crate::graph::Operand::Memory(a, 32),
+                    source,
+                    add: false,
+                } = op
+                else {
+                    return Err("new-mode atomic shape".into());
+                };
+                Ok(format!("let p={};cpu.exchange_initializing_scalar(rt,inputs.init,inputs.image,p,{},false)?;",crate::crt_stream_emit::address(a,&Default::default())?,source.index))
+            },
+            |pc, _| {
+                Ok(if pc == 0x4071fb {
+                    "cpu.r[1]=CrtValue::Pointer(rt.module_word_pointer(inputs.image,cpu.r[1])?);"
+                        .into()
+                } else {
+                    String::new()
+                })
+            },
+            |_, _| Ok(None),
+        )?;
+        out.push_str(&format!("fn {name}(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;{}{body}}}",guard(at,&bytes)));
+    }
+    Ok(out)
 }

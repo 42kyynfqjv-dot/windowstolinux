@@ -1,6 +1,16 @@
 # Remaining entry-to-exit dependencies
 
-## Current executable checkpoint: original C-initializer array returned
+## Current executable checkpoint: original C++ initialization and state2 publication
+
+The controlled native-profile entry executes caller result branching, original
+void-array traversal, process-owned filter exchange and original new-mode XCHG.
+It pops the array arguments, publishes startup state2, pushes the byte-initialized
+release flag without inventing upper bits, and stops before **0x4016b4 →0x401a9c**.
+The initial previous filter remains unknown; no exceptional delivery is admitted.
+
+[Process-slot contract, review and next release scope](CPP-INITIALIZER.md).
+
+## Previous executable checkpoint: original C-initializer array returned
 
 The final original processor-feature callback now uses the live CPU profile,
 stores raw BOOL truth without inventing representation bits, and returns zero.
