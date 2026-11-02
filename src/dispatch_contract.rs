@@ -786,6 +786,7 @@ mod tests {
                 after: -2,
             }],
             instructions: vec![],
+            initial_level: 2,
             final_level: -2,
             temporary_bytes: 0,
             call_depths: vec![],
