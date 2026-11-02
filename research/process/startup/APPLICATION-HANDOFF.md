@@ -3,8 +3,8 @@
 The explicit native profile reaches original Main CALL0x401717 after the original
 startup state2 publication and argument pushes. This boundary revokes constructor
 permission while preserving the actual startup frame. Main, Outer and Inner then
-use a separate application instruction lease. The original entry currently stops
-before RaiseException CALL0x401117, after Inner's four argument pushes. This is
+use a separate application instruction lease. The original entry now executes RaiseException CALL0x401117 through the
+[producer-bound suspension contract](PENDING-CALL.md), then stops before delivery. This is
 component execution from the original entry, with zero whole-PE exit comparisons.
 
 ## Handoff
@@ -64,10 +64,10 @@ five Windows component comparisons; it adds no Windows acquisition observations.
 
 This does not enable normal-phase heap/FLS/FP/constructor APIs by weakening their
 initialization checks. Canonical resources and their identities remain stored;
-normal API effects need their own justified operation permits. The absent-SP
-pending issuer remains rejected. Next work must capture the actual RaiseException
-CALL state without assuming a memory-saved ESP or manufacturing Windows CONTEXT
-bytes, and close delivery/containment before resumption. Main/Outer/Inner returns,
+normal API effects need their own justified operation permits. The generic absent-SP
+pending issuer remains rejected; a separate original producer now permits CALL
+suspension without manufacturing a saved-SP field or Windows CONTEXT. Delivery
+and containment still need proof before resumption. Main/Outer/Inner returns,
 exceptional cleanup, resource failure equivalence, default admission and full
 startup/rcedit remain unproved.
 

@@ -29,6 +29,7 @@ pub(crate) const INNER_CALL: &str = "e8d6feffff";
 pub(crate) const INNER_PROLOG: &str = "558bec6afe68d0b14100681022400064a1000000005083ec10535657a100c041003145f833c5508d45f064a300000000";
 pub(crate) const INNER_INITIAL: &str =
     "c745e464000000c745e000000000c745fc00000000c745fc010000006a006a006a0068424242e0";
+pub(crate) const INNER_RAISE: &str = "ff1500504100";
 pub(crate) const INNER_EPILOG: &str = "8b4df064890d00000000595f5e5b8be55dc3";
 pub(crate) const INNER_SCOPE: &str =
     "feffffff00000000d0ffffff00000000feffffff000000007f11400000000000000000006e114000";
@@ -253,10 +254,24 @@ fn inner_source() -> Result<String, String> {
             Ok(Some(format!("b.authority(rt,epoch)?;let p={};if p!=b.at(rt,b.layout.bp+({offset}))?{{return Err(\"Inner initial destination alias\");}}{transition}rt.store(p,32,v)?;let image=b.image(rt,cpu,epoch)?;epoch.validate_image(b.id.ok_or(\"Inner initial missing frame\")?,&image)?;",crate::crt_stream_emit::address(a,&Default::default())?)))
         },
     )?;
+    let prefix = [p.clone(), bytes.clone()].concat();
+    let acquisition = crate::crt_exception_wrapper::normal_frame::emit_pending_raise(
+        &prefix,
+        &raw(INNER_RAISE),
+        crate::crt_exception_wrapper::normal_frame::PendingRaiseBinding {
+            origin: 0x4010c0,
+            cookie: 0x41c000,
+            scope: 0x41b1d0,
+            handler: 0x402210,
+            iat: 0x415000,
+            code: 0xe0424242,
+        },
+    )?;
     let mut out=format!("fn original_inner_layout()->CrtNormalLayout{{{layout}}}fn original_inner_plan()->NormalFramePlan{{{plan}}}");
+    out.push_str(&acquisition);
     out.push_str(&format!("fn original_inner_prolog(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>,b:&mut CrtNormalBinding)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;b.authority(rt,epoch)?;if b.layout!=original_inner_layout()||b.id.is_some()||b.saved_sp_pending||cpu.r[4]!=cpu.entry[4]{{return Err(\"Inner prolog phase/layout\");}}{}{}{prolog}}}",guard(0x4010c0,&p),guard(0x40115c,&ep)));
     out.push_str(&format!("fn original_inner_initial(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>,b:&mut CrtNormalBinding)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;let image=b.image(rt,cpu,epoch)?;epoch.validate_image(b.id.ok_or(\"Inner initial missing frame\")?,&image)?;{}{body}}}",guard(0x4010f0,&bytes)));
-    out.push_str(&format!("fn startup_inner_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;let scope=rt.process_image_pointer(inputs.image,0x41b1d0,{})?;rt.memory.validate_immutable(scope.cap,scope.owner,scope.address(),{}).map_err(|_|\"Inner scope permission\")?;if rt.memory.read(scope.address(),{}).map_err(|_|\"Inner scope read\")?!=&{scope:?}{{return Err(\"Inner scope bytes changed\");}}let mut b=CrtNormalBinding::bind_inline_initializing(rt,cpu,epoch,original_inner_layout(),inputs.init,vec![])?;original_inner_prolog(rt,cpu,inputs,epoch,&mut b)?;original_inner_initial(rt,cpu,inputs,epoch,&mut b)?;Err(\"startup Inner RaiseException acquisition unbound at 0x401117\")}}",scope.len(),scope.len(),scope.len()));
+    out.push_str(&format!("fn startup_inner_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;let scope=rt.process_image_pointer(inputs.image,0x41b1d0,{})?;rt.memory.validate_immutable(scope.cap,scope.owner,scope.address(),{}).map_err(|_|\"Inner scope permission\")?;if rt.memory.read(scope.address(),{}).map_err(|_|\"Inner scope read\")?!=&{scope:?}{{return Err(\"Inner scope bytes changed\");}}let mut b=CrtNormalBinding::bind_inline_initializing(rt,cpu,epoch,original_inner_layout(),inputs.init,vec![])?;original_inner_prolog(rt,cpu,inputs,epoch,&mut b)?;original_inner_initial(rt,cpu,inputs,epoch,&mut b)?;let event=acquire_original_inner_raise(rt,cpu,epoch,&b)?;event.dispatch_source(rt,cpu,epoch,&b)?;event.require_delivery_contract()?;Err(\"unexpected original RaiseException delivery\")}}",scope.len(),scope.len(),scope.len()));
     out.push_str(&format!("fn startup_call_inner(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>,parent:&CrtNormalBinding)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;let image=parent.image(rt,cpu,epoch)?;epoch.validate_image(parent.id.ok_or(\"Inner parent missing\")?,&image)?;if parent.layout!=original_outer_layout()||image.try_level!=0||cpu.r[4]!=CrtValue::Pointer(parent.at(rt,parent.layout.low)?){{return Err(\"Inner caller phase/stack\");}}{}cpu.call_activation(rt,0x4011ea,0,|rt,c|startup_inner_original(rt,c,inputs,epoch))?;Err(\"unexpected Inner return\")}}",guard(0x4011e5,&raw(INNER_CALL))));
     Ok(out)
 }
@@ -993,5 +1008,61 @@ fn original_inner_absent_sp_and_two_scope_transitions_are_instruction_bound() {
     }
     let source = inner_source().unwrap();
     assert!(source.contains("Inner nested scope transition"));
-    assert!(source.contains("0x401117"));
+    assert!(source.contains(&format!("instruction:{}", 0x401117)));
+}
+
+#[test]
+fn pending_raise_proves_actual_prefix_arguments_and_distinct_stack_extents() {
+    use crate::crt_exception_wrapper::normal_frame::{emit_pending_raise, PendingRaiseBinding};
+    let prefix = crate::crt_ptd::raw(&format!("{INNER_PROLOG}{INNER_INITIAL}"));
+    let call = crate::crt_ptd::raw("ff1500504100");
+    let emit = |p: &[u8], c: &[u8]| {
+        emit_pending_raise(
+            p,
+            c,
+            PendingRaiseBinding {
+                origin: 0x4010c0,
+                cookie: 0x41c000,
+                scope: 0x41b1d0,
+                handler: 0x402210,
+                iat: 0x415000,
+                code: 0xe0424242,
+            },
+        )
+    };
+    let source = emit(&prefix, &call).unwrap();
+    assert!(source.contains("b.at(rt,-68)"));
+    assert!(!source.contains("cpu.r="));
+    assert!(!source.contains("cpu.flags="));
+    for i in 0..call.len() {
+        let mut changed = call.clone();
+        changed[i] ^= 1;
+        assert!(emit(&prefix, &changed).is_err(), "CALL byte {i}");
+    }
+    // Every byte of the actual four pushes either fails the proof, or must be
+    // explicitly frozen as a different producer; it cannot retain this source.
+    for i in prefix.len() - 11..prefix.len() {
+        let mut changed = prefix.clone();
+        changed[i] ^= 1;
+        if let Ok(other) = emit(&changed, &call) {
+            assert_ne!(other, source);
+        }
+    }
+    // A second independent frame extent changes the derived CALL stack. No
+    // fixed Inner offset grants authority to a differently sized activation.
+    let mut larger = prefix.clone();
+    let at = larger
+        .windows(3)
+        .position(|w| w == [0x83, 0xec, 0x10])
+        .unwrap();
+    larger[at + 2] = 0x20;
+    let source = emit(&larger, &call).unwrap();
+    assert!(source.contains("b.at(rt,-84)"));
+    // An actual saved-SP store remains a fact of the original frame only.
+    let mut with_slot = prefix[..48].to_vec();
+    with_slot.extend_from_slice(&[0x89, 0x65, 0xe8]);
+    with_slot.extend_from_slice(&prefix[48..]);
+    let source = emit(&with_slot, &call).unwrap();
+    assert!(source.contains("b.at(rt,-68)"));
+    assert!(!source.contains("CONTEXT"));
 }

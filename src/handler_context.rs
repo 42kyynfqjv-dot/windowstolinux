@@ -56,7 +56,7 @@ impl CrtNormalException {{
  /// Component-only no-observation lease. This does not acquire OS delivery
  /// state or permit full-image emission. All raw CONTEXT access stays blocked.
  fn bind_unobserved_context(&mut self,rt:&mut CrtStreamRuntime,interrupted:&CrtCpu,epoch:&NormalCallEpoch<'_>,binding:&CrtNormalBinding,record:CrtPointer,context:CrtPointer)->RegistryResult<CrtNormalObjects>{{
-  self.dispatch_source(rt,interrupted,epoch,binding)?;
+  self.require_delivery_contract()?;self.dispatch_source(rt,interrupted,epoch,binding)?;
   if self.delivery!=CrtNormalDelivery::Pending||self.unobserved.is_some()||self.produced_record!=Some(record){{return Err("unobserved context source/phase/replay");}}
   if context.kind!=CrtRegionKind::Context||context.address()!=context.base||context.address()%4!=0||context.size!=716||record.cap==context.cap{{return Err("unobserved context storage role/alias");}}
   rt.valid(context,716)?;

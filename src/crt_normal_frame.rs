@@ -37,6 +37,85 @@ impl NormalRaiseCallProof {
         )
     }
 }
+/// Consumer-bound acquisition from a proved original prefix. This emits checks
+/// of live values; it never installs proof-derived register or CONTEXT values.
+pub(crate) struct PendingRaiseBinding {
+    pub origin: u32,
+    pub cookie: u32,
+    pub scope: u32,
+    pub handler: u32,
+    pub iat: u32,
+    pub code: u32,
+}
+pub(crate) fn emit_pending_raise(
+    prefix: &[u8],
+    call: &[u8],
+    binding: PendingRaiseBinding,
+) -> Result<String, String> {
+    use crate::frame_proof::GuestRegister;
+    let PendingRaiseBinding {
+        origin,
+        cookie,
+        scope,
+        handler,
+        iat,
+        code,
+    } = binding;
+    let frame = crate::frame_proof::prove_frame(
+        prefix,
+        origin,
+        cookie,
+        &std::collections::BTreeSet::from([scope]),
+        &std::collections::BTreeSet::from([handler]),
+    )?;
+    let proof = crate::raise_call::prove_call(&frame, call, frame.end(), iat, code)?;
+    let mut checks = String::new();
+    for (i, r) in proof.registers().iter().enumerate() {
+        let value = match r {
+            GuestRegister::Unknown => continue,
+            GuestRegister::Scalar(n) => format!("CrtValue::scalar({n})"),
+            GuestRegister::EntryRegister(n) => format!("cpu.entry[{n}]"),
+            GuestRegister::StackOffset(n) => format!("CrtValue::Pointer(b.at(rt,{n})?)"),
+            _ => return Err("pending raise register expression".into()),
+        };
+        checks.push_str(&format!(
+            "if cpu.r[{i}]!={value}{{return Err(\"pending raise live register\");}}"
+        ));
+    }
+    let (mask, bits) = proof.known_flags();
+    for (bit, name) in [(1, "cf"), (64, "zf"), (128, "sf"), (2048, "of")] {
+        if mask & bit != 0 {
+            checks.push_str(&format!(
+                "if cpu.flags.{name}!=Some({}){{return Err(\"pending raise live flags\");}}",
+                bits & bit != 0
+            ));
+        }
+    }
+    let bp = frame.ebp_offset();
+    let record = bp + frame.record_offset();
+    let low = proof.normal_return_sp_offset();
+    for (&offset, &value) in frame.scalar_words() {
+        checks.push_str(&format!("if rt.load(b.at(rt,{})?,32)?!=CrtValue::scalar({value}){{return Err(\"pending raise producer stores\");}}",bp+offset));
+    }
+    let pc = proof.call_pc();
+    let next = proof.next_pc();
+    let sp = proof.caller_sp_offset();
+    let scope = frame.scope_va();
+    let level = frame.try_level();
+    Ok(format!(
+        r#"
+fn acquire_original_inner_raise(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,epoch:&mut NormalCallEpoch<'_>,b:&CrtNormalBinding)->RegistryResult<CrtNormalException>{{
+ let app=b.application.ok_or("pending raise requires application lease")?;app.validate(rt)?;cpu.validate_active(rt)?;
+ let image=b.image(rt,cpu,epoch)?;
+ if b.initialization.is_some()||b.saved_sp_pending||b.layout.bp!={bp}||b.layout.low!={low}||b.layout.record!={record}||b.layout.handler!={handler}||b.layout.cookie_address!={cookie}||image.scope_va!={scope}||image.try_level!={level}||cpu.entry!=b.entry||cpu.return_id!=b.return_id{{return Err("pending raise producer frame");}}
+ let producer=CrtPendingRaiseProducer{{application:app,prefix:({origin},&{prefix:?}),call:({pc},&{call:?}),iat:{iat}}};producer.validate(rt)?;
+ {checks}
+ for(i,value)in [{code}u32,0,0,0].into_iter().enumerate(){{if rt.load(b.at(rt,{sp}+i as i32*4)?,32)?!=CrtValue::scalar(value){{return Err("pending raise live arguments");}}}}
+ CrtNormalException::issue_checked(rt,cpu,epoch,b,CrtNormalRaiseSite{{instruction:{pc},continuation:{next},iat:{iat}}},Some(producer))
+}}
+"#
+    ))
+}
 /// Lower one original MOV [establisher+12], register into the live frame.
 /// Scope-table/control-flow proof remains the caller's obligation. This proof
 /// establishes the memory/register operation, not which scope may be selected.
@@ -407,6 +486,16 @@ impl CrtNormalBinding {
 /// An issued software exception is not a successful API return. This private
 /// token owns the interrupted guest CALL state. There is deliberately no API
 /// turning it into a Windows captured CONTEXT or a normal-return receipt.
+/// Original producer bytes/import remain owned by the same live process image.
+#[derive(Clone,Copy)]
+struct CrtPendingRaiseProducer {application:CrtApplicationInputs,prefix:(u32,&'static[u8]),call:(u32,&'static[u8]),iat:u32}
+impl CrtPendingRaiseProducer {
+ fn validate(&self,rt:&CrtStreamRuntime)->RegistryResult<()>{
+  self.application.validate(rt)?;
+  for(at,bytes)in[self.prefix,self.call]{let p=rt.process_image_code(self.application.image,at,bytes.len()as u32)?;if rt.memory.read(p.address(),bytes.len()as u32).map_err(|_|"pending raise code read")?!=bytes{return Err("pending raise changed producer");}}
+  rt.process_image_import(self.application.image,self.iat,"kernel32.dll","RaiseException")
+ }
+}
 struct CrtNormalRaiseSite { instruction:u32,continuation:u32,iat:u32 }
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 enum CrtNormalDelivery { Pending,Calling,Returned,ResultTaken,Failed }
@@ -420,7 +509,7 @@ struct CrtNormalObjects {
 }
 impl CrtNormalObjects {
  fn bind(event:&CrtNormalException,rt:&CrtStreamRuntime,epoch:&NormalCallEpoch<'_>,record:CrtPointer,context:CrtPointer)->RegistryResult<Self>{
-  event.validate_pending(rt,epoch)?;
+  event.require_delivery_contract()?;event.validate_pending(rt,epoch)?;
   if record.kind!=CrtRegionKind::Context||context.kind!=CrtRegionKind::Context
    ||record.address()%4!=0||context.address()%4!=0
    ||(u64::from(record.address())<u64::from(context.address())+716&&u64::from(context.address())<u64::from(record.address())+80){return Err("normal exception object roles/alias");}
@@ -430,7 +519,7 @@ impl CrtNormalObjects {
   objects.validate(event,rt,epoch)?;Ok(objects)
  }
  fn validate_record(&self,event:&CrtNormalException,rt:&CrtStreamRuntime,epoch:&NormalCallEpoch<'_>)->RegistryResult<()>{
-  event.validate_pending(rt,epoch)?;
+  event.require_delivery_contract()?;event.validate_pending(rt,epoch)?;
   if rt.anchor!=self.anchor||event.identity!=self.identity||event.epoch!=self.epoch||event.generation!=self.generation{return Err("normal exception captured object identity/bounds");}
   if event.produced_record.is_some_and(|p|p!=self.record){return Err("normal record producer object mismatch");}
   rt.valid(self.record,80)?;rt.valid(self.context,716)?;
@@ -466,21 +555,30 @@ impl CrtNormalObjects {
 }
 struct CrtNormalException {
  anchor:guest_memory::Capability,identity:RegistryIdentity,epoch:u64,frame:NormalFrameId,
- generation:u64,code:u32,noncontinuable:bool,continuation:u32,
+ generation:u64,code:u32,noncontinuable:bool,continuation:u32,acquisition:Option<CrtPendingRaiseProducer>,
  call_registers:[CrtValue;8],call_flags:CrtFlags,return_id:u64,delivery:CrtNormalDelivery,produced_record:Option<CrtPointer>,unobserved:Option<CrtUnobservedContext>,
 }
 impl Drop for CrtNormalException {fn drop(&mut self){if let Some(lease)=&self.unobserved{lease.revoke();}}}
 impl CrtNormalException {
+ fn require_delivery_contract(&self)->RegistryResult<()>{if self.acquisition.is_some(){return Err("pending raise delivery/capture contract unbound");}Ok(())}
  fn fail_capture(&mut self){if let Some(lease)=&self.unobserved{lease.revoke();}self.delivery=CrtNormalDelivery::Failed;}
  /// Called only at a separately proved FF /2 RaiseException import boundary.
  /// Initial domain: no exception parameters. The opcode/IAT effect binding is
  /// still a compiler prerequisite, never inferred from numeric address equality.
  fn issue(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,epoch:&mut NormalCallEpoch<'_>,binding:&CrtNormalBinding,site:CrtNormalRaiseSite)->RegistryResult<Self>{
+  if binding.layout.saved_sp.is_none(){return Err("normal exception absent saved-SP contract unbound");}
+  Self::issue_checked(rt,cpu,epoch,binding,site,None)
+ }
+ /// Only a consumer-bound original producer may supply application authority.
+ /// This permits suspension, never supplied capture or handler delivery.
+ fn issue_checked(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,epoch:&mut NormalCallEpoch<'_>,binding:&CrtNormalBinding,site:CrtNormalRaiseSite,acquisition:Option<CrtPendingRaiseProducer>)->RegistryResult<Self>{
   if epoch.registry.normal_epoch.as_ref().is_some_and(|s|s.pending_exception.is_some()||s.delivery.is_some()){
    return Err("normal exception nested delivery contract unbound");
   }
-  if binding.layout.saved_sp.is_none(){return Err("normal exception absent saved-SP contract unbound");}
+  if let Some(producer)=acquisition{producer.validate(rt)?;if binding.application!=Some(producer.application)||binding.initialization.is_some(){return Err("pending raise application mismatch");}cpu.validate_active(rt)?;}
+  else if binding.layout.saved_sp.is_none(){return Err("normal exception absent saved-SP contract unbound");}
   let CrtNormalRaiseSite{instruction,continuation,iat}=site;
+  if let Some(p)=acquisition{if p.call.0!=instruction||p.call.1.len()!=6||p.iat!=iat||p.prefix.0.checked_add(p.prefix.1.len()as u32)!=Some(instruction){return Err("pending raise producer/site mismatch");}}
   binding.image(rt,cpu,epoch)?;
   let frame=binding.id.ok_or("normal exception source not installed")?;
   let f=epoch.top(frame)?;
@@ -505,8 +603,9 @@ impl CrtNormalException {
   let generation=rt.generation.checked_add(1).filter(|n|*n<1u64<<63).ok_or("normal exception identity budget")?;
   let return_id=generation|(1u64<<63);
   if rt.tags.values().any(|v|*v==CrtValue::ProtectedReturn(return_id)){return Err("normal exception return collision");}
+  if acquisition.is_some(){let(_,shared_generation,shared_return)=cpu.preflight_call(rt,continuation,0)?;if(shared_generation,shared_return)!=(generation,return_id){return Err("pending raise CALL preflight mismatch");}}
   let pending=Self{anchor:rt.anchor,identity:epoch.registry.identity,epoch:epoch.generation,frame,
-   generation,code:args[0],noncontinuable:args[1]!=0,continuation,
+   generation,code:args[0],noncontinuable:args[1]!=0,continuation,acquisition,
    call_registers:cpu.r,call_flags:cpu.flags,return_id,delivery:CrtNormalDelivery::Pending,produced_record:None,unobserved:None};
   // Publish suspension only after the original CALL push succeeds. No argument
   // cleanup, clobber, captured-register synthesis, unlock or frame retirement.
@@ -558,6 +657,7 @@ impl CrtNormalException {
  /// disposition or authorize resuming the interrupted guest CALL.
  fn execute_handler<F>(&mut self,rt:&mut CrtStreamRuntime,interrupted:&CrtCpu,epoch:&mut NormalCallEpoch<'_>,binding:&CrtNormalBinding,dispatcher:&mut CrtCpu,continuation:u32,body:F)->RegistryResult<CrtNormalHandlerReturn>
  where F:FnOnce(&mut CrtStreamRuntime,&mut CrtCpu)->RegistryResult<CrtValue>{
+  self.require_delivery_contract()?;
   if self.delivery!=CrtNormalDelivery::Pending{return Err("normal exception handler replay/phase");}
   let before=self.dispatch_source(rt,interrupted,epoch,binding)?;
   self.check_handler_stack(rt,interrupted,epoch,dispatcher)?;
@@ -576,6 +676,7 @@ impl CrtNormalException {
  /// own delivery/containment contract and is rejected by issue().
  fn execute_child_handler<F>(&mut self,rt:&mut CrtStreamRuntime,interrupted:&CrtCpu,epoch:&mut NormalCallEpoch<'_>,binding:&CrtNormalBinding,dispatcher:&mut CrtCpu,continuation:u32,body:F)->RegistryResult<CrtNormalHandlerReturn>
  where F:FnOnce(&mut CrtStreamRuntime,&mut CrtCpu,&mut NormalCallEpoch<'_>)->RegistryResult<CrtValue>{
+  self.require_delivery_contract()?;
   if self.delivery!=CrtNormalDelivery::Pending||epoch.delivery.is_some(){return Err("delivery child replay/nested phase");}
   let before=self.dispatch_source(rt,interrupted,epoch,binding)?;
   self.check_handler_stack(rt,interrupted,epoch,dispatcher)?;
@@ -624,6 +725,7 @@ impl CrtNormalException {
   match result{Ok(value)=>{self.delivery=CrtNormalDelivery::ResultTaken;Ok(value)},Err(error)=>{self.fail_capture();epoch.fail(error)}}
  }
  fn validate_pending(&self,rt:&CrtStreamRuntime,epoch:&NormalCallEpoch<'_>)->RegistryResult<()>{
+  if let Some(producer)=self.acquisition{producer.validate(rt)?;if self.delivery==CrtNormalDelivery::Failed{return Err("pending raise failed event");}}
   epoch.registry.available()?;
   let state=epoch.registry.normal_epoch.as_ref().ok_or("normal exception expired epoch")?;
   if rt.anchor!=self.anchor||rt.owner!=self.identity.owner||rt.thread!=self.identity.instance||rt.closed
@@ -632,6 +734,7 @@ impl CrtNormalException {
    ||state.pending_exception!=Some(self.generation)||epoch.registry.head!=RegistryHead::Normal(self.frame)
    ||state.frames.last().is_none_or(|f|f.id!=self.frame||!f.installed||f.unlinked){return Err("normal exception stale/foreign ownership");}
   let sp=CrtCpu::pointer(self.call_registers[4])?;
+  if self.acquisition.is_some(){for(i,value)in[self.code,u32::from(self.noncontinuable),0,0].into_iter().enumerate(){if rt.load(rt.offset(sp,i as i64*4)?,32)?!=CrtValue::scalar(value){return Err("pending raise argument lifetime");}}}
   if rt.load(rt.offset(sp,-4)?,32)?!=CrtValue::ProtectedReturn(self.return_id)||rt.tags.values().filter(|v|**v==CrtValue::ProtectedReturn(self.return_id)).count()!=1{return Err("normal exception lost/aliased CALL continuation");}Ok(())
  }
 }
@@ -746,6 +849,7 @@ impl CrtNormalException {
  /// remain an explicit captured-state input. No projection is committed.
  fn execute_live_handler<F>(&mut self,objects:&CrtNormalObjects,rt:&mut CrtStreamRuntime,interrupted:&CrtCpu,epoch:&mut NormalCallEpoch<'_>,binding:&CrtNormalBinding,dispatcher:&mut CrtCpu,continuation:u32,body:F)->RegistryResult<CrtNormalHandlerReturn>
  where F:FnOnce(&mut CrtLiveFrame<'_,'_>,&mut CrtCpu)->RegistryResult<CrtValue>{
+  self.require_delivery_contract()?;
   if self.delivery!=CrtNormalDelivery::Pending{return Err("normal exception handler replay/phase");}
   objects.check_arguments(self,rt,epoch,binding,dispatcher)?;
   let image=self.dispatch_source(rt,interrupted,epoch,binding)?;

@@ -1,14 +1,17 @@
 # Remaining entry-to-exit dependencies
 
-## Current executable checkpoint: application handoff and Inner prefix
+## Current executable checkpoint: original RaiseException CALL suspended
 
-The original Main call now transfers the sole live startup frame from constructor
-permission to a checked application instruction lease. Original Main, Outer and
-Inner bind under that lease. Inner's EH4 publication, local100/cursor0, scope0
-then scope1, and four original arguments execute. The next boundary is **before
-RaiseException CALL0x401117**. No event or Windows CONTEXT is acquired.
+The explicit native-profile entry executes Main, Outer and Inner through the
+original RaiseException CALL `0x401117`, IAT `0x415000`. The original prefix and
+arguments now issue a pending CALL only after its protected return push succeeds.
+Four frames and prior effects remain owned; constructor permissions stay revoked.
+The next boundary is **same-event record/CONTEXT acquisition and delivery**.
+No handler delivery, captured Windows registers, cleanup or resumption is admitted.
+Five retained Windows component comparisons and zero whole-PE pairs remain.
 
-[Handoff proof, original effects, tests and remaining API permissions](APPLICATION-HANDOFF.md).
+[Producer proof, ownership, tests and exact delivery limits](PENDING-CALL.md).
+[Earlier application handoff](APPLICATION-HANDOFF.md).
 
 ## Previous executable checkpoint: Outer entered under live Main
 
