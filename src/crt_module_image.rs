@@ -14,7 +14,7 @@ pub(crate) fn source(bytes: &[u8]) -> Result<String, String> {
             if pc != 0x401d53 || target != Target::Import(0x415008) {
                 return Err("managed image query import".into());
             }
-            Ok("cpu.call_activation(rt,0x401d59,4,|rt,c|{let sp=CrtCpu::pointer(c.r[4])?;if rt.load(rt.offset(sp,4)?,32)?!=CrtValue::scalar(0){return Err(\"main module query argument\");}let value=if let Some(view)=image{view.validate(rt)?;CrtValue::Pointer(view.root)}else{CrtValue::scalar(0)};rt.last_os_error=None;c.clobber(value);c.finish_pop(rt,4)})?;".into())
+            Ok("cpu.call_activation(rt,0x401d59,4,|rt,c|CrtModuleImage::null_handle_call(image,rt,c))?;".into())
         },
         &Default::default(),
         64,
@@ -35,6 +35,15 @@ const TYPES: &str = r#"
 enum CrtImageOwner{Acquired(CrtModule),Process(CrtProcessImage)}
 struct CrtModuleImage{owner:CrtImageOwner,root:CrtPointer}
 impl CrtModuleImage{
+ // Shared checked NULL-name ABI. The enclosing producer establishes which
+ // current image this view denotes; Main uses process-owned main-image state.
+ fn null_handle_call(image:Option<&Self>,rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->Result<CrtValue,&'static str>{
+  cpu.validate_active(rt)?;
+  if cpu.return_pop!=4||cpu.r[4]!=cpu.entry[4]||[3,5,6,7].iter().any(|&r|cpu.r[r]!=cpu.entry[r]){return Err("main module query stdcall ABI");}
+  let sp=CrtCpu::pointer(cpu.r[4])?;if rt.load(rt.offset(sp,4)?,32)?!=CrtValue::scalar(0){return Err("main module query argument");}
+  let value=if let Some(view)=image{view.validate(rt)?;CrtValue::Pointer(view.root)}else{CrtValue::scalar(0)};
+  rt.last_os_error=None;cpu.clobber(value);cpu.finish_pop(rt,4)
+ }
  // An initialization contract supplies the mapped image and executable-module
  // acquisition; matching numbers alone cannot create either capability.
  fn bind(rt:&CrtStreamRuntime,init:CrtInitialization,module:CrtModule,root:CrtPointer)->Result<Self,&'static str>{
@@ -46,6 +55,22 @@ impl CrtModuleImage{
  fn validate(&self,rt:&CrtStreamRuntime)->Result<(),&'static str>{match self.owner{CrtImageOwner::Acquired(module)=>rt.module_identity(module)?,CrtImageOwner::Process(token)=>{if rt.process_image(token)?!=self.root{return Err("main image view alias");}}}rt.valid(self.root,self.root.size)?;Ok(())}
 }
 "#;
+#[test]
+fn null_module_handle_call_validates_abi_owner_and_preserves_preflight_state() {
+    let extra = source(&crate::crt_ptd::raw(QUERY)).unwrap();
+    crate::crt_stream_callees_tests::native(
+        &extra,
+        r#"
+for mode in 0..6{
+ let(mut rt,init)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();let image=rt.bootstrap_main_image(init,0x500000,&[0;512]).unwrap();let view=CrtModuleImage::main(&rt).unwrap();let stack=rt.map_region(0x9000,1024,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,800).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(71)).unwrap();rt.store(rt.offset(sp,4).unwrap(),32,if mode==2{CrtValue::scalar(1)}else{CrtValue::scalar(0)}).unwrap();let mut c=CrtCpu::new(sp,71).unwrap();c.return_pop=if mode==1{0}else{4};if mode==3{c.r[3]=CrtValue::scalar(2);}if mode==4{rt.memory.release(view.root.cap,view.root.owner).unwrap();}if mode==5{rt.tags.insert(stack.address(),CrtValue::ProtectedReturn(71));}let before=c.r;rt.last_os_error=Some(91);
+ let got=CrtModuleImage::null_handle_call(Some(&view),&mut rt,&mut c);
+ if mode==0{assert_eq!(got,Ok(CrtValue::Pointer(rt.process_image(image).unwrap())));assert!(c.returned);assert_eq!(rt.last_os_error,None);assert_eq!(c.r[4],CrtValue::Pointer(rt.offset(sp,8).unwrap()));}
+ else{assert_eq!(got,Err(match mode{1|3=>"main module query stdcall ABI",2=>"main module query argument",4=>"CRT pointer lifetime",5=>"CRT active caller lifetime/return authority",_=>unreachable!()}));assert_eq!(c.r,before);assert_eq!(rt.last_os_error,Some(91));assert!(!c.returned);}
+}
+"#,
+        "null-main-module-ABI",
+    );
+}
 #[test]
 fn original_managed_query_checks_live_image_and_header_paths() {
     let extra = source(&crate::crt_ptd::raw(QUERY)).expect("original query lowering");

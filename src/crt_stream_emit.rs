@@ -597,7 +597,7 @@ pub(crate) fn emit_body_with_repeated_memory(
  let value=if *op==Binary::Move{read(src,roles)?}else if *op==Binary::Xor&&dst==src&&matches!(dst,Operand::Reg(_)){"cpu.zero()".into()}else{out.push_str(&format!("let a={};let b={};",read(dst,roles)?,read(src,roles)?));format!("cpu.binary(rt,{},a,b,{})?",binary(*op),width(dst))};
  out.push_str(&format!("let {}={value};", if matches!(op,Binary::Compare|Binary::Test){"_"}else{"v"}));
  if !matches!(op,Binary::Compare|Binary::Test){
- if matches!(dst,Operand::Reg(Reg{index:4,width:32,shift:0}))&&*op==Binary::Add{if let Operand::Immediate(n)=src{out.push_str(&format!("cpu.discard(rt,{n})?;"));}else{return Err("CRT emit dynamic ESP cleanup outside admission".into());}}
+ if matches!(dst,Operand::Reg(Reg{index:4,width:32,shift:0}))&&*op==Binary::Add{if let Operand::Immediate(n)=src{if (*n as i32)>=0{out.push_str(&format!("cpu.discard(rt,{n})?;"));}}else{return Err("CRT emit dynamic ESP cleanup outside admission".into());}}
  let special=if *op==Binary::Move{if let Operand::Memory(address,width)=dst{store(pc,address,*width)?}else{None}}else{None};
  out.push_str(&special.unwrap_or(write(dst,"v",roles)?));}
  },

@@ -157,6 +157,7 @@ struct CrtNormalBinding {
  anchor:guest_memory::Capability,identity:RegistryIdentity,epoch:u64,
  previous:RegistryHead,token:CrtThreadHead,caller:CrtPointer,entry:[CrtValue;8],return_id:u64,
  layout:CrtNormalLayout,cookie:u32,initialization:Option<CrtInitialization>,id:Option<NormalFrameId>,consumed:std::collections::BTreeSet<i32>,done:bool,
+ extra_guards:Vec<i32>,saved_sp_pending:bool,
 }
 impl CrtNormalBinding {
  fn head_bits(head:RegistryHead)->[u64;3]{match head{
@@ -208,7 +209,15 @@ impl CrtNormalBinding {
   let cookie=rt.load(rt.resolve_absolute(layout.cookie_address,CrtRegionKind::Module)?,32)?.known_scalar()?;
   let token=rt.thread_head(identity.instance,epoch.generation,Self::head_bits(previous))?;
   Ok(Self{anchor:rt.anchor,identity,epoch:epoch.generation,previous,token,caller,entry:cpu.entry,
-   return_id:cpu.return_id,layout,cookie,initialization,id:None,consumed:Default::default(),done:false})
+   return_id:cpu.return_id,layout,cookie,initialization,id:None,consumed:Default::default(),done:false,extra_guards:Vec::new(),saved_sp_pending:false})
+ }
+ /// The original inline prolog publishes its record before writing saved ESP.
+ /// This stage grants no image/exception/return authority for that absent word.
+ fn bind_inline_initializing(rt:&CrtStreamRuntime,cpu:&CrtCpu,epoch:&NormalCallEpoch<'_>,layout:CrtNormalLayout,initialization:CrtInitialization,guards:Vec<i32>)->RegistryResult<Self>{
+  let mut b=Self::bind_initializing(rt,cpu,epoch,layout,initialization)?;
+  let mut seen=std::collections::BTreeSet::from([b.layout.guard]);
+  for &offset in &guards{if offset%4!=0||offset<b.layout.low||offset>=0||!seen.insert(offset)||b.layout.saved.iter().any(|&(at,_)|at==offset)||[b.layout.record,b.layout.record+4,b.layout.scope_slot,b.layout.level,b.layout.saved_sp].contains(&offset){return Err("CRT inline guard layout alias");}}
+  b.extra_guards=guards;b.saved_sp_pending=true;Ok(b)
  }
  fn authority(&self,rt:&CrtStreamRuntime,epoch:&NormalCallEpoch<'_>)->RegistryResult<()>{
   epoch.state()?;self.identity(rt,epoch)?;
@@ -233,11 +242,18 @@ impl CrtNormalBinding {
  /// remain forgotten and the restored typed register must still match.
  fn image(&self,rt:&CrtStreamRuntime,cpu:&CrtCpu,epoch:&NormalCallEpoch<'_>)->RegistryResult<FrameImage<RegistryHead>>{
   self.authority(rt,epoch)?;
+  if self.saved_sp_pending{return Err("CRT normal saved-SP not initialized");}
   self.storage_image(rt,cpu)
  }
  /// Read-only reconstruction. Callers must establish live normal or suspended
  /// authority before using it; it cannot mutate the registry or clear suspension.
  fn storage_image(&self,rt:&CrtStreamRuntime,cpu:&CrtCpu)->RegistryResult<FrameImage<RegistryHead>>{
+  if self.saved_sp_pending{return Err("CRT normal saved-SP not initialized");}
+  self.project_storage(rt,cpu)
+ }
+ /// Only inline FS publication may use the incomplete projection. It omits
+ /// the unwritten field and cannot serve as a normal/suspended image issuer.
+ fn project_storage(&self,rt:&CrtStreamRuntime,cpu:&CrtCpu)->RegistryResult<FrameImage<RegistryHead>>{
   if cpu.entry!=self.entry||cpu.return_id!=self.return_id||cpu.returned||cpu.return_pop!=self.layout.pop{return Err("CRT normal changed CPU activation");}
   let l=&self.layout;let frame=self.at(rt,l.bp)?;let low=self.at(rt,l.low)?;let record=self.at(rt,l.record)?;
   if !self.consumed.contains(&l.bp)&&cpu.r[5]!=CrtValue::Pointer(frame){return Err("CRT normal actual frame pointer");}
@@ -246,7 +262,7 @@ impl CrtNormalBinding {
    ||rt.load(record,32)?!=CrtValue::ThreadHead(self.token)
    ||rt.load(self.at(rt,l.record+4)?,32)?.known_scalar()?!=l.handler
    ||rt.load(self.at(rt,l.scope_slot)?,32)?.known_scalar()?!=l.scope^self.cookie
-   ||rt.load(self.at(rt,l.saved_sp)?,32)?!=CrtValue::Pointer(low)
+   ||(!self.saved_sp_pending&&rt.load(self.at(rt,l.saved_sp)?,32)?!=CrtValue::Pointer(low))
    ||rt.load(rt.resolve_absolute(l.cookie_address,CrtRegionKind::Module)?,32)?.known_scalar()?!=self.cookie{
    return Err("CRT normal actual record/cookie/return changed");
   }
@@ -257,6 +273,9 @@ impl CrtNormalBinding {
   for (&address,&value) in rt.tags.range(low.address()..=self.caller.address()){
    if matches!(value,CrtValue::ProtectedReturn(_)|CrtValue::ThreadHead(_)|CrtValue::OpaqueSaved(_)){
     let offset=(i64::from(address)-i64::from(self.caller.address())) as i32;
+    // Defer even an invalid old tag in this word to its actual later MOV.
+    // Rejecting it here would erase the preceding original FS publication.
+    if self.saved_sp_pending&&offset==l.saved_sp{continue;}
     let expected=if offset==0{Some(CrtValue::ProtectedReturn(self.return_id))}
      else if offset==l.record{Some(CrtValue::ThreadHead(self.token))}
      else{l.saved.iter().find(|&&(at,_)|at==offset).map(|&(_,r)|self.saved(r))};
@@ -266,8 +285,10 @@ impl CrtNormalBinding {
   let mut words=std::collections::BTreeMap::from([
    (0,FrameWord::Return),(l.record,FrameWord::Borrowed(self.previous)),
    (l.record+4,FrameWord::Scalar(l.handler)),(l.scope_slot,FrameWord::EncodedScope{scope:l.scope,cookie:self.cookie,bits:l.scope^self.cookie}),
-   (l.level,FrameWord::Scalar(level as u32)),(l.saved_sp,FrameWord::StackAddress(low.address())),
+   (l.level,FrameWord::Scalar(level as u32)),
    (l.guard,FrameWord::Guard{frame:frame.address(),cookie:self.cookie,bits:frame.address()^self.cookie})]);
+  if !self.saved_sp_pending{words.insert(l.saved_sp,FrameWord::StackAddress(low.address()));}
+  for &offset in &self.extra_guards{self.word(rt,cpu,offset,1,CrtValue::scalar(frame.address()^self.cookie))?;words.insert(offset,FrameWord::Guard{frame:frame.address(),cookie:self.cookie,bits:frame.address()^self.cookie});}
   for &(offset,register) in &l.saved{
    let value=self.saved(register);self.word(rt,cpu,offset,register,value)?;
    // Unknown or pointer bits cannot gain scalar knowledge in the registry.
@@ -293,6 +314,21 @@ impl CrtNormalBinding {
   for(offset,register)in saved{steps.push(NormalFrameStep::PopSaved{offset,register});}
   let id=epoch.reserve_eh4(&image,NormalFramePlan{steps,callee_pop:u32::from(self.layout.pop)})?;
   self.id=Some(id);epoch.install_head(id,&image)
+ }
+ /// Caller supplies the separately instruction-proved inline epilog plan.
+ /// The private incomplete projection omits saved ESP instead of reading or
+ /// inventing it. Only the actual later MOV can make the full image available.
+ fn install_inline(&mut self,rt:&CrtStreamRuntime,cpu:&CrtCpu,epoch:&mut NormalCallEpoch<'_>,record:CrtPointer,token:CrtThreadHead,plan:NormalFramePlan)->RegistryResult<()>{
+  self.authority(rt,epoch)?;
+  if !self.saved_sp_pending||self.id.is_some()||record!=self.at(rt,self.layout.record)?||token!=self.token||cpu.r[4]!=CrtValue::Pointer(self.at(rt,self.layout.low)?)||plan.callee_pop!=u32::from(self.layout.pop){return epoch.fail("CRT inline install phase/record");}
+  Self::validate_cxx_from(rt,epoch,self.previous)?;let image=self.project_storage(rt,cpu)?;
+  let id=epoch.reserve_eh4(&image,plan)?;self.id=Some(id);epoch.install_head(id,&image)
+ }
+ fn store_inline_saved_sp(&mut self,rt:&mut CrtStreamRuntime,cpu:&CrtCpu,epoch:&mut NormalCallEpoch<'_>,destination:CrtPointer,value:CrtValue)->RegistryResult<()>{
+  self.authority(rt,epoch)?;let id=self.id.ok_or("CRT inline saved-SP before installation")?;let low=self.at(rt,self.layout.low)?;
+  if !self.saved_sp_pending||destination!=self.at(rt,self.layout.saved_sp)?||value!=CrtValue::Pointer(low)||cpu.r[4]!=value{return epoch.fail("CRT inline saved-SP original operand");}
+  // On failure the already published child head and all earlier stores survive.
+  rt.store(destination,32,value)?;self.saved_sp_pending=false;let image=self.image(rt,cpu,epoch)?;epoch.validate_image(id,&image)
  }
  fn epilog_entry(&self,rt:&CrtStreamRuntime,cpu:&CrtCpu,epoch:&NormalCallEpoch<'_>)->RegistryResult<()>{
   let image=self.image(rt,cpu,epoch)?;let id=self.id.ok_or("CRT normal epilog before installation")?;

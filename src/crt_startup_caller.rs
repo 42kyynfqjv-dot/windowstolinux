@@ -14,7 +14,220 @@ pub(crate) const ENV_FALLBACK: &str =
     "a148ce410085c0752239054cce41007418e81600000085c07409e87b01000085c07506a148ce4100c333c0c3";
 pub(crate) const ARGC_CELL: &str = "b868ce4100c3";
 pub(crate) const ARGV_CELL: &str = "b86cce4100c3";
+pub(crate) const MAIN_CALL: &str = "e864fbffff";
+pub(crate) const MAIN_PROLOG: &str = "558bec6afe6818b24100681022400064a1000000005081c404fdffffa100c041003145f833c58945e4535657508d45f064a3000000008965e8";
+pub(crate) const MAIN_INITIAL: &str = "c78500fdffff2c010000c78510fdffff0000000068cc0200006a008d8518fdffff50e89010000083c40cc7850cfdffff00000000c78508fdffff00000000c78504fdffff000000006a00ff1508504100898514fdffffc745fc00000000";
+pub(crate) const MAIN_EPILOG: &str = "8b4df064890d00000000595f5e5b8b4de433cde8340000008be55dc3";
+pub(crate) const MAIN_SCOPE: &str = "e4ffffff00000000e4fcffff00000000feffffff331340005c134000";
 pub(crate) const SCOPE: &str = "feffffff00000000ccffffff00000000feffffff491740005d174000";
+/// Derive registration metadata from the existing inline instruction proof,
+/// then check its restoration shape. This does not execute or admit a return.
+fn inline_contract(prolog: &[u8], epilog: &[u8]) -> Result<(String, String, String), String> {
+    use crate::graph::{Address, Binary, Operand, Operation, Reg};
+    let f = crate::frame_proof::prove_frame(
+        prolog,
+        0x401280,
+        0x41c000,
+        &std::collections::BTreeSet::from([0x41b218]),
+        &std::collections::BTreeSet::from([0x402210]),
+    )?;
+    f.validate_eh4_header([-28, 0, -796, 0])?;
+    if f.end() != 0x4012b9 || f.try_level() != -2 || !f.guard_offsets().contains(&f.esp_offset()) {
+        return Err("inline frame prolog shape".into());
+    }
+    let bp = f.ebp_offset();
+    let low = bp + f.esp_offset();
+    let saved_sp: Vec<_> = f
+        .stack_words()
+        .iter()
+        .filter(|(_, target)| **target == f.esp_offset())
+        .map(|(&at, _)| bp + at)
+        .collect();
+    if saved_sp.len() != 1 {
+        return Err("inline frame saved-SP producer".into());
+    }
+    let reg = |index| Reg {
+        index,
+        width: 32,
+        shift: 0,
+    };
+    let memory = |offset: i32| {
+        Operand::Memory(
+            Address {
+                base: Some(5),
+                index: None,
+                scale: 1,
+                displacement: offset as u32,
+            },
+            32,
+        )
+    };
+    let g = Graph::decode(epilog, 0x401500)?;
+    let ops: Vec<_> = g.nodes.values().map(|n| n.op.clone()).collect();
+    let expected = vec![
+        Op::Ordinary(Operation::Binary(
+            Binary::Move,
+            Operand::Reg(reg(1)),
+            memory(f.record_offset()),
+        )),
+        Op::FsWrite(reg(1)),
+        Op::Ordinary(Operation::Pop(reg(1))),
+        Op::Ordinary(Operation::Pop(reg(7))),
+        Op::Ordinary(Operation::Pop(reg(6))),
+        Op::Ordinary(Operation::Pop(reg(3))),
+        Op::Ordinary(Operation::Binary(
+            Binary::Move,
+            Operand::Reg(reg(1)),
+            memory(-28),
+        )),
+        Op::Ordinary(Operation::Binary(
+            Binary::Xor,
+            Operand::Reg(reg(1)),
+            Operand::Reg(reg(5)),
+        )),
+        Op::Call(Target::Direct(0x40154c)),
+        Op::Ordinary(Operation::Binary(
+            Binary::Move,
+            Operand::Reg(reg(4)),
+            Operand::Reg(reg(5)),
+        )),
+        Op::Ordinary(Operation::Pop(reg(5))),
+        Op::Ordinary(Operation::Return),
+    ];
+    if ops != expected || g.end != 0x40151c {
+        return Err("inline original epilog shape".into());
+    }
+    let pops = [
+        (f.esp_offset() + 4, 7),
+        (f.esp_offset() + 8, 6),
+        (f.esp_offset() + 12, 3),
+        (0, 5),
+    ];
+    if f.saved_slots() != &pops.into_iter().collect::<BTreeMap<_, _>>() {
+        return Err("inline original saved-slot order".into());
+    }
+    if !(-744..-28)
+        .step_by(4)
+        .all(|n| f.ordinary_words().contains(&n))
+    {
+        return Err("inline original memset ordinary extent".into());
+    }
+    let saved: Vec<_> = f
+        .saved_slots()
+        .iter()
+        .map(|(&at, &r)| (bp + at, r))
+        .collect();
+    let guards: Vec<_> = f
+        .guard_offsets()
+        .iter()
+        .filter(|&&at| at != f.esp_offset())
+        .map(|&at| bp + at)
+        .collect();
+    let layout=format!("CrtNormalLayout{{low:{low},bp:{bp},record:{},scope_slot:{},level:{},saved_sp:{},guard:{low},saved:vec!{saved:?},scope:{},handler:{},cookie_address:0x41c000,pop:0}}",bp+f.record_offset(),bp+f.record_offset()+8,bp+f.try_level_offset(),saved_sp[0],f.scope_va(),f.handler_va());
+    let mut steps=format!("vec![NormalFrameStep::RestorePredecessor,NormalFrameStep::DiscardGuard{{offset:{low},register:1}},");
+    for (at, r) in &pops[..3] {
+        steps.push_str(&format!(
+            "NormalFrameStep::PopSaved{{offset:{},register:{r}}},",
+            bp + at
+        ));
+    }
+    steps.push_str(&format!("NormalFrameStep::CheckGuard{{offset:{},target:0x40154c}},NormalFrameStep::PopSaved{{offset:{bp},register:5}}]",bp-28));
+    Ok((
+        layout,
+        format!("vec!{guards:?}"),
+        format!("NormalFramePlan{{steps:{steps},callee_pop:0}}"),
+    ))
+}
+fn main_source() -> Result<String, String> {
+    let raw = crate::crt_ptd::raw;
+    let p = raw(MAIN_PROLOG);
+    let ep = raw(MAIN_EPILOG);
+    let scope = raw(MAIN_SCOPE);
+    let (layout, guards, plan) = inline_contract(&p, &ep)?;
+    let g = crate::crt_startup_table::graph(&p[..54], 0x401280)?;
+    let body = crate::crt_stream_emit::emit_body_with_store(
+        &g,
+        |_, _| Err("inline Main prolog call".into()),
+        &BTreeMap::from([(0x41c000, "CrtRegionKind::Module".into())]),
+        128,
+        |_, op| {
+            Ok(match op {
+            Op::FsRead(r)=>format!("b.authority(rt,epoch)?;if epoch.head()?!=b.previous{{return Err(\"inline Main previous head changed\");}}cpu.set({},32,0,CrtValue::ThreadHead(b.token))?;",r.index),
+            Op::FsWrite(r)=>format!("b.install_inline(rt,cpu,epoch,CrtCpu::pointer(cpu.r[{}])?,b.token,original_main_plan())?;",r.index),
+            _=>return Err("inline Main thread effect".into()),
+        })
+        },
+        |_, _| Ok(String::new()),
+        |_, _| Err("inline Main prolog return".into()),
+        Some(0x4012b6),
+        |_, _, _| Ok(None),
+    )?;
+    let last = crate::crt_startup_table::graph(&p[54..], 0x4012b6)?;
+    let store = crate::crt_stream_emit::emit_body_with_store(
+        &last,
+        |_, _| Err("inline Main saved-SP call".into()),
+        &Default::default(),
+        4,
+        |_, _| Err("inline Main saved-SP FS".into()),
+        |_, _| Ok(String::new()),
+        |_, _| Err("inline Main saved-SP return".into()),
+        Some(0x4012b9),
+        |pc, a, w| {
+            if pc != 0x4012b6 || w != 32 {
+                return Err("inline Main saved-SP instruction".into());
+            }
+            Ok(Some(format!(
+                "let p={};b.store_inline_saved_sp(rt,cpu,epoch,p,v)?;",
+                crate::crt_stream_emit::address(a, &Default::default())?
+            )))
+        },
+    )?;
+    let mut out=format!("fn original_main_layout()->CrtNormalLayout{{{layout}}}fn original_main_guards()->Vec<i32>{{{guards}}}fn original_main_plan()->NormalFramePlan{{{plan}}}");
+    out.push_str(&format!("fn original_main_install(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>,b:&mut CrtNormalBinding)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;b.authority(rt,epoch)?;if b.id.is_some()||!b.saved_sp_pending||cpu.r[4]!=cpu.entry[4]{{return Err(\"Main inline prolog activation phase\");}}{}{}{body}}}",guard(0x401280,&p),guard(0x401500,&ep)));
+    out.push_str(&format!("fn original_main_saved_sp(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>,b:&mut CrtNormalBinding)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;b.authority(rt,epoch)?;{}{store}}}",guard(0x401280,&p)));
+    let bytes = raw(MAIN_INITIAL);
+    let g = crate::crt_startup_table::graph(&bytes, 0x4012b9)?;
+    let body = crate::crt_stream_emit::emit_body_with_store(
+        &g,
+        |pc, t| {
+            Ok(match(pc,t){
+        (0x4012db,Target::Direct(0x402370))=>"b.authority(rt,epoch)?;let sp=CrtCpu::pointer(cpu.r[4])?;if rt.load(sp,32)?!=CrtValue::Pointer(b.at(rt,b.layout.bp-744)?)||rt.load(rt.offset(sp,4)?,32)?!=CrtValue::scalar(0)||rt.load(rt.offset(sp,8)?,32)?!=CrtValue::scalar(716){return Err(\"Main original fill arguments\");}cpu.call_activation(rt,0x4012e0,0,|rt,c|onexit_memset_original(rt,c,inputs))?;".into(),
+        (0x401303,Target::Import(0x415008))=>"rt.process_image_import(inputs.image,0x415008,\"kernel32.dll\",\"GetModuleHandleW\")?;let view=CrtModuleImage::main(rt)?;cpu.call_activation(rt,0x401309,4,|rt,c|CrtModuleImage::null_handle_call(Some(&view),rt,c))?;".into(),
+        _=>return Err("Main original initial call".into()),
+    })
+        },
+        &Default::default(),
+        128,
+        |_, _| Err("Main initial FS effect".into()),
+        |_, _| Ok(String::new()),
+        |_, _| Err("Main initial return".into()),
+        Some(0x401316),
+        |pc, a, w| {
+            if w != 32 {
+                return Err("Main initial store width".into());
+            }
+            let offset = match pc {
+                0x4012b9 => -768,
+                0x4012c3 => -752,
+                0x4012e3 => -756,
+                0x4012ed => -760,
+                0x4012f7 => -764,
+                0x401309 => -748,
+                0x40130f => -4,
+                _ => return Err("Main initial store instruction".into()),
+            };
+            let transition = if pc == 0x40130f {
+                "if rt.load(p,32)?!=CrtValue::scalar((-2i32)as u32)||v!=CrtValue::scalar(0){return Err(\"Main initial scope transition\");}"
+            } else {
+                ""
+            };
+            Ok(Some(format!("b.authority(rt,epoch)?;let p={};if p!=b.at(rt,b.layout.bp+({offset}))?{{return Err(\"Main initial destination alias\");}}{transition}rt.store(p,32,v)?;let image=b.image(rt,cpu,epoch)?;epoch.validate_image(b.id.ok_or(\"Main initial missing frame\")?,&image)?;",crate::crt_stream_emit::address(a,&Default::default())?)))
+        },
+    )?;
+    out.push_str(&format!("fn original_main_initial(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>,b:&mut CrtNormalBinding)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;let image=b.image(rt,cpu,epoch)?;epoch.validate_image(b.id.ok_or(\"Main initial missing frame\")?,&image)?;{}{body}}}",guard(0x4012b9,&bytes)));
+    out.push_str(&format!("fn startup_main_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;let scope=rt.process_image_pointer(inputs.image,0x41b218,{})?;rt.memory.validate_immutable(scope.cap,scope.owner,scope.address(),{}).map_err(|_|\"Main scope permission\")?;if rt.memory.read(scope.address(),{}).map_err(|_|\"Main scope read\")?!=&{scope:?}{{return Err(\"Main scope bytes changed\");}}let mut b=CrtNormalBinding::bind_inline_initializing(rt,cpu,epoch,original_main_layout(),inputs.init,original_main_guards())?;original_main_install(rt,cpu,inputs,epoch,&mut b)?;original_main_saved_sp(rt,cpu,inputs,epoch,&mut b)?;original_main_initial(rt,cpu,inputs,epoch,&mut b)?;Err(\"startup Main Inner call unbound at 0x401316\")}}",scope.len(),scope.len(),scope.len()));
+    Ok(out)
+}
 fn argument_source() -> Result<String, String> {
     let mut out = String::new();
     for (name, at, raw) in [
@@ -195,6 +408,7 @@ pub(crate) fn source() -> Result<String, String> {
     out.push_str(&array_source);
     out.push_str(&callback_source()?);
     out.push_str(&argument_source()?);
+    out.push_str(&main_source()?);
     let lock = crate::crt_ptd::raw(LOCK);
     let g = lock_graph()?;
     let body = crate::crt_stream_emit::emit_body(
@@ -273,6 +487,15 @@ pub(crate) fn source() -> Result<String, String> {
     }
 
     let roles = BTreeMap::from([(0x41cc7c, "CrtRegionKind::Module".into())]);
+    let main_call_bytes = crate::crt_ptd::raw(MAIN_CALL);
+    let main_call_graph = crate::crt_startup_table::graph(&main_call_bytes, 0x401717)?;
+    if main_call_graph.nodes.len() != 1
+        || main_call_graph.nodes[&0x401717].op != Op::Call(Target::Direct(0x401280))
+        || main_call_graph.end != 0x40171c
+    {
+        return Err("Main original CALL identity".into());
+    }
+    let main_call_guard = guard(0x401717, &main_call_bytes);
     let scope = crate::crt_ptd::raw(SCOPE);
     let body = crate::crt_stream_emit::emit_body_with_store(
         &g,
@@ -316,12 +539,76 @@ pub(crate) fn source() -> Result<String, String> {
         },
     )?;
     out.push_str(r#"fn startup_caller_frame(rt:&CrtStreamRuntime,cpu:&CrtCpu,epoch:&NormalCallEpoch<'_>,binding:&CrtNormalBinding)->Result<(),&'static str>{binding.authority(rt,epoch)?;let image=binding.image(rt,cpu,epoch)?;epoch.validate_image(binding.id.ok_or("startup caller missing normal frame")?,&image)}"#);
-    out.push_str(&format!("fn startup_post_initializer(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>,binding:&mut CrtNormalBinding)->Result<CrtValue,&'static str>{{startup_post_initializer_platform(rt,cpu,inputs,epoch,binding,None)}}fn startup_post_initializer_platform(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>,binding:&mut CrtNormalBinding,platform:Option<&CrtNativePlatform>)->Result<CrtValue,&'static str>{{startup_post_initializer_observed(rt,cpu,inputs,epoch,binding,platform,None)}}fn startup_post_initializer_observed(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>,binding:&mut CrtNormalBinding,platform:Option<&CrtNativePlatform>,features:Option<&CrtFeatureObservation>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;startup_caller_frame(rt,cpu,epoch,binding)?;let arg=binding.at(rt,binding.layout.low-4)?;if cpu.r[4]!=CrtValue::Pointer(arg)||rt.load(arg,32)?!=CrtValue::scalar(1){{return Err(\"startup caller argument/phase\");}}if binding.image(rt,cpu,epoch)?.try_level!= -2{{return Err(\"startup caller scope phase\");}}{}let _=(||->Result<CrtValue,&'static str>{{{body}}})()?;startup_caller_frame(rt,cpu,epoch,binding)?;startup_callback_cells(rt,cpu,inputs)?;startup_caller_frame(rt,cpu,epoch,binding)?;startup_main_arguments(rt,cpu,inputs,platform,epoch)?;startup_caller_frame(rt,cpu,epoch,binding)?;Err(\"startup Main call unbound at 0x401717\")}}",guard(0x401632,&bytes)));
+    out.push_str(&format!("fn startup_post_initializer(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>,binding:&mut CrtNormalBinding)->Result<CrtValue,&'static str>{{startup_post_initializer_platform(rt,cpu,inputs,epoch,binding,None)}}fn startup_post_initializer_platform(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>,binding:&mut CrtNormalBinding,platform:Option<&CrtNativePlatform>)->Result<CrtValue,&'static str>{{startup_post_initializer_observed(rt,cpu,inputs,epoch,binding,platform,None)}}fn startup_post_initializer_observed(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>,binding:&mut CrtNormalBinding,platform:Option<&CrtNativePlatform>,features:Option<&CrtFeatureObservation>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;startup_caller_frame(rt,cpu,epoch,binding)?;let arg=binding.at(rt,binding.layout.low-4)?;if cpu.r[4]!=CrtValue::Pointer(arg)||rt.load(arg,32)?!=CrtValue::scalar(1){{return Err(\"startup caller argument/phase\");}}if binding.image(rt,cpu,epoch)?.try_level!= -2{{return Err(\"startup caller scope phase\");}}{}let _=(||->Result<CrtValue,&'static str>{{{body}}})()?;startup_caller_frame(rt,cpu,epoch,binding)?;startup_callback_cells(rt,cpu,inputs)?;startup_caller_frame(rt,cpu,epoch,binding)?;startup_main_arguments(rt,cpu,inputs,platform,epoch)?;startup_call_main(rt,cpu,inputs,epoch,binding)}}",guard(0x401632,&bytes)));
+    out.push_str(&format!("fn startup_call_main(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>,parent:&mut CrtNormalBinding)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;startup_caller_frame(rt,cpu,epoch,parent)?;if parent.image(rt,cpu,epoch)?.try_level!=0||rt.load(rt.process_image_pointer(inputs.image,0x41cc7c,4)?,32)?!=CrtValue::scalar(2)||cpu.r[4]!=CrtValue::Pointer(parent.at(rt,parent.layout.low-12)?){{return Err(\"Main caller phase/argument stack\");}}{main_call_guard}cpu.call_activation(rt,0x40171c,0,|rt,c|startup_main_original(rt,c,inputs,epoch))?;Err(\"unexpected Main return\")}}"));
     out.push_str(&format!("fn startup_caller_bytes()->Vec<u8>{{vec!{bytes:?}}}fn startup_release_bytes()->Vec<u8>{{vec!{release:?}}}fn startup_runtime_lock_bytes()->Vec<u8>{{vec!{lock:?}}}fn startup_runtime_flag_bytes()->Vec<u8>{{vec!{flag:?}}}"));
     Ok(out)
 }
 fn guard(at: u32, bytes: &[u8]) -> String {
     format!("let p=rt.process_image_code(inputs.image,{at},{})?;if rt.memory.read(p.address(),{}).map_err(|_|\"startup caller code read\")?!=&{bytes:?}{{return Err(\"startup caller code changed\");}}",bytes.len(),bytes.len())
+}
+#[test]
+fn negative_stack_add_grows_without_reading_or_initializing_locals() {
+    let mut extra = String::new();
+    for (name, bytes) in [
+        ("grow", vec![0x81, 0xc4, 0x00, 0xfd, 0xff, 0xff]),
+        ("clean", vec![0x83, 0xc4, 4]),
+    ] {
+        let g = crate::crt_startup_table::graph(&bytes, 0x440000).unwrap();
+        let body = crate::crt_stream_emit::emit_body_with_store(
+            &g,
+            |_, _| Err("stack fragment call".into()),
+            &Default::default(),
+            8,
+            |_, _| Err("stack fragment FS".into()),
+            |_, _| Ok(String::new()),
+            |_, _| Err("stack fragment RET".into()),
+            Some(g.end),
+            |_, _, _| Ok(None),
+        )
+        .unwrap();
+        extra.push_str(&format!("fn {name}(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->Result<CrtValue,&'static str>{{cpu.validate_active(rt)?;{body}}}"));
+    }
+    crate::crt_stream_callees_tests::native_bounded_stack(
+        &extra,
+        r#"
+for mode in 0..4{
+ let(mut rt,_)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();let stack=rt.map_region(0x9000,2048,CrtRegionKind::Stack,None).unwrap();let entry=rt.offset(stack,1536).unwrap();rt.store(entry,32,CrtValue::ProtectedReturn(71)).unwrap();let mut c=CrtCpu::new(entry,71).unwrap();let low=rt.offset(entry,-768).unwrap();
+ if mode==1{rt.store(low,32,CrtValue::ProtectedReturn(999)).unwrap();}
+ if mode<2{assert!(grow(&mut rt,&mut c).is_ok());assert_eq!(c.r[4],CrtValue::Pointer(low));assert_eq!(rt.load(low,32),Ok(if mode==1{CrtValue::ProtectedReturn(999)}else{CrtValue::Scalar{bits:0,known:0}}));assert_eq!((c.flags.cf,c.flags.zf,c.flags.of,c.flags.sf),(Some(true),Some(false),Some(false),Some(false)));}
+ else{let arg=rt.offset(entry,-4).unwrap();rt.store(arg,32,if mode==3{CrtValue::ProtectedReturn(999)}else{CrtValue::scalar(5)}).unwrap();c.r[4]=CrtValue::Pointer(arg);let got=clean(&mut rt,&mut c);if mode==2{assert!(got.is_ok());assert_eq!(c.r[4],CrtValue::Pointer(entry));assert_eq!(rt.load(arg,32),Ok(CrtValue::Scalar{bits:0,known:0}));}else{assert_eq!(got,Err("CRT cleanup crosses protected word"));assert_eq!(c.r[4],CrtValue::Pointer(arg));assert_eq!(rt.load(arg,32),Ok(CrtValue::ProtectedReturn(999)));}}
+ assert_eq!(rt.load(entry,32),Ok(CrtValue::ProtectedReturn(71)));assert!(!c.returned);
+}
+"#,
+        "negative-stack-add",
+    );
+}
+#[test]
+fn original_inline_main_derives_layout_and_rejects_changed_restoration() {
+    let p = crate::crt_ptd::raw(MAIN_PROLOG);
+    let e = crate::crt_ptd::raw(MAIN_EPILOG);
+    let (layout, guards, plan) = inline_contract(&p, &e).expect("actual inline frame shape");
+    for field in [
+        "low:-800",
+        "bp:-4",
+        "record:-20",
+        "saved_sp:-28",
+        "guard:-800",
+    ] {
+        assert!(layout.contains(field), "{field}");
+    }
+    assert_eq!(guards, "vec![-32]");
+    assert!(plan.contains("CheckGuard{offset:-32,target:0x40154c}"));
+    for i in 0..e.len() {
+        let mut bad = e.clone();
+        bad[i] ^= 1;
+        assert!(inline_contract(&p, &bad).is_err(), "epilog mutation{i}");
+    }
+    for i in [6, 11, 24, 33, 40, 55] {
+        let mut bad = p.clone();
+        bad[i] ^= 1;
+        assert!(inline_contract(&bad, &e).is_err(), "prolog mutation{i}");
+    }
 }
 #[test]
 fn original_startup_guard_reads_flag_and_rejects_unproved_thread_branch() {
