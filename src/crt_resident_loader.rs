@@ -417,18 +417,21 @@ fn installed_code_page_catalog_is_distinct_from_acp_and_rejects_unmeasured_queri
     crate::crt_stream_callees_tests::native_bounded_stack(
         TYPES,
         r#"
-#[inline(never)] fn query(mode:u32){
+#[inline(never)] fn foreign_anchor()->guest_memory::Capability{
+ let(other,_)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();other.anchor
+}
+#[inline(never)] fn query(mode:u32,foreign:guest_memory::Capability){
  let(mut rt,init)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();let mut p=CrtNativePlatform::prepare(&mut rt,init,CrtNativePlatform::PROFILE,0x700000,0x701000).unwrap();
  assert!(p.command_line.is_none());assert!(!p.code_pages);assert!(p.enable_code_pages(&rt,init,"unmeasured-profile").is_err());assert!(!p.code_pages);
  if mode!=3{p.enable_code_pages(&rt,init,CrtNativePlatform::CODE_PAGE_PROFILE).unwrap();assert!(p.enable_code_pages(&rt,init,CrtNativePlatform::CODE_PAGE_PROFILE).is_err());}
  let stack=rt.map_region(0xa000,4096,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,2048).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(77)).unwrap();let mut c=CrtCpu::new(sp,77).unwrap();c.return_pop=4;
  let page=if mode==1{u32::MAX}else if mode==2{1252}else{65001};rt.store(rt.offset(sp,4).unwrap(),32,if mode==4{CrtValue::Scalar{bits:page,known:0}}else if mode==12{CrtValue::Pointer(stack)}else{CrtValue::scalar(page)}).unwrap();
- if mode==5{let(other,_)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();p.anchor=other.anchor;}if mode==6{rt.provider_destroy(init,p.function.module).unwrap();}if mode==7{rt.end_initialization(init).unwrap();}if mode==8{c.return_pop=0;}if mode==9{c.r[3]=CrtValue::scalar(12);}if mode==10{c.return_id+=1;}if mode==11{rt.memory.release(stack.cap,stack.owner).unwrap();}if mode==13{rt.bind_fiber(rt.thread).unwrap();}if mode==14{rt.thread+=1;}
+ if mode==5{assert_ne!(foreign,rt.anchor);p.anchor=foreign;}if mode==6{rt.provider_destroy(init,p.function.module).unwrap();}if mode==7{rt.end_initialization(init).unwrap();}if mode==8{c.return_pop=0;}if mode==9{c.r[3]=CrtValue::scalar(12);}if mode==10{c.return_id+=1;}if mode==11{rt.memory.release(stack.cap,stack.owner).unwrap();}if mode==13{rt.bind_fiber(rt.thread).unwrap();}if mode==14{rt.thread+=1;}
  rt.last_os_error=Some(71);let before=c.r;let generation=rt.generation;let result=p.valid_code_page_call(&mut rt,&mut c,init);
  if matches!(mode,0|1|13){assert_eq!(result,Ok(CrtValue::scalar(u32::from(mode!=1))));assert!(c.returned);assert_eq!(c.r[4],CrtValue::Pointer(rt.offset(sp,8).unwrap()));for r in [3,5,6,7]{assert_eq!(c.r[r],before[r]);}assert_eq!(rt.last_os_error,None);assert!(c.r[1].known_scalar().is_err());assert_eq!((c.flags.cf,c.flags.zf,c.flags.sf,c.flags.of),(None,None,None,None));assert!(p.valid_code_page_call(&mut rt,&mut c,init).is_err());}
  else{let expected=match mode{2=>"native installed code-page query outside measured profile",3=>"native installed code-page profile unbound",4|12=>"CRT scalar knowledge/type",5=>"native platform process identity",6=>"CRT unloaded module",7|14=>"CRT initialization owner/lifetime",8|9=>"native installed code-page ABI",10=>"CRT active caller lifetime/return authority",11=>"CRT pointer lifetime",_=>unreachable!()};assert_eq!(result,Err(expected),"catalog mode {mode}");assert!(!c.returned);assert_eq!(c.r,before);assert_eq!(rt.last_os_error,Some(71));assert_eq!(rt.generation,generation);}
 }
-for mode in 0..15{query(mode);}
+let foreign=foreign_anchor();for mode in 0..15{query(mode,foreign);}
 "#,
         "installed-code-page-catalog",
     );
