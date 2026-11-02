@@ -31,9 +31,13 @@ connected original-entry cases use the earlier actual producer.
 
 ## Review and CI evidence
 
-Review of72c3b24 found no additional FILE ownership defect in its supported domain.
-Canonical FILE views, fallible reservation before opacity, original thunk/ABI,
-partial slot publication and lifecycle cleanup restrictions remain intact. Its
+Review of72c3b24 found an opaque-owner alias defect: native FILE construction
+could overlap a preexisting global critical section in the same mapped section.
+An original-body regression first demonstrated unexpected success. Native FILE
+construction now invokes the shared opaque-owner range check before reservation
+or byte effects. The regression rejects with the global owner retained, prior
+vector publication preserved and no new FILE locks or slots. Canonical FILE views,
+fallible reservation, thunk/ABI and other partial-failure checks remain intact. Its
 558 replay input hashes independently match exact commit blobs.
 
 Its PR workflow41378889653/job125065106041 failed before converter execution:
@@ -69,3 +73,7 @@ canonical entry with nine original-artifact cases, six independent instruction
 cases, 114 Python tests (one skip), Clippy with warnings denied, formatting and
 all152 word cases at512KiB plus64KiB padding. Final published-source replay and
 new CI are tracked separately.
+
+The superseded local replay for fedea20 was intentionally interrupted after this
+review finding; its manifest, log and partial outputs are retained. It is not
+qualified final-head evidence. CI runs were not cancelled or masked.

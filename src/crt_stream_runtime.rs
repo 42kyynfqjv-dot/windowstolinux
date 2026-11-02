@@ -888,6 +888,7 @@ impl CrtStreamRuntime {
   self.identity_range(p,24)?;let file=self.offset(p,-32)?;self.file_record(file)?;
   self.memory.validate_writable(p.cap,p.owner,p.address(),24).map_err(|_|"CRT FILE lock writable range")?;
   if spin!=4000||flags!=0||p.address()%4!=0||self.lock_objects.contains(&file.address())||self.has_overlapping_tags(p.address(),24){return Err("CRT native FILE lock domain/duplicate/alias");}
+  self.ordinary_file_bytes(p,24)?;
   self.lock_objects.reserve()?;
   self.memory.forget(p.address(),24).map_err(|_|"CRT FILE lock opaque range")?;
   self.partial.retain(|&at,_|at<p.address()||at>=p.address()+24);self.lock_objects.insert(file.address());self.last_os_error=None;Ok(true)
