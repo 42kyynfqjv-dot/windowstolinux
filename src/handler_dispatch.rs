@@ -112,6 +112,8 @@ pub(crate) struct DispatchProof {
     pub source_table: Vec<u8>,
     pub actions: Vec<Action>,
     pub instructions: Vec<InstructionStep>,
+    /// Live establisher level at entry; distinct from the search cursor.
+    pub initial_level: i32,
     pub final_level: i32,
     pub temporary_bytes: u32,
     /// Original handler-entry ESP to callee-entry ESP, including this CALL's
@@ -913,6 +915,7 @@ pub(crate) fn prove_dispatch(
         source_table: table_bytes.to_vec(),
         actions,
         instructions,
+        initial_level,
         final_level: s.level,
         temporary_bytes: u32::try_from(4 - s.minimum_sp).map_err(|_| "dispatch: stack extent")?,
         call_depths,

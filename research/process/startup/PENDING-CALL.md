@@ -74,3 +74,26 @@ Independent Sol review should inspect proof/emitter correspondence, retained
 producer lifetime, preflight/push/publication ordering, the delivery gates and
 strict negative expectations. Full startup/rcedit, default admission, resource
 failure equivalence and exceptional cleanup remain unproved.
+
+## Inner search emitter prerequisite
+
+The dispatch certificate now retains its initial live frame level separately
+from its final live level. Return emission requires those levels to agree and
+checks that proved initial level at runtime. It no longer assumes every search
+starts at -2. Original Inner's finally-only rows preserve live level1; original
+Outer's one row preserves level0. Traversal changes the search cursor, not the
+interrupted frame's scope word. Original Outer return emission is checked against
+its decoded proof, helper sources and table; this is not connected delivery.
+
+A reproduced additional gate remains: original Inner's two-row traversal revisits
+instructions, and emit_proved_return_path rejects with `CRT path: repeated
+instruction requires loop proof`. Its PC-keyed expected-successor map cannot
+represent different edges on successive visits. The regression preserves this
+rejection. A sound follow-up needs occurrence-bound original edges and a derived
+visit bound, with independent changed-edge, early-exit, repeated-effect and loop
+failure tests; simply deleting the duplicate-PC check would lose proof agreement.
+
+Same-event object allocation, partial flag knowledge, Normal predecessor views
+and actual Inner-to-Outer advancement are still unimplemented. Production still
+stops at the protected RaiseException CALL; the first delivery acceptance target
+has not been reached. No delivery gate or context knowledge was widened by this correction.

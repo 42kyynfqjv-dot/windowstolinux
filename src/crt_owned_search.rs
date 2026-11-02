@@ -265,7 +265,7 @@ pub(crate) fn emit_live_return(
         || input.origin.checked_add(input.code.len() as u32).is_none()
         || input.origin != prefix.end
         || input.proof.source_table != input.table
-        || input.proof.final_level != -2
+        || input.proof.final_level != input.proof.initial_level
         || input.code.is_empty()
         || input.code.len() > 1024
         || input.table.len() < 16
@@ -387,7 +387,7 @@ fn {name}(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,objects:&CrtNormalObjec
  {helpers}
  let result=(||{{
  frame.validate()?;objects.validate(frame.event,frame.rt,frame.epoch)?;{name}_bytes(frame.rt)?;
- if frame.binding.layout.handler!={entry}||frame.scope_address()!={table_va}||frame.state.level!= -2
+ if frame.binding.layout.handler!={entry}||frame.scope_address()!={table_va}||frame.state.level!= {initial_level}
   ||frame.rt.load(frame.rt.offset(objects.record,4)?,32)?.known_scalar()?!=0{{return Err("live search handler/scope/flags contract");}}
  frame.preflight_bridge(cpu,{temporary})?;
  let local_low=frame.rt.offset(CrtCpu::pointer(cpu.entry[4])?,-{temporary})?;
@@ -402,7 +402,8 @@ fn {name}(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,objects:&CrtNormalObjec
  }})();if result.is_err(){{frame.state.failed=true;}}result
 }}
 "#,
-        temporary = prefix.temporary_bytes
+        temporary = prefix.temporary_bytes,
+        initial_level = input.proof.initial_level
     ))
 }
 

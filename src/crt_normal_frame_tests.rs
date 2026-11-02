@@ -3694,6 +3694,22 @@ fn map_local_wrapper(rt:&mut CrtStreamRuntime)->RegistryResult<()>{{rt.map_regio
         let empty_dispatch=crate::handler_dispatch::prove_dispatch(&handler_complete[prefix_bytes.len()..],prefix.end,&prefix,dispatch_bindings,crate::handler_dispatch::Entry::Search,&main_table,-2,0xe0424242,&filters,&filter_layout,&std::collections::BTreeSet::from([0x401333,0x40135c])).expect("original empty-scope search proof");
         assert!(empty_dispatch.actions.iter().any(|a|matches!(a,crate::handler_dispatch::Action::ReturnDisposition{value:1,..})),"original empty-scope path must return ContinueSearch");
         assert_eq!(crate::crt_owned_search::emit(crate::crt_owned_search::Input{proof:&empty_dispatch,origin:prefix.end,code:&handler_complete[prefix_bytes.len()..],table_va:main.scope_va(),table:&main_table,bridge:0x402800,filters:&filters},"empty_search").unwrap_err(),"owned search: no global boundary");
+        // A finally-only search traverses a cursor; it never stores -2 into
+        // the interrupted frame. Bind the emitter to that actual entry level.
+        let inner_search_table=handler_bytes("Inner-scope-table.bin",crate::crt_startup_caller::INNER_SCOPE);
+        let inner_search=crate::handler_dispatch::prove_dispatch(&handler_complete[prefix_bytes.len()..],prefix.end,&prefix,dispatch_bindings,crate::handler_dispatch::Entry::Search,&inner_search_table,1,0xe0424242,&Default::default(),&filter_layout,&std::collections::BTreeSet::from([0x40117f,0x40116e])).expect("original Inner finally-only search");
+        assert_eq!((inner_search.initial_level,inner_search.final_level),(1,1));
+        assert!(inner_search.actions.iter().all(|a|matches!(a,crate::handler_dispatch::Action::ValidateGuards{..}|crate::handler_dispatch::Action::ReturnDisposition{value:1,..})));
+        let inner_search_normalizer=crate::selection::prove_code_identity(&normalizer,0x414a1b,&std::collections::BTreeSet::from([0x41ccb8]),0xe0424242).unwrap();
+        let inner_search_guard=crate::handler_guard::prove_guard(&guard,0x4021d0,&security,0x40154c,0x41c000,[-2,0,-48,0],&inner).unwrap();
+        let inner_search_callees=crate::crt_owned_search::SearchCallees{normalizer:&inner_search_normalizer,guard:&inner_search_guard,context:&context_proof};
+        let inner_search_emitted=crate::crt_owned_search::emit_live_return(crate::crt_owned_search::Input{proof:&inner_search,origin:prefix.end,code:&handler_complete[prefix_bytes.len()..],table_va:0x41b1d0,table:&inner_search_table,bridge:0x402800,filters:&Default::default()},&prefix,&inner_search_callees,"original_inner_search_return").unwrap_err();
+        assert_eq!(inner_search_emitted,"CRT path: repeated instruction requires loop proof");
+        let outer_search_table=bytes_hex(crate::crt_startup_caller::OUTER_SCOPE);
+        let outer_search=crate::handler_dispatch::prove_dispatch(&handler_complete[prefix_bytes.len()..],prefix.end,&prefix,dispatch_bindings,crate::handler_dispatch::Entry::Search,&outer_search_table,0,0xe0424242,&Default::default(),&filter_layout,&std::collections::BTreeSet::from([0x401222])).unwrap();
+        assert_eq!((outer_search.initial_level,outer_search.final_level),(0,0));
+        let outer_emitted=crate::crt_owned_search::emit_live_return(crate::crt_owned_search::Input{proof:&outer_search,origin:prefix.end,code:&handler_complete[prefix_bytes.len()..],table_va:0x41b1f8,table:&outer_search_table,bridge:0x402800,filters:&Default::default()},&prefix,&inner_search_callees,"original_outer_search_return").expect("original single-row finally-only return emission");
+        assert!(outer_emitted.contains("frame.state.level!= 0"));
         let return_table=handler_bytes("file-scope-table.bin","feffffff00000000d4ffffff00000000feffffff00000000a8464000");
         let return_dispatch=crate::handler_dispatch::prove_dispatch(&handler_complete[prefix_bytes.len()..],prefix.end,&prefix,dispatch_bindings,crate::handler_dispatch::Entry::Search,&return_table,-2,0xe0420042,&Default::default(),&filter_layout,&std::collections::BTreeSet::from([0x4046a8])).unwrap();
         let return_normalizer=crate::selection::prove_code_identity(&normalizer,0x414a1b,&std::collections::BTreeSet::from([0x41ccb8]),0xe0420042).unwrap();
