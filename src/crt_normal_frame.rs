@@ -150,7 +150,7 @@ impl super::PrologProof {
 pub(crate) const EMITTED_TYPES: &str = r#"
 #[derive(Clone,Debug,PartialEq,Eq)]
 struct CrtNormalLayout {
- low:i32,bp:i32,record:i32,scope_slot:i32,level:i32,saved_sp:i32,guard:i32,
+ low:i32,bp:i32,record:i32,scope_slot:i32,level:i32,saved_sp:Option<i32>,guard:i32,
  saved:Vec<(i32,u8)>,scope:u32,handler:u32,cookie_address:u32,pop:u16,
 }
 struct CrtNormalBinding {
@@ -211,13 +211,13 @@ impl CrtNormalBinding {
   Ok(Self{anchor:rt.anchor,identity,epoch:epoch.generation,previous,token,caller,entry:cpu.entry,
    return_id:cpu.return_id,layout,cookie,initialization,id:None,consumed:Default::default(),done:false,extra_guards:Vec::new(),saved_sp_pending:false})
  }
- /// The original inline prolog publishes its record before writing saved ESP.
- /// This stage grants no image/exception/return authority for that absent word.
+ /// Some inline prologs publish before saving ESP; finally-only prologs may
+ /// have no such store at all. Only a proved present slot enters pending state.
  fn bind_inline_initializing(rt:&CrtStreamRuntime,cpu:&CrtCpu,epoch:&NormalCallEpoch<'_>,layout:CrtNormalLayout,initialization:CrtInitialization,guards:Vec<i32>)->RegistryResult<Self>{
   let mut b=Self::bind_initializing(rt,cpu,epoch,layout,initialization)?;
   let mut seen=std::collections::BTreeSet::from([b.layout.guard]);
-  for &offset in &guards{if offset%4!=0||offset<b.layout.low||offset>=0||!seen.insert(offset)||b.layout.saved.iter().any(|&(at,_)|at==offset)||[b.layout.record,b.layout.record+4,b.layout.scope_slot,b.layout.level,b.layout.saved_sp].contains(&offset){return Err("CRT inline guard layout alias");}}
-  b.extra_guards=guards;b.saved_sp_pending=true;Ok(b)
+  for &offset in &guards{if offset%4!=0||offset<b.layout.low||offset>=0||!seen.insert(offset)||b.layout.saved.iter().any(|&(at,_)|at==offset)||([b.layout.record,b.layout.record+4,b.layout.scope_slot,b.layout.level].contains(&offset)||b.layout.saved_sp==Some(offset)){return Err("CRT inline guard layout alias");}}
+  b.extra_guards=guards;b.saved_sp_pending=b.layout.saved_sp.is_some();Ok(b)
  }
  fn authority(&self,rt:&CrtStreamRuntime,epoch:&NormalCallEpoch<'_>)->RegistryResult<()>{
   epoch.state()?;self.identity(rt,epoch)?;
@@ -236,6 +236,9 @@ impl CrtNormalBinding {
   Ok(())
  }
  fn at(&self,rt:&CrtStreamRuntime,offset:i32)->RegistryResult<CrtPointer>{rt.offset(self.caller,i64::from(offset))}
+ fn saved_sp_matches(&self,rt:&CrtStreamRuntime,low:CrtPointer)->RegistryResult<bool>{
+  match self.layout.saved_sp{Some(at)=>Ok(rt.load(self.at(rt,at)?,32)?==CrtValue::Pointer(low)),None=>Ok(true)}
+ }
  fn saved(&self,register:u8)->CrtValue{match self.entry[register as usize]{CrtValue::Scalar{bits,known}=>CrtValue::Scalar{bits:bits&known,known},v=>v}}
  /// The projection is rebuilt from live words on every transition. Consumed
  /// saved words may be represented only by our exact POP receipt: storage must
@@ -262,7 +265,7 @@ impl CrtNormalBinding {
    ||rt.load(record,32)?!=CrtValue::ThreadHead(self.token)
    ||rt.load(self.at(rt,l.record+4)?,32)?.known_scalar()?!=l.handler
    ||rt.load(self.at(rt,l.scope_slot)?,32)?.known_scalar()?!=l.scope^self.cookie
-   ||(!self.saved_sp_pending&&rt.load(self.at(rt,l.saved_sp)?,32)?!=CrtValue::Pointer(low))
+   ||(!self.saved_sp_pending&&!self.saved_sp_matches(rt,low)?)
    ||rt.load(rt.resolve_absolute(l.cookie_address,CrtRegionKind::Module)?,32)?.known_scalar()?!=self.cookie{
    return Err("CRT normal actual record/cookie/return changed");
   }
@@ -275,7 +278,7 @@ impl CrtNormalBinding {
     let offset=(i64::from(address)-i64::from(self.caller.address())) as i32;
     // Defer even an invalid old tag in this word to its actual later MOV.
     // Rejecting it here would erase the preceding original FS publication.
-    if self.saved_sp_pending&&offset==l.saved_sp{continue;}
+    if self.saved_sp_pending&&Some(offset)==l.saved_sp{continue;}
     let expected=if offset==0{Some(CrtValue::ProtectedReturn(self.return_id))}
      else if offset==l.record{Some(CrtValue::ThreadHead(self.token))}
      else{l.saved.iter().find(|&&(at,_)|at==offset).map(|&(_,r)|self.saved(r))};
@@ -287,7 +290,7 @@ impl CrtNormalBinding {
    (l.record+4,FrameWord::Scalar(l.handler)),(l.scope_slot,FrameWord::EncodedScope{scope:l.scope,cookie:self.cookie,bits:l.scope^self.cookie}),
    (l.level,FrameWord::Scalar(level as u32)),
    (l.guard,FrameWord::Guard{frame:frame.address(),cookie:self.cookie,bits:frame.address()^self.cookie})]);
-  if !self.saved_sp_pending{words.insert(l.saved_sp,FrameWord::StackAddress(low.address()));}
+  if !self.saved_sp_pending{if let Some(at)=l.saved_sp{words.insert(at,FrameWord::StackAddress(low.address()));}}
   for &offset in &self.extra_guards{self.word(rt,cpu,offset,1,CrtValue::scalar(frame.address()^self.cookie))?;words.insert(offset,FrameWord::Guard{frame:frame.address(),cookie:self.cookie,bits:frame.address()^self.cookie});}
   for &(offset,register) in &l.saved{
    let value=self.saved(register);self.word(rt,cpu,offset,register,value)?;
@@ -316,17 +319,17 @@ impl CrtNormalBinding {
   self.id=Some(id);epoch.install_head(id,&image)
  }
  /// Caller supplies the separately instruction-proved inline epilog plan.
- /// The private incomplete projection omits saved ESP instead of reading or
- /// inventing it. Only the actual later MOV can make the full image available.
+ /// A pending present slot needs its actual later MOV. An absent slot is
+ /// omitted permanently, never read or promoted to saved restoration state.
  fn install_inline(&mut self,rt:&CrtStreamRuntime,cpu:&CrtCpu,epoch:&mut NormalCallEpoch<'_>,record:CrtPointer,token:CrtThreadHead,plan:NormalFramePlan)->RegistryResult<()>{
   self.authority(rt,epoch)?;
-  if !self.saved_sp_pending||self.id.is_some()||record!=self.at(rt,self.layout.record)?||token!=self.token||cpu.r[4]!=CrtValue::Pointer(self.at(rt,self.layout.low)?)||plan.callee_pop!=u32::from(self.layout.pop){return epoch.fail("CRT inline install phase/record");}
+  if self.saved_sp_pending!=self.layout.saved_sp.is_some()||self.id.is_some()||record!=self.at(rt,self.layout.record)?||token!=self.token||cpu.r[4]!=CrtValue::Pointer(self.at(rt,self.layout.low)?)||plan.callee_pop!=u32::from(self.layout.pop){return epoch.fail("CRT inline install phase/record");}
   Self::validate_cxx_from(rt,epoch,self.previous)?;let image=self.project_storage(rt,cpu)?;
   let id=epoch.reserve_eh4(&image,plan)?;self.id=Some(id);epoch.install_head(id,&image)
  }
  fn store_inline_saved_sp(&mut self,rt:&mut CrtStreamRuntime,cpu:&CrtCpu,epoch:&mut NormalCallEpoch<'_>,destination:CrtPointer,value:CrtValue)->RegistryResult<()>{
-  self.authority(rt,epoch)?;let id=self.id.ok_or("CRT inline saved-SP before installation")?;let low=self.at(rt,self.layout.low)?;
-  if !self.saved_sp_pending||destination!=self.at(rt,self.layout.saved_sp)?||value!=CrtValue::Pointer(low)||cpu.r[4]!=value{return epoch.fail("CRT inline saved-SP original operand");}
+  self.authority(rt,epoch)?;let at=self.layout.saved_sp.ok_or("CRT inline saved-SP absent")?;let id=self.id.ok_or("CRT inline saved-SP before installation")?;let low=self.at(rt,self.layout.low)?;
+  if !self.saved_sp_pending||destination!=self.at(rt,at)?||value!=CrtValue::Pointer(low)||cpu.r[4]!=value{return epoch.fail("CRT inline saved-SP original operand");}
   // On failure the already published child head and all earlier stores survive.
   rt.store(destination,32,value)?;self.saved_sp_pending=false;let image=self.image(rt,cpu,epoch)?;epoch.validate_image(id,&image)
  }
@@ -455,6 +458,7 @@ impl CrtNormalException {
   if epoch.registry.normal_epoch.as_ref().is_some_and(|s|s.pending_exception.is_some()||s.delivery.is_some()){
    return Err("normal exception nested delivery contract unbound");
   }
+  if binding.layout.saved_sp.is_none(){return Err("normal exception absent saved-SP contract unbound");}
   let CrtNormalRaiseSite{instruction,continuation,iat}=site;
   binding.image(rt,cpu,epoch)?;
   let frame=binding.id.ok_or("normal exception source not installed")?;
@@ -645,7 +649,7 @@ impl CrtLiveFrame<'_,'_> {
   self.validate()?;
   let l=&self.binding.layout;let at=l.bp.checked_add(offset).ok_or("live frame offset overflow")?;
   if at%4!=0||at<l.low||at.checked_add(4).is_none_or(|end|end>0)
-   ||(l.record..l.record+16).contains(&at)||at==l.guard||at==l.saved_sp
+   ||(l.record..l.record+16).contains(&at)||at==l.guard||Some(at)==l.saved_sp
    ||l.saved.iter().any(|&(p,_)|p==at){return Err("live frame protected/outside word");}
   let p=self.binding.at(self.rt,at)?;self.rt.valid(p,4)?;Ok(p)
  }

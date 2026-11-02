@@ -19,7 +19,170 @@ pub(crate) const MAIN_PROLOG: &str = "558bec6afe6818b24100681022400064a100000000
 pub(crate) const MAIN_INITIAL: &str = "c78500fdffff2c010000c78510fdffff0000000068cc0200006a008d8518fdffff50e89010000083c40cc7850cfdffff00000000c78508fdffff00000000c78504fdffff000000006a00ff1508504100898514fdffffc745fc00000000";
 pub(crate) const MAIN_EPILOG: &str = "8b4df064890d00000000595f5e5b8b4de433cde8340000008be55dc3";
 pub(crate) const MAIN_SCOPE: &str = "e4ffffff00000000e4fcffff00000000feffffff331340005c134000";
+pub(crate) const OUTER_CALL: &str = "e885feffff";
+pub(crate) const OUTER_PROLOG: &str = "558bec6afe68f8b14100681022400064a1000000005083ec10535657a100c041003145f833c5508d45f064a300000000";
+pub(crate) const OUTER_INITIAL: &str = "c745e4c8000000c745e002000000c745fc00000000";
+pub(crate) const OUTER_EPILOG: &str = "8b4df064890d00000000595f5e5b8be55dc3";
+pub(crate) const OUTER_SCOPE: &str = "feffffff00000000d0ffffff00000000feffffff0000000022124000";
 pub(crate) const SCOPE: &str = "feffffff00000000ccffffff00000000feffffff491740005d174000";
+/// Finally-only inline frame: absence is proved over the entire original
+/// call-free prolog, not inferred from old or unknown contents of a stack word.
+fn outer_contract(prolog: &[u8], epilog: &[u8]) -> Result<(String, String), String> {
+    use crate::graph::{Address, Binary, Operand, Operation, Reg};
+    let f = crate::frame_proof::prove_frame(
+        prolog,
+        0x4011a0,
+        0x41c000,
+        &std::collections::BTreeSet::from([0x41b1f8]),
+        &std::collections::BTreeSet::from([0x402210]),
+    )?;
+    f.validate_eh4_header([-2, 0, -48, 0])?;
+    let g = crate::crt_startup_table::graph(prolog, 0x4011a0)?;
+    if f.end() != 0x4011d0
+        || f.try_level() != -2
+        || !f.stack_words().is_empty()
+        || !f.pending_arguments().is_empty()
+        || f.guard_offsets() != [-48]
+        || g.nodes.values().any(|n| {
+            matches!(
+                &n.op,
+                Op::Ordinary(Operation::Binary(
+                    Binary::Move,
+                    Operand::Memory(..),
+                    Operand::Reg(Reg { index: 4, .. })
+                ))
+            )
+        })
+    {
+        return Err("Outer original saved-SP absence proof".into());
+    }
+    let reg = |index| Reg {
+        index,
+        width: 32,
+        shift: 0,
+    };
+    let previous = Operand::Memory(
+        Address {
+            base: Some(5),
+            index: None,
+            scale: 1,
+            displacement: f.record_offset() as u32,
+        },
+        32,
+    );
+    let e = Graph::decode(epilog, 0x401210)?;
+    let expected = vec![
+        Op::Ordinary(Operation::Binary(
+            Binary::Move,
+            Operand::Reg(reg(1)),
+            previous,
+        )),
+        Op::FsWrite(reg(1)),
+        Op::Ordinary(Operation::Pop(reg(1))),
+        Op::Ordinary(Operation::Pop(reg(7))),
+        Op::Ordinary(Operation::Pop(reg(6))),
+        Op::Ordinary(Operation::Pop(reg(3))),
+        Op::Ordinary(Operation::Binary(
+            Binary::Move,
+            Operand::Reg(reg(4)),
+            Operand::Reg(reg(5)),
+        )),
+        Op::Ordinary(Operation::Pop(reg(5))),
+        Op::Ordinary(Operation::Return),
+    ];
+    let pops = [
+        (f.esp_offset() + 4, 7),
+        (f.esp_offset() + 8, 6),
+        (f.esp_offset() + 12, 3),
+        (0, 5),
+    ];
+    if e.end != 0x401222
+        || e.nodes.values().map(|n| n.op.clone()).collect::<Vec<_>>() != expected
+        || f.saved_slots() != &pops.into_iter().collect::<BTreeMap<_, _>>()
+        || ![-28, -32].iter().all(|at| f.ordinary_words().contains(at))
+    {
+        return Err("Outer original saved/epilog shape".into());
+    }
+    let bp = f.ebp_offset();
+    let low = bp + f.esp_offset();
+    let saved: Vec<_> = f
+        .saved_slots()
+        .iter()
+        .map(|(&at, &r)| (bp + at, r))
+        .collect();
+    let layout=format!("CrtNormalLayout{{low:{low},bp:{bp},record:{},scope_slot:{},level:{},saved_sp:None,guard:{low},saved:vec!{saved:?},scope:{},handler:{},cookie_address:0x41c000,pop:0}}",bp+f.record_offset(),bp+f.record_offset()+8,bp+f.try_level_offset(),f.scope_va(),f.handler_va());
+    let mut steps=format!("vec![NormalFrameStep::RestorePredecessor,NormalFrameStep::DiscardGuard{{offset:{low},register:1}},");
+    for (at, r) in pops {
+        steps.push_str(&format!(
+            "NormalFrameStep::PopSaved{{offset:{},register:{r}}},",
+            bp + at
+        ));
+    }
+    steps.push(']');
+    Ok((
+        layout,
+        format!("NormalFramePlan{{steps:{steps},callee_pop:0}}"),
+    ))
+}
+fn outer_source() -> Result<String, String> {
+    let raw = crate::crt_ptd::raw;
+    let p = raw(OUTER_PROLOG);
+    let ep = raw(OUTER_EPILOG);
+    let scope = raw(OUTER_SCOPE);
+    let (layout, plan) = outer_contract(&p, &ep)?;
+    let g = crate::crt_startup_table::graph(&p, 0x4011a0)?;
+    let prolog = crate::crt_stream_emit::emit_body_with_store(
+        &g,
+        |_, _| Err("Outer prolog call".into()),
+        &BTreeMap::from([(0x41c000, "CrtRegionKind::Module".into())]),
+        128,
+        |_, op| {
+            Ok(match op{
+            Op::FsRead(r)=>format!("b.authority(rt,epoch)?;if epoch.head()?!=b.previous{{return Err(\"Outer predecessor changed\");}}cpu.set({},32,0,CrtValue::ThreadHead(b.token))?;",r.index),
+            Op::FsWrite(r)=>format!("b.install_inline(rt,cpu,epoch,CrtCpu::pointer(cpu.r[{}])?,b.token,original_outer_plan())?;",r.index),
+            _=>return Err("Outer prolog FS effect".into())})
+        },
+        |_, _| Ok(String::new()),
+        |_, _| Err("Outer prolog RET".into()),
+        Some(0x4011d0),
+        |_, _, _| Ok(None),
+    )?;
+    let bytes = raw(OUTER_INITIAL);
+    let g = crate::crt_startup_table::graph(&bytes, 0x4011d0)?;
+    let body = crate::crt_stream_emit::emit_body_with_store(
+        &g,
+        |_, _| Err("Outer initial call".into()),
+        &Default::default(),
+        16,
+        |_, _| Err("Outer initial FS".into()),
+        |_, _| Ok(String::new()),
+        |_, _| Err("Outer initial RET".into()),
+        Some(0x4011e5),
+        |pc, a, w| {
+            let offset = match pc {
+                0x4011d0 => -28,
+                0x4011d7 => -32,
+                0x4011de => -4,
+                _ => return Err("Outer initial store instruction".into()),
+            };
+            if w != 32 {
+                return Err("Outer initial store width".into());
+            }
+            let transition = if pc == 0x4011de {
+                "if rt.load(p,32)?!=CrtValue::scalar((-2i32)as u32)||v!=CrtValue::scalar(0){return Err(\"Outer scope transition\");}"
+            } else {
+                ""
+            };
+            Ok(Some(format!("b.authority(rt,epoch)?;let p={};if p!=b.at(rt,b.layout.bp+({offset}))?{{return Err(\"Outer initial destination alias\");}}{transition}rt.store(p,32,v)?;let image=b.image(rt,cpu,epoch)?;epoch.validate_image(b.id.ok_or(\"Outer initial missing frame\")?,&image)?;",crate::crt_stream_emit::address(a,&Default::default())?)))
+        },
+    )?;
+    let mut out=format!("fn original_outer_layout()->CrtNormalLayout{{{layout}}}fn original_outer_plan()->NormalFramePlan{{{plan}}}");
+    out.push_str(&format!("fn original_outer_prolog(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>,b:&mut CrtNormalBinding)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;b.authority(rt,epoch)?;if b.layout!=original_outer_layout()||b.id.is_some()||b.saved_sp_pending||cpu.r[4]!=cpu.entry[4]{{return Err(\"Outer prolog phase/layout\");}}{}{}{prolog}}}",guard(0x4011a0,&p),guard(0x401210,&ep)));
+    out.push_str(&format!("fn original_outer_initial(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>,b:&mut CrtNormalBinding)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;let image=b.image(rt,cpu,epoch)?;epoch.validate_image(b.id.ok_or(\"Outer initial missing frame\")?,&image)?;{}{body}}}",guard(0x4011d0,&bytes)));
+    out.push_str(&format!("fn startup_outer_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;let scope=rt.process_image_pointer(inputs.image,0x41b1f8,{})?;rt.memory.validate_immutable(scope.cap,scope.owner,scope.address(),{}).map_err(|_|\"Outer scope permission\")?;if rt.memory.read(scope.address(),{}).map_err(|_|\"Outer scope read\")?!=&{scope:?}{{return Err(\"Outer scope bytes changed\");}}let mut b=CrtNormalBinding::bind_inline_initializing(rt,cpu,epoch,original_outer_layout(),inputs.init,vec![])?;original_outer_prolog(rt,cpu,inputs,epoch,&mut b)?;original_outer_initial(rt,cpu,inputs,epoch,&mut b)?;Err(\"startup Outer Inner call unbound at 0x4011e5\")}}",scope.len(),scope.len(),scope.len()));
+    out.push_str(&format!("fn startup_call_outer(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>,parent:&CrtNormalBinding)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;let image=parent.image(rt,cpu,epoch)?;epoch.validate_image(parent.id.ok_or(\"Outer parent missing\")?,&image)?;if parent.layout!=original_main_layout()||image.try_level!=0||cpu.r[4]!=CrtValue::Pointer(parent.at(rt,parent.layout.low)?){{return Err(\"Outer caller phase/stack\");}}{}cpu.call_activation(rt,0x40131b,0,|rt,c|startup_outer_original(rt,c,inputs,epoch))?;Err(\"unexpected Outer return\")}}",guard(0x401316,&raw(OUTER_CALL))));
+    Ok(out)
+}
 /// Derive registration metadata from the existing inline instruction proof,
 /// then check its restoration shape. This does not execute or admit a return.
 fn inline_contract(prolog: &[u8], epilog: &[u8]) -> Result<(String, String, String), String> {
@@ -123,7 +286,7 @@ fn inline_contract(prolog: &[u8], epilog: &[u8]) -> Result<(String, String, Stri
         .filter(|&&at| at != f.esp_offset())
         .map(|&at| bp + at)
         .collect();
-    let layout=format!("CrtNormalLayout{{low:{low},bp:{bp},record:{},scope_slot:{},level:{},saved_sp:{},guard:{low},saved:vec!{saved:?},scope:{},handler:{},cookie_address:0x41c000,pop:0}}",bp+f.record_offset(),bp+f.record_offset()+8,bp+f.try_level_offset(),saved_sp[0],f.scope_va(),f.handler_va());
+    let layout=format!("CrtNormalLayout{{low:{low},bp:{bp},record:{},scope_slot:{},level:{},saved_sp:Some({}),guard:{low},saved:vec!{saved:?},scope:{},handler:{},cookie_address:0x41c000,pop:0}}",bp+f.record_offset(),bp+f.record_offset()+8,bp+f.try_level_offset(),saved_sp[0],f.scope_va(),f.handler_va());
     let mut steps=format!("vec![NormalFrameStep::RestorePredecessor,NormalFrameStep::DiscardGuard{{offset:{low},register:1}},");
     for (at, r) in &pops[..3] {
         steps.push_str(&format!(
@@ -225,7 +388,7 @@ fn main_source() -> Result<String, String> {
         },
     )?;
     out.push_str(&format!("fn original_main_initial(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>,b:&mut CrtNormalBinding)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;let image=b.image(rt,cpu,epoch)?;epoch.validate_image(b.id.ok_or(\"Main initial missing frame\")?,&image)?;{}{body}}}",guard(0x4012b9,&bytes)));
-    out.push_str(&format!("fn startup_main_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;let scope=rt.process_image_pointer(inputs.image,0x41b218,{})?;rt.memory.validate_immutable(scope.cap,scope.owner,scope.address(),{}).map_err(|_|\"Main scope permission\")?;if rt.memory.read(scope.address(),{}).map_err(|_|\"Main scope read\")?!=&{scope:?}{{return Err(\"Main scope bytes changed\");}}let mut b=CrtNormalBinding::bind_inline_initializing(rt,cpu,epoch,original_main_layout(),inputs.init,original_main_guards())?;original_main_install(rt,cpu,inputs,epoch,&mut b)?;original_main_saved_sp(rt,cpu,inputs,epoch,&mut b)?;original_main_initial(rt,cpu,inputs,epoch,&mut b)?;Err(\"startup Main Outer call unbound at 0x401316\")}}",scope.len(),scope.len(),scope.len()));
+    out.push_str(&format!("fn startup_main_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;let scope=rt.process_image_pointer(inputs.image,0x41b218,{})?;rt.memory.validate_immutable(scope.cap,scope.owner,scope.address(),{}).map_err(|_|\"Main scope permission\")?;if rt.memory.read(scope.address(),{}).map_err(|_|\"Main scope read\")?!=&{scope:?}{{return Err(\"Main scope bytes changed\");}}let mut b=CrtNormalBinding::bind_inline_initializing(rt,cpu,epoch,original_main_layout(),inputs.init,original_main_guards())?;original_main_install(rt,cpu,inputs,epoch,&mut b)?;original_main_saved_sp(rt,cpu,inputs,epoch,&mut b)?;original_main_initial(rt,cpu,inputs,epoch,&mut b)?;startup_call_outer(rt,cpu,inputs,epoch,&b)}}",scope.len(),scope.len(),scope.len()));
     Ok(out)
 }
 fn argument_source() -> Result<String, String> {
@@ -409,6 +572,7 @@ pub(crate) fn source() -> Result<String, String> {
     out.push_str(&callback_source()?);
     out.push_str(&argument_source()?);
     out.push_str(&main_source()?);
+    out.push_str(&outer_source()?);
     let lock = crate::crt_ptd::raw(LOCK);
     let g = lock_graph()?;
     let body = crate::crt_stream_emit::emit_body(
@@ -548,6 +712,35 @@ fn guard(at: u32, bytes: &[u8]) -> String {
     format!("let p=rt.process_image_code(inputs.image,{at},{})?;if rt.memory.read(p.address(),{}).map_err(|_|\"startup caller code read\")?!=&{bytes:?}{{return Err(\"startup caller code changed\");}}",bytes.len(),bytes.len())
 }
 #[test]
+fn original_outer_proves_absent_saved_sp_and_rejects_added_store_or_changed_return() {
+    let p = crate::crt_ptd::raw(OUTER_PROLOG);
+    let e = crate::crt_ptd::raw(OUTER_EPILOG);
+    let (layout, plan) = outer_contract(&p, &e).expect("original finally-only frame");
+    for field in ["low:-52", "bp:-4", "record:-20", "saved_sp:None"] {
+        assert!(layout.contains(field), "{field}");
+    }
+    assert!(!plan.contains("CheckGuard"));
+    let mut with_store = p.clone();
+    with_store.splice(42..42, [0x89, 0x65, 0xe8]);
+    assert!(
+        outer_contract(&with_store, &e).is_err(),
+        "a new saved-ESP effect must reject"
+    );
+    for i in 0..p.len() {
+        let mut bad = p.clone();
+        bad[i] ^= 1;
+        assert!(outer_contract(&bad, &e).is_err(), "prolog mutation{i}");
+    }
+    for i in 0..e.len() {
+        let mut bad = e.clone();
+        bad[i] ^= 1;
+        assert!(outer_contract(&p, &bad).is_err(), "epilog mutation{i}");
+    }
+    assert!(outer_source()
+        .expect("Outer lowering")
+        .contains("saved_sp:None"));
+}
+#[test]
 fn negative_stack_add_grows_without_reading_or_initializing_locals() {
     let mut extra = String::new();
     for (name, bytes) in [
@@ -592,7 +785,7 @@ fn original_inline_main_derives_layout_and_rejects_changed_restoration() {
         "low:-800",
         "bp:-4",
         "record:-20",
-        "saved_sp:-28",
+        "saved_sp:Some(-28)",
         "guard:-800",
     ] {
         assert!(layout.contains(field), "{field}");

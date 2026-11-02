@@ -100,7 +100,7 @@ impl EpilogProof {
         }
         let l = &self.layout;
         let saved: Vec<_> = l.saved.iter().map(|(&o, &r)| (o, r)).collect();
-        let mut code = format!("fn {name}_layout()->CrtNormalLayout{{CrtNormalLayout{{low:{},bp:{},record:{},scope_slot:{},level:{},saved_sp:{},guard:{},saved:vec!{:?},scope:{},handler:{},cookie_address:{},pop:{}}}}}\n",
+        let mut code = format!("fn {name}_layout()->CrtNormalLayout{{CrtNormalLayout{{low:{},bp:{},record:{},scope_slot:{},level:{},saved_sp:Some({}),guard:{},saved:vec!{:?},scope:{},handler:{},cookie_address:{},pop:{}}}}}\n",
             l.low,l.frame_pointer,l.record,l.scope_slot,l.level_slot,l.saved_sp,l.guard,saved,self.scope,self.handler,self.cookie_address,self.pop);
         code.push_str(&format!("fn {name}(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,epoch:&mut NormalCallEpoch<'_>,binding:&mut CrtNormalBinding)->Result<CrtValue,&'static str>{{let result=(||{{if binding.layout!={name}_layout(){{return Err(\"EH4 epilog certificate/binding disagreement\");}}binding.epilog_entry(rt,cpu,epoch)?;"));
         let mut sp = l.low;

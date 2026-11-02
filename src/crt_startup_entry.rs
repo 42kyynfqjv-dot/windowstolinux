@@ -47,7 +47,7 @@ pub(crate) fn source(regions: &[Vec<u8>], helper: &[u8]) -> Result<String, Strin
     )?;
     let l = &p.layout;
     let saved: Vec<_> = l.saved.iter().map(|(&o, &r)| (o, r)).collect();
-    let layout=format!("fn startup_layout()->CrtNormalLayout{{CrtNormalLayout{{low:{},bp:{},record:{},scope_slot:{},level:{},saved_sp:{},guard:{},saved:vec!{:?},scope:0x41b238,handler:0x402210,cookie_address:0x41c000,pop:0}}}}",l.low,l.frame_pointer,l.record,l.scope_slot,l.level_slot,l.saved_sp,l.guard,saved);
+    let layout=format!("fn startup_layout()->CrtNormalLayout{{CrtNormalLayout{{low:{},bp:{},record:{},scope_slot:{},level:{},saved_sp:Some({}),guard:{},saved:vec!{:?},scope:0x41b238,handler:0x402210,cookie_address:0x41c000,pop:0}}}}",l.low,l.frame_pointer,l.record,l.scope_slot,l.level_slot,l.saved_sp,l.guard,saved);
     let mut out = p.emit("startup_helper")?;
     out.push_str(&crate::crt_startup_table::source()?);
     out.push_str(&crate::crt_startup_caller::source()?);

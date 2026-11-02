@@ -112,6 +112,9 @@ final clean committed-source replay or exact-head CI conclusions.
 
 ## Remaining contracts
 
+This is the Main-only checkpoint. The subsequent bounded Outer prefix and
+explicit absence representation are recorded in [OUTER-ENTRY.md](OUTER-ENTRY.md).
+
 The next connected scope is original Outer `0x4011a0`, its call to Inner `0x4010c0` and actual
 software-exception acquisition. Bind them to this live Main record and suspended
 caller with existing shared machinery; do not promote fixture-supplied Machine

@@ -1,6 +1,17 @@
 # Remaining entry-to-exit dependencies
 
-## Current executable checkpoint: Main entered through the actual startup CALL
+## Current executable checkpoint: Outer entered under live Main
+
+The controlled native-profile entry executes original Main CALL
+`0x401316 → Outer 0x4011a0`, Outer's EH4 publication and initial local/cursor/scope
+stores. Its layout explicitly has no saved-SP store or restoration field.
+Startup, Main and Outer remain distinct live normal frames. The next frontier
+is **before CALL `0x4011e5 → Inner 0x4010c0`**; RaiseException at `0x401117` and
+all subsequent acquisition/delivery, returns and exit remain unexecuted here.
+
+[Absence proof, ordering, ownership and next scope](OUTER-ENTRY.md).
+
+## Previous executable checkpoint: Main entered through the actual startup CALL
 
 The controlled native-profile entry executes CALL 0x401717 into original Main
 0x401280, its inline EH4 publication and later saved-SP store, initial locals,
