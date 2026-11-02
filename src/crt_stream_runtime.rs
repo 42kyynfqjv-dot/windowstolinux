@@ -598,7 +598,11 @@ impl CrtStreamRuntime {
  }
  fn set_file_mode(&mut self,token:CrtProcessFileMode,mode:CrtFileApiMode)->Result<(),&'static str>{self.file_mode(token)?;self.file_mode.as_mut().unwrap().1=mode;Ok(())}
  fn file_mode_result(&mut self,token:CrtProcessFileMode)->Result<CrtValue,&'static str>{
-  if self.file_mode(token)?==CrtFileApiMode::Oem{return Ok(CrtValue::scalar(0));}
+  let truth=self.file_mode(token)?!=CrtFileApiMode::Oem;self.symbolic_bool(truth)
+ }
+ /// Preserve BOOL truth without choosing any unspecified representation bits.
+ fn symbolic_bool(&mut self,truth:bool)->Result<CrtValue,&'static str>{
+  if !truth{return Ok(CrtValue::scalar(0));}
   let serial=self.serial.checked_add(1).ok_or("CRT BOOL symbol serial")?;self.serial=serial;Ok(CrtValue::NonZero{anchor:self.anchor,serial})
  }
  /// One-call source acquisition. No query-to-copy authority is cached.

@@ -281,6 +281,8 @@ impl CrtCpu{
   // A nonzero fact constrains truth, not any particular raw set bit. Distinct
   // results can be disjoint bit patterns, even when both represent TRUE.
   if width==32&&kind==8&&a==b&&matches!(a,CrtValue::NonZero{..}){self.flags=CrtFlags{cf:Some(false),of:Some(false),zf:Some(false),sf:None};return Ok(CrtValue::Scalar{bits:0,known:0});}
+  // Full-width CMP nonzero,0 constrains equality/carry/overflow only.
+  if width==32&&kind==7&&matches!(a,CrtValue::NonZero{..})&&b==CrtValue::scalar(0){self.flags=CrtFlags{cf:Some(false),of:Some(false),zf:Some(false),sf:None};return Ok(CrtValue::Scalar{bits:0,known:0});}
   if matches!(kind,3|4|5|8){let(x,kx)=Self::bits(a)?;let(y,ky)=Self::bits(b)?;let(bits,known)=match kind{3=>(x^y,kx&ky),4|8=>(x&y,(kx&ky)|(kx&!x)|(ky&!y)),5=>(x|y,(kx&ky)|(kx&x)|(ky&y)),_=>unreachable!()};let bits=bits&mask;let known=(known&mask)|!mask;let sign=1u32<<(width-1);self.flags=CrtFlags{cf:Some(false),of:Some(false),zf:if bits&known&mask!=0{Some(false)}else if known==u32::MAX{Some(true)}else{None},sf:if known&sign!=0{Some(bits&sign!=0)}else{None}};return Ok(CrtValue::Scalar{bits,known});}
   let x=Self::number(a)?&mask;let y=Self::number(b)?&mask;let sign=1u32<<(width-1);
   let (bits,cf,of)=match kind{1=>{let n=u64::from(x)+u64::from(y);let r=n as u32&mask;(r,n>u64::from(mask),(!(x^y)&(x^r)&sign)!=0)},2|7=>{let r=x.wrapping_sub(y)&mask;(r,x<y,((x^y)&(x^r)&sign)!=0)},3=>(x^y,false,false),4|8=>(x&y,false,false),5=>(x|y,false,false),6=>{let borrow=u32::from(self.flags.cf.ok_or("CRT unknown borrow")?);let r=x.wrapping_sub(y).wrapping_sub(borrow)&mask;(r,u64::from(x)<u64::from(y)+u64::from(borrow),((x^y)&(x^r)&sign)!=0)},_=>return Err("CRT binary kind")};

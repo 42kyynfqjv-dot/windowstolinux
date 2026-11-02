@@ -1,5 +1,9 @@
 # Original repeated locale initializer
 
+This earlier checkpoint is superseded by [the feature initializer](FEATURE-INITIALIZER.md),
+which completes the C array and reaches0x401678. Its review and failed Windows
+evidence below remain retained.
+
 The explicit controlled native-profile entry now completes original locale callback
 0x4109ba and reaches **0x4127b0**, the raw processor-feature BOOL storage callback.
 Both empty and three-entry synthetic variants retain their previously published

@@ -1,6 +1,17 @@
 # Remaining entry-to-exit dependencies
 
-## Current executable checkpoint: repeated original locale callback completed
+## Current executable checkpoint: original C-initializer array returned
+
+The final original processor-feature callback now uses the live CPU profile,
+stores raw BOOL truth without inventing representation bits, and returns zero.
+The original guarded C array completes and restores its saved registers. The
+controlled entry reaches **0x401678**, before the caller's argument cleanup,
+result branch and C++ initializer array at0x406ca1. Full startup/default/rcedit
+admission remains unproved.
+
+[Feature binding, overlap review and next caller scope](FEATURE-INITIALIZER.md).
+
+## Previous executable checkpoint: repeated original locale callback completed
 
 Original0x4109ba now calls the existing guarded locale helper, executes MOVZX/XOR
 and returns through the original protected RET. The controlled native-profile

@@ -148,7 +148,7 @@ fn startup_connected_platform(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&C
  if let Some(p)=platform{p.validate(rt,inputs.init)?;}
  inputs.validate(rt)?;let root=rt.process_image(inputs.image)?;let nt=rt.load(rt.offset(root,0x3c)?,32)?.known_scalar()?;let rva=rt.load(rt.offset(root,i64::from(nt)+40)?,32)?.known_scalar()?;
  if root.address().checked_add(rva)!=Some(0x4017a4){return Err("startup original PE entry identity");}
- startup_shim(rt,cpu,inputs,backend,features,platform)?;let mut binding=CrtNormalBinding::bind_initializing(rt,cpu,epoch,startup_layout(),inputs.init)?;startup_prefix(rt,cpu,inputs,backend,features,platform,epoch,&mut binding)?;startup_post_initializer_platform(rt,cpu,inputs,epoch,&mut binding,platform)
+ startup_shim(rt,cpu,inputs,backend,features,platform)?;let mut binding=CrtNormalBinding::bind_initializing(rt,cpu,epoch,startup_layout(),inputs.init)?;startup_prefix(rt,cpu,inputs,backend,features,platform,epoch,&mut binding)?;startup_post_initializer_observed(rt,cpu,inputs,epoch,&mut binding,platform,features)
 }"#);
     Ok(out)
 }

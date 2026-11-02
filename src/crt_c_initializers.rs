@@ -110,10 +110,26 @@ impl CrtCArray{{
 fn startup_c_array(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,callback:&mut impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu,usize,CrtPointer)->Result<CrtValue,&'static str>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;if cpu.return_pop!=0||cpu.r[4]!=cpu.entry[4]||[3,5,6,7].iter().any(|&r|cpu.r[r]!=cpu.entry[r]){{return Err("C-array entry phase/ABI");}}let table=CrtCArray::bind(rt,cpu,inputs.image)?;table.validate(rt,inputs.image)?;let mut completed=[false;64];let mut guarded:Option<(usize,CrtPointer)>=None;let mut failure:Option<CrtValue>=None;{body}}}
 fn startup_c_array_real(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs)->Result<CrtValue,&'static str>{{startup_c_array_context(rt,cpu,inputs,None)}}
 fn startup_c_array_context(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,mut epoch:Option<&mut NormalCallEpoch<'_>>)->Result<CrtValue,&'static str>{{startup_c_array_platform(rt,cpu,inputs,epoch,None)}}
-fn startup_c_array_platform(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,mut epoch:Option<&mut NormalCallEpoch<'_>>,platform:Option<&CrtNativePlatform>)->Result<CrtValue,&'static str>{{startup_c_array(rt,cpu,inputs,&mut |rt,c,_,target|match target.address(){{0x40155a=>cinit_first_platform(rt,c,inputs,epoch.as_deref_mut(),platform),0x401605=>cinit_second_original(rt,c,inputs),0x40c109=>cinit_default_mode(rt,c,inputs),0x404510=>{{let e=epoch.as_deref_mut().ok_or("FILE registry absent")?;let p=platform.ok_or("FILE platform absent")?;cinit_file_original(rt,c,inputs,p,e)}},0x4109ba=>{{let e=epoch.as_deref_mut().ok_or("locale initializer registry absent")?;let p=platform.ok_or("locale initializer platform absent")?;cinit_locale_original(rt,c,inputs,p,e)}},0x4127b0=>Err("C initializer raw feature BOOL storage unbound"),_=>Err("C initializer callback unbound")}})}}
+fn startup_c_array_platform(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,mut epoch:Option<&mut NormalCallEpoch<'_>>,platform:Option<&CrtNativePlatform>)->Result<CrtValue,&'static str>{{startup_c_array_observed(rt,cpu,inputs,epoch,platform,None)}}
+fn startup_c_array_observed(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,mut epoch:Option<&mut NormalCallEpoch<'_>>,platform:Option<&CrtNativePlatform>,features:Option<&CrtFeatureObservation>)->Result<CrtValue,&'static str>{{startup_c_array(rt,cpu,inputs,&mut |rt,c,_,target|match target.address(){{0x40155a=>cinit_first_platform(rt,c,inputs,epoch.as_deref_mut(),platform),0x401605=>cinit_second_original(rt,c,inputs),0x40c109=>cinit_default_mode(rt,c,inputs),0x404510=>{{let e=epoch.as_deref_mut().ok_or("FILE registry absent")?;let p=platform.ok_or("FILE platform absent")?;cinit_file_original(rt,c,inputs,p,e)}},0x4109ba=>{{let e=epoch.as_deref_mut().ok_or("locale initializer registry absent")?;let p=platform.ok_or("locale initializer platform absent")?;cinit_locale_original(rt,c,inputs,p,e)}},0x4127b0=>cinit_feature_original(rt,c,inputs,features.ok_or("C initializer feature observation absent")?),_=>Err("C initializer callback unbound")}})}}
 "#,
         guard = guard(0x406ccc, &bytes).replace("inputs.image", "image")
     );
+    let feature = raw(FEATURE);
+    let graph = Graph::decode(&feature, 0x4127b0)?;
+    let roles = BTreeMap::from([(0x41d2fc, "CrtRegionKind::Module".into())]);
+    let body = crate::crt_stream_emit::emit_body(
+        &graph,
+        |pc, target| {
+            if pc != 0x4127b2 || target != Target::Import(0x41501c) {
+                return Err("feature initializer API identity".into());
+            }
+            Ok("cpu.call_activation(rt,0x4127b8,4,|rt,c|features.raw_api(rt,c))?;".into())
+        },
+        &roles,
+        16,
+    )?;
+    out.push_str(&format!("fn cinit_feature_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,features:&CrtFeatureObservation)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;features.validate(rt)?;cpu.validate_active(rt)?;{} {body}}}", guard(0x4127b0,&feature)));
     out.push_str(&registration_source);
     out.push_str(&crate::crt_argv::source()?);
     out.push_str(&post_source()?);

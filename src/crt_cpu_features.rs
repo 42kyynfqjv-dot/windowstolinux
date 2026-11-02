@@ -58,12 +58,17 @@ impl CrtFeatureObservation{
   // Both instructions leave EFLAGS unchanged; never ABI-clobber EBX or flags.
   Ok(())
  }
- fn api(&self,rt:&mut CrtStreamRuntime,c:&mut CrtCpu)->Result<CrtValue,&'static str>{
+ fn api(&self,rt:&mut CrtStreamRuntime,c:&mut CrtCpu)->Result<CrtValue,&'static str>{self.api_result(rt,c,false)}
+ fn raw_api(&self,rt:&mut CrtStreamRuntime,c:&mut CrtCpu)->Result<CrtValue,&'static str>{self.api_result(rt,c,true)}
+ fn api_result(&self,rt:&mut CrtStreamRuntime,c:&mut CrtCpu,raw:bool)->Result<CrtValue,&'static str>{
   self.validate(rt)?;c.validate_active(rt)?;let sp=CrtCpu::pointer(c.r[4])?;
+  if c.return_pop!=4||c.r[4]!=c.entry[4]||[3,5,6,7].iter().any(|&r|c.r[r]!=c.entry[r]){return Err("CPU feature stdcall frame");}
+  rt.offset(sp,8)?;rt.memory.validate_writable(sp.cap,sp.owner,sp.address(),8).map_err(|_|"CPU feature stack permission")?;rt.ordinary_file_bytes(sp,8)?;
   if rt.load(rt.offset(sp,4)?,32)?.known_scalar()?!=10{return Err("CPU feature selector unsupported");}
   // Exact bound caller only observes zero/nonzero via TEST EAX,EAX. This is
   // not a general BOOL-byte contract for other consumers.
-  let result=CrtValue::scalar(u32::from(self.current_data()?.reported_sse2));rt.last_os_error=None;c.clobber(result);c.finish_pop(rt,4)
+  let truth=self.current_data()?.reported_sse2;
+  let result=if raw{rt.symbolic_bool(truth)?}else{CrtValue::scalar(u32::from(truth))};rt.last_os_error=None;c.clobber(result);c.finish_pop(rt,4)
  }
 }
 "#;
@@ -230,5 +235,24 @@ for mode in 0..3{
 }
 "#,
         "cpu-feature-api",
+    );
+}
+
+#[test]
+fn raw_feature_bool_keeps_unspecified_bits_and_validates_before_api_effects() {
+    crate::crt_stream_callees_tests::native_bounded_stack(
+        TYPES,
+        r#"
+for mode in 0..12{
+ let(mut rt,init)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();let stack=rt.map_region(0x10000,1024,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,512).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(81)).unwrap();rt.store(rt.offset(sp,4).unwrap(),32,CrtValue::scalar(if mode==3{9}else{10})).unwrap();let mut c=CrtCpu::new(sp,81).unwrap();c.return_pop=4;
+ let data=CrtFeatureData{leaves:std::collections::BTreeMap::from([((0,0),[1,0,0,0]),((1,0),[0,0,0,7<<24])]),xcr0:None,reported_sse2:mode!=1};let mut observation=CrtFeatureObservation::bind(&rt,init,data).unwrap();
+ if mode==2{rt.end_initialization(init).unwrap();}if mode==4{c.return_pop=0;}if mode==5{c.r[3]=CrtValue::scalar(7);}if mode==6{observation.thread+=1;}if mode==7{observation.data.leaves.remove(&(1,0));}if mode==8{rt.store(rt.offset(sp,4).unwrap(),32,CrtValue::Scalar{bits:10,known:0xff}).unwrap();}if mode==9{rt.store(stack,32,CrtValue::ProtectedReturn(81)).unwrap();}if mode==10{observation.host=Some((std::process::id().wrapping_add(1),std::thread::current().id()));}
+ #[cfg(all(target_os="linux",target_arch="x86_64"))]if mode==11{observation=CrtFeatureObservation::native(&rt,init).unwrap();}
+ rt.last_os_error=Some(73);let before=c.r;let serial=rt.serial;let got=observation.raw_api(&mut rt,&mut c);
+ if matches!(mode,0|1|11){let result=got.expect("raw BOOL valid call");assert!(c.returned);if mode==1{assert_eq!(result,CrtValue::scalar(0));}else{assert!(matches!(result,CrtValue::NonZero{..}));assert!(result.known_scalar().is_err());rt.store(stack,32,result).unwrap();assert_eq!(rt.load(stack,32),Ok(result));assert_eq!(rt.load(stack,8),Err("CRT partial typed-word read"));assert!(rt.memory.read(stack.address(),4).is_err());c.binary(&rt,7,result,CrtValue::scalar(0),32).unwrap();assert_eq!((c.flags.cf,c.flags.of,c.flags.zf,c.flags.sf),(Some(false),Some(false),Some(false),None));assert!(c.binary(&rt,7,result,CrtValue::scalar(1),32).is_err());let other=rt.symbolic_bool(true).unwrap();assert_ne!(result,other);c.binary(&rt,8,result,other,32).unwrap();assert_eq!(c.flags.zf,None);}}
+ else{assert_eq!(got,Err(match mode{2=>"CRT initialization owner/lifetime",3=>"CPU feature selector unsupported",4|5=>"CPU feature stdcall frame",6=>"CPU observation owner/lifetime",7=>"CPU query outside observed leaf domain",8=>"CRT scalar knowledge/type",9=>"CRT active caller lifetime/return authority",10=>"CPU observation host lifetime/thread",_=>unreachable!()}),"feature API negative{mode}");assert!(!c.returned);assert_eq!(c.r,before);assert_eq!(rt.serial,serial);assert_eq!(rt.last_os_error,Some(73));assert_eq!(rt.load(sp,32),Ok(CrtValue::ProtectedReturn(81)));}
+}
+"#,
+        "raw-feature-bool",
     );
 }
