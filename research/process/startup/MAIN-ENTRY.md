@@ -4,7 +4,7 @@ The controlled native-profile entry now executes the actual CALL at `0x401717`
 to Main at `0x401280`. It preserves the already produced argc/argv/envp words,
 executes Main's original inline EH4 prolog, initial stores, full original memset,
 NULL-name module-handle query, result store and scope activation. It stops
-**before Main's CALL `0x401316 → 0x4011a0`**. Inner, exception delivery, Main
+**before Main's CALL `0x401316 → 0x4011a0`**. Outer/Inner, exception delivery, Main
 completion and process termination are not executed by this change.
 
 Both empty and three-entry synthetic environment variants must reach that same
@@ -76,7 +76,7 @@ root. It neither creates a temporary library owner nor increments a reference.
 The successful API conservatively invalidates volatile/LastError knowledge.
 Named queries and missing or stale authority are not guessed into success.
 
-The original final store transitions Main's try level from -2 to 0. Inner's call
+The original final store transitions Main's try level from -2 to 0. Outer's call
 is still unsupported, so no event or normal return follows. Reaching this point
 is evidence of entering Main and executing this prefix only.
 
@@ -112,12 +112,22 @@ final clean committed-source replay or exact-head CI conclusions.
 
 ## Remaining contracts
 
-The next connected scope is original Inner `0x4011a0`, its frame/calls and actual
+The next connected scope is original Outer `0x4011a0`, its call to Inner `0x4010c0` and actual
 software-exception acquisition. Bind them to this live Main record and suspended
 caller with existing shared machinery; do not promote fixture-supplied Machine
 or capture state into acquisition authority. Full startup/default/rcedit admission,
 Main/CRT return and exit, non-NULL callback validation, concurrent execution,
 exceptional delivery/cleanup and resource-failure equivalence remain unproved.
+
+The authored source identifies the first callee as Outer, not Inner. Outer's
+actual prolog publishes its record at `0x4011ca` without any saved-ESP store;
+its finally-only scope header is `[-2, 0, -48, 0]`. The current shared normal
+layout requires a saved-SP word, so reusing Main's delayed-store stage would
+invent an eventual store that is absent here. The next bounded integration
+must represent instruction-proved absence without issuing restoration authority
+from an uninitialized slot. Outer initializes locals 200/2 and scope 0, then
+calls Inner at `0x4011e5 → 0x4010c0`. Inner's original RaiseException call is
+`0x401117`. These are three distinct execution boundaries, not one acquisition.
 
 Historical original Windows C01 and case-26 timeouts remain separate unresolved
 failures before conversion. Their retained owned-process/WCT records have no

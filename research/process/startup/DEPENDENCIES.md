@@ -5,7 +5,7 @@
 The controlled native-profile entry executes CALL 0x401717 into original Main
 0x401280, its inline EH4 publication and later saved-SP store, initial locals,
 original memset and checked module-root query. Both normal frames and caller
-arguments remain live. It stops **before CALL 0x401316 → 0x4011a0**; Inner,
+arguments remain live. It stops **before CALL 0x401316 → 0x4011a0**; Outer/Inner,
 exception delivery, Main completion and process exit have not executed.
 
 [Staged publication, instruction effects and next scope](MAIN-ENTRY.md).
