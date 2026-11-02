@@ -1,6 +1,15 @@
 # Remaining entry-to-exit dependencies
 
-## Current executable checkpoint: original first-initializer return
+## Current executable checkpoint: original FILE initialization completed
+
+The explicit controlled native-profile entry executes original FILE allocation,
+publication, all three lock constructors, slot stores, descriptor classification
+and protected return. It reaches locale callback **0x4109ba**. Canonical FILE
+storage and independently owned environment strings remain live.
+
+[Contract, failure ordering and next locale scope](FILE-INITIALIZER.md).
+
+## Previous executable checkpoint: original first-initializer return
 
 The explicit controlled native-profile entry now executes both original
 post-environment helper calls, the original TEST and protected RET. Guarded C-array

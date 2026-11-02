@@ -110,7 +110,7 @@ impl CrtCArray{{
 fn startup_c_array(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,callback:&mut impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu,usize,CrtPointer)->Result<CrtValue,&'static str>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;if cpu.return_pop!=0||cpu.r[4]!=cpu.entry[4]||[3,5,6,7].iter().any(|&r|cpu.r[r]!=cpu.entry[r]){{return Err("C-array entry phase/ABI");}}let table=CrtCArray::bind(rt,cpu,inputs.image)?;table.validate(rt,inputs.image)?;let mut completed=[false;64];let mut guarded:Option<(usize,CrtPointer)>=None;let mut failure:Option<CrtValue>=None;{body}}}
 fn startup_c_array_real(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs)->Result<CrtValue,&'static str>{{startup_c_array_context(rt,cpu,inputs,None)}}
 fn startup_c_array_context(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,mut epoch:Option<&mut NormalCallEpoch<'_>>)->Result<CrtValue,&'static str>{{startup_c_array_platform(rt,cpu,inputs,epoch,None)}}
-fn startup_c_array_platform(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,mut epoch:Option<&mut NormalCallEpoch<'_>>,platform:Option<&CrtNativePlatform>)->Result<CrtValue,&'static str>{{startup_c_array(rt,cpu,inputs,&mut |rt,c,_,target|match target.address(){{0x40155a=>cinit_first_platform(rt,c,inputs,epoch.as_deref_mut(),platform),0x401605=>cinit_second_original(rt,c,inputs),0x40c109=>cinit_default_mode(rt,c,inputs),0x404510=>Err("C initializer FILE allocation/lock composition unbound"),0x4109ba=>Err("C initializer locale epoch composition unbound"),0x4127b0=>Err("C initializer raw feature BOOL storage unbound"),_=>Err("C initializer callback unbound")}})}}
+fn startup_c_array_platform(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,mut epoch:Option<&mut NormalCallEpoch<'_>>,platform:Option<&CrtNativePlatform>)->Result<CrtValue,&'static str>{{startup_c_array(rt,cpu,inputs,&mut |rt,c,_,target|match target.address(){{0x40155a=>cinit_first_platform(rt,c,inputs,epoch.as_deref_mut(),platform),0x401605=>cinit_second_original(rt,c,inputs),0x40c109=>cinit_default_mode(rt,c,inputs),0x404510=>{{let e=epoch.as_deref_mut().ok_or("FILE registry absent")?;let p=platform.ok_or("FILE platform absent")?;cinit_file_original(rt,c,inputs,p,e)}},0x4109ba=>Err("C initializer locale epoch composition unbound"),0x4127b0=>Err("C initializer raw feature BOOL storage unbound"),_=>Err("C initializer callback unbound")}})}}
 "#,
         guard = guard(0x406ccc, &bytes).replace("inputs.image", "image")
     );
@@ -121,6 +121,7 @@ fn startup_c_array_platform(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&Crt
     out.push_str(&environment_prefix_source()?);
     out.push_str(&environment_producer_source()?);
     out.push_str(&environment_table_source()?);
+    out.push_str(&file_source()?);
     let scan = environment_scan_body()?;
     out.push_str(&format!("fn cinit_environment_scan(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;{}{scan}}}",guard(0x40b92f,&raw(ENV_SCAN))));
     for (name, at, literal) in [
@@ -821,4 +822,38 @@ for mode in 0..4{let(mut rt,_)=CrtStreamRuntime::new_initializing(7,9,0x8000,655
 "#,
         "post-environment-return",
     );
+}
+
+fn file_source() -> Result<String, String> {
+    let bytes = crate::crt_ptd::raw(FILE_INIT);
+    let graph = Graph::decode(&bytes, 0x404510)?;
+    let roles = BTreeMap::from_iter(
+        [0x41cd2c, 0x41cd30, 0x41cf08].map(|a| (a, "CrtRegionKind::Module".into())),
+    );
+    let body = crate::crt_stream_emit::emit_body_with_hooks(
+        &graph,
+        |pc, t| {
+            let next = pc + graph.nodes[&pc].length;
+            Ok(match t{
+ Target::Direct(0x407cf0)=>format!("cpu.call_activation(rt,{next},0,|rt,c|ucrt_calloc_native(rt,c,inputs,platform,epoch))?;"),
+ Target::Direct(0x407d50)=>format!("cpu.call_activation(rt,{next},0,|rt,c|ucrt_free_null(rt,c,inputs))?;"),
+ Target::Direct(0x408079)=>format!("cpu.call_activation(rt,{next},12,|rt,c|startup_file_lock(rt,c,inputs,platform))?;"),
+ _=>return Err("FILE unexpected original call".into())})
+        },
+        &roles,
+        8192,
+        |_, _| Err("FILE thread effect".into()),
+        |pc, _| {
+            Ok(if pc == 0x404582 {
+                "let p=rt.file();let image=rt.process_image_pointer(inputs.image,0x41c080,168)?;rt.valid(p,168)?;if p.cap!=image.cap||p.owner!=image.owner||p.address()!=0x41c080||p.size!=168{return Err(\"FILE canonical array identity\");}if matches!(cpu.r[6],CrtValue::Scalar{..}){if cpu.r[6]!=CrtValue::scalar(p.address()){return Err(\"FILE initial cursor\");}cpu.r[6]=CrtValue::Pointer(p);}else{let cursor=CrtCpu::pointer(cpu.r[6])?;rt.file_record(cursor)?;if cursor.cap!=p.cap||cursor.base!=p.base||cursor.size!=p.size{return Err(\"FILE loop cursor identity\");}}".into()
+            } else {
+                String::new()
+            })
+        },
+        |_, _| Ok(None),
+    )?;
+    let thunk = crate::crt_ptd::raw("8bff558bec5dff25ac504100");
+    let g = Graph::decode_linear_fragment(&thunk[..6], 0x408079)?;
+    let pre = crate::crt_stream_emit::emit_linear_fragment(&g, &Default::default())?;
+    Ok(format!("fn cinit_file_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:&CrtNativePlatform,epoch:&mut NormalCallEpoch<'_>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;{}{body}}}fn startup_file_lock(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:&CrtNativePlatform)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;platform.validate(rt,inputs.init)?;cpu.validate_active(rt)?;{}let _=(||->Result<CrtValue,&'static str>{{{pre}}})()?;rt.process_image_import(inputs.image,0x4150ac,\"kernel32.dll\",\"InitializeCriticalSectionEx\")?;if cpu.return_pop!=12||cpu.r[4]!=cpu.entry[4]||[3,5,6,7].iter().any(|&i|cpu.r[i]!=cpu.entry[i]){{return Err(\"FILE lock ABI\");}}let sp=CrtCpu::pointer(cpu.r[4])?;rt.offset(sp,16)?;rt.memory.validate_writable(sp.cap,sp.owner,sp.address(),16).map_err(|_|\"FILE lock return stack permission\")?;let p=CrtCpu::pointer(rt.load(rt.offset(sp,4)?,32)?)?;let spin=rt.load(rt.offset(sp,8)?,32)?.known_scalar()?;let flags=rt.load(rt.offset(sp,12)?,32)?.known_scalar()?;let value=rt.native_file_initialize(inputs.init,platform.function,p,spin,flags)?;cpu.clobber(CrtValue::scalar(u32::from(value)));cpu.finish_pop(rt,12)}}",guard(0x404510,&bytes),guard(0x408079,&thunk)))
 }

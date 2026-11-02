@@ -105,6 +105,19 @@ struct CrtHeapPtdAllocation {anchor:guest_memory::Capability,slot:CrtFlsSlot,bef
 /// Single-use API observation. Failure revokes allocation knowledge; it does
 /// not claim Windows released the block or left its contents unchanged.
 struct CrtHeapFreeEffect {anchor:guest_memory::Capability,thread:u64,serial:u64,pointer:CrtPointer,failed:bool}
+/// Canonical FILE-lock membership with fallible metadata reservation.
+struct CrtFileLockSet(Vec<u32>);
+impl CrtFileLockSet {
+ fn first(address:u32)->Result<Self,&'static str>{let mut set=Self(Vec::new());set.reserve()?;set.insert(address);Ok(set)}
+ fn reserve(&mut self)->Result<(),&'static str>{self.0.try_reserve(1).map_err(|_|"CRT FILE lock bookkeeping resource")}
+ fn contains(&self,p:&u32)->bool{self.0.contains(p)}
+ fn insert(&mut self,p:u32)->bool{if self.contains(&p){false}else{self.0.push(p);true}}
+ fn remove(&mut self,p:&u32)->bool{if let Some(i)=self.0.iter().position(|n|n==p){self.0.remove(i);true}else{false}}
+ fn clear(&mut self){self.0.clear()}
+ fn is_empty(&self)->bool{self.0.is_empty()}
+ fn len(&self)->usize{self.0.len()}
+ fn iter(&self)->std::slice::Iter<'_,u32>{self.0.iter()}
+}
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 enum CrtValue {NonZero{anchor:guest_memory::Capability,serial:u64},Module(CrtModule),Function(CrtFunction),Heap(CrtHeap),Dispatcher(CrtDispatcherContext),Scalar{bits:u32,known:u32},Pointer(CrtPointer),ProcessHandle(CrtProcessHandle),Handle(CrtDescriptorId),ThreadHead(CrtThreadHead),OpaqueSaved(u8),ProtectedReturn(u64)}
 impl CrtValue {
@@ -229,7 +242,7 @@ struct CrtStreamRuntime {
  dispatchers:std::collections::BTreeMap<u64,CrtDispatcherContext>,regions:Vec<CrtRegion>,retired:Vec<CrtPointer>,tags:std::collections::BTreeMap<u32,CrtValue>,
  partial:std::collections::BTreeMap<u32,(u8,u8)>,descriptors:Vec<CrtDescriptor>,native_endpoints:Vec<CrtNativeEndpoint>,native_standards:Option<(CrtNativeStandards,[CrtStandardEntry;3])>,command_line:Option<CrtCommandLine>,image_name:Option<CrtImageName>,file_mode:Option<(CrtProcessFileMode,CrtFileApiMode)>,
  global_objects:CrtGlobalSlots<CrtPointer>,global_locks:CrtGlobalLeases,record_objects:Vec<CrtPointer>,record_locks:Vec<CrtRecordLock>,locks:Vec<CrtLock>,descriptor_locks:Vec<CrtDescriptorLock>,serial:u64,generation:u64,canonical_errno:bool,errno_cell:Option<CrtPointer>,errno:Option<i32>,doserrno:Option<u32>,last_os_error:Option<u32>,
- locale_generation:u64,locale_live:bool,initialization:Option<u64>,shutdown:Option<CrtShutdown>,closed:bool,lock_objects:std::collections::BTreeSet<u32>,
+ locale_generation:u64,locale_live:bool,initialization:Option<u64>,shutdown:Option<CrtShutdown>,closed:bool,lock_objects:CrtFileLockSet,
 }
 impl CrtStreamRuntime {
  const X87_PROFILE:&'static str="w2l-modern-enabled-stationary-x87-v1";
@@ -318,7 +331,7 @@ impl CrtStreamRuntime {
  }
  fn from_file_storage(owner:u64,thread:u64,memory:guest_memory::Space,pointer:CrtPointer)->Result<Self,&'static str>{
   let anchor=pointer.cap;
-  Ok(Self{environment:None,fp_boundary:None,x87:None,file_view:pointer,main_image:None,main_image_regions:vec![],loader_cells:std::collections::BTreeMap::new(),modules:std::collections::BTreeMap::new(),module_references:CrtModuleReferences::new(),exports:std::collections::BTreeMap::new(),providers:std::collections::BTreeMap::new(),native_sync:CrtGlobalSlots::new(),slist_heads:Box::new(CrtGlobalSlots::new()),uncertain_allocations:vec![],completed_failed_frees:vec![],heap_ptds:vec![],fiber:None,fls_indices:CrtFlsIndices::new(),fls:CrtFlsValues::new(),unobserved_contexts:vec![],heap:None,memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],native_endpoints:vec![],native_standards:None,command_line:None,image_name:None,file_mode:None,global_objects:CrtGlobalSlots::new(),global_locks:CrtGlobalLeases::new(),record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,canonical_errno:false,errno_cell:None,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:std::collections::BTreeSet::from([pointer.base])})
+  Ok(Self{environment:None,fp_boundary:None,x87:None,file_view:pointer,main_image:None,main_image_regions:vec![],loader_cells:std::collections::BTreeMap::new(),modules:std::collections::BTreeMap::new(),module_references:CrtModuleReferences::new(),exports:std::collections::BTreeMap::new(),providers:std::collections::BTreeMap::new(),native_sync:CrtGlobalSlots::new(),slist_heads:Box::new(CrtGlobalSlots::new()),uncertain_allocations:vec![],completed_failed_frees:vec![],heap_ptds:vec![],fiber:None,fls_indices:CrtFlsIndices::new(),fls:CrtFlsValues::new(),unobserved_contexts:vec![],heap:None,memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],native_endpoints:vec![],native_standards:None,command_line:None,image_name:None,file_mode:None,global_objects:CrtGlobalSlots::new(),global_locks:CrtGlobalLeases::new(),record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,canonical_errno:false,errno_cell:None,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:CrtFileLockSet::first(pointer.base)?})
  }
 
  /// Initial FILE storage is a bounded role view of the original writable
@@ -856,7 +869,7 @@ impl CrtStreamRuntime {
  fn free_shutdown(&mut self,token:CrtShutdown,p:CrtPointer)->Result<(),&'static str>{self.shutdown(token)?;self.free_allocation(p)}
  fn end_shutdown(&mut self,token:CrtShutdown)->Result<(),&'static str>{self.shutdown(token)?;if !self.locks.is_empty()||!self.descriptor_locks.is_empty()||!self.record_locks.is_empty()||!self.global_locks.is_empty()||!self.lock_objects.is_empty()||!self.record_objects.is_empty()||!self.global_objects.is_empty(){return Err("CRT shutdown remaining lock authority");}self.shutdown=None;self.closed=true;Ok(())}
  fn construct_lock(&mut self,token:CrtInitialization,file:CrtPointer)->Result<(),&'static str>{
-  self.initialization(token)?;self.file_record(file)?;if !self.lock_objects.insert(file.address){return Err("CRT duplicate lock construction");}Ok(())
+  self.initialization(token)?;self.file_record(file)?;self.lock_objects.reserve()?;if !self.lock_objects.insert(file.address){return Err("CRT duplicate lock construction");}Ok(())
  }
  /// Bound InitializeCriticalSectionEx result, for the exclusive x86 FILE domain.
  /// The external result is an input effect, not a simulated successful OS call.
@@ -867,6 +880,17 @@ impl CrtStreamRuntime {
   self.memory.forget(lock.address,24).map_err(|_|"CRT opaque lock range")?;
   self.partial.retain(|&at,_|at<lock.address||at>=lock.address+24);self.last_os_error=None;
   if result!=0{self.construct_lock(token,file)?;}Ok(result!=0)
+ }
+ /// Native FILE critical section construction in the exclusive startup domain.
+ /// Resources/authority reject before opaque-byte effects; no supplied API result.
+ fn native_file_initialize(&mut self,init:CrtInitialization,function:CrtFunction,p:CrtPointer,spin:u32,flags:u32)->Result<bool,&'static str>{
+  self.initialization(init)?;self.native_sync_identity(function)?;self.provider_ready(function.module)?;
+  self.identity_range(p,24)?;let file=self.offset(p,-32)?;self.file_record(file)?;
+  self.memory.validate_writable(p.cap,p.owner,p.address(),24).map_err(|_|"CRT FILE lock writable range")?;
+  if spin!=4000||flags!=0||p.address()%4!=0||self.lock_objects.contains(&file.address())||self.has_overlapping_tags(p.address(),24){return Err("CRT native FILE lock domain/duplicate/alias");}
+  self.lock_objects.reserve()?;
+  self.memory.forget(p.address(),24).map_err(|_|"CRT FILE lock opaque range")?;
+  self.partial.retain(|&at,_|at<p.address()||at>=p.address()+24);self.lock_objects.insert(file.address());self.last_os_error=None;Ok(true)
  }
  /// Explicit successful initialization outcome for a distinct module lock.
  fn construct_global_lock(&mut self,token:CrtInitialization,index:u32,p:CrtPointer,result:u32)->Result<bool,&'static str>{

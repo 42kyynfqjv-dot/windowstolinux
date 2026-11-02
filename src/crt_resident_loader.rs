@@ -433,3 +433,40 @@ for mode in 0..15{query(mode);}
         "installed-code-page-catalog",
     );
 }
+
+#[test]
+fn native_file_locks_preserve_distinct_records_and_preflight_rejection() {
+    crate::crt_stream_callees_tests::native_bounded_stack(
+        TYPES,
+        r#"
+for mode in 0..11{
+ let(mut rt,init)=CrtStreamRuntime::new_initializing_array(17,23,0x8000,3,65536).unwrap();let platform=CrtNativePlatform::prepare(&mut rt,init,CrtNativePlatform::PROFILE,0x700000,0x701000).unwrap();let file=rt.file();let lock=rt.offset(file,32).unwrap();rt.store(lock,32,CrtValue::scalar(77)).unwrap();let mut pointer=lock;let mut function=platform.function;
+ match mode{1=>pointer=rt.offset(lock,4).unwrap(),2=>{rt.store(lock,32,CrtValue::Pointer(file)).unwrap();},3=>rt.end_initialization(init).unwrap(),4=>rt.thread+=1,5=>rt.provider_destroy(init,function.module).unwrap(),6=>{rt.native_file_initialize(init,function,lock,4000,0).unwrap();},7=>{pointer=rt.offset(file,56+32).unwrap();rt.native_file_initialize(init,function,lock,4000,0).unwrap();},8=>{let p=rt.map_region(0x9000,24,CrtRegionKind::Module,Some(&[0;24])).unwrap();pointer=p;},_=>{}}
+ let result=rt.native_file_initialize(init,function,pointer,if mode==9{0}else{4000},if mode==7||mode==10{1}else{0});
+ if mode==0{assert_eq!(result,Ok(true));assert!(rt.lock_objects.contains(&file.address()));assert_eq!(rt.load(lock,32),Err("CRT opaque critical section bytes"));let lease=rt.lock_file(23,file).unwrap();assert!(rt.destroy_lock(init,file).is_err());rt.unlock(lease).unwrap();rt.destroy_lock(init,file).unwrap();assert!(!rt.lock_objects.contains(&file.address()));assert_eq!(rt.native_file_initialize(init,function,lock,4000,0),Ok(true));}
+ else{assert!(result.is_err(),"FILE negative{mode}");assert_eq!(rt.lock_objects.iter().count(),usize::from(mode==6||mode==7));if mode==7{let second=rt.offset(file,56).unwrap();assert!(!rt.lock_objects.contains(&second.address()));assert!(rt.lock_file(23,file).is_ok());}if !matches!(mode,2|6|7){assert_eq!(rt.memory.read(lock.address(),4).unwrap(),&77u32.to_le_bytes());}}
+}
+"#,
+        "native-FILE-locks",
+    );
+}
+
+#[test]
+fn native_file_constructor_reservation_is_fallible_and_preallocated_effects_need_no_allocation() {
+    crate::crt_stream_callees_tests::native(
+        TYPES,
+        r#"
+struct Reject;static DENY:std::sync::atomic::AtomicBool=std::sync::atomic::AtomicBool::new(false);static ATTEMPTS:std::sync::atomic::AtomicUsize=std::sync::atomic::AtomicUsize::new(0);
+unsafe impl std::alloc::GlobalAlloc for Reject{
+ unsafe fn alloc(&self,l:std::alloc::Layout)->*mut u8{if DENY.load(std::sync::atomic::Ordering::SeqCst){ATTEMPTS.fetch_add(1,std::sync::atomic::Ordering::SeqCst);std::ptr::null_mut()}else{std::alloc::System.alloc(l)}}
+ unsafe fn realloc(&self,p:*mut u8,l:std::alloc::Layout,n:usize)->*mut u8{if DENY.load(std::sync::atomic::Ordering::SeqCst){ATTEMPTS.fetch_add(1,std::sync::atomic::Ordering::SeqCst);std::ptr::null_mut()}else{std::alloc::System.realloc(p,l,n)}}
+ unsafe fn dealloc(&self,p:*mut u8,l:std::alloc::Layout){std::alloc::System.dealloc(p,l)}
+}
+#[global_allocator]static ALLOC:Reject=Reject;
+let(mut rt,init)=CrtStreamRuntime::new_initializing_array(17,23,0x8000,3,65536).unwrap();let platform=CrtNativePlatform::prepare(&mut rt,init,CrtNativePlatform::PROFILE,0x700000,0x701000).unwrap();let pointers=std::array::from_fn::<_,3,_>(|i|rt.offset(rt.file(),i as i64*56+32).unwrap());
+DENY.store(true,std::sync::atomic::Ordering::SeqCst);let failure=CrtFileLockSet::first(0x9000);let results=pointers.map(|p|rt.native_file_initialize(init,platform.function,p,4000,0));DENY.store(false,std::sync::atomic::Ordering::SeqCst);
+assert!(matches!(failure,Err("CRT FILE lock bookkeeping resource")));assert_eq!(ATTEMPTS.load(std::sync::atomic::Ordering::SeqCst),1);assert_eq!(results,[Ok(true);3]);assert_eq!(rt.lock_objects.len(),3);for p in pointers{assert_eq!(rt.load(p,8),Err("CRT opaque critical section bytes"));}
+"#,
+        "FILE-lock-resource",
+    );
+}
