@@ -229,18 +229,19 @@ fn startup_c_array_platform(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&Crt
         |_, _| Ok("return Err(\"C initializer nonempty preinitializer callback unbound\");".into()),
     )?;
     out.push_str(&format!("fn cinit_empty_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;{} {body}}}",guard(0x401e00,&bytes)));
+    let thunk = raw("e96bfeffff");
+    if Graph::decode_instruction(&thunk, 0x401d4c)?.op
+        != Op::Ordinary(crate::graph::Operation::Jump(0x401bbc))
+    {
+        return Err("post-environment original tail target".into());
+    }
+    out.push_str(&format!("fn cinit_post_environment_tail(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;{}cinit_zero(rt,cpu,inputs)}}",guard(0x401d4c,&thunk)));
     let bytes = raw(FIRST);
     let g = cut_graph(
         &bytes,
         0x40155a,
-        0x4015ee,
-        &[
-            (
-                0x4015ee,
-                "C initializer post-environment continuation unbound at0x4015ee",
-            ),
-            (0x4015fd, "C initializer fatal path unbound at 0x4015fd"),
-        ],
+        0x4015fd,
+        &[(0x4015fd, "C initializer fatal path unbound at 0x4015fd")],
     )?;
     let body = crate::crt_stream_emit::emit_body_with_hooks(
         &g,
@@ -262,6 +263,7 @@ fn startup_c_array_platform(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&Crt
                 Target::Direct(0x401bc3) => "cinit_get_mode",
                 Target::Direct(0x407056) => "cinit_set_mode",
                 Target::Direct(0x401bbc) => "cinit_zero",
+                Target::Direct(0x401d4c) => "cinit_post_environment_tail",
                 Target::Direct(0x4071ff) => "cinit_get_commode",
                 Target::Direct(0x40197e) => "cinit_onexit_original",
                 _ => return Err("first C initializer call".into()),
@@ -789,5 +791,34 @@ fn checked_relation_lowers_unrelated_registers_and_word_load_without_host_pointe
 for reverse in [false,true]{let(mut rt,init)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();let CrtValue::Heap(heap)=rt.native_process_heap(init).unwrap()else{panic!()};let a=rt.native_heap_allocate(init,heap,8,2).unwrap();let b=rt.native_heap_allocate(init,heap,8,2).unwrap();let(src,dst)=if reverse{(b,a)}else{(a,b)};rt.store(src,16,CrtValue::scalar(0x5678)).unwrap();let stack=rt.map_region(0x40000,1024,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,512).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(91)).unwrap();rt.store(rt.offset(sp,4).unwrap(),32,CrtValue::Pointer(dst)).unwrap();rt.store(rt.offset(sp,8).unwrap(),32,CrtValue::Pointer(src)).unwrap();let mut c=CrtCpu::new(sp,91).unwrap();c.r[0]=CrtValue::scalar(0xaabb0000);let saved=c.r;assert_eq!(word(&mut rt,&mut c),Ok(CrtValue::scalar(0xaabb5678)));assert_eq!(c.flags.cf,Some(src.address()<dst.address()));assert_eq!(c.flags.zf,Some(false));assert_eq!(rt.load(dst,16),Ok(CrtValue::scalar(0)));for r in[3,5,6,7]{assert_eq!(c.r[r],saved[r]);}}
 "#,
         "independent-word-relation",
+    );
+}
+
+#[test]
+fn post_environment_original_calls_branch_and_return_preserve_failure_boundaries() {
+    let bytes = crate::crt_ptd::raw(FIRST);
+    let tail = &bytes[(0x4015ee - 0x40155a)..];
+    let graph = cut_graph(
+        tail,
+        0x4015ee,
+        0x4015fd,
+        &[(0x4015fd, "original fatal path unbound")],
+    )
+    .unwrap();
+    let zero = crate::crt_stream_emit::emit_body(
+        &Graph::decode(&crate::crt_ptd::raw(ZERO), 0x401bbc).unwrap(),
+        |_, _| Err("zero call".into()),
+        &Default::default(),
+        8,
+    )
+    .unwrap();
+    let body=crate::crt_stream_emit::emit_body(&graph,|pc,t|{assert_eq!(t,if pc==0x4015ee{Target::Direct(0x401bbc)}else{Target::Direct(0x401d4c)});Ok(format!("calls+=1;cpu.call_activation(rt,{},0,|rt,c|{{let v=zero(rt,c)?;if calls==2&&mode==1{{c.r[0]=CrtValue::scalar(7);return Ok(c.r[0]);}}if calls==2&&mode==2{{c.r[0]=CrtValue::Scalar{{bits:0,known:0}};return Ok(c.r[0]);}}if calls==2&&mode==3{{rt.tags.insert(outer.address(),CrtValue::ProtectedReturn(999));}}Ok(v)}})?;",pc+5))},&Default::default(),32).unwrap();
+    let extra=format!("fn zero(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->Result<CrtValue,&'static str>{{{zero}}}fn tail(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,mode:u32)->Result<CrtValue,&'static str>{{let outer=CrtCpu::pointer(cpu.entry[4])?;let mut calls=0;let result=(||{{{body}}})();assert_eq!(calls,2);result}}");
+    crate::crt_stream_callees_tests::native_bounded_stack(
+        &extra,
+        r#"
+for mode in 0..4{let(mut rt,_)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();let stack=rt.map_region(0x10000,1024,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,512).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(91)).unwrap();let mut c=CrtCpu::new(sp,91).unwrap();let got=tail(&mut rt,&mut c,mode);if mode==0{assert_eq!(got,Ok(CrtValue::scalar(0)));assert!(c.returned);}else{assert_eq!(got,Err(match mode{1=>"original fatal path unbound",2=>"CRT unknown ZF",_=>"CRT original protected return"}));assert!(!c.returned);}}
+"#,
+        "post-environment-return",
     );
 }

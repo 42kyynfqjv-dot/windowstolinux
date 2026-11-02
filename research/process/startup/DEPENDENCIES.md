@@ -1,6 +1,16 @@
 # Remaining entry-to-exit dependencies
 
-## Current executable checkpoint: owned environment table and temporary release
+## Current executable checkpoint: original first-initializer return
+
+The explicit controlled native-profile entry now executes both original
+post-environment helper calls, the original TEST and protected RET. Guarded C-array
+traversal selects **0x404510**, the FILE initializer whose allocation/lock
+composition remains unsupported. Empty and three-entry variants retain published
+owned strings after temporary release.
+
+[Review, execution boundary and next FILE scope](POST-ENVIRONMENT.md).
+
+## Previous executable checkpoint: owned environment table and temporary release
 
 The original controlled native-profile entry now reaches **0x4015ee** after
 constructing and publishing the empty or nonempty environment vector and freeing
