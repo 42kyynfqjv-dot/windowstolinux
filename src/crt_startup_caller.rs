@@ -25,20 +25,36 @@ pub(crate) const OUTER_INITIAL: &str = "c745e4c8000000c745e002000000c745fc000000
 pub(crate) const OUTER_EPILOG: &str = "8b4df064890d00000000595f5e5b8be55dc3";
 pub(crate) const OUTER_SCOPE: &str = "feffffff00000000d0ffffff00000000feffffff0000000022124000";
 pub(crate) const SCOPE: &str = "feffffff00000000ccffffff00000000feffffff491740005d174000";
+pub(crate) const INNER_CALL: &str = "e8d6feffff";
+pub(crate) const INNER_PROLOG: &str = "558bec6afe68d0b14100681022400064a1000000005083ec10535657a100c041003145f833c5508d45f064a300000000";
+pub(crate) const INNER_INITIAL: &str =
+    "c745e464000000c745e000000000c745fc00000000c745fc010000006a006a006a0068424242e0";
+pub(crate) const INNER_EPILOG: &str = "8b4df064890d00000000595f5e5b8be55dc3";
+pub(crate) const INNER_SCOPE: &str =
+    "feffffff00000000d0ffffff00000000feffffff000000007f11400000000000000000006e114000";
 /// Finally-only inline frame: absence is proved over the entire original
 /// call-free prolog, not inferred from old or unknown contents of a stack word.
 fn outer_contract(prolog: &[u8], epilog: &[u8]) -> Result<(String, String), String> {
+    absent_sp_contract(prolog, epilog, 0x4011a0, 0x41b1f8, 0x401210)
+}
+fn absent_sp_contract(
+    prolog: &[u8],
+    epilog: &[u8],
+    origin: u32,
+    scope: u32,
+    epilog_origin: u32,
+) -> Result<(String, String), String> {
     use crate::graph::{Address, Binary, Operand, Operation, Reg};
     let f = crate::frame_proof::prove_frame(
         prolog,
-        0x4011a0,
+        origin,
         0x41c000,
-        &std::collections::BTreeSet::from([0x41b1f8]),
+        &std::collections::BTreeSet::from([scope]),
         &std::collections::BTreeSet::from([0x402210]),
     )?;
     f.validate_eh4_header([-2, 0, -48, 0])?;
-    let g = crate::crt_startup_table::graph(prolog, 0x4011a0)?;
-    if f.end() != 0x4011d0
+    let g = crate::crt_startup_table::graph(prolog, origin)?;
+    if f.end() != origin + 48
         || f.try_level() != -2
         || !f.stack_words().is_empty()
         || !f.pending_arguments().is_empty()
@@ -70,7 +86,7 @@ fn outer_contract(prolog: &[u8], epilog: &[u8]) -> Result<(String, String), Stri
         },
         32,
     );
-    let e = Graph::decode(epilog, 0x401210)?;
+    let e = Graph::decode(epilog, epilog_origin)?;
     let expected = vec![
         Op::Ordinary(Operation::Binary(
             Binary::Move,
@@ -96,7 +112,7 @@ fn outer_contract(prolog: &[u8], epilog: &[u8]) -> Result<(String, String), Stri
         (f.esp_offset() + 12, 3),
         (0, 5),
     ];
-    if e.end != 0x401222
+    if e.end != epilog_origin + 18
         || e.nodes.values().map(|n| n.op.clone()).collect::<Vec<_>>() != expected
         || f.saved_slots() != &pops.into_iter().collect::<BTreeMap<_, _>>()
         || ![-28, -32].iter().all(|at| f.ordinary_words().contains(at))
@@ -179,10 +195,72 @@ fn outer_source() -> Result<String, String> {
     let mut out=format!("fn original_outer_layout()->CrtNormalLayout{{{layout}}}fn original_outer_plan()->NormalFramePlan{{{plan}}}");
     out.push_str(&format!("fn original_outer_prolog(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>,b:&mut CrtNormalBinding)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;b.authority(rt,epoch)?;if b.layout!=original_outer_layout()||b.id.is_some()||b.saved_sp_pending||cpu.r[4]!=cpu.entry[4]{{return Err(\"Outer prolog phase/layout\");}}{}{}{prolog}}}",guard(0x4011a0,&p),guard(0x401210,&ep)));
     out.push_str(&format!("fn original_outer_initial(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>,b:&mut CrtNormalBinding)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;let image=b.image(rt,cpu,epoch)?;epoch.validate_image(b.id.ok_or(\"Outer initial missing frame\")?,&image)?;{}{body}}}",guard(0x4011d0,&bytes)));
-    out.push_str(&format!("fn startup_outer_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;let scope=rt.process_image_pointer(inputs.image,0x41b1f8,{})?;rt.memory.validate_immutable(scope.cap,scope.owner,scope.address(),{}).map_err(|_|\"Outer scope permission\")?;if rt.memory.read(scope.address(),{}).map_err(|_|\"Outer scope read\")?!=&{scope:?}{{return Err(\"Outer scope bytes changed\");}}let mut b=CrtNormalBinding::bind_inline_initializing(rt,cpu,epoch,original_outer_layout(),inputs.init,vec![])?;original_outer_prolog(rt,cpu,inputs,epoch,&mut b)?;original_outer_initial(rt,cpu,inputs,epoch,&mut b)?;Err(\"startup Outer Inner call unbound at 0x4011e5\")}}",scope.len(),scope.len(),scope.len()));
+    out.push_str(&format!("fn startup_outer_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;let scope=rt.process_image_pointer(inputs.image,0x41b1f8,{})?;rt.memory.validate_immutable(scope.cap,scope.owner,scope.address(),{}).map_err(|_|\"Outer scope permission\")?;if rt.memory.read(scope.address(),{}).map_err(|_|\"Outer scope read\")?!=&{scope:?}{{return Err(\"Outer scope bytes changed\");}}let mut b=CrtNormalBinding::bind_inline_initializing(rt,cpu,epoch,original_outer_layout(),inputs.init,vec![])?;original_outer_prolog(rt,cpu,inputs,epoch,&mut b)?;original_outer_initial(rt,cpu,inputs,epoch,&mut b)?;startup_call_inner(rt,cpu,inputs,epoch,&b)}}",scope.len(),scope.len(),scope.len()));
     out.push_str(&format!("fn startup_call_outer(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>,parent:&CrtNormalBinding)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;let image=parent.image(rt,cpu,epoch)?;epoch.validate_image(parent.id.ok_or(\"Outer parent missing\")?,&image)?;if parent.layout!=original_main_layout()||image.try_level!=0||cpu.r[4]!=CrtValue::Pointer(parent.at(rt,parent.layout.low)?){{return Err(\"Outer caller phase/stack\");}}{}cpu.call_activation(rt,0x40131b,0,|rt,c|startup_outer_original(rt,c,inputs,epoch))?;Err(\"unexpected Outer return\")}}",guard(0x401316,&raw(OUTER_CALL))));
     Ok(out)
 }
+fn inner_source() -> Result<String, String> {
+    let raw = crate::crt_ptd::raw;
+    let p = raw(INNER_PROLOG);
+    let ep = raw(INNER_EPILOG);
+    let scope = raw(INNER_SCOPE);
+    let (layout, plan) = absent_sp_contract(&p, &ep, 0x4010c0, 0x41b1d0, 0x40115c)?;
+    let g = crate::crt_startup_table::graph(&p, 0x4010c0)?;
+    let prolog = crate::crt_stream_emit::emit_body_with_store(
+        &g,
+        |_, _| Err("Inner prolog call".into()),
+        &BTreeMap::from([(0x41c000, "CrtRegionKind::Module".into())]),
+        128,
+        |_, op| {
+            Ok(match op{
+            Op::FsRead(r)=>format!("b.authority(rt,epoch)?;if epoch.head()?!=b.previous{{return Err(\"Inner predecessor changed\");}}cpu.set({},32,0,CrtValue::ThreadHead(b.token))?;",r.index),
+            Op::FsWrite(r)=>format!("b.install_inline(rt,cpu,epoch,CrtCpu::pointer(cpu.r[{}])?,b.token,original_inner_plan())?;",r.index),
+            _=>return Err("Inner prolog FS effect".into())})
+        },
+        |_, _| Ok(String::new()),
+        |_, _| Err("Inner prolog RET".into()),
+        Some(0x4010f0),
+        |_, _, _| Ok(None),
+    )?;
+    let bytes = raw(INNER_INITIAL);
+    let g = crate::crt_startup_table::graph(&bytes, 0x4010f0)?;
+    let body = crate::crt_stream_emit::emit_body_with_store(
+        &g,
+        |_, _| Err("Inner initial call".into()),
+        &Default::default(),
+        16,
+        |_, _| Err("Inner initial FS".into()),
+        |_, _| Ok(String::new()),
+        |_, _| Err("Inner initial RET".into()),
+        Some(0x401117),
+        |pc, a, w| {
+            let offset = match pc {
+                0x4010f0 => -28,
+                0x4010f7 => -32,
+                0x4010fe | 0x401105 => -4,
+                _ => return Err("Inner initial store instruction".into()),
+            };
+            if w != 32 {
+                return Err("Inner initial store width".into());
+            }
+            let transition = if pc == 0x4010fe {
+                "if rt.load(p,32)?!=CrtValue::scalar((-2i32)as u32)||v!=CrtValue::scalar(0){return Err(\"Inner scope transition\");}"
+            } else if pc == 0x401105 {
+                "if rt.load(p,32)?!=CrtValue::scalar(0)||v!=CrtValue::scalar(1){return Err(\"Inner nested scope transition\");}"
+            } else {
+                ""
+            };
+            Ok(Some(format!("b.authority(rt,epoch)?;let p={};if p!=b.at(rt,b.layout.bp+({offset}))?{{return Err(\"Inner initial destination alias\");}}{transition}rt.store(p,32,v)?;let image=b.image(rt,cpu,epoch)?;epoch.validate_image(b.id.ok_or(\"Inner initial missing frame\")?,&image)?;",crate::crt_stream_emit::address(a,&Default::default())?)))
+        },
+    )?;
+    let mut out=format!("fn original_inner_layout()->CrtNormalLayout{{{layout}}}fn original_inner_plan()->NormalFramePlan{{{plan}}}");
+    out.push_str(&format!("fn original_inner_prolog(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>,b:&mut CrtNormalBinding)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;b.authority(rt,epoch)?;if b.layout!=original_inner_layout()||b.id.is_some()||b.saved_sp_pending||cpu.r[4]!=cpu.entry[4]{{return Err(\"Inner prolog phase/layout\");}}{}{}{prolog}}}",guard(0x4010c0,&p),guard(0x40115c,&ep)));
+    out.push_str(&format!("fn original_inner_initial(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>,b:&mut CrtNormalBinding)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;let image=b.image(rt,cpu,epoch)?;epoch.validate_image(b.id.ok_or(\"Inner initial missing frame\")?,&image)?;{}{body}}}",guard(0x4010f0,&bytes)));
+    out.push_str(&format!("fn startup_inner_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;let scope=rt.process_image_pointer(inputs.image,0x41b1d0,{})?;rt.memory.validate_immutable(scope.cap,scope.owner,scope.address(),{}).map_err(|_|\"Inner scope permission\")?;if rt.memory.read(scope.address(),{}).map_err(|_|\"Inner scope read\")?!=&{scope:?}{{return Err(\"Inner scope bytes changed\");}}let mut b=CrtNormalBinding::bind_inline_initializing(rt,cpu,epoch,original_inner_layout(),inputs.init,vec![])?;original_inner_prolog(rt,cpu,inputs,epoch,&mut b)?;original_inner_initial(rt,cpu,inputs,epoch,&mut b)?;Err(\"startup Inner RaiseException acquisition unbound at 0x401117\")}}",scope.len(),scope.len(),scope.len()));
+    out.push_str(&format!("fn startup_call_inner(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>,parent:&CrtNormalBinding)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;let image=parent.image(rt,cpu,epoch)?;epoch.validate_image(parent.id.ok_or(\"Inner parent missing\")?,&image)?;if parent.layout!=original_outer_layout()||image.try_level!=0||cpu.r[4]!=CrtValue::Pointer(parent.at(rt,parent.layout.low)?){{return Err(\"Inner caller phase/stack\");}}{}cpu.call_activation(rt,0x4011ea,0,|rt,c|startup_inner_original(rt,c,inputs,epoch))?;Err(\"unexpected Inner return\")}}",guard(0x4011e5,&raw(INNER_CALL))));
+    Ok(out)
+}
+
 /// Derive registration metadata from the existing inline instruction proof,
 /// then check its restoration shape. This does not execute or admit a return.
 fn inline_contract(prolog: &[u8], epilog: &[u8]) -> Result<(String, String, String), String> {
@@ -571,8 +649,9 @@ pub(crate) fn source() -> Result<String, String> {
     out.push_str(&array_source);
     out.push_str(&callback_source()?);
     out.push_str(&argument_source()?);
-    out.push_str(&main_source()?);
-    out.push_str(&outer_source()?);
+    out.push_str(&application_instruction_source(main_source()?));
+    out.push_str(&application_instruction_source(outer_source()?));
+    out.push_str(&application_instruction_source(inner_source()?));
     let lock = crate::crt_ptd::raw(LOCK);
     let g = lock_graph()?;
     let body = crate::crt_stream_emit::emit_body(
@@ -704,9 +783,24 @@ pub(crate) fn source() -> Result<String, String> {
     )?;
     out.push_str(r#"fn startup_caller_frame(rt:&CrtStreamRuntime,cpu:&CrtCpu,epoch:&NormalCallEpoch<'_>,binding:&CrtNormalBinding)->Result<(),&'static str>{binding.authority(rt,epoch)?;let image=binding.image(rt,cpu,epoch)?;epoch.validate_image(binding.id.ok_or("startup caller missing normal frame")?,&image)}"#);
     out.push_str(&format!("fn startup_post_initializer(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>,binding:&mut CrtNormalBinding)->Result<CrtValue,&'static str>{{startup_post_initializer_platform(rt,cpu,inputs,epoch,binding,None)}}fn startup_post_initializer_platform(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>,binding:&mut CrtNormalBinding,platform:Option<&CrtNativePlatform>)->Result<CrtValue,&'static str>{{startup_post_initializer_observed(rt,cpu,inputs,epoch,binding,platform,None)}}fn startup_post_initializer_observed(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>,binding:&mut CrtNormalBinding,platform:Option<&CrtNativePlatform>,features:Option<&CrtFeatureObservation>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;startup_caller_frame(rt,cpu,epoch,binding)?;let arg=binding.at(rt,binding.layout.low-4)?;if cpu.r[4]!=CrtValue::Pointer(arg)||rt.load(arg,32)?!=CrtValue::scalar(1){{return Err(\"startup caller argument/phase\");}}if binding.image(rt,cpu,epoch)?.try_level!= -2{{return Err(\"startup caller scope phase\");}}{}let _=(||->Result<CrtValue,&'static str>{{{body}}})()?;startup_caller_frame(rt,cpu,epoch,binding)?;startup_callback_cells(rt,cpu,inputs)?;startup_caller_frame(rt,cpu,epoch,binding)?;startup_main_arguments(rt,cpu,inputs,platform,epoch)?;startup_call_main(rt,cpu,inputs,epoch,binding)}}",guard(0x401632,&bytes)));
-    out.push_str(&format!("fn startup_call_main(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>,parent:&mut CrtNormalBinding)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;startup_caller_frame(rt,cpu,epoch,parent)?;if parent.image(rt,cpu,epoch)?.try_level!=0||rt.load(rt.process_image_pointer(inputs.image,0x41cc7c,4)?,32)?!=CrtValue::scalar(2)||cpu.r[4]!=CrtValue::Pointer(parent.at(rt,parent.layout.low-12)?){{return Err(\"Main caller phase/argument stack\");}}{main_call_guard}cpu.call_activation(rt,0x40171c,0,|rt,c|startup_main_original(rt,c,inputs,epoch))?;Err(\"unexpected Main return\")}}"));
+    out.push_str(&format!("fn startup_call_main(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>,parent:&mut CrtNormalBinding)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;startup_caller_frame(rt,cpu,epoch,parent)?;if parent.image(rt,cpu,epoch)?.try_level!=0||rt.load(rt.process_image_pointer(inputs.image,0x41cc7c,4)?,32)?!=CrtValue::scalar(2)||cpu.r[4]!=CrtValue::Pointer(parent.at(rt,parent.layout.low-12)?){{return Err(\"Main caller phase/argument stack\");}}{main_call_guard}cpu.preflight_call(rt,0x40171c,0)?;let app=parent.enter_application(rt,cpu,epoch,inputs.init,inputs.image)?;cpu.call_activation(rt,0x40171c,0,|rt,c|startup_main_original(rt,c,&app,epoch))?;Err(\"unexpected Main return\")}}"));
     out.push_str(&format!("fn startup_caller_bytes()->Vec<u8>{{vec!{bytes:?}}}fn startup_release_bytes()->Vec<u8>{{vec!{release:?}}}fn startup_runtime_lock_bytes()->Vec<u8>{{vec!{lock:?}}}fn startup_runtime_flag_bytes()->Vec<u8>{{vec!{flag:?}}}"));
     Ok(out)
+}
+/// Same emitted operations accept either checked initialization or application
+/// image access. Constructor authority is never part of the latter interface.
+fn application_instruction_source(source: String) -> String {
+    source
+        .replace(
+            "inputs:&CrtEntropyInputs",
+            "inputs:&impl CrtInstructionInputs",
+        )
+        .replace("inputs.image", "inputs.image()")
+        .replace(
+            "CrtNormalBinding::bind_inline_initializing",
+            "CrtNormalBinding::bind_inline_phase",
+        )
+        .replace("inputs.init,", "inputs.initialization_token(),")
 }
 fn guard(at: u32, bytes: &[u8]) -> String {
     format!("let p=rt.process_image_code(inputs.image,{at},{})?;if rt.memory.read(p.address(),{}).map_err(|_|\"startup caller code read\")?!=&{bytes:?}{{return Err(\"startup caller code changed\");}}",bytes.len(),bytes.len())
@@ -873,4 +967,31 @@ for mode in 0..8{
 "#,
         "original-caller-result",
     );
+}
+
+#[test]
+fn original_inner_absent_sp_and_two_scope_transitions_are_instruction_bound() {
+    let p = crate::crt_ptd::raw(INNER_PROLOG);
+    let e = crate::crt_ptd::raw(INNER_EPILOG);
+    let (layout, _) = absent_sp_contract(&p, &e, 0x4010c0, 0x41b1d0, 0x40115c).unwrap();
+    assert!(layout.contains("saved_sp:None"));
+    for i in 0..p.len() {
+        let mut m = p.clone();
+        m[i] ^= 1;
+        assert!(
+            absent_sp_contract(&m, &e, 0x4010c0, 0x41b1d0, 0x40115c).is_err(),
+            "prolog {i}"
+        );
+    }
+    for i in 0..e.len() {
+        let mut m = e.clone();
+        m[i] ^= 1;
+        assert!(
+            absent_sp_contract(&p, &m, 0x4010c0, 0x41b1d0, 0x40115c).is_err(),
+            "epilog {i}"
+        );
+    }
+    let source = inner_source().unwrap();
+    assert!(source.contains("Inner nested scope transition"));
+    assert!(source.contains("0x401117"));
 }

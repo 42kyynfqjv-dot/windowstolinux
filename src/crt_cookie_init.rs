@@ -135,6 +135,11 @@ impl CrtEntropyInputs{
   if rt.owner!=self.owner||rt.thread!=self.thread{return Err("entropy process/thread identity");}Ok(())
  }
 }
+impl CrtInstructionInputs for CrtEntropyInputs{
+ fn validate(&self,rt:&CrtStreamRuntime)->Result<(),&'static str>{CrtEntropyInputs::validate(self,rt)}
+ fn image(&self)->CrtProcessImage{self.image}
+ fn initialization_token(&self)->Option<CrtInitialization>{Some(self.init)}
+}
 trait CrtEntropyBackend{
  fn validate(&self,_rt:&CrtStreamRuntime,_inputs:&CrtEntropyInputs)->Result<(),&'static str>{Ok(())}
  // Independently acquired observations, never an expected cookie/result.

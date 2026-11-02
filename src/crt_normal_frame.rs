@@ -156,7 +156,7 @@ struct CrtNormalLayout {
 struct CrtNormalBinding {
  anchor:guest_memory::Capability,identity:RegistryIdentity,epoch:u64,
  previous:RegistryHead,token:CrtThreadHead,caller:CrtPointer,entry:[CrtValue;8],return_id:u64,
- layout:CrtNormalLayout,cookie:u32,initialization:Option<CrtInitialization>,id:Option<NormalFrameId>,consumed:std::collections::BTreeSet<i32>,done:bool,
+ layout:CrtNormalLayout,cookie:u32,initialization:Option<CrtInitialization>,application:Option<CrtApplicationInputs>,id:Option<NormalFrameId>,consumed:std::collections::BTreeSet<i32>,done:bool,
  extra_guards:Vec<i32>,saved_sp_pending:bool,
 }
 impl CrtNormalBinding {
@@ -192,6 +192,7 @@ impl CrtNormalBinding {
  fn bind_phase(rt:&CrtStreamRuntime,cpu:&CrtCpu,epoch:&NormalCallEpoch<'_>,layout:CrtNormalLayout,initialization:Option<CrtInitialization>)->RegistryResult<Self>{
   match initialization{Some(token)=>rt.initialization(token)?,None=>if rt.initialization.is_some(){return Err("CRT normal initialization token required");}}
 
+  if let Some(app)=rt.application{app.validate(rt)?;}
   epoch.state()?;Self::validate_cxx_head(rt,epoch)?;let identity=epoch.registry.identity;let previous=epoch.head()?;
   let caller=CrtCpu::pointer(cpu.entry[4])?;
   if rt.owner!=identity.owner||rt.thread!=identity.instance||epoch.registry.cookie_address!=layout.cookie_address||rt.shutdown.is_some()||rt.closed
@@ -209,12 +210,15 @@ impl CrtNormalBinding {
   let cookie=rt.load(rt.resolve_absolute(layout.cookie_address,CrtRegionKind::Module)?,32)?.known_scalar()?;
   let token=rt.thread_head(identity.instance,epoch.generation,Self::head_bits(previous))?;
   Ok(Self{anchor:rt.anchor,identity,epoch:epoch.generation,previous,token,caller,entry:cpu.entry,
-   return_id:cpu.return_id,layout,cookie,initialization,id:None,consumed:Default::default(),done:false,extra_guards:Vec::new(),saved_sp_pending:false})
+   return_id:cpu.return_id,layout,cookie,initialization,application:rt.application,id:None,consumed:Default::default(),done:false,extra_guards:Vec::new(),saved_sp_pending:false})
  }
  /// Some inline prologs publish before saving ESP; finally-only prologs may
  /// have no such store at all. Only a proved present slot enters pending state.
  fn bind_inline_initializing(rt:&CrtStreamRuntime,cpu:&CrtCpu,epoch:&NormalCallEpoch<'_>,layout:CrtNormalLayout,initialization:CrtInitialization,guards:Vec<i32>)->RegistryResult<Self>{
-  let mut b=Self::bind_initializing(rt,cpu,epoch,layout,initialization)?;
+  Self::bind_inline_phase(rt,cpu,epoch,layout,Some(initialization),guards)
+ }
+ fn bind_inline_phase(rt:&CrtStreamRuntime,cpu:&CrtCpu,epoch:&NormalCallEpoch<'_>,layout:CrtNormalLayout,initialization:Option<CrtInitialization>,guards:Vec<i32>)->RegistryResult<Self>{
+  let mut b=Self::bind_phase(rt,cpu,epoch,layout,initialization)?;
   let mut seen=std::collections::BTreeSet::from([b.layout.guard]);
   for &offset in &guards{if offset%4!=0||offset<b.layout.low||offset>=0||!seen.insert(offset)||b.layout.saved.iter().any(|&(at,_)|at==offset)||([b.layout.record,b.layout.record+4,b.layout.scope_slot,b.layout.level].contains(&offset)||b.layout.saved_sp==Some(offset)){return Err("CRT inline guard layout alias");}}
   b.extra_guards=guards;b.saved_sp_pending=b.layout.saved_sp.is_some();Ok(b)
@@ -225,6 +229,7 @@ impl CrtNormalBinding {
  }
  fn identity(&self,rt:&CrtStreamRuntime,epoch:&NormalCallEpoch<'_>)->RegistryResult<()>{
   rt.validate_thread_head(self.token)?;
+  if let Some(app)=self.application{app.validate(rt)?;}
   match self.initialization{Some(token)=>rt.initialization(token)?,None=>if rt.initialization.is_some(){return Err("CRT normal initialization phase changed");}}
   if self.done||rt.anchor!=self.anchor||rt.owner!=self.identity.owner||rt.thread!=self.identity.instance
    ||epoch.registry.identity!=self.identity||epoch.generation!=self.epoch
@@ -234,6 +239,22 @@ impl CrtNormalBinding {
   }
   rt.valid(self.caller,4)?;
   Ok(())
+ }
+ /// Transfer the sole live startup activation before entering application
+ /// code. All checks precede revocation; no guest bytes or CPU bits are written.
+ /// This grants instruction/frame lifetime, not constructors or API outcomes.
+ fn enter_application(&mut self,rt:&mut CrtStreamRuntime,cpu:&CrtCpu,epoch:&NormalCallEpoch<'_>,init:CrtInitialization,image:CrtProcessImage)->RegistryResult<CrtApplicationInputs>{
+  rt.initialization(init)?;rt.process_image(image)?;cpu.validate_active(rt)?;
+  let projected=self.image(rt,cpu,epoch)?;let id=self.id.ok_or("application parent missing")?;epoch.validate_image(id,&projected)?;
+  let state=epoch.state()?;
+  if rt.application.is_some()||self.application.is_some()||self.initialization!=Some(init)||self.saved_sp_pending||!self.consumed.is_empty()||epoch.delivery.is_some()||state.frames.len()!=1||!epoch.registry.cxx.is_empty()||state.frames[0].id!=id||!state.frames[0].installed||state.frames[0].unlinked||state.frames[0].next!=0||self.previous!=state.previous{return Err("application handoff incomplete/foreign chain");}
+  if let Some(f)=rt.fiber{rt.check_fiber(f)?;}
+  let serial=rt.serial.checked_add(1).ok_or("application generation overflow")?;
+  let app=CrtApplicationInputs{anchor:rt.anchor,owner:rt.owner,thread:rt.thread,fiber:rt.fiber,image,serial};
+  // end_initialization preflights pending providers and every live lock lease.
+  // Nothing fallible follows it: old constructor tokens expire atomically with
+  // installation of the normal instruction lease and parent lifetime transfer.
+  rt.end_initialization(init)?;rt.serial=serial;rt.application=Some(app);self.initialization=None;self.application=Some(app);Ok(app)
  }
  fn at(&self,rt:&CrtStreamRuntime,offset:i32)->RegistryResult<CrtPointer>{rt.offset(self.caller,i64::from(offset))}
  fn saved_sp_matches(&self,rt:&CrtStreamRuntime,low:CrtPointer)->RegistryResult<bool>{

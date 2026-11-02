@@ -1,6 +1,16 @@
 # Remaining entry-to-exit dependencies
 
-## Current executable checkpoint: Outer entered under live Main
+## Current executable checkpoint: application handoff and Inner prefix
+
+The original Main call now transfers the sole live startup frame from constructor
+permission to a checked application instruction lease. Original Main, Outer and
+Inner bind under that lease. Inner's EH4 publication, local100/cursor0, scope0
+then scope1, and four original arguments execute. The next boundary is **before
+RaiseException CALL0x401117**. No event or Windows CONTEXT is acquired.
+
+[Handoff proof, original effects, tests and remaining API permissions](APPLICATION-HANDOFF.md).
+
+## Previous executable checkpoint: Outer entered under live Main
 
 The controlled native-profile entry executes original Main CALL
 `0x401316 → Outer 0x4011a0`, Outer's EH4 publication and initial local/cursor/scope

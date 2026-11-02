@@ -284,7 +284,7 @@ fn memset_body() -> Result<String, String> {
 fn memset_source() -> Result<String, String> {
     let bytes = crate::crt_ptd::raw(MEMSET);
     let body = memset_body()?;
-    Ok(format!("fn onexit_memset_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;{} {body}}}",guard(0x402370,&bytes)))
+    Ok(format!("fn onexit_memset_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&impl CrtInstructionInputs)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;{} {body}}}",guard(0x402370,&bytes).replace("inputs.image","inputs.image()")))
 }
 
 #[test]

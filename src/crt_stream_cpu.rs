@@ -231,8 +231,7 @@ impl CrtCpu{
  /// require a lock that the original instruction has not yet acquired. Their
  /// independently bound effects validate the exact object and thread instead.
  /// This grants no external-effect or exception-containment certificate.
- fn call_activation<F>(&mut self,rt:&mut CrtStreamRuntime,continuation:u32,return_pop:u16,callee:F)->Result<CrtValue,&'static str>
- where F:FnOnce(&mut CrtStreamRuntime,&mut CrtCpu)->Result<CrtValue,&'static str>{
+ fn preflight_call(&self,rt:&CrtStreamRuntime,continuation:u32,return_pop:u16)->Result<(CrtPointer,u64,u64),&'static str>{
   if self.returned||continuation==0||return_pop>256||return_pop%4!=0{return Err("CRT call activation/continuation/cleanup");}
   let before=Self::pointer(self.r[4])?;
   if before.kind!=CrtRegionKind::Stack{return Err("CRT call stack role");}
@@ -243,6 +242,12 @@ impl CrtCpu{
   let generation=rt.generation.checked_add(1).filter(|n|*n<1u64<<63).ok_or("CRT call identity exhausted")?;
   let identity=generation|(1u64<<63);
   if rt.tags.values().any(|v|*v==CrtValue::ProtectedReturn(identity)){return Err("CRT call identity collision");}
+  rt.memory.validate_writable(slot.cap,slot.owner,slot.address(),4).map_err(|_|"CRT call return slot not writable")?;
+  Ok((expected_after,generation,identity))
+ }
+ fn call_activation<F>(&mut self,rt:&mut CrtStreamRuntime,continuation:u32,return_pop:u16,callee:F)->Result<CrtValue,&'static str>
+ where F:FnOnce(&mut CrtStreamRuntime,&mut CrtCpu)->Result<CrtValue,&'static str>{
+  let(expected_after,generation,identity)=self.preflight_call(rt,continuation,return_pop)?;
   rt.generation=generation;self.push(rt,CrtValue::ProtectedReturn(identity))?;
   let mut child=Self{abi:self.abi,r:self.r,xmm:self.xmm,entry:self.r,flags:self.flags,return_id:identity,return_site:Some((identity,continuation)),steps:self.steps,returned:false,return_pop};
   let result=callee(rt,&mut child);

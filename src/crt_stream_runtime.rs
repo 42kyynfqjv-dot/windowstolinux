@@ -133,6 +133,25 @@ struct CrtProcessFileMode {anchor:guest_memory::Capability,serial:u64}
 struct CrtLock {anchor:guest_memory::Capability,thread:u64,serial:u64,depth:usize,record:u32}
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 struct CrtInitialization {anchor:guest_memory::Capability,thread:u64,serial:u64}
+/// Instruction access is separate from constructor permission. Implementations
+/// validate their live phase before any original instruction or image access.
+trait CrtInstructionInputs {
+ fn validate(&self,rt:&CrtStreamRuntime)->Result<(),&'static str>;
+ fn image(&self)->CrtProcessImage;
+ fn initialization_token(&self)->Option<CrtInitialization>;
+}
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+struct CrtApplicationInputs {anchor:guest_memory::Capability,owner:u64,thread:u64,fiber:Option<CrtFiber>,image:CrtProcessImage,serial:u64}
+impl CrtInstructionInputs for CrtApplicationInputs {
+ fn validate(&self,rt:&CrtStreamRuntime)->Result<(),&'static str>{
+  rt.memory.validate(self.anchor,rt.file_view.owner).map_err(|_|"CRT application arena lifetime")?;
+  if rt.application!=Some(*self)||rt.initialization.is_some()||rt.closed||rt.shutdown.is_some()||rt.anchor!=self.anchor||rt.owner!=self.owner||rt.thread!=self.thread||rt.fiber!=self.fiber{return Err("CRT application owner/phase lifetime");}
+  rt.process_image(self.image)?;if let Some(f)=self.fiber{rt.check_fiber(f)?;}Ok(())
+ }
+ fn image(&self)->CrtProcessImage{self.image}
+ fn initialization_token(&self)->Option<CrtInitialization>{None}
+}
+
 /// Lifecycle identity only; does not initialize or attest locale data objects.
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 struct CrtLocale {anchor:guest_memory::Capability,thread:u64,generation:u64}
@@ -244,7 +263,7 @@ struct CrtStreamRuntime {
  dispatchers:std::collections::BTreeMap<u64,CrtDispatcherContext>,regions:Vec<CrtRegion>,retired:Vec<CrtPointer>,tags:std::collections::BTreeMap<u32,CrtValue>,
  partial:std::collections::BTreeMap<u32,(u8,u8)>,descriptors:Vec<CrtDescriptor>,native_endpoints:Vec<CrtNativeEndpoint>,native_standards:Option<(CrtNativeStandards,[CrtStandardEntry;3])>,command_line:Option<CrtCommandLine>,image_name:Option<CrtImageName>,file_mode:Option<(CrtProcessFileMode,CrtFileApiMode)>,
  global_objects:CrtGlobalSlots<CrtPointer>,global_locks:CrtGlobalLeases,record_objects:Vec<CrtPointer>,record_locks:Vec<CrtRecordLock>,locks:Vec<CrtLock>,descriptor_locks:Vec<CrtDescriptorLock>,serial:u64,generation:u64,canonical_errno:bool,errno_cell:Option<CrtPointer>,errno:Option<i32>,doserrno:Option<u32>,last_os_error:Option<u32>,
- locale_generation:u64,locale_live:bool,initialization:Option<u64>,shutdown:Option<CrtShutdown>,closed:bool,lock_objects:CrtFileLockSet,
+ locale_generation:u64,locale_live:bool,initialization:Option<u64>,application:Option<CrtApplicationInputs>,shutdown:Option<CrtShutdown>,closed:bool,lock_objects:CrtFileLockSet,
 }
 impl CrtStreamRuntime {
  const X87_PROFILE:&'static str="w2l-modern-enabled-stationary-x87-v1";
@@ -333,7 +352,7 @@ impl CrtStreamRuntime {
  }
  fn from_file_storage(owner:u64,thread:u64,memory:guest_memory::Space,pointer:CrtPointer)->Result<Self,&'static str>{
   let anchor=pointer.cap;
-  Ok(Self{unhandled_filter:CrtUnhandledFilter::Unobserved,environment:None,fp_boundary:None,x87:None,file_view:pointer,main_image:None,main_image_regions:vec![],loader_cells:std::collections::BTreeMap::new(),modules:std::collections::BTreeMap::new(),module_references:CrtModuleReferences::new(),exports:std::collections::BTreeMap::new(),providers:std::collections::BTreeMap::new(),native_sync:CrtGlobalSlots::new(),slist_heads:Box::new(CrtGlobalSlots::new()),uncertain_allocations:vec![],completed_failed_frees:vec![],heap_ptds:vec![],fiber:None,fls_indices:CrtFlsIndices::new(),fls:CrtFlsValues::new(),unobserved_contexts:vec![],heap:None,memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],native_endpoints:vec![],native_standards:None,command_line:None,image_name:None,file_mode:None,global_objects:CrtGlobalSlots::new(),global_locks:CrtGlobalLeases::new(),record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,canonical_errno:false,errno_cell:None,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,shutdown:None,closed:false,lock_objects:CrtFileLockSet::first(pointer.base)?})
+  Ok(Self{unhandled_filter:CrtUnhandledFilter::Unobserved,environment:None,fp_boundary:None,x87:None,file_view:pointer,main_image:None,main_image_regions:vec![],loader_cells:std::collections::BTreeMap::new(),modules:std::collections::BTreeMap::new(),module_references:CrtModuleReferences::new(),exports:std::collections::BTreeMap::new(),providers:std::collections::BTreeMap::new(),native_sync:CrtGlobalSlots::new(),slist_heads:Box::new(CrtGlobalSlots::new()),uncertain_allocations:vec![],completed_failed_frees:vec![],heap_ptds:vec![],fiber:None,fls_indices:CrtFlsIndices::new(),fls:CrtFlsValues::new(),unobserved_contexts:vec![],heap:None,memory,owner,thread,anchor,dispatchers:std::collections::BTreeMap::new(),regions:vec![CrtRegion{pointer,heap:false,file_owner:None}],retired:vec![],tags:std::collections::BTreeMap::new(),partial:std::collections::BTreeMap::new(),descriptors:vec![],native_endpoints:vec![],native_standards:None,command_line:None,image_name:None,file_mode:None,global_objects:CrtGlobalSlots::new(),global_locks:CrtGlobalLeases::new(),record_objects:vec![],record_locks:vec![],locks:vec![],descriptor_locks:vec![],serial:0,generation:0,canonical_errno:false,errno_cell:None,errno:None,doserrno:None,last_os_error:None,locale_generation:0,locale_live:false,initialization:None,application:None,shutdown:None,closed:false,lock_objects:CrtFileLockSet::first(pointer.base)?})
  }
 
  /// Initial FILE storage is a bounded role view of the original writable
