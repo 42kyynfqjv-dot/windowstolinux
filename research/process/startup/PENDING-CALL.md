@@ -141,3 +141,30 @@ This changes the instruction-proof domain only. The existing object validator
 still requires its older supplied record contract, including flags and nested
 link. Production object acquisition and Normal predecessor views remain closed;
 this prerequisite does not issue delivery, capture or resumption authority.
+
+## Pending event-owned storage prerequisite
+
+A producer-bound pending RaiseException event can now acquire native-owned,
+disjoint 80-byte record and 716-byte opaque CONTEXT regions. Placement uses live
+memory reservations and fresh capabilities. This is native internal storage,
+with resource rejection, rather than a supplied Windows allocation outcome.
+Failure acquiring the second region releases the first and publishes no token.
+Only argument-derived code/count and bit0 are initialized. The nested link,
+address, unused record words and all CONTEXT bytes remain unknown.
+
+A distinct pending-storage token validates the actual suspended source, event,
+process/thread/epoch, exact object identities, record knowledge and opaque bytes.
+Typed CONTEXT reads/writes through aliases reject; failed validation, event
+failure and event drop revoke the shared token. Revocation never unseals bytes.
+Backing storage stays reserved until runtime destruction; this step grants no
+reclamation or guest cleanup authority. The old supplied-object validator and
+all handler delivery gates remain closed.
+No search-phase flag producer, captured register, Outer view or resumption token
+is issued by this storage step.
+
+Nine producer-bound original-prefix component cases cover storage identity, token substitution,
+replay, invented NULL-link knowledge, opaque alias mutation, changed interrupted
+CPU, failure/drop, stale backing and second-allocation rollback. Original CALL
+state and existing frame count are checked. Actual Inner-to-Outer routing still
+requires justified search-phase flags, the no-read consumer certificate and a
+selected Normal view distinct from interrupted Inner.

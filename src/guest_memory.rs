@@ -174,6 +174,34 @@ impl Space {
             region_limit,
         })
     }
+    /// Native internal scratch with unknown contents and a fresh capability.
+    /// Placement follows live reservations, including heap page extents.
+    pub fn map_scratch(&mut self, size: u32, owner: Owner) -> Result<(u32, Capability), Fault> {
+        if size == 0 {
+            return Err(Fault::Range);
+        }
+        let mut base = 0x10000u64;
+        for _ in 0..=self.regions.len() {
+            let limit = base.checked_add(u64::from(size)).ok_or(Fault::Range)?;
+            if limit > u64::from(u32::MAX) {
+                return Err(Fault::Range);
+            }
+            if let Some(next) = self
+                .regions
+                .iter()
+                .filter(|r| base < r.reserved_end() && u64::from(r.capability.base) < limit)
+                .map(|r| r.reserved_end())
+                .max()
+            {
+                base = next.checked_add(3).ok_or(Fault::Range)? & !3;
+            } else {
+                let base = u32::try_from(base).map_err(|_| Fault::Range)?;
+                let cap = self.map(base, size, owner, Permissions::READ_WRITE, false)?;
+                return Ok((base, cap));
+            }
+        }
+        Err(Fault::Budget)
+    }
     /// Map a disjoint region. Defined zero-fill is distinct from unknown backing.
     /// Initialized image bytes can subsequently be provided with map_image.
     pub fn map(

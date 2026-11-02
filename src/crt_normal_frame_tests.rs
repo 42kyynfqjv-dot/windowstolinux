@@ -2235,6 +2235,31 @@ fn application_handoff_cases(){let original=std::fs::read(std::env::var("W2L_PE_
    assert_eq!(event.execute_handler(rt,c,e,&b,&mut dispatcher,0x40111d,|_,_|panic!("unproved handler executed")).err(),Some("pending raise delivery/capture contract unbound"));
    assert_eq!(event.execute_child_handler(rt,c,e,&b,&mut dispatcher,0x40111d,|_,_,_|panic!("unproved child executed")).err(),Some("pending raise delivery/capture contract unbound"));
    assert_eq!(event.bind_unobserved_context(rt,c,e,&b,record,context).err(),Some("pending raise delivery/capture contract unbound"));
+   if mode>=22{
+    let before=c.r;let frame_count=e.registry.normal_epoch.as_ref().unwrap().frames.len();
+    if mode==30{
+     let mut last=None;while let Ok((_,cap))=rt.memory.map_scratch(4,guest_memory::Owner::Stack(999)){last=Some(cap);}
+     rt.memory.release(last.unwrap(),guest_memory::Owner::Stack(999)).unwrap();let regions=rt.regions.len();
+     assert_eq!(event.acquire_pending_objects(rt,c,e,&b).err(),Some("pending objects storage resource"));assert_eq!(rt.regions.len(),regions);assert!(event.pending_objects.is_none());assert!(event.produced_record.is_none());assert_eq!(c.r,before);event.dispatch_source(rt,c,e,&b)?;return Err("pending acquisition test stop");
+    }
+    let owned=event.acquire_pending_objects(rt,c,e,&b)?;owned.validate(&event,rt,c,e,&b)?;
+    assert_eq!(c.r,before);assert_eq!(e.registry.normal_epoch.as_ref().unwrap().frames.len(),frame_count);assert_ne!(owned.record.cap,owned.context.cap);assert_eq!((owned.record.size,owned.context.size),(80,716));
+    assert_eq!(rt.load(rt.offset(owned.record,4)?,32)?,CrtValue::Scalar{bits:0,known:1});assert_eq!(rt.load(rt.offset(owned.record,8)?,32)?,CrtValue::Scalar{bits:0,known:0});
+    assert_eq!(rt.load(owned.context,8),Err("unobserved context raw read requires acquisition proof"));assert_eq!(rt.store(owned.context,8,CrtValue::scalar(0)),Err("unobserved context write requires effect proof"));
+    assert_eq!(CrtNormalObjects::bind(&event,rt,e,owned.record,owned.context).err(),Some("pending raise delivery/capture contract unbound"));
+    if mode==22{let mut wrong=owned.clone();wrong.record=owned.context;assert!(wrong.validate(&event,rt,c,e,&b).is_err());assert!(!owned.live.get());return Err("pending acquisition test stop");}
+    match mode{
+     23=>assert_eq!(event.acquire_pending_objects(rt,c,e,&b).err(),Some("pending objects producer/phase/replay")),
+     24=>{rt.store(rt.offset(owned.record,8)?,32,CrtValue::scalar(0))?;assert_eq!(owned.validate(&event,rt,c,e,&b),Err("pending objects record knowledge changed"));},
+     25=>{rt.memory.write(owned.context.address(),&[1]).unwrap();assert_eq!(owned.validate(&event,rt,c,e,&b),Err("pending objects context knowledge changed"));},
+     26=>{c.r[1]=CrtValue::scalar(99);assert!(owned.validate(&event,rt,c,e,&b).is_err());},
+     27=>{event.fail_capture();assert!(!owned.live.get());assert!(owned.validate(&event,rt,c,e,&b).is_err());},
+     28=>{drop(event);assert!(!owned.live.get());assert!(rt.load(owned.context,8).is_err());return Err("pending acquisition test stop");},
+     29=>{rt.memory.release(owned.context.cap,owned.context.owner).unwrap();assert!(owned.validate(&event,rt,c,e,&b).is_err());},
+     _=>{}
+    }
+    return Err("pending acquisition test stop");
+   }
    event.produce_record_fields(rt,c,e,&b,record)?;assert_eq!(rt.load(record,32)?,CrtValue::scalar(0xe0424242));assert_eq!(rt.load(rt.offset(record,4)?,32)?,CrtValue::Scalar{bits:0,known:1});assert_eq!(rt.load(rt.offset(record,8)?,32)?,CrtValue::Scalar{bits:0,known:0});for i in 0..716{assert_eq!(rt.load(rt.offset(context,i)?,8)?,CrtValue::Scalar{bits:0,known:0xffffff00});}
    assert_eq!(event.produce_record_fields(rt,c,e,&b,record),Err("normal record producer phase/role/replay"));
    if mode==12{rt.application=None;assert!(event.validate_pending(rt,e).is_err());}
@@ -2248,7 +2273,7 @@ fn application_handoff_cases(){let original=std::fs::read(std::env::var("W2L_PE_
   })
  });assert_eq!(result,Err("pending acquisition test stop"),"pending acquisition mode{mode}");
 }
-fn pending_call_acquisition_cases(){let original=std::fs::read(std::env::var("W2L_PE_MAPPING_INPUT").unwrap()).unwrap();for mode in 0..22{pending_call_acquisition_one(&original,mode);}}
+fn pending_call_acquisition_cases(){let original=std::fs::read(std::env::var("W2L_PE_MAPPING_INPUT").unwrap()).unwrap();for mode in 0..31{pending_call_acquisition_one(&original,mode);}}
 
 #[inline(never)]fn startup_main_one(original:&[u8],mode:u32){
  let mut file=original.to_vec();if let Some(at)=match mode{1=>Some(0x401717),2=>Some(0x401280),3=>Some(0x401500),4=>Some(0x41b218),5=>Some(0x4012b9),6=>Some(0x402370),25=>Some(0x4011e5),26=>Some(0x4010c0),27=>Some(0x40115c),28=>Some(0x41b1d0),29=>Some(0x4010f0),_=>None}{startup_caller_mutate(&mut file,at);}

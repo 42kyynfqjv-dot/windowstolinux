@@ -553,15 +553,34 @@ impl CrtNormalObjects {
   }Ok(())
  }
 }
+/// Native storage acquisition only. This token grants no delivery or saved-state authority.
+#[derive(Clone)]
+struct CrtPendingObjects {record:CrtPointer,context:CrtPointer,source:[u64;4],live:std::rc::Rc<std::cell::Cell<bool>>}
+impl CrtPendingObjects {
+ fn validate(&self,event:&CrtNormalException,rt:&CrtStreamRuntime,cpu:&CrtCpu,epoch:&NormalCallEpoch<'_>,binding:&CrtNormalBinding)->RegistryResult<()>{
+  let result=self.validate_checked(event,rt,cpu,epoch,binding);if result.is_err(){self.live.set(false);}result
+ }
+ fn validate_checked(&self,event:&CrtNormalException,rt:&CrtStreamRuntime,cpu:&CrtCpu,epoch:&NormalCallEpoch<'_>,binding:&CrtNormalBinding)->RegistryResult<()>{
+  event.dispatch_source(rt,cpu,epoch,binding)?;
+  if !self.live.get()||self.source!=[event.identity.instance,event.epoch,event.frame.generation,event.generation]
+   ||event.pending_objects.as_ref().is_none_or(|o|o.record!=self.record||o.context!=self.context||!std::rc::Rc::ptr_eq(&o.live,&self.live))
+   ||event.produced_record!=Some(self.record)||self.record.cap==self.context.cap{return Err("pending objects event/lifetime");}
+  rt.valid(self.record,80)?;rt.valid(self.context,716)?;
+  for i in (0..80).step_by(4){let expected=match i{0=>CrtValue::scalar(event.code),4=>CrtValue::Scalar{bits:u32::from(event.noncontinuable),known:1},16=>CrtValue::scalar(0),_=>CrtValue::Scalar{bits:0,known:0}};if rt.load(rt.offset(self.record,i)?,32)?!=expected{return Err("pending objects record knowledge changed");}}
+  if !rt.unobserved_contexts.iter().any(|(p,live)|*p==self.context&&std::rc::Rc::ptr_eq(live,&self.live)){return Err("pending objects context seal");}
+  for i in (0..716).step_by(4){if rt.load_unsealed(rt.offset(self.context,i)?,32)?!=(CrtValue::Scalar{bits:0,known:0}){return Err("pending objects context knowledge changed");}}
+  Ok(())
+ }
+}
 struct CrtNormalException {
  anchor:guest_memory::Capability,identity:RegistryIdentity,epoch:u64,frame:NormalFrameId,
  generation:u64,code:u32,noncontinuable:bool,continuation:u32,acquisition:Option<CrtPendingRaiseProducer>,
- call_registers:[CrtValue;8],call_flags:CrtFlags,return_id:u64,delivery:CrtNormalDelivery,produced_record:Option<CrtPointer>,unobserved:Option<CrtUnobservedContext>,
+ pending_objects:Option<CrtPendingObjects>,call_registers:[CrtValue;8],call_flags:CrtFlags,return_id:u64,delivery:CrtNormalDelivery,produced_record:Option<CrtPointer>,unobserved:Option<CrtUnobservedContext>,
 }
-impl Drop for CrtNormalException {fn drop(&mut self){if let Some(lease)=&self.unobserved{lease.revoke();}}}
+impl Drop for CrtNormalException {fn drop(&mut self){if let Some(o)=&self.pending_objects{o.live.set(false);}if let Some(lease)=&self.unobserved{lease.revoke();}}}
 impl CrtNormalException {
  fn require_delivery_contract(&self)->RegistryResult<()>{if self.acquisition.is_some(){return Err("pending raise delivery/capture contract unbound");}Ok(())}
- fn fail_capture(&mut self){if let Some(lease)=&self.unobserved{lease.revoke();}self.delivery=CrtNormalDelivery::Failed;}
+ fn fail_capture(&mut self){if let Some(o)=&self.pending_objects{o.live.set(false); }if let Some(lease)=&self.unobserved{lease.revoke();}self.delivery=CrtNormalDelivery::Failed;}
  /// Called only at a separately proved FF /2 RaiseException import boundary.
  /// Initial domain: no exception parameters. The opcode/IAT effect binding is
  /// still a compiler prerequisite, never inferred from numeric address equality.
@@ -606,12 +625,27 @@ impl CrtNormalException {
   if acquisition.is_some(){let(_,shared_generation,shared_return)=cpu.preflight_call(rt,continuation,0)?;if(shared_generation,shared_return)!=(generation,return_id){return Err("pending raise CALL preflight mismatch");}}
   let pending=Self{anchor:rt.anchor,identity:epoch.registry.identity,epoch:epoch.generation,frame,
    generation,code:args[0],noncontinuable:args[1]!=0,continuation,acquisition,
-   call_registers:cpu.r,call_flags:cpu.flags,return_id,delivery:CrtNormalDelivery::Pending,produced_record:None,unobserved:None};
+   pending_objects:None,call_registers:cpu.r,call_flags:cpu.flags,return_id,delivery:CrtNormalDelivery::Pending,produced_record:None,unobserved:None};
   // Publish suspension only after the original CALL push succeeds. No argument
   // cleanup, clobber, captured-register synthesis, unlock or frame retirement.
   cpu.push(rt,CrtValue::ProtectedReturn(return_id))?;rt.generation=generation;
   epoch.registry.normal_epoch.as_mut().ok_or("normal exception missing epoch")?.pending_exception=Some(generation);
   Ok(pending)
+ }
+ /// Acquire native internal storage once, without guessing Windows delivery bits.
+ fn acquire_pending_objects(&mut self,rt:&mut CrtStreamRuntime,cpu:&CrtCpu,epoch:&NormalCallEpoch<'_>,binding:&CrtNormalBinding)->RegistryResult<CrtPendingObjects>{
+  self.dispatch_source(rt,cpu,epoch,binding)?;
+  if self.acquisition.is_none()||self.pending_objects.is_some()||self.produced_record.is_some()||self.delivery!=CrtNormalDelivery::Pending{return Err("pending objects producer/phase/replay");}
+  rt.regions.try_reserve(2).map_err(|_|"pending objects bookkeeping resource")?;
+  rt.unobserved_contexts.try_reserve(1).map_err(|_|"pending objects seal resource")?;
+  let owner=guest_memory::Owner::Stack(self.generation);
+  let mut map=|size|->RegistryResult<CrtPointer>{let(base,cap)=rt.memory.map_scratch(size,owner).map_err(|_|"pending objects storage resource")?;let p=CrtPointer{cap,owner,base,size,address:base,kind:CrtRegionKind::Context};rt.regions.push(CrtRegion{pointer:p,heap:false,file_owner:None});Ok(p)};
+  let record=map(80)?;
+  let context=match map(716){Ok(p)=>p,Err(e)=>{rt.memory.release(record.cap,record.owner).map_err(|_|"pending objects allocation rollback")?;rt.regions.retain(|r|r.pointer.cap!=record.cap);return Err(e);}};
+  self.produce_record_fields(rt,cpu,epoch,binding,record)?;
+  let objects=CrtPendingObjects{record,context,source:[self.identity.instance,self.epoch,self.frame.generation,self.generation],live:std::rc::Rc::new(std::cell::Cell::new(true))};
+  rt.unobserved_contexts.push((context,objects.live.clone()));self.pending_objects=Some(objects.clone());
+  objects.validate(self,rt,cpu,epoch,binding)?;Ok(objects)
  }
  /// Materialize code/count and documented noncontinuable-bit knowledge only.
  /// CONTEXT, ExceptionAddress, nested link and unused parameter bytes stay
