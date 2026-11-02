@@ -566,16 +566,25 @@ impl CrtPendingObjects {
    ||event.pending_objects.as_ref().is_none_or(|o|o.record!=self.record||o.context!=self.context||!std::rc::Rc::ptr_eq(&o.live,&self.live))
    ||event.produced_record!=Some(self.record)||self.record.cap==self.context.cap{return Err("pending objects event/lifetime");}
   rt.valid(self.record,80)?;rt.valid(self.context,716)?;
-  for i in (0..80).step_by(4){let expected=match i{0=>CrtValue::scalar(event.code),4=>CrtValue::Scalar{bits:u32::from(event.noncontinuable),known:1},16=>CrtValue::scalar(0),_=>CrtValue::Scalar{bits:0,known:0}};if rt.load(rt.offset(self.record,i)?,32)?!=expected{return Err("pending objects record knowledge changed");}}
+  for i in (0..80).step_by(4){let expected=match i{0=>CrtValue::scalar(event.code),4=>CrtValue::Scalar{bits:u32::from(event.noncontinuable),known:if event.search_started{0x67}else{1}},16=>CrtValue::scalar(0),_=>CrtValue::Scalar{bits:0,known:0}};if rt.load(rt.offset(self.record,i)?,32)?!=expected{return Err("pending objects record knowledge changed");}}
   if !rt.unobserved_contexts.iter().any(|(p,live)|*p==self.context&&std::rc::Rc::ptr_eq(live,&self.live)){return Err("pending objects context seal");}
   for i in (0..716).step_by(4){if rt.load_unsealed(rt.offset(self.context,i)?,32)?!=(CrtValue::Scalar{bits:0,known:0}){return Err("pending objects context knowledge changed");}}
   Ok(())
  }
 }
+/// Initial native dispatch phase only; no handler or restoration permission.
+struct CrtPendingSearch {objects:CrtPendingObjects}
+impl CrtPendingSearch {
+ fn validate(&self,event:&CrtNormalException,rt:&CrtStreamRuntime,cpu:&CrtCpu,epoch:&NormalCallEpoch<'_>,binding:&CrtNormalBinding)->RegistryResult<()>{
+  let result=(||{self.objects.validate(event,rt,cpu,epoch,binding)?;
+   if !event.search_started||event.delivery!=CrtNormalDelivery::Pending||epoch.delivery.is_some()||epoch.registry.normal_epoch.as_ref().is_none_or(|s|s.delivery.is_some()){return Err("pending search phase/lifetime");}Ok(())})();
+  if result.is_err(){self.objects.live.set(false);}result
+ }
+}
 struct CrtNormalException {
  anchor:guest_memory::Capability,identity:RegistryIdentity,epoch:u64,frame:NormalFrameId,
  generation:u64,code:u32,noncontinuable:bool,continuation:u32,acquisition:Option<CrtPendingRaiseProducer>,
- pending_objects:Option<CrtPendingObjects>,call_registers:[CrtValue;8],call_flags:CrtFlags,return_id:u64,delivery:CrtNormalDelivery,produced_record:Option<CrtPointer>,unobserved:Option<CrtUnobservedContext>,
+ search_started:bool,pending_objects:Option<CrtPendingObjects>,call_registers:[CrtValue;8],call_flags:CrtFlags,return_id:u64,delivery:CrtNormalDelivery,produced_record:Option<CrtPointer>,unobserved:Option<CrtUnobservedContext>,
 }
 impl Drop for CrtNormalException {fn drop(&mut self){if let Some(o)=&self.pending_objects{o.live.set(false);}if let Some(lease)=&self.unobserved{lease.revoke();}}}
 impl CrtNormalException {
@@ -625,7 +634,7 @@ impl CrtNormalException {
   if acquisition.is_some(){let(_,shared_generation,shared_return)=cpu.preflight_call(rt,continuation,0)?;if(shared_generation,shared_return)!=(generation,return_id){return Err("pending raise CALL preflight mismatch");}}
   let pending=Self{anchor:rt.anchor,identity:epoch.registry.identity,epoch:epoch.generation,frame,
    generation,code:args[0],noncontinuable:args[1]!=0,continuation,acquisition,
-   pending_objects:None,call_registers:cpu.r,call_flags:cpu.flags,return_id,delivery:CrtNormalDelivery::Pending,produced_record:None,unobserved:None};
+   search_started:false,pending_objects:None,call_registers:cpu.r,call_flags:cpu.flags,return_id,delivery:CrtNormalDelivery::Pending,produced_record:None,unobserved:None};
   // Publish suspension only after the original CALL push succeeds. No argument
   // cleanup, clobber, captured-register synthesis, unlock or frame retirement.
   cpu.push(rt,CrtValue::ProtectedReturn(return_id))?;rt.generation=generation;
@@ -646,6 +655,16 @@ impl CrtNormalException {
   let objects=CrtPendingObjects{record,context,source:[self.identity.instance,self.epoch,self.frame.generation,self.generation],live:std::rc::Rc::new(std::cell::Cell::new(true))};
   rt.unobserved_contexts.push((context,objects.live.clone()));self.pending_objects=Some(objects.clone());
   objects.validate(self,rt,cpu,epoch,binding)?;Ok(objects)
+ }
+ /// The native dispatcher enters its first search before invoking a handler.
+ /// No unwind, nested handler or collided unwind has occurred in this phase.
+ /// Only the corresponding 0x66 phase bits become known-clear; bit0 is retained.
+ fn begin_pending_search(&mut self,objects:&CrtPendingObjects,rt:&mut CrtStreamRuntime,cpu:&CrtCpu,epoch:&NormalCallEpoch<'_>,binding:&CrtNormalBinding)->RegistryResult<CrtPendingSearch>{
+  objects.validate(self,rt,cpu,epoch,binding)?;
+  if self.search_started||self.delivery!=CrtNormalDelivery::Pending||epoch.delivery.is_some()||epoch.registry.normal_epoch.as_ref().is_none_or(|s|s.delivery.is_some()){return Err("pending search initial phase/replay");}
+  rt.store(rt.offset(objects.record,4)?,32,CrtValue::Scalar{bits:u32::from(self.noncontinuable),known:0x67})?;
+  self.search_started=true;
+  let phase=CrtPendingSearch{objects:objects.clone()};phase.validate(self,rt,cpu,epoch,binding)?;Ok(phase)
  }
  /// Materialize code/count and documented noncontinuable-bit knowledge only.
  /// CONTEXT, ExceptionAddress, nested link and unused parameter bytes stay

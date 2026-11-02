@@ -2192,7 +2192,7 @@ fn application_handoff_cases(){let original=std::fs::read(std::env::var("W2L_PE_
 
 // Independent expectations at the real producer, after original prolog/stores/pushes.
 #[inline(never)]fn pending_call_acquisition_one(original:&[u8],mode:u32){
- let mut file=original.to_vec();if mode==1||mode==2{startup_caller_mutate(&mut file,0x401117+mode-1);}if mode==3{startup_caller_mutate(&mut file,0x415000);}
+ let mut file=original.to_vec();if mode==35{startup_caller_mutate(&mut file,0x415128);}if mode==36{startup_caller_mutate(&mut file,0x402877);}if mode==1||mode==2{startup_caller_mutate(&mut file,0x401117+mode-1);}if mode==3{startup_caller_mutate(&mut file,0x415000);}
  let(m,mut registry,main,mut permit)=fixture_with_extra(&[(0x410000,0x420000)]);
  let(mut rt,init)=CrtStreamRuntime::new_initializing_pe32(registry.identity.owner,registry.identity.instance,0x41c080,3,1048576,&file).unwrap();
  let inputs=CrtEntropyInputs::bind(&rt,init,17,19).unwrap();rt.map_region(0x9000,0x6000,CrtRegionKind::Stack,None).unwrap();rt.store(rt.process_image_pointer(inputs.image,0x41c000,4).unwrap(),32,CrtValue::scalar(0x12345678)).unwrap();
@@ -2247,6 +2247,19 @@ fn application_handoff_cases(){let original=std::fs::read(std::env::var("W2L_PE_
     assert_eq!(rt.load(rt.offset(owned.record,4)?,32)?,CrtValue::Scalar{bits:0,known:1});assert_eq!(rt.load(rt.offset(owned.record,8)?,32)?,CrtValue::Scalar{bits:0,known:0});
     assert_eq!(rt.load(owned.context,8),Err("unobserved context raw read requires acquisition proof"));assert_eq!(rt.store(owned.context,8,CrtValue::scalar(0)),Err("unobserved context write requires effect proof"));
     assert_eq!(CrtNormalObjects::bind(&event,rt,e,owned.record,owned.context).err(),Some("pending raise delivery/capture contract unbound"));
+    if mode>=31{
+     if mode==33{event.delivery=CrtNormalDelivery::Returned;assert_eq!(event.begin_pending_search(&owned,rt,c,e,&b).err(),Some("pending search initial phase/replay"));assert!(!event.search_started);return Err("pending acquisition test stop");}
+     let phase=event.begin_pending_search(&owned,rt,c,e,&b)?;phase.validate(&event,rt,c,e,&b)?;
+     assert_eq!(rt.load(rt.offset(owned.record,4)?,32)?,CrtValue::Scalar{bits:0,known:0x67});assert_eq!(rt.load(rt.offset(owned.record,8)?,32)?,CrtValue::Scalar{bits:0,known:0});assert_eq!(c.r,before);assert_eq!(e.registry.normal_epoch.as_ref().unwrap().frames.len(),frame_count);
+     if mode==32{assert_eq!(event.begin_pending_search(&owned,rt,c,e,&b).err(),Some("pending search initial phase/replay"));phase.validate(&event,rt,c,e,&b)?;}
+     if mode==34{rt.store(rt.offset(owned.record,4)?,32,CrtValue::scalar(0))?;assert_eq!(phase.validate(&event,rt,c,e,&b),Err("pending objects record knowledge changed"));assert!(!owned.live.get());return Err("pending acquisition test stop");}
+     if mode==37{c.r[1]=CrtValue::scalar(77);}
+     if mode==38{event.fail_capture();}
+     let got=phase.check_original_context_no_read(&event,rt,c,e,&b);
+     if matches!(mode,31|32){assert_eq!(got,Ok(()));assert!(rt.load(owned.context,32).is_err());assert_eq!(event.require_delivery_contract(),Err("pending raise delivery/capture contract unbound"));}
+     else{if mode==35{assert_eq!(got,Err("pending search context observation unproved"));}else if mode==36{assert_eq!(got,Err("pending context helper changed"));}else{assert!(got.is_err(),"pending search observation mode{mode}");}assert!(!owned.live.get());}
+     return Err("pending acquisition test stop");
+    }
     if mode==22{let mut wrong=owned.clone();wrong.record=owned.context;assert!(wrong.validate(&event,rt,c,e,&b).is_err());assert!(!owned.live.get());return Err("pending acquisition test stop");}
     match mode{
      23=>assert_eq!(event.acquire_pending_objects(rt,c,e,&b).err(),Some("pending objects producer/phase/replay")),
@@ -2273,7 +2286,7 @@ fn application_handoff_cases(){let original=std::fs::read(std::env::var("W2L_PE_
   })
  });assert_eq!(result,Err("pending acquisition test stop"),"pending acquisition mode{mode}");
 }
-fn pending_call_acquisition_cases(){let original=std::fs::read(std::env::var("W2L_PE_MAPPING_INPUT").unwrap()).unwrap();for mode in 0..31{pending_call_acquisition_one(&original,mode);}}
+fn pending_call_acquisition_cases(){let original=std::fs::read(std::env::var("W2L_PE_MAPPING_INPUT").unwrap()).unwrap();for mode in 0..39{pending_call_acquisition_one(&original,mode);}}
 
 #[inline(never)]fn startup_main_one(original:&[u8],mode:u32){
  let mut file=original.to_vec();if let Some(at)=match mode{1=>Some(0x401717),2=>Some(0x401280),3=>Some(0x401500),4=>Some(0x41b218),5=>Some(0x4012b9),6=>Some(0x402370),25=>Some(0x4011e5),26=>Some(0x4010c0),27=>Some(0x40115c),28=>Some(0x41b1d0),29=>Some(0x4010f0),_=>None}{startup_caller_mutate(&mut file,at);}

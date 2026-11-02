@@ -168,3 +168,32 @@ CPU, failure/drop, stale backing and second-allocation rollback. Original CALL
 state and existing frame count are checked. Actual Inner-to-Outer routing still
 requires justified search-phase flags, the no-read consumer certificate and a
 selected Normal view distinct from interrupted Inner.
+
+## Native initial-search phase and original context-helper check
+
+The native pending event now has a one-time initial-search transition, available
+only with its acquired object token, unchanged interrupted source and no active
+handler/child delivery. The dispatcher has not begun an unwind or selected an
+unwind target in this phase. It therefore produces known-clear 0x66 phase bits,
+retaining argument-derived bit0. Flags carry mask0x67; stack-invalid/nested and
+reserved bits, the nested link, and CONTEXT remain unknown. This is explicit
+native dispatch phase production, not acquisition of a Windows saved CONTEXT.
+Failed preflight leaves the flag word and phase unchanged; reentry rejects.
+
+The independently decoded original context helper has a separate no-read check
+on the pending search token. Each use validates actual process-image helper
+bytes and reads its actual selector cell. It runs the proof's original decision
+projection over a view that rejects every captured-stack predicate. Only the
+proved selector bypass can succeed. A loader-patched/non-bypass selector still
+rejects; no Windows delivery bypass is inferred from mapped IAT bytes. This
+returns no generic lease, callback
+receipt or delivery permission; it does not certify all other handler consumers.
+A changed selector requiring capture observation, changed helper, changed source
+CPU or expired event rejects and revokes the underlying token.
+
+Eight additional component cases retain exact bit knowledge, no nested-link
+fact, source registers and frame count, and cover reentry, wrong phase, invented
+flag knowledge, changed selector/helper and source/event expiry. Total producer
+component cases39. The original-entry caller is still stopped at the pending
+RaiseException delivery gate. Selected Normal views, full handler read/effect
+composition and original Inner-to-Outer advancement remain unimplemented.

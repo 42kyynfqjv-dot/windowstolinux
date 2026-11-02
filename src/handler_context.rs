@@ -52,6 +52,27 @@ impl ContextCheckProof {
             r#"
 impl ThreadContext {{fn original_check(&self,owner:u64,selector:u32)->Result<(),&'static str>{{{body}}}}}
 impl CapturedStackView {{fn original_check(&self,owner:u64,selector:u32)->Result<(),&'static str>{{{projection}}}}}
+/// This view cannot answer any captured-state predicate. The decoded helper
+/// must actually follow its no-read selector path, or the check rejects.
+struct CrtPendingNoReadContext {{owner:u64}}
+impl CrtPendingNoReadContext {{
+ fn preflight(&self,owner:u64)->RegistryResult<()>{{if owner!=self.owner{{return Err("pending context owner");}}Ok(())}}
+ fn captured_below_limit(&self,_owner:u64)->RegistryResult<bool>{{Err("pending search context observation unproved")}}
+ fn captured_at_most_base(&self,_owner:u64)->RegistryResult<bool>{{Err("pending search context observation unproved")}}
+ fn original_check(&self,owner:u64,selector:u32)->RegistryResult<()>{{{projection}}}
+}}
+impl CrtPendingSearch {{
+ /// Consumer-specific preflight only. No generic no-read lease or delivery
+ /// token is returned, and all original source bytes are checked on each use.
+ fn check_original_context_no_read(&self,event:&CrtNormalException,rt:&CrtStreamRuntime,cpu:&CrtCpu,epoch:&NormalCallEpoch<'_>,binding:&CrtNormalBinding)->RegistryResult<()>{{
+  let result=(||{{self.validate(event,rt,cpu,epoch,binding)?;let image=binding.application.ok_or("pending context application")?.image;
+   let code=rt.process_image_code(image,{origin},{code_len})?;
+   if rt.memory.read(code.address(),{code_len}).map_err(|_|"pending context code read")?!=&{code:?}{{return Err("pending context helper changed");}}
+   let selector=rt.load(rt.process_image_pointer(image,{selector},4)?,32)?.known_scalar()?;
+   CrtPendingNoReadContext{{owner:rt.owner}}.original_check(rt.owner,selector)
+  }})();if result.is_err(){{self.objects.live.set(false);}}result
+ }}
+}}
 impl CrtNormalException {{
  /// Component-only no-observation lease. This does not acquire OS delivery
  /// state or permit full-image emission. All raw CONTEXT access stays blocked.
@@ -103,6 +124,7 @@ impl CrtNormalException {{
 "#,
             origin = self.origin,
             code = self.source,
+            code_len = self.source.len(),
             bypass = self.bypass_selector,
             body = self.body,
             projection = self.projection_body,
