@@ -1,6 +1,15 @@
 # Remaining entry-to-exit dependencies
 
-## Current executable checkpoint: original FILE initialization completed
+## Current executable checkpoint: repeated original locale callback completed
+
+Original0x4109ba now calls the existing guarded locale helper, executes MOVZX/XOR
+and returns through the original protected RET. The controlled native-profile
+entry reaches **0x4127b0**, whose whole BOOL result store remains unbound. Existing
+FILE/environment object and reference-count checks remain intact.
+
+[Locale reuse, CI evidence and next feature-BOOL scope](LOCALE-INITIALIZER.md).
+
+## Previous executable checkpoint: original FILE initialization completed
 
 The explicit controlled native-profile entry executes original FILE allocation,
 publication, all three lock constructors, slot stores, descriptor classification

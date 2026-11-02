@@ -110,7 +110,7 @@ impl CrtCArray{{
 fn startup_c_array(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,callback:&mut impl FnMut(&mut CrtStreamRuntime,&mut CrtCpu,usize,CrtPointer)->Result<CrtValue,&'static str>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;if cpu.return_pop!=0||cpu.r[4]!=cpu.entry[4]||[3,5,6,7].iter().any(|&r|cpu.r[r]!=cpu.entry[r]){{return Err("C-array entry phase/ABI");}}let table=CrtCArray::bind(rt,cpu,inputs.image)?;table.validate(rt,inputs.image)?;let mut completed=[false;64];let mut guarded:Option<(usize,CrtPointer)>=None;let mut failure:Option<CrtValue>=None;{body}}}
 fn startup_c_array_real(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs)->Result<CrtValue,&'static str>{{startup_c_array_context(rt,cpu,inputs,None)}}
 fn startup_c_array_context(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,mut epoch:Option<&mut NormalCallEpoch<'_>>)->Result<CrtValue,&'static str>{{startup_c_array_platform(rt,cpu,inputs,epoch,None)}}
-fn startup_c_array_platform(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,mut epoch:Option<&mut NormalCallEpoch<'_>>,platform:Option<&CrtNativePlatform>)->Result<CrtValue,&'static str>{{startup_c_array(rt,cpu,inputs,&mut |rt,c,_,target|match target.address(){{0x40155a=>cinit_first_platform(rt,c,inputs,epoch.as_deref_mut(),platform),0x401605=>cinit_second_original(rt,c,inputs),0x40c109=>cinit_default_mode(rt,c,inputs),0x404510=>{{let e=epoch.as_deref_mut().ok_or("FILE registry absent")?;let p=platform.ok_or("FILE platform absent")?;cinit_file_original(rt,c,inputs,p,e)}},0x4109ba=>Err("C initializer locale epoch composition unbound"),0x4127b0=>Err("C initializer raw feature BOOL storage unbound"),_=>Err("C initializer callback unbound")}})}}
+fn startup_c_array_platform(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,mut epoch:Option<&mut NormalCallEpoch<'_>>,platform:Option<&CrtNativePlatform>)->Result<CrtValue,&'static str>{{startup_c_array(rt,cpu,inputs,&mut |rt,c,_,target|match target.address(){{0x40155a=>cinit_first_platform(rt,c,inputs,epoch.as_deref_mut(),platform),0x401605=>cinit_second_original(rt,c,inputs),0x40c109=>cinit_default_mode(rt,c,inputs),0x404510=>{{let e=epoch.as_deref_mut().ok_or("FILE registry absent")?;let p=platform.ok_or("FILE platform absent")?;cinit_file_original(rt,c,inputs,p,e)}},0x4109ba=>{{let e=epoch.as_deref_mut().ok_or("locale initializer registry absent")?;let p=platform.ok_or("locale initializer platform absent")?;cinit_locale_original(rt,c,inputs,p,e)}},0x4127b0=>Err("C initializer raw feature BOOL storage unbound"),_=>Err("C initializer callback unbound")}})}}
 "#,
         guard = guard(0x406ccc, &bytes).replace("inputs.image", "image")
     );
@@ -122,6 +122,7 @@ fn startup_c_array_platform(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&Crt
     out.push_str(&environment_producer_source()?);
     out.push_str(&environment_table_source()?);
     out.push_str(&file_source()?);
+    out.push_str(&locale_initializer_source()?);
     let scan = environment_scan_body()?;
     out.push_str(&format!("fn cinit_environment_scan(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;{}{scan}}}",guard(0x40b92f,&raw(ENV_SCAN))));
     for (name, at, literal) in [
@@ -856,4 +857,63 @@ fn file_source() -> Result<String, String> {
     let g = Graph::decode_linear_fragment(&thunk[..6], 0x408079)?;
     let pre = crate::crt_stream_emit::emit_linear_fragment(&g, &Default::default())?;
     Ok(format!("fn cinit_file_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:&CrtNativePlatform,epoch:&mut NormalCallEpoch<'_>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;{}{body}}}fn startup_file_lock(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:&CrtNativePlatform)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;platform.validate(rt,inputs.init)?;cpu.validate_active(rt)?;{}let _=(||->Result<CrtValue,&'static str>{{{pre}}})()?;rt.process_image_import(inputs.image,0x4150ac,\"kernel32.dll\",\"InitializeCriticalSectionEx\")?;if cpu.return_pop!=12||cpu.r[4]!=cpu.entry[4]||[3,5,6,7].iter().any(|&i|cpu.r[i]!=cpu.entry[i]){{return Err(\"FILE lock ABI\");}}let sp=CrtCpu::pointer(cpu.r[4])?;rt.offset(sp,16)?;rt.memory.validate_writable(sp.cap,sp.owner,sp.address(),16).map_err(|_|\"FILE lock return stack permission\")?;let p=CrtCpu::pointer(rt.load(rt.offset(sp,4)?,32)?)?;let spin=rt.load(rt.offset(sp,8)?,32)?.known_scalar()?;let flags=rt.load(rt.offset(sp,12)?,32)?.known_scalar()?;let value=rt.native_file_initialize(inputs.init,platform.function,p,spin,flags)?;cpu.clobber(CrtValue::scalar(u32::from(value)));cpu.finish_pop(rt,12)}}",guard(0x404510,&bytes),guard(0x408079,&thunk)))
+}
+
+fn locale_initializer_source() -> Result<String, String> {
+    let bytes = crate::crt_ptd::raw(LOCALE);
+    let graph = Graph::decode(&bytes, 0x4109ba)?;
+    let body = crate::crt_stream_emit::emit_body(
+        &graph,
+        |pc, t| {
+            if t != Target::Direct(0x40b42a) {
+                return Err("locale initializer target changed".into());
+            }
+            Ok(format!("cpu.call_activation(rt,{},0,|rt,c|locale_startup_original(rt,c,inputs,platform,epoch))?;",pc+5))
+        },
+        &Default::default(),
+        32,
+    )?;
+    Ok(format!("fn cinit_locale_original(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:&CrtNativePlatform,epoch:&mut NormalCallEpoch<'_>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;{}{body}}}",guard(0x4109ba,&bytes)))
+}
+
+#[test]
+fn original_locale_initializer_reuses_flag_without_erasing_unknowns_or_reinitializing() {
+    let graph = Graph::decode(&crate::crt_ptd::raw(LOCALE), 0x4109ba).unwrap();
+    let helper = Graph::decode(
+        &crate::crt_ptd::raw(crate::crt_locale_startup::CALLBACK),
+        0x40b42a,
+    )
+    .unwrap();
+    let roles = BTreeMap::from_iter(
+        [0x41d148, 0x41d140, 0x41d13c, 0x41d138].map(|a| (a, "CrtRegionKind::Module".into())),
+    );
+    let hb = crate::crt_stream_emit::emit_body(
+        &helper,
+        |_, _| Ok("return Err(\"original locale acquisition required\");".into()),
+        &roles,
+        128,
+    )
+    .unwrap();
+    let body = crate::crt_stream_emit::emit_body(
+        &graph,
+        |pc, target| {
+            assert_eq!(target, Target::Direct(0x40b42a));
+            Ok(format!("cpu.call_activation(rt,{},0,helper)?;", pc + 5))
+        },
+        &Default::default(),
+        32,
+    )
+    .unwrap();
+    let extra=format!("fn helper(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->Result<CrtValue,&'static str>{{{hb}}}fn initializer(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->Result<CrtValue,&'static str>{{cpu.validate_active(rt)?;{body}}}");
+    crate::crt_stream_callees_tests::native_bounded_stack(
+        &extra,
+        r#"
+for mode in 0..6{let(mut rt,_)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();let globals=rt.map_region(0x41d138,20,CrtRegionKind::Module,Some(&[79;20])).unwrap();let flag=rt.offset(globals,16).unwrap();rt.store(flag,8,if mode==3{CrtValue::Scalar{bits:0,known:0}}else{CrtValue::scalar(if mode==2{0}else if mode==5{2}else{1})}).unwrap();let before=rt.memory.read(globals.address(),20).ok().map(|b|b.to_vec());let stack=rt.map_region(0x10000,1024,CrtRegionKind::Stack,None).unwrap();let sp=rt.offset(stack,512).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(81)).unwrap();let mut cpu=CrtCpu::new(sp,81).unwrap();cpu.r[0]=if mode==0{CrtValue::Scalar{bits:0,known:0}}else{CrtValue::scalar(0xaabbccdd)};let saved=cpu.r;if mode==4{rt.retire_region(stack).unwrap_err();rt.tags.insert(sp.address(),CrtValue::ProtectedReturn(82));}
+ let got=initializer(&mut rt,&mut cpu);
+ if mode==0||mode==1||mode==5{assert_eq!(got,Ok(CrtValue::scalar(0)));assert!(cpu.returned);assert_eq!(rt.memory.read(globals.address(),20).unwrap(),before.as_ref().unwrap());for i in[3,5,6,7]{assert_eq!(cpu.r[i],saved[i]);}assert!(initializer(&mut rt,&mut cpu).is_err());let next=rt.offset(stack,768).unwrap();rt.store(next,32,CrtValue::ProtectedReturn(83)).unwrap();let mut repeated=CrtCpu::new(next,83).unwrap();assert_eq!(initializer(&mut rt,&mut repeated),Ok(CrtValue::scalar(0)));assert!(repeated.returned);assert_eq!(rt.memory.read(globals.address(),20).unwrap(),before.as_ref().unwrap());}
+ else{assert!(got.is_err(),"locale negative{mode}");assert!(!cpu.returned);if mode==2{assert_eq!(got,Err("original locale acquisition required"));for(address,value)in[(0x41d140,0x41c240),(0x41d13c,0x41c568),(0x41d138,0x41c460)]{assert_eq!(rt.load(rt.resolve_absolute(address,CrtRegionKind::Module).unwrap(),32),Ok(CrtValue::scalar(value)));}assert_eq!(rt.load(flag,8),Ok(CrtValue::scalar(0)));}if mode==3{assert!(rt.load(flag,8).unwrap().known_scalar().is_err());}if mode==4{assert_eq!(rt.memory.read(globals.address(),20).unwrap(),before.as_ref().unwrap());}}
+}
+"#,
+        "locale-initializer-reuse",
+    );
 }
