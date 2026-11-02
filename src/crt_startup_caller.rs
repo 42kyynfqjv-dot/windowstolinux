@@ -5,7 +5,72 @@ pub(crate) const CALLER:&str="5984c00f845301000032db885de7c745fc00000000e8c70200
 pub(crate) const LOCK:&str="56e8a608000085c0742064a118000000be80cc41008b5004eb043bd0741033c08bcaf00fb10e85c075f032c05ec3b0015ec3";
 pub(crate) const RELEASE: &str = "558bece81b07000085c0740f807d0800750933c0b980cc410087015dc3";
 pub(crate) const FLAG: &str = "33c03905f0d241000f95c0c3";
+pub(crate) const CALLBACK_CELLS: &str = "e86c0500008bf033ff393e741b56e8380300005984c074108b36576a02578bceff1528514100ffd6e84a0500008bf0393e741356e8120300005984c07408ff36e81b59000059";
+pub(crate) const INIT_CELL: &str = "b8f8d24100c3";
+pub(crate) const DTOR_CELL: &str = "b8f4d24100c3";
 pub(crate) const SCOPE: &str = "feffffff00000000ccffffff00000000feffffff491740005d174000";
+// The mapped words are read at the original CMPs. Neither getter supplies their
+// values, nor does this prefix grant authority to call a non-NULL value.
+fn callback_source() -> Result<String, String> {
+    let mut out = String::new();
+    for (name, at, raw) in [
+        ("startup_init_cell", 0x401c2b, INIT_CELL),
+        ("startup_dtor_cell", 0x401c31, DTOR_CELL),
+    ] {
+        let bytes = crate::crt_ptd::raw(raw);
+        let g = Graph::decode(&bytes, at)?;
+        let body = crate::crt_stream_emit::emit_body(
+            &g,
+            |_, _| Err("callback cell getter call".into()),
+            &Default::default(),
+            8,
+        )?;
+        out.push_str(&format!("fn {name}(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;if cpu.return_pop!=0||cpu.r[4]!=cpu.entry[4]||[3,5,6,7].iter().any(|&r|cpu.r[r]!=cpu.entry[r]){{return Err(\"callback cell getter entry ABI\");}}{}{body}}}",guard(at,&bytes)));
+    }
+    let bytes = crate::crt_ptd::raw(CALLBACK_CELLS);
+    let mut g = crate::crt_startup_table::graph(&bytes, 0x4016ba)?;
+    // A non-NULL cell requires the original EH4-backed PE section validator.
+    // Keep its CALL as the rejection frontier, including the original PUSH.
+    // Do not classify by current page permissions or eagerly resolve a target.
+    for (start, end) in [(0x4016cd, 0x4016e2), (0x4016f3, 0x401700)] {
+        g.nodes.retain(|pc, _| *pc < start || *pc >= end);
+    }
+    for pc in [0x4016c8, 0x4016ee] {
+        g.nodes
+            .get_mut(&pc)
+            .ok_or("callback validator CALL missing")?
+            .successors
+            .clear();
+    }
+    let body = crate::crt_stream_emit::emit_body_with_store(
+        &g,
+        |pc, target| {
+            Ok(match (pc, target) {
+            (0x4016ba, Target::Direct(0x401c2b)) => "cpu.call_activation(rt,0x4016bf,0,|rt,c|startup_init_cell(rt,c,inputs))?;".into(),
+            (0x4016e2, Target::Direct(0x401c31)) => "cpu.call_activation(rt,0x4016e7,0,|rt,c|startup_dtor_cell(rt,c,inputs))?;".into(),
+            (0x4016c8 | 0x4016ee, Target::Direct(0x401a05)) => format!("cpu.call_activation(rt,{},0,|_,_|Err(\"startup callback-cell PE/EH4 validation unbound at 0x401a05\"))?;return Err(\"unexpected callback validator return\");",pc+5),
+            _ => return Err("callback cell prefix call target".into()),
+        })
+        },
+        &Default::default(),
+        32,
+        |_, _| Err("callback cell thread effect".into()),
+        |pc, _| {
+            Ok(match pc {
+                0x4016c3 | 0x4016e9 => {
+                    let address = if pc == 0x4016c3 { 0x41d2f8 } else { 0x41d2f4 };
+                    format!("let p=rt.module_word_pointer(inputs.image,cpu.r[6])?;if p!=rt.process_image_pointer(inputs.image,{address},4)?{{return Err(\"callback cell live identity\");}}cpu.r[6]=CrtValue::Pointer(p);")
+                }
+                _ => String::new(),
+            })
+        },
+        |_, _| Err("callback prefix unexpected RET".into()),
+        Some(0x401700),
+        |_, _, _| Err("callback prefix unexpected store".into()),
+    )?;
+    out.push_str(&format!("fn startup_callback_cells(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;{}{body}}}fn startup_callback_cells_bytes()->Vec<u8>{{vec!{bytes:?}}}",guard(0x4016ba,&bytes)));
+    Ok(out)
+}
 fn lock_graph() -> Result<Graph, String> {
     let bytes = crate::crt_ptd::raw(LOCK);
     let mut nodes = crate::crt_startup_table::graph(&bytes[..10], 0x401913)?.nodes;
@@ -52,6 +117,7 @@ pub(crate) fn source() -> Result<String, String> {
     )?;
     let mut out=format!("fn startup_runtime_flag(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;{} {body}}}",guard(0x4021bf,&flag));
     out.push_str(&array_source);
+    out.push_str(&callback_source()?);
     let lock = crate::crt_ptd::raw(LOCK);
     let g = lock_graph()?;
     let body = crate::crt_stream_emit::emit_body(
@@ -173,7 +239,7 @@ pub(crate) fn source() -> Result<String, String> {
         },
     )?;
     out.push_str(r#"fn startup_caller_frame(rt:&CrtStreamRuntime,cpu:&CrtCpu,epoch:&NormalCallEpoch<'_>,binding:&CrtNormalBinding)->Result<(),&'static str>{binding.authority(rt,epoch)?;let image=binding.image(rt,cpu,epoch)?;epoch.validate_image(binding.id.ok_or("startup caller missing normal frame")?,&image)}"#);
-    out.push_str(&format!("fn startup_post_initializer(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>,binding:&mut CrtNormalBinding)->Result<CrtValue,&'static str>{{startup_post_initializer_platform(rt,cpu,inputs,epoch,binding,None)}}fn startup_post_initializer_platform(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>,binding:&mut CrtNormalBinding,platform:Option<&CrtNativePlatform>)->Result<CrtValue,&'static str>{{startup_post_initializer_observed(rt,cpu,inputs,epoch,binding,platform,None)}}fn startup_post_initializer_observed(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>,binding:&mut CrtNormalBinding,platform:Option<&CrtNativePlatform>,features:Option<&CrtFeatureObservation>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;startup_caller_frame(rt,cpu,epoch,binding)?;let arg=binding.at(rt,binding.layout.low-4)?;if cpu.r[4]!=CrtValue::Pointer(arg)||rt.load(arg,32)?!=CrtValue::scalar(1){{return Err(\"startup caller argument/phase\");}}if binding.image(rt,cpu,epoch)?.try_level!= -2{{return Err(\"startup caller scope phase\");}}{}let _=(||->Result<CrtValue,&'static str>{{{body}}})()?;Err(\"startup callback-cell accessor unbound at 0x4016ba\")}}",guard(0x401632,&bytes)));
+    out.push_str(&format!("fn startup_post_initializer(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>,binding:&mut CrtNormalBinding)->Result<CrtValue,&'static str>{{startup_post_initializer_platform(rt,cpu,inputs,epoch,binding,None)}}fn startup_post_initializer_platform(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>,binding:&mut CrtNormalBinding,platform:Option<&CrtNativePlatform>)->Result<CrtValue,&'static str>{{startup_post_initializer_observed(rt,cpu,inputs,epoch,binding,platform,None)}}fn startup_post_initializer_observed(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>,binding:&mut CrtNormalBinding,platform:Option<&CrtNativePlatform>,features:Option<&CrtFeatureObservation>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;startup_caller_frame(rt,cpu,epoch,binding)?;let arg=binding.at(rt,binding.layout.low-4)?;if cpu.r[4]!=CrtValue::Pointer(arg)||rt.load(arg,32)?!=CrtValue::scalar(1){{return Err(\"startup caller argument/phase\");}}if binding.image(rt,cpu,epoch)?.try_level!= -2{{return Err(\"startup caller scope phase\");}}{}let _=(||->Result<CrtValue,&'static str>{{{body}}})()?;startup_caller_frame(rt,cpu,epoch,binding)?;startup_callback_cells(rt,cpu,inputs)?;startup_caller_frame(rt,cpu,epoch,binding)?;Err(\"startup environment getter unbound at 0x401700\")}}",guard(0x401632,&bytes)));
     out.push_str(&format!("fn startup_caller_bytes()->Vec<u8>{{vec!{bytes:?}}}fn startup_release_bytes()->Vec<u8>{{vec!{release:?}}}fn startup_runtime_lock_bytes()->Vec<u8>{{vec!{lock:?}}}fn startup_runtime_flag_bytes()->Vec<u8>{{vec!{flag:?}}}"));
     Ok(out)
 }

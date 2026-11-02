@@ -1,6 +1,16 @@
 # Remaining entry-to-exit dependencies
 
-## Current executable checkpoint: original startup release and argument cleanup
+## Current executable checkpoint: original callback-cell getters and NULL decisions
+
+The controlled native-profile entry executes both original getters and reads
+both live mapped callback cells. Both NULL branches reach **before CALL0x401700
+→0x406c88**, the environment-vector getter. Non-NULL values preserve the original
+PUSH/CALL and reject at the unsupported EH4/PE section validator; no callback
+value becomes callable authority. Startup state2 and the normal frame remain live.
+
+[Producer provenance, rejection order and next connected scope](CALLBACK-CELLS.md).
+
+## Previous executable checkpoint: original startup release and argument cleanup
 
 The controlled native-profile entry now executes0x4016b4 →0x401a9c and its actual
 runtime-flag guard/return, then the original caller POP. Upper argument bits stay
