@@ -1,6 +1,16 @@
 # Remaining entry-to-exit dependencies
 
-## Current executable checkpoint: original C++ initialization and state2 publication
+## Current executable checkpoint: original startup release and argument cleanup
+
+The controlled native-profile entry now executes0x4016b4 →0x401a9c and its actual
+runtime-flag guard/return, then the original caller POP. Upper argument bits stay
+unknown. It stops before **0x4016ba →0x401c2b**, the callback-cell accessor. The
+known-scalar XCHG instruction domain is explicit; nonzero-flag TEB/CAS acquisition,
+concurrent ownership and unhandled delivery remain unproved.
+
+[Release contract, reviewed evidence and next scope](STARTUP-RELEASE.md).
+
+## Previous executable checkpoint: original C++ initialization and state2 publication
 
 The controlled native-profile entry executes caller result branching, original
 void-array traversal, process-owned filter exchange and original new-mode XCHG.

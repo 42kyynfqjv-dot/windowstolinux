@@ -1,8 +1,9 @@
 //! Original post-initializer caller; live frame checks grant no exception/TEB effects.
 use crate::crt_stream_ir::{Graph, Node, Op, Target};
 use std::collections::BTreeMap;
-pub(crate) const CALLER:&str="5984c00f845301000032db885de7c745fc00000000e8c70200008845dca17ccc410033c9413bc10f842f01000085c07549890d7ccc41006858514100683c514100e854560000595985c07411c745fcfeffffffb8ff000000e9ef00000068385141006830514100e8035600005959c7057ccc410002000000eb058ad9885de7ff75dce8e3030000";
+pub(crate) const CALLER:&str="5984c00f845301000032db885de7c745fc00000000e8c70200008845dca17ccc410033c9413bc10f842f01000085c07549890d7ccc41006858514100683c514100e854560000595985c07411c745fcfeffffffb8ff000000e9ef00000068385141006830514100e8035600005959c7057ccc410002000000eb058ad9885de7ff75dce8e303000059";
 pub(crate) const LOCK:&str="56e8a608000085c0742064a118000000be80cc41008b5004eb043bd0741033c08bcaf00fb10e85c075f032c05ec3b0015ec3";
+pub(crate) const RELEASE: &str = "558bece81b07000085c0740f807d0800750933c0b980cc410087015dc3";
 pub(crate) const FLAG: &str = "33c03905f0d241000f95c0c3";
 pub(crate) const SCOPE: &str = "feffffff00000000ccffffff00000000feffffff491740005d174000";
 fn lock_graph() -> Result<Graph, String> {
@@ -68,6 +69,43 @@ pub(crate) fn source() -> Result<String, String> {
         64,
     )?;
     out.push_str(&format!("fn startup_runtime_lock(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;{} {body}}}",guard(0x401913,&lock)));
+    let release = crate::crt_ptd::raw(RELEASE);
+    let mut graph = Graph::decode(&release, 0x401a9c)?;
+    graph.initializing_atomic(0x401ab5)?;
+    let body = crate::crt_stream_emit::emit_body_with_hooks(
+        &graph,
+        |pc, target| {
+            if pc != 0x401a9f || target != Target::Direct(0x4021bf) {
+                return Err("startup release guard target".into());
+            }
+            Ok(
+                "cpu.call_activation(rt,0x401aa4,0,|rt,c|startup_runtime_flag(rt,c,inputs))?;"
+                    .into(),
+            )
+        },
+        &Default::default(),
+        64,
+        |_, op| {
+            let Op::InitializingAtomic {
+                destination: crate::graph::Operand::Memory(a, 32),
+                source,
+                add: false,
+            } = op
+            else {
+                return Err("startup release atomic shape".into());
+            };
+            Ok(format!("let p={};if p!=rt.process_image_pointer(inputs.image,0x41cc80,4)?{{return Err(\"startup release cell identity\");}}cpu.exchange_initializing_scalar(rt,inputs.init,inputs.image,p,{},false)?;",crate::crt_stream_emit::address(a,&Default::default())?,source.index))
+        },
+        |pc, _| {
+            Ok(if pc == 0x401ab5 {
+                "cpu.r[1]=CrtValue::Pointer(rt.module_word_pointer(inputs.image,cpu.r[1])?);".into()
+            } else {
+                String::new()
+            })
+        },
+        |_, _| Ok(None),
+    )?;
+    out.push_str(&format!("fn startup_runtime_release(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;if cpu.return_pop!=0||cpu.r[4]!=cpu.entry[4]||[3,5,6,7].iter().any(|&r|cpu.r[r]!=cpu.entry[r]){{return Err(\"startup release entry ABI\");}}{}{body}}}",guard(0x401a9c,&release)));
     let bytes = crate::crt_ptd::raw(CALLER);
     let mut g = crate::crt_startup_table::graph(&bytes, 0x401632)?;
     for (pc, reason) in [
@@ -90,20 +128,13 @@ pub(crate) fn source() -> Result<String, String> {
             },
         );
     }
-    g.nodes.insert(
-        0x4016b4,
-        Node {
-            length: 5,
-            op: Op::Reject("startup lock release unbound at 0x4016b4"),
-            successors: vec![],
-        },
-    );
+
     let roles = BTreeMap::from([(0x41cc7c, "CrtRegionKind::Module".into())]);
     let scope = crate::crt_ptd::raw(SCOPE);
     let body = crate::crt_stream_emit::emit_body_with_store(
         &g,
         |pc, t| {
-            Ok(match(pc,t){(0x401647,Target::Direct(0x401913))=>"startup_caller_frame(rt,cpu,epoch,binding)?;cpu.call_activation(rt,0x40164c,0,|rt,c|startup_runtime_lock(rt,c,inputs))?;startup_caller_frame(rt,cpu,epoch,binding)?;".into(),(0x401673,Target::Direct(0x406ccc))=>"startup_caller_frame(rt,cpu,epoch,binding)?;if binding.image(rt,cpu,epoch)?.try_level!=0||rt.load(rt.process_image_pointer(inputs.image,0x41cc7c,4)?,32)?!=CrtValue::scalar(1){return Err(\"C initializer caller phase\");}cpu.call_activation(rt,0x401678,0,|rt,c|startup_c_array_observed(rt,c,inputs,Some(epoch),platform,features))?;startup_caller_frame(rt,cpu,epoch,binding)?;".into(),(0x401699,Target::Direct(0x406ca1))=>"startup_caller_frame(rt,cpu,epoch,binding)?;cpu.call_activation(rt,0x40169e,0,|rt,c|startup_cpp_array_original(rt,c,inputs))?;startup_caller_frame(rt,cpu,epoch,binding)?;".into(),_=>return Err("startup caller call target".into())})
+            Ok(match(pc,t){(0x401647,Target::Direct(0x401913))=>"startup_caller_frame(rt,cpu,epoch,binding)?;cpu.call_activation(rt,0x40164c,0,|rt,c|startup_runtime_lock(rt,c,inputs))?;startup_caller_frame(rt,cpu,epoch,binding)?;".into(),(0x401673,Target::Direct(0x406ccc))=>"startup_caller_frame(rt,cpu,epoch,binding)?;if binding.image(rt,cpu,epoch)?.try_level!=0||rt.load(rt.process_image_pointer(inputs.image,0x41cc7c,4)?,32)?!=CrtValue::scalar(1){return Err(\"C initializer caller phase\");}cpu.call_activation(rt,0x401678,0,|rt,c|startup_c_array_observed(rt,c,inputs,Some(epoch),platform,features))?;startup_caller_frame(rt,cpu,epoch,binding)?;".into(),(0x401699,Target::Direct(0x406ca1))=>"startup_caller_frame(rt,cpu,epoch,binding)?;cpu.call_activation(rt,0x40169e,0,|rt,c|startup_cpp_array_original(rt,c,inputs))?;startup_caller_frame(rt,cpu,epoch,binding)?;".into(),(0x4016b4,Target::Direct(0x401a9c))=>"startup_caller_frame(rt,cpu,epoch,binding)?;if binding.image(rt,cpu,epoch)?.try_level!=0||rt.load(rt.process_image_pointer(inputs.image,0x41cc7c,4)?,32)?!=CrtValue::scalar(2){return Err(\"startup release caller phase\");}cpu.call_activation(rt,0x4016b9,0,|rt,c|startup_runtime_release(rt,c,inputs))?;startup_caller_frame(rt,cpu,epoch,binding)?;".into(),_=>return Err("startup caller call target".into())})
         },
         &roles,
         128,
@@ -116,7 +147,7 @@ pub(crate) fn source() -> Result<String, String> {
             })
         },
         |_, _| Err("startup caller unexpected return".into()),
-        Some(0x4016b4),
+        Some(0x4016ba),
         |pc, a, width| {
             let offset = match pc {
                 0x40163d | 0x4016ae if width == 8 => Some(-25),
@@ -142,8 +173,8 @@ pub(crate) fn source() -> Result<String, String> {
         },
     )?;
     out.push_str(r#"fn startup_caller_frame(rt:&CrtStreamRuntime,cpu:&CrtCpu,epoch:&NormalCallEpoch<'_>,binding:&CrtNormalBinding)->Result<(),&'static str>{binding.authority(rt,epoch)?;let image=binding.image(rt,cpu,epoch)?;epoch.validate_image(binding.id.ok_or("startup caller missing normal frame")?,&image)}"#);
-    out.push_str(&format!("fn startup_post_initializer(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>,binding:&mut CrtNormalBinding)->Result<CrtValue,&'static str>{{startup_post_initializer_platform(rt,cpu,inputs,epoch,binding,None)}}fn startup_post_initializer_platform(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>,binding:&mut CrtNormalBinding,platform:Option<&CrtNativePlatform>)->Result<CrtValue,&'static str>{{startup_post_initializer_observed(rt,cpu,inputs,epoch,binding,platform,None)}}fn startup_post_initializer_observed(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>,binding:&mut CrtNormalBinding,platform:Option<&CrtNativePlatform>,features:Option<&CrtFeatureObservation>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;startup_caller_frame(rt,cpu,epoch,binding)?;let arg=binding.at(rt,binding.layout.low-4)?;if cpu.r[4]!=CrtValue::Pointer(arg)||rt.load(arg,32)?!=CrtValue::scalar(1){{return Err(\"startup caller argument/phase\");}}if binding.image(rt,cpu,epoch)?.try_level!= -2{{return Err(\"startup caller scope phase\");}}{}let _=(||->Result<CrtValue,&'static str>{{{body}}})()?;Err(\"startup lock release unbound at 0x4016b4\")}}",guard(0x401632,&bytes)));
-    out.push_str(&format!("fn startup_caller_bytes()->Vec<u8>{{vec!{bytes:?}}}fn startup_runtime_lock_bytes()->Vec<u8>{{vec!{lock:?}}}fn startup_runtime_flag_bytes()->Vec<u8>{{vec!{flag:?}}}"));
+    out.push_str(&format!("fn startup_post_initializer(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>,binding:&mut CrtNormalBinding)->Result<CrtValue,&'static str>{{startup_post_initializer_platform(rt,cpu,inputs,epoch,binding,None)}}fn startup_post_initializer_platform(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>,binding:&mut CrtNormalBinding,platform:Option<&CrtNativePlatform>)->Result<CrtValue,&'static str>{{startup_post_initializer_observed(rt,cpu,inputs,epoch,binding,platform,None)}}fn startup_post_initializer_observed(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,epoch:&mut NormalCallEpoch<'_>,binding:&mut CrtNormalBinding,platform:Option<&CrtNativePlatform>,features:Option<&CrtFeatureObservation>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;startup_caller_frame(rt,cpu,epoch,binding)?;let arg=binding.at(rt,binding.layout.low-4)?;if cpu.r[4]!=CrtValue::Pointer(arg)||rt.load(arg,32)?!=CrtValue::scalar(1){{return Err(\"startup caller argument/phase\");}}if binding.image(rt,cpu,epoch)?.try_level!= -2{{return Err(\"startup caller scope phase\");}}{}let _=(||->Result<CrtValue,&'static str>{{{body}}})()?;Err(\"startup callback-cell accessor unbound at 0x4016ba\")}}",guard(0x401632,&bytes)));
+    out.push_str(&format!("fn startup_caller_bytes()->Vec<u8>{{vec!{bytes:?}}}fn startup_release_bytes()->Vec<u8>{{vec!{release:?}}}fn startup_runtime_lock_bytes()->Vec<u8>{{vec!{lock:?}}}fn startup_runtime_flag_bytes()->Vec<u8>{{vec!{flag:?}}}"));
     Ok(out)
 }
 fn guard(at: u32, bytes: &[u8]) -> String {
