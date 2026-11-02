@@ -18,9 +18,12 @@ pub(crate) const SET_MODE:&str="8bff558bec8b45083d0040000074233d00800000741c3d00
 pub(crate) const ZERO: &str = "33c0c3";
 pub(crate) const TRUE_BYTE: &str = "b001c3";
 pub(crate) const ENV_THUNK: &str = "e96afdffff";
-pub(crate) const ENV_PREFIX: &str = "833d48ce410000740333c0c356e80d4a0000e8444f0000";
+pub(crate) const ENV_PREFIX: &str = "833d48ce410000740333c0c356e80d4a0000e8444f00008bf085f6750c50e8221300005983c8ff5ec35756e82a0000005985c0750583cfffeb0ca354ce410033ffa348ce41006a00e8f812000056e8f212000059598bc75f5ec3";
 pub(crate) const ENV_PRODUCER_PREFIX: &str = "8bff558bec515156ff15e45041008bf085f60f84850000005356e8aaffffff33db2bc653535353d1f8505653538945f8e82affffff83c4248945fc85c0750b56ff15e850410033c0eb525750e879cdffff8bf8595385ff7511e88cc3ffff5956ff15e850410033c0eb3153ff75fc57ff75f8565353e8e5feffff83c42085c0750857e863c3ffffeb0853e85bc3ffff8bdf5956ff15e85041008bc35f5b5ec9c3";
 pub(crate) const ENV_SCAN: &str = "8bff558bec8b55085733ff66393a7421568bca8d7102668b0183c102663bc775f52bced1f98d144a83c20266393a75e15e8d42025f5dc3";
+pub(crate) const ENV_TABLE: &str = "8bff558bec5151538b5d0833c956578bf38a13eb1b80fa3d8bd60f44c18bc88d7a018a024284c075f92bd74603f28a168d410184d275de6a0450e84c1200008bf0595985f6750a50e89e12000033c0eb668975fceb528bcb8d79018a014184c075f92bcf8d41018945f880fa3d74376a0150e8141200008bf8595985ff743e53ff75f857e8820c000083c40c85c075488b45fc6a00893883c0048945fce8491200008b45f85903d88a1384d275a86a00e8361200008bc6595f5e5bc9c356e8220000006a00e8211200006a00e81a12000083c40c33c0ebe033c05050505050e816100000cc";
+pub(crate) const ENV_TABLE_CLEANUP: &str = "8bff558bec568b750885f6741f8b06578bfeeb0c50e8ec1100008d7f048b075985c075f056e8dc110000595f5e5dc3";
+pub(crate) const ENV_STRING_COPY: &str = "8bff558bec578b7d0885ff746a8b550c85d27463568b751085f6751ac60700e839050000c70016000000e8b00300008d46165e5f5dc38bcf2bf7660f1f4400008a040e8d49018841ff84c0742483ea0175ee85d2751b8817e800050000c70022000000e8770300005eb8220000005f5dc35e33c05f5dc3e8e1040000c70016000000e858030000b8160000005f5dc3";
 pub(crate) const GET_COMMODE: &str = "b884ce4100c3";
 pub(crate) const ONEXIT:&str="558bec803d85cc4100007404b0015dc3568b750885f6740583fe017562e81f08000085c0742685f675226888cc4100e84a5b00005985c0750f6894cc4100e83b5b00005985c0742b32c0eb3083c9ff890d88cc4100890d8ccc4100890d90cc4100890d94cc4100890d98cc4100890d9ccc4100c60585cc410001b0015e5dc36a05e833020000cc";
 pub(crate) const OPTIONS: &str = "e869f6ffff8b4804830824894804e8e7ffffff8b4804830802894804c3";
@@ -117,6 +120,7 @@ fn startup_c_array_platform(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&Crt
     out.push_str(&thread_locale_source()?);
     out.push_str(&environment_prefix_source()?);
     out.push_str(&environment_producer_source()?);
+    out.push_str(&environment_table_source()?);
     let scan = environment_scan_body()?;
     out.push_str(&format!("fn cinit_environment_scan(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;{}{scan}}}",guard(0x40b92f,&raw(ENV_SCAN))));
     for (name, at, literal) in [
@@ -455,15 +459,7 @@ for mode in 0..10{one(mode);}
 
 fn environment_prefix_source() -> Result<String, String> {
     let bytes = crate::crt_ptd::raw(ENV_PREFIX);
-    let g = cut_graph(
-        &bytes,
-        0x406a0b,
-        0x406a22,
-        &[(
-            0x406a22,
-            "original environment result continuation unbound at0x406a22",
-        )],
-    )?;
+    let g = Graph::decode(&bytes, 0x406a0b)?;
     let body = crate::crt_stream_emit::emit_body(
         &g,
         |pc, t| {
@@ -473,13 +469,22 @@ fn environment_prefix_source() -> Result<String, String> {
                     pc + 5
                 ));
             }
+            if t == Target::Direct(0x406a65) {
+                return Ok(format!("cpu.call_activation(rt,{},0,|rt,c|cinit_environment_table(rt,c,inputs,platform,epoch))?;",pc+5));
+            }
+            if t == Target::Direct(0x407d50) {
+                return Ok(format!(
+                    "cpu.call_activation(rt,{},0,|rt,c|ucrt_free_null(rt,c,inputs))?;",
+                    pc + 5
+                ));
+            }
             if t != Target::Direct(0x40b42a) {
                 return Err("environment locale initialization target".into());
             }
             Ok(format!("cpu.call_activation(rt,{},0,|rt,c|locale_startup_original(rt,c,inputs,platform,epoch))?;",pc+5))
         },
-        &BTreeMap::from([(0x41ce48, "CrtRegionKind::Module".into())]),
-        64,
+        &BTreeMap::from_iter([0x41ce48, 0x41ce54].map(|a| (a, "CrtRegionKind::Module".into()))),
+        128,
     )?;
     let thunk = crate::crt_ptd::raw(ENV_THUNK);
     let node = Graph::decode_instruction(&thunk, 0x406c9c)?;
@@ -608,5 +613,91 @@ fn original_environment_scan_preserves_word_bounds_lifetime_and_failure_progress
  }for mode in 0..12{one(mode);}
  "#,
         "environment-original-scan",
+    );
+}
+
+fn environment_table_source() -> Result<String, String> {
+    let mut source = String::new();
+    for (name, start, literal, budget) in [
+        ("cinit_environment_table", 0x406a65, ENV_TABLE, 1048576),
+        (
+            "cinit_environment_table_cleanup",
+            0x406b4a,
+            ENV_TABLE_CLEANUP,
+            8192,
+        ),
+        (
+            "cinit_environment_string_copy",
+            0x407770,
+            ENV_STRING_COPY,
+            1048576,
+        ),
+    ] {
+        let bytes = crate::crt_ptd::raw(literal);
+        let mut graph = if start == 0x406a65 {
+            crate::crt_startup_table::graph(&bytes[..bytes.len() - 1], start)?
+        } else {
+            Graph::decode(&bytes, start)?
+        };
+        // The invalid-parameter routine is declared nonreturning; retain a rejected
+        // terminator after its actual CALL rather than trying to decode INT3.
+        if start == 0x406a65 {
+            graph.nodes.insert(
+                0x406b49,
+                Node {
+                    length: 1,
+                    op: Op::Reject("environment table invalid-parameter termination unbound"),
+                    successors: vec![],
+                },
+            );
+        }
+        let body = crate::crt_stream_emit::emit_body(
+            &graph,
+            |pc, target| {
+                let next = pc + graph.nodes[&pc].length;
+                Ok(match target{
+    Target::Direct(0x407cf0)=>format!("cpu.call_activation(rt,{next},0,|rt,c|ucrt_calloc_native(rt,c,inputs,platform,epoch))?;"),
+    Target::Direct(0x407770)=>format!("cpu.call_activation(rt,{next},0,|rt,c|cinit_environment_string_copy(rt,c,inputs,platform,epoch))?;"),
+    Target::Direct(0x406b4a)=>format!("cpu.call_activation(rt,{next},0,|rt,c|cinit_environment_table_cleanup(rt,c,inputs,platform,epoch))?;"),
+    Target::Direct(0x407d50)=>format!("cpu.call_activation(rt,{next},0,|rt,c|ucrt_free_null(rt,c,inputs))?;"),
+    Target::Direct(0x407ccd|0x407b4f|0x407b5f)=>"return Err(\"environment string-copy errno/invalid-parameter effect unbound\");".into(),
+    _=>return Err(format!("environment table unexpected target{target:?}"))
+   })
+            },
+            &Default::default(),
+            budget,
+        )?;
+        source.push_str(&format!("fn {name}(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs,platform:&CrtNativePlatform,epoch:&mut NormalCallEpoch<'_>)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;{}{body}}}",guard(start,&bytes)));
+    }
+    Ok(source)
+}
+
+#[test]
+fn original_string_copy_exposes_cross_allocation_address_cancellation_without_granting_authority() {
+    let graph = Graph::decode(&crate::crt_ptd::raw(ENV_STRING_COPY), 0x407770).unwrap();
+    let body = crate::crt_stream_emit::emit_body(
+        &graph,
+        |_, _| Ok("return Err(\"copy error contract unbound\");".into()),
+        &Default::default(),
+        256,
+    )
+    .unwrap();
+    let extra = format!("fn copy(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu)->Result<CrtValue,&'static str>{{cpu.validate_active(rt)?;{body}}}");
+    crate::crt_stream_callees_tests::native_bounded_stack(
+        &extra,
+        r#"
+#[inline(never)]fn one(mode:u32){
+ let(mut rt,init)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();let CrtValue::Heap(heap)=rt.native_process_heap(init).unwrap()else{panic!()};let stack=rt.map_region(0x40000,1024,CrtRegionKind::Stack,None).unwrap();let shared=mode==1||mode==5;
+ let source=if shared{rt.offset(stack,64).unwrap()}else{rt.native_heap_allocate(init,heap,0,3).unwrap()};let target=if shared{rt.offset(stack,128).unwrap()}else{rt.native_heap_allocate(init,heap,0,3).unwrap()};
+ for(i,b)in [65,66,0].into_iter().enumerate(){rt.store(rt.offset(source,i as i64).unwrap(),8,if mode==5&&i==1{CrtValue::Scalar{bits:0,known:0}}else{CrtValue::scalar(b)}).unwrap();}
+ if mode==3{rt.free_allocation(source).unwrap();}if mode==4{rt.free_allocation(target).unwrap();}
+ let sp=rt.offset(stack,512).unwrap();rt.store(sp,32,CrtValue::ProtectedReturn(91)).unwrap();for(i,v)in [CrtValue::Pointer(target),CrtValue::scalar(3),CrtValue::Pointer(source)].into_iter().enumerate(){rt.store(rt.offset(sp,4+i as i64*4).unwrap(),32,v).unwrap();}let mut c=CrtCpu::new(sp,91).unwrap();let saved=c.r;
+ if mode==2{let difference=c.binary_number(&rt,2,CrtValue::Pointer(source),CrtValue::Pointer(target)).unwrap();assert!(CrtCpu::pointer(difference).is_err());c.r[6]=difference;c.r[1]=CrtValue::Pointer(target);assert_eq!(CrtCpu::number(difference).unwrap().wrapping_add(target.address()),source.address());assert_eq!(c.address(&rt,Some(6),Some(1),1,0,None),Err("CRT pointer complete range/identity"));return;}
+ let got=copy(&mut rt,&mut c);
+ if mode==1{assert_eq!(got,Ok(CrtValue::scalar(0)));assert!(c.returned);assert_eq!(rt.memory.read(target.address(),3).unwrap(),&[65,66,0]);for n in[3,5,6,7]{assert_eq!(c.r[n],saved[n]);}}
+ else{assert_eq!(got,Err(match mode{0=>"CRT unrelated pointer subtraction",3|4=>"CRT stale/foreign pointer",5=>"CRT unknown ZF",_=>unreachable!()}));assert!(!c.returned);if mode==0{assert!(rt.load(target,8).unwrap().known_scalar().is_err());assert_eq!(c.r[6],CrtValue::Pointer(source));assert_eq!(c.r[7],CrtValue::Pointer(target));}if mode==5{assert_eq!(rt.load(target,8),Ok(CrtValue::scalar(65)));assert!(rt.load(rt.offset(target,1).unwrap(),8).unwrap().known_scalar().is_err());assert!(rt.load(rt.offset(target,2).unwrap(),8).unwrap().known_scalar().is_err());}}
+}for mode in 0..6{one(mode);}
+"#,
+        "environment-copy-address-gap",
     );
 }

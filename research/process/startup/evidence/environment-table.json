@@ -1,0 +1,38 @@
+{
+  "scope": "Original table allocation/caller components; no complete environment/startup admission",
+  "nonempty_boundary": "0x4077a8 SUB ESI,EDI rejects unrelated capability subtraction",
+  "empty_boundary": "0x407d66 HeapFree remains unbound; prior NULL-vector globals preserved",
+  "regions_sha256": {
+    "ENV_PREFIX": "f9654b2ab15e94e69ee368e55a8914c4560a62b7a520bc71161320fd5648567c",
+    "ENV_TABLE": "346076e3201d8488ba938e203786bcfcb2682e623a0e6cf39402969502e37d83",
+    "ENV_TABLE_CLEANUP": "b8a90c97d546def2dfb9a5a5dd4f1a71de80942ad220d8e54955dc678efa2b1e",
+    "ENV_STRING_COPY": "a8da9dcc32e4a402a9ed399bce931934dd263596c59b889be45861320548c636"
+  },
+  "canonical_rust_sha256": "dfb7859834b9d3e6e067c31b4d3ed3a5b90a5a0b401b319f84e679e4a386f439",
+  "builder_cases": 14,
+  "copy_address_cases": 6,
+  "original_entry_variants": 2,
+  "new_windows_pairs": 0,
+  "whole_pe_pairs": 0,
+  "source_policy": "synthetic only; no real environment read/logged",
+  "reviewed_head": "b6681d9c0f180a45fe0df108194479feeb03552b",
+  "review_findings": "Conversion/matching release and hidden-source guard remain sound in tested domain; current gate is explicit pointer-displacement representation and unbound nonnull free",
+  "validation": {
+    "crt": "351 passed,2 ignored artifact gates handled separately",
+    "canonical": "both actual controlled entry variants and14 builder cases pass",
+    "copy_provenance": "6 original instruction cases pass; no widened arithmetic authority",
+    "python": "114 tests,1 skip",
+    "clippy": "all targets warnings denied pass",
+    "fmt": "cargo fmt --all -- --check pass",
+    "low_stack": "all152 word cases512KiB plus64KiB environment padding pass",
+    "final_head": "commit-pinned replay/full CI remain separate gates"
+  },
+  "limitations": [
+    "Nonempty table not populated/published",
+    "Empty vector published before original unbound temporary free; no completed caller claim",
+    "No numeric authority recovery or assumed API success",
+    "No full startup/rcedit/default/resource failure/exception cleanup support",
+    "Historical Windows timeouts unresolved"
+  ],
+  "reviewed_manifest_files_matching_exact_commit_blobs": 553
+}

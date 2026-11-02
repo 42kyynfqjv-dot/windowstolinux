@@ -1,5 +1,8 @@
 # Original environment conversion and snapshot release
 
+This records b6681d9. See [ENVIRONMENT-TABLE.md](ENVIRONMENT-TABLE.md) for the
+subsequent builder execution and current copy/free gates.
+
 Within the explicit controlled-environment and native UTF8 launch profiles, the
 original producer0x40b966 now returns its narrow buffer. Actual instructions
 execute both CALLs to0x40b8c5, the original malloc0x408730, the NULL-free wrapper,

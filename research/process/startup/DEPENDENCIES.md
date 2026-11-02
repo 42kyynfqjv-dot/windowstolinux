@@ -1,6 +1,19 @@
 # Remaining entry-to-exit dependencies
 
-## Current executable checkpoint: original environment conversion and release
+## Current executable checkpoint: original table allocations and precise copy/free gates
+
+Original caller0x406a22 reaches the real table builder. Nonempty input counts,
+allocates a distinct zeroed vector and first string, then rejects at original
+**SUB ESI,EDI0x4077a8**, whose cross-allocation numeric displacement lacks a
+source-authority relation. Empty original entry builds/publishes a NULL-only
+vector and rejects at **HeapFree0x407d66** before temporary-buffer retirement.
+No nonempty strings/table or full startup completion is claimed.
+
+[Execution evidence and bounded Astra contract](ENVIRONMENT-TABLE.md). Preserve
+all prior effects; no integer-to-pointer retag or fabricated free success closes
+these gates. Inputs/evidence remain synthetic; broader support stays unproved.
+
+## Previous executable checkpoint: original environment conversion and release
 
 The controlled native-profile path executes both original conversion calls,
 original malloc, NULL-free and matching wide-snapshot free. It returns a distinct
