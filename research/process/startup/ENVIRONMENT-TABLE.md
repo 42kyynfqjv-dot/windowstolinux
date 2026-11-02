@@ -31,7 +31,7 @@ call arguments. It does not change general pointer subtraction or convert numeri
 registers into pointers.
 
 At the original source read, 0x4077b0, that relation revalidates the runtime,
-thread/fiber, protected activation, arguments, scalar displacement and destination
+thread/fiber, protected activation and continuation/return ABI, arguments, scalar displacement and destination
 cursor. It resolves the read through the original source capability and its
 bounds. It never searches allocations by raw address. The subsequent original
 LEA, destination store and branch still execute in order. An unknown later byte
@@ -52,7 +52,8 @@ the live initialization and heap authority, flags, full allocation identity and
 absence of conflicting record/FILE ownership, and reserves retirement metadata
 before release. Only successful release creates a nonzero result fact; no exact
 Windows BOOL bit pattern is fabricated. Original TEST/branch, ABI cleanup and RET
-then execute. Stale aliases and prior read facts expire; repeated release rejects.
+then execute. Completion is validated only after the original free body has
+returned through its protected RET, not after the nested API return. Stale aliases and prior read facts expire; repeated release rejects.
 
 This binding is used by the environment caller, table and cleanup. Other users
 of the existing NULL-only wrapper retain their prior rejection boundary.
@@ -73,7 +74,7 @@ returned a guest NULL. Copy-error termination 0x407b5f remains unsupported.
 ## Evidence and next review
 
 There are 18 original-builder cases, two connected entry variants, eight original
-checked-copy cases, 15 relation lifetime/operand cases, two independent word-load
+checked-copy cases, 17 relation lifetime/operand cases, two independent word-load
 cases, nine native-release cases and retained six numeric-only rejection cases.
 Inputs are synthetic. Leading-equals data appears only in direct builder tests;
 controlled launch declarations do not admit hidden-drive environment behavior.

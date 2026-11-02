@@ -82,20 +82,19 @@ pub(crate) fn source() -> Result<String, String> {
             let next = pc + g.nodes[&pc].length;
             Ok(format!(
                 r#"rt.process_image_import(inputs.image,0x415098,"kernel32.dll","HeapFree")?;
-let mut effect=None;
 cpu.call_activation(rt,{next},12,|rt,c|{{
 c.validate_active(rt)?;if c.r[4]!=c.entry[4]||[3,5,6,7].iter().any(|&r|c.r[r]!=c.entry[r]){{return Err("CRT native HeapFree ABI");}}
 let sp=CrtCpu::pointer(c.r[4])?;rt.offset(sp,16)?;rt.memory.validate_writable(sp.cap,sp.owner,sp.address(),16).map_err(|_|"CRT native HeapFree stack permission")?;
 let CrtValue::Heap(heap)=rt.load(rt.offset(sp,4)?,32)?else{{return Err("CRT native HeapFree canonical heap")}};
 let flags=rt.load(rt.offset(sp,8)?,32)?.known_scalar()?;let pointer=CrtCpu::pointer(rt.load(rt.offset(sp,12)?,32)?)?;
 let(value,receipt)=rt.native_heap_free(inputs.init,heap,flags,pointer)?;effect=Some(receipt);c.clobber(value);c.finish_pop(rt,12)
-}})?;rt.complete_heap_free(effect.ok_or("CRT native free effect missing")?)?;"#
+}})?;"#
             ))
         },
         &std::collections::BTreeMap::from([(0x41d2c8, "CrtRegionKind::Module".into())]),
         128,
     )?;
-    out.push_str(&format!("fn ucrt_free_native(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;let p=rt.process_image_code(inputs.image,0x407d50,{})?;if rt.memory.read(p.address(),{}).map_err(|_|\"UCRT free code read\")?!=&{free:?}{{return Err(\"UCRT free code changed\");}}{native}}}",free.len(),free.len()));
+    out.push_str(&format!("fn ucrt_free_native(rt:&mut CrtStreamRuntime,cpu:&mut CrtCpu,inputs:&CrtEntropyInputs)->Result<CrtValue,&'static str>{{inputs.validate(rt)?;cpu.validate_active(rt)?;let p=rt.process_image_code(inputs.image,0x407d50,{})?;if rt.memory.read(p.address(),{}).map_err(|_|\"UCRT free code read\")?!=&{free:?}{{return Err(\"UCRT free code changed\");}}let mut effect=None;let value=(||->Result<CrtValue,&'static str>{{{native}}})()?;if !cpu.returned{{return Err(\"native free missing original return\");}}if let Some(receipt)=effect{{rt.complete_heap_free(receipt)?;}}Ok(value)}}",free.len(),free.len()));
     Ok(out)
 }
 
@@ -223,7 +222,7 @@ fn native_free_releases_actual_owned_storage_and_preflights_rejections() {
 #[inline(never)]fn one(mode:u32){
  let(mut rt,init)=CrtStreamRuntime::new_initializing(7,9,0x8000,65536).unwrap();let CrtValue::Heap(heap)=rt.native_process_heap(init).unwrap()else{panic!()};let root=rt.native_heap_allocate(init,heap,8,16).unwrap();let alias=rt.offset(root,4).unwrap();let other=rt.native_heap_allocate(init,heap,8,16).unwrap();rt.store(other,32,CrtValue::scalar(77)).unwrap();let fact=rt.memory.prove_read(root.cap,root.owner,root.address(),16).unwrap();let before=rt.regions.len();let serial=rt.serial;rt.last_os_error=Some(19);
  let pointer=match mode{1=>alias,2=>rt.subrange(root,8).unwrap(),_=>root};if mode==3{rt.end_initialization(init).unwrap();}if mode==4{rt.thread+=1;}if mode==5{rt.serial=u64::MAX;}if mode==6{rt.retired=vec![other;4096];}if mode==7{rt.record_objects.push(root);}let result=rt.native_heap_free(init,heap,if mode==8{8}else{0},pointer);
- if mode==0{let(value,receipt)=result.unwrap();assert!(matches!(value,CrtValue::NonZero{..}));assert_eq!(rt.serial,serial+1);assert_eq!(rt.regions.len(),before-1);assert_eq!(rt.last_os_error,None);assert!(rt.load(root,8).is_err());assert!(rt.load(alias,8).is_err());assert!(rt.memory.read_proven(fact,root.owner).is_err());rt.complete_heap_free(receipt).unwrap();assert!(rt.native_heap_free(init,heap,0,root).is_err());let fresh=rt.native_heap_allocate(init,heap,8,16).unwrap();assert_ne!(fresh.cap,root.cap);assert!(rt.load(alias,8).is_err());}
+ if mode==0{let(value,receipt)=result.unwrap();assert!(matches!(value,CrtValue::NonZero{..}));assert_eq!(rt.serial,serial+1);assert_eq!(rt.regions.len(),before-1);assert_eq!(rt.last_os_error,None);assert!(rt.load(root,8).is_err());assert!(rt.load(alias,8).is_err());assert!(rt.memory.read_proven(fact,root.owner).is_err());rt.complete_heap_free(receipt).unwrap();assert!(rt.native_heap_free(init,heap,0,root).is_err());let fresh=rt.native_heap_allocate(init,heap,8,16).unwrap();assert_eq!(fresh.address(),root.address());assert_ne!(fresh.cap,root.cap);assert!(rt.load(alias,8).is_err());}
  else{assert!(result.is_err(),"native free negative{mode}");assert_eq!(rt.regions.len(),before);assert_eq!(rt.last_os_error,Some(19));rt.memory.read_proven(fact,root.owner).unwrap();assert_eq!(rt.memory.read(root.address(),16).unwrap(),&[0;16]);}
  assert_eq!(rt.memory.read(other.address(),4).unwrap(),&77u32.to_le_bytes());
 }for mode in 0..9{one(mode);}

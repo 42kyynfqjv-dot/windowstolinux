@@ -730,7 +730,7 @@ def check(original, observation, out, compare=None):
                   complete_handler_sha256=sha((out/'handler-complete.bin').read_bytes()),
                   observation_sha256=sha((observation/'report.json').read_bytes()),
                   vectors_sha256=sha(vector_bytes), rust_sha256=source_hash, command=command,
-                  comparisons=5, whole_pe_translation_pairs=0, environment_scan_native_cases=12, environment_conversion_native_cases=12, environment_table_native_cases=18, environment_table_entry_cases=2, environment_copy_address_cases=6, environment_empty_entry_boundary="0x4015ee original post-environment continuation unbound", environment_checked_copy_cases=8, environment_relation_lifetime_cases=15, environment_independent_word_cases=2, environment_native_free_cases=9, environment_conversion_new_windows_pairs=0, environment_scan_new_windows_pairs=0,
+                  comparisons=5, whole_pe_translation_pairs=0, environment_scan_native_cases=12, environment_conversion_native_cases=12, environment_table_native_cases=18, environment_table_entry_cases=2, environment_copy_address_cases=6, environment_empty_entry_boundary="0x4015ee original post-environment continuation unbound", environment_checked_copy_cases=8, environment_relation_lifetime_cases=17, environment_independent_word_cases=2, environment_native_free_cases=9, environment_conversion_new_windows_pairs=0, environment_scan_new_windows_pairs=0,
                   live_finally_native_cases=38, live_finally_windows_pairs=0, live_finally_hashes=finally_regions,
                   file_scope_code_sha256=file_regions, file_scope_imports=file_imports,
                   file_scope_native_test_functions=3,
