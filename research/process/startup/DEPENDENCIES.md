@@ -14,8 +14,9 @@ composition and a separately validated selected Outer view**. No complete handle
 delivery, captured Windows registers, cleanup or resumption is admitted.
 The protected component path executes original handler entry through normalizer
 writeback, the actual guard/security checker and the original context-helper
-CALL/RET, stopping before caller0x402251. The remaining prefix, production
-handler entry and separately selected Outer view are still unconnected.
+CALL/RET, followed by original caller cleanup, TEST and actual pointer-pair
+installation through0x40226f. It stops before0x402272. Production handler entry,
+original search/RET and separately selected Outer view are still unconnected.
 Five retained Windows component comparisons and zero whole-PE pairs remain.
 
 [Producer proof, ownership, tests and exact delivery limits](PENDING-CALL.md).

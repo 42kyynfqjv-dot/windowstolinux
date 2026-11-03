@@ -258,7 +258,8 @@ RaiseException CALL, with zero whole-PE comparisons.
 The protected handler component now continues from normalizer writeback through
 the original scope-table decode, guard argument pushes, guard helper, security
 checker and context-helper CALL/RET. It stops before original caller instruction
-0x402251. Remaining argument cleanup, flag test, pointer-pair installation,
+0x402254 (correcting the earlier reported0x402251, which was inside the CALL).
+Remaining argument cleanup, flag test, pointer-pair installation,
 handler search/disposition and Outer selection are not executed by this cut.
 
 The guard lowers its actual instructions. Scope-header values are checked at
@@ -291,3 +292,37 @@ Production handler entry from the pending event remains a separate gate. This
 component grants no complete-handler disposition, selected-frame view, ordered
 advancement receipt or restoration authority. Full startup/rcedit admission,
 exceptional cleanup and historical Windows launch-timeout causes remain open.
+
+## Original caller cleanup, flags and pointer-pair stores
+
+The protected component now executes the remainder of the original prefix,
+0x402254 through0x40226f, reaching before0x402272. Independent disassembly confirms
+that the preceding CALL is at0x40224f and returns to0x402254; the earlier reported
+0x402251 was inside that CALL's immediate operand. Runtime lowering always used
+the decoded continuation, so this corrects reporting rather than execution.
+
+The original MOV, ADD ESP, level read, TEST0x66, conditional branch and installer
+stores execute in order. ADD retains its actual arithmetic flags if the later
+level read rejects. TEST observes only its original mask, preserving unknown
+reserved bits and nested-link/CONTEXT knowledge. The actual record/context
+pointers are stored in separate handler-local words; the original establisher
+slot receives a pointer to that pair. The producer-bound event, interrupted
+CPU and existing frame ownership remain unchanged.
+
+Entry checks bind the actual handler activation/root, continuation stack shape,
+original handler/deferred arguments, same-image source and exact pending
+objects. Compiler reproof includes the pair offsets. Post-store validation
+checks all three pointer identities. Unit success grants no disposition,
+selected-frame view, return/selection receipt or resumption authority. A replay
+rejects on the actual changed stack state. The handler remains active and its
+pair must remain live until separately justified retirement.
+
+Nine additional native cases cover completion, altered tail source, stale
+activation, wrong deferred or handler arguments, invented flag knowledge,
+failure of the second pair store, a forbidden source alias after cleanup and
+replay. The alias failure retains ADD flags and cleanup; the second-store
+failure retains TEST flags and the first pointer store while leaving the
+establisher's pair slot untouched. Total producer/component cases72. Unknown
+record words and raw CONTEXT reads remain checked. Production is still stopped
+at the original pending RaiseException gate. Original finite search/RET and
+separately validated Outer selection remain next requirements.

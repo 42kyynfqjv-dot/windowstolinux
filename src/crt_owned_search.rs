@@ -914,6 +914,8 @@ fn reprove_pending_prefix(prefix: &super::handler_checks::PrefixProof) -> Result
         || p.front != prefix.front
         || p.caller != prefix.caller
         || p.end != prefix.end
+        || p.handler_pair_offset != prefix.handler_pair_offset
+        || p.owner_pair_offset != prefix.owner_pair_offset
     {
         return Err("pending caller prefix reproof".into());
     }
@@ -1063,6 +1065,62 @@ fn pending_after_normalizer(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,phase
  phase.objects.validate(frame.event,frame.rt,frame.interrupted,frame.epoch,frame.binding)?;Ok(())}})();if result.is_err(){{phase.objects.live.set(false);frame.state.failed=true;}}result
 }}
 "#
+    ))
+}
+
+/// Original caller after context RET through its pointer-pair installation.
+/// Unit success does not issue a handler disposition or dispatch authority.
+pub(crate) fn emit_pending_prefix_tail(
+    prefix: &super::handler_checks::PrefixProof,
+) -> Result<String, String> {
+    reprove_pending_prefix(prefix)?;
+    let context = prefix
+        .calls
+        .iter()
+        .find(|c| c.effect == super::handler_checks::CallEffect::ValidateContext)
+        .ok_or("pending tail missing context call")?;
+    let marker = format!(
+        "context_prefix_call(frame,cpu,objects,{})?;",
+        context.va + 5
+    );
+    let (_, body) = prefix
+        .caller_body()
+        .split_once(&marker)
+        .ok_or("pending tail caller boundary")?;
+    // The original ADD sets flags even if the following frame read faults.
+    // Use the shared stack retirement, then retain the real arithmetic result.
+    let cleanup = "cpu.discard(frame.rt,16)?;cpu.flags=CrtFlags::unknown();";
+    if body.matches(cleanup).count() != 1 {
+        return Err("pending tail original cleanup form".into());
+    }
+    let body=body.replace(cleanup,"let original_sp=cpu.r[4];cpu.discard(frame.rt,16)?;let adjusted=cpu.binary(frame.rt,1,original_sp,CrtValue::scalar(16),32)?;if cpu.r[4]!=adjusted{return Err(\"pending tail cleanup identity\");}");
+    Ok(format!(
+        r#"
+fn pending_prefix_tail(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,phase:&CrtPendingSearch)->RegistryResult<()>{{
+ let result=(||{{frame.validate()?;phase.objects.validate(frame.event,frame.rt,frame.interrupted,frame.epoch,frame.binding)?;cpu.validate_active(frame.rt)?;
+ let root=CrtCpu::pointer(cpu.entry[4])?;let sp=CrtCpu::pointer(cpu.r[4])?;
+ if !frame.event.search_started||frame.state.depth!=1||frame.state.activation!=cpu.return_id||cpu.returned
+  ||frame.binding.layout.handler!={handler}||frame.binding.layout.record.checked_add(16)!=Some(frame.binding.layout.bp)
+  ||cpu.r[5]!=CrtValue::Pointer(frame.rt.offset(root,-4)?)||sp!=frame.rt.offset(root,-{depth})?
+  ||frame.rt.tags.values().filter(|v|**v==CrtValue::ProtectedReturn(cpu.return_id)).count()!=1{{return Err("pending tail activation/callsite");}}
+ for(i,p)in[phase.objects.record,frame.binding.at(frame.rt,frame.binding.layout.record)?,phase.objects.context].into_iter().enumerate(){{if frame.rt.load(frame.rt.offset(root,4+i as i64*4)?,32)?!=CrtValue::Pointer(p){{return Err("pending tail handler arguments");}}}}
+ let image=frame.binding.application.ok_or("pending tail application")?.image;let code=frame.rt.process_image_code(image,{handler},{length})?;
+ if frame.rt.memory.read(code.address(),{length}).map_err(|_|"pending tail code read")?!=&{raw:?}{{return Err("pending tail original bytes changed");}}
+ let table=frame.rt.process_image_pointer(image,frame.scope_address(),16)?;let owner=frame.binding.at(frame.rt,frame.binding.layout.bp)?;
+ for(i,v)in[CrtValue::Pointer(phase.objects.context),CrtValue::Pointer(table),CrtValue::Pointer(owner),CrtValue::scalar(frame.event.code)].into_iter().enumerate(){{if frame.rt.load(frame.rt.offset(sp,i as i64*4)?,32)?!=v{{return Err("pending tail deferred arguments");}}}}
+ {body}
+ phase.objects.validate(frame.event,frame.rt,frame.interrupted,frame.epoch,frame.binding)?;frame.validate()?;
+ let pair=frame.rt.offset(root,{pair})?;let slot=frame.binding.at(frame.rt,frame.binding.layout.record-4)?;
+ if cpu.r[0]!=CrtValue::Pointer(pair)||frame.rt.load(pair,32)?!=CrtValue::Pointer(phase.objects.record)
+  ||frame.rt.load(frame.rt.offset(pair,4)?,32)?!=CrtValue::Pointer(phase.objects.context)||frame.rt.load(slot,32)?!=CrtValue::Pointer(pair){{return Err("pending tail installed pair identity");}}Ok(())
+ }})();if result.is_err(){{phase.objects.live.set(false);frame.state.failed=true;}}result
+}}
+"#,
+        depth = context.entry_depth - 4,
+        handler = prefix.entry,
+        length = prefix.source.len(),
+        raw = prefix.source,
+        pair = prefix.handler_pair_offset - 4
     ))
 }
 

@@ -2193,6 +2193,7 @@ fn application_handoff_cases(){let original=std::fs::read(std::env::var("W2L_PE_
 // Independent expectations at the real producer, after original prolog/stores/pushes.
 #[inline(never)]fn pending_call_acquisition_one(original:&[u8],mode:u32){
  let original=if mode==51{let mut changed=original.to_vec();startup_caller_mutate(&mut changed,0x414a1b);changed}else{original.to_vec()};let original=&original[..];
+ let mut tail_input=original.to_vec();if mode==64{startup_caller_mutate(&mut tail_input,0x402251);}let original=&tail_input[..];
  let mut changed_guard=original.to_vec();if let Some(at)=match mode{55=>Some(0x4021d0),56=>Some(0x40154c),57=>Some(0x41b1d8),59=>Some(0x415128),_=>None}{startup_caller_mutate(&mut changed_guard,at);}if mode==58{startup_caller_xor(&mut changed_guard,0x41b1d0,0x2e);}let original=&changed_guard[..];
  let mut file=original.to_vec();if mode==35||mode==40{startup_caller_mutate(&mut file,0x415128);}if mode==36||mode==41{startup_caller_mutate(&mut file,0x402877);}if mode==1||mode==2{startup_caller_mutate(&mut file,0x401117+mode-1);}if mode==3{startup_caller_mutate(&mut file,0x415000);}
  let(m,mut registry,main,mut permit)=fixture_with_extra(&[(0x410000,0x420000)]);
@@ -2268,12 +2269,28 @@ fn application_handoff_cases(){let original=std::fs::read(std::env::var("W2L_PE_
         if mode==52{view.rt.store(view.rt.offset(root,4)?,32,CrtValue::Pointer(owned.context))?;}
         if mode==53{owned.live.set(false);}
         let got=pending_normalizer_front(&mut view,h,&phase);
+        if mode==64{assert_eq!(got,Err("pending normalizer code changed"));assert!(!owned.live.get());return Err("pending handler remainder unbound");}
         if mode>=54{
          assert_eq!(got,Ok(()));let call_count=view.state.calls;
          if mode==60{let at=view.rt.offset(root,-68)?;view.rt.tags.insert(at.address(),CrtValue::ProtectedReturn(991122));}
          if mode==61{view.state.activation+=1;}
          if mode==62{owned.live.set(false);}
          let got=if mode==58{pending_optional_guard::pending_after_normalizer(&mut view,h,&phase)}else{pending_after_normalizer(&mut view,h,&phase)};
+         if mode>=63{
+          assert_eq!(got,Ok(()));let owner_slot=b.at(view.rt,b.layout.record-4)?;let before_slot=view.rt.load(owner_slot,32)?;let pair=view.rt.offset(root,-32)?;
+          if mode==65{view.state.activation+=1;}
+          if mode==66{view.rt.store(CrtCpu::pointer(h.r[4])?,32,CrtValue::Pointer(owned.record))?;}
+          if mode==67{view.rt.store(view.rt.offset(owned.record,4)?,32,CrtValue::scalar(0))?;}
+          if mode==68{view.rt.tags.insert(view.rt.offset(pair,4)?.address(),CrtValue::ProtectedReturn(998877));}
+          if mode==69{h.r[3]=CrtValue::Pointer(owned.context);}
+          if mode==71{view.rt.store(view.rt.offset(root,12)?,32,CrtValue::Pointer(owned.record))?;}
+          let got=pending_prefix_tail(&mut view,h,&phase);
+          if mode==69{assert_eq!((h.flags.cf,h.flags.zf,h.flags.sf,h.flags.of),(Some(false),Some(false),Some(false),Some(false)));}
+          if mode==68{assert_eq!((h.flags.cf,h.flags.zf,h.flags.sf,h.flags.of),(Some(false),Some(true),Some(false),Some(false)));}
+          if mode==63||mode==70{assert_eq!(got,Ok(()));assert_eq!(h.r[4],CrtValue::Pointer(view.rt.offset(root,-44)?));assert_eq!(h.r[0],CrtValue::Pointer(pair));assert_eq!(view.rt.load(pair,32)?,CrtValue::Pointer(owned.record));assert_eq!(view.rt.load(view.rt.offset(pair,4)?,32)?,CrtValue::Pointer(owned.context));assert_eq!(view.rt.load(owner_slot,32)?,CrtValue::Pointer(pair));assert_eq!(view.rt.load(view.rt.offset(owned.record,4)?,32)?,CrtValue::Scalar{bits:0,known:0x67});assert_eq!(view.rt.load(view.rt.offset(owned.record,8)?,32)?,CrtValue::Scalar{bits:0,known:0});assert!(view.rt.load(owned.context,32).is_err());assert!(!h.returned);assert_eq!(event.require_delivery_contract(),Err("pending raise delivery/capture contract unbound"));if mode==70{assert_eq!(pending_prefix_tail(&mut view,h,&phase),Err("pending tail activation/callsite"));assert!(!owned.live.get());assert_eq!(view.rt.load(owner_slot,32)?,CrtValue::Pointer(pair));}}
+          else{assert_eq!(got,Err(match mode{65=>"pending tail activation/callsite",66=>"pending tail deferred arguments",67=>"pending objects record knowledge changed",68=>"CRT protected saved/return overwrite",69=>"unobserved context raw read requires acquisition proof",71=>"pending tail handler arguments",_=>unreachable!()}),"tail mode{mode}");assert!(!owned.live.get());assert_eq!(view.rt.load(owner_slot,32)?,before_slot);if mode==68||mode==69{assert_eq!(h.r[4],CrtValue::Pointer(view.rt.offset(root,-44)?));}if mode==68{assert_eq!(view.rt.load(pair,32)?,CrtValue::Pointer(owned.record));assert_eq!(view.rt.load(view.rt.offset(pair,4)?,32)?,CrtValue::ProtectedReturn(998877));}}
+          assert_eq!(view.interrupted.r,before);assert_eq!(view.epoch.registry.normal_epoch.as_ref().unwrap().frames.len(),frame_count);return Err("pending handler remainder unbound");
+         }
          if mode==54||mode==58{assert_eq!(got,Ok(()));assert_eq!(view.state.calls-call_count,if mode==58{3}else{2});assert!(!h.returned);assert_eq!(h.flags.zf,Some(true));assert!(view.rt.load(owned.context,32).is_err());assert_eq!(view.rt.load(root,32)?,CrtValue::ProtectedReturn(h.return_id));}
          else{assert_eq!(got,Err(match mode{55|56=>"pending guard original bytes changed",57=>"pending guard original header read",59=>"CRT branch disagrees with semantic proof",60=>"pending guard protected scratch",61=>"pending guard activation/callsite",62=>"pending objects event/lifetime",_=>unreachable!()}),"guard mode{mode}");assert!(!owned.live.get());assert_eq!(view.rt.load(owned.record,32)?,CrtValue::scalar(0xe0424242));if mode==57{assert!(matches!(view.rt.load(view.rt.offset(root,-60)?,32)?,CrtValue::ProtectedReturn(_)));assert_eq!(view.rt.load(view.rt.offset(root,-64)?,32)?,CrtValue::Pointer(view.rt.offset(root,-4)?));}}
          assert_eq!(view.interrupted.r,before);assert_eq!(view.epoch.registry.normal_epoch.as_ref().unwrap().frames.len(),frame_count);return Err("pending handler remainder unbound");
@@ -2336,7 +2353,7 @@ fn application_handoff_cases(){let original=std::fs::read(std::env::var("W2L_PE_
   })
  });assert_eq!(result,Err("pending acquisition test stop"),"pending acquisition mode{mode}");
 }
-fn pending_call_acquisition_cases(){let original=std::fs::read(std::env::var("W2L_PE_MAPPING_INPUT").unwrap()).unwrap();for mode in 0..63{pending_call_acquisition_one(&original,mode);}}
+fn pending_call_acquisition_cases(){let original=std::fs::read(std::env::var("W2L_PE_MAPPING_INPUT").unwrap()).unwrap();for mode in 0..72{pending_call_acquisition_one(&original,mode);}}
 
 #[inline(never)]fn startup_main_one(original:&[u8],mode:u32){
  let mut file=original.to_vec();if let Some(at)=match mode{1=>Some(0x401717),2=>Some(0x401280),3=>Some(0x401500),4=>Some(0x41b218),5=>Some(0x4012b9),6=>Some(0x402370),25=>Some(0x4011e5),26=>Some(0x4010c0),27=>Some(0x40115c),28=>Some(0x41b1d0),29=>Some(0x4010f0),_=>None}{startup_caller_mutate(&mut file,at);}
@@ -3898,6 +3915,7 @@ if fault==1{{cpu.condition(0)?;}}
         prefix_metadata.push_str(&crate::crt_owned_search::emit_pending_normalizer_front(&prefix,&pending_normalizer).expect("original pending normalizer lowering"));
         prefix_metadata.push_str(&crate::crt_owned_search::emit_pending_guard(&prefix,&inner_search_guard).expect("original pending guard lowering"));
         let after_normalizer=crate::crt_owned_search::emit_pending_after_normalizer(&prefix).unwrap();prefix_metadata.push_str(&after_normalizer);
+        prefix_metadata.push_str(&crate::crt_owned_search::emit_pending_prefix_tail(&prefix).unwrap());let mut wrong_pair=prefix.clone();wrong_pair.handler_pair_offset+=4;assert_eq!(crate::crt_owned_search::emit_pending_prefix_tail(&wrong_pair).unwrap_err(),"pending caller prefix reproof");
         let mut wrong_caller=prefix.clone();wrong_caller.caller.push_str("cpu.r[0]=CrtValue::scalar(0);");assert_eq!(crate::crt_owned_search::emit_pending_after_normalizer(&wrong_caller).unwrap_err(),"pending caller prefix reproof");
         let optional_guard=crate::handler_guard::prove_guard(&guard,0x4021d0,&security,0x40154c,0x41c000,[-48,0,-48,0],&inner).unwrap();
         prefix_metadata.push_str(&format!("mod pending_optional_guard{{use super::*;{} {} }}",crate::crt_owned_search::emit_pending_guard(&prefix,&optional_guard).unwrap().replace("fn pending_guard_call", "pub(super) fn pending_guard_call"),after_normalizer.replace("fn pending_after_normalizer", "pub(super) fn pending_after_normalizer")));
