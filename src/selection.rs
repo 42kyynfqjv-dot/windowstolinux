@@ -310,8 +310,19 @@ pub struct CodeIdentity {
     temporary_bytes: u32,
     #[allow(dead_code)]
     globals: Vec<u32>,
+    #[allow(dead_code)] // Native CRT execution is not linked by every slice example.
+    reachable: BTreeSet<u32>,
 }
 impl CodeIdentity {
+    /// Instruction domain explored by the original effect/ABI proof.
+    #[allow(dead_code)]
+    pub(crate) fn reachable(&self) -> &BTreeSet<u32> {
+        &self.reachable
+    }
+    #[allow(dead_code)]
+    pub(crate) fn execution_storage(&self) -> (&[u32], u32) {
+        (&self.globals, self.temporary_bytes)
+    }
     #[allow(dead_code)] // Shared caller composition is not linked by every example.
     pub(crate) fn original(&self) -> (u32, &[u8]) {
         (self.origin, &self.source)
@@ -531,6 +542,7 @@ pub fn prove_code_identity(
     let mut explored = 0;
     let mut returns = 0;
     let mut temporary_bytes = 0;
+    let mut reachable = BTreeSet::new();
     while let Some((mut pc, mut state)) = pending.pop() {
         loop {
             explored += 1;
@@ -541,6 +553,7 @@ pub fn prove_code_identity(
                 .get(&pc)
                 .ok_or("selection helper: instruction boundary")?;
             clean_instruction(i)?;
+            reachable.insert(pc);
             let first = code[(pc - origin) as usize];
             if matches!(first, 0x66 | 0x67) {
                 return Err("selection helper: operand/address size prefix".into());
@@ -678,6 +691,7 @@ pub fn prove_code_identity(
         returns,
         temporary_bytes,
         globals: initialized_globals.iter().copied().collect(),
+        reachable,
     })
 }
 

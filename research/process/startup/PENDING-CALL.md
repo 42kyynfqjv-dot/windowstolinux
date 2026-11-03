@@ -220,3 +220,35 @@ wrong helper or handler arguments and expired objects. Total producer component
 cases are 48. The original-entry caller is still stopped at the pending
 RaiseException delivery gate. Full prefix composition, selected Normal views and
 original Inner-to-Outer advancement remain unimplemented.
+
+## Original handler entry through normalizer writeback
+
+A further component path starts at the protected handler entry and executes the
+original prefix through its first helper CALL and record-code writeback. The
+normalizer now uses native instruction lowering over the instruction domain
+explored by the original code-identity proof. Instructions outside that event
+domain remain explicit rejection nodes. Both possible initialized global-guard
+branches retain their original loads, comparisons, flags and helper stack
+effects; an unknown global rejects at its actual compare operand read. The
+normalizer's return value is obtained by executing the original body and RET.
+
+The entry validates the same-event objects, exact handler arguments, unique
+protected return, application image and original prefix/helper bytes. Global
+reads resolve only to the same process-image capability. Prefix source is
+re-proved before emission, including the generated front and CALL depth. Failure
+revokes the pending objects while retaining earlier handler/helper stores.
+
+Six additional cases cover both global branches, unknown global knowledge,
+changed helper code, substituted handler arguments and expired objects. Total
+producer component cases are 54. A compiler mutation also checks that changing
+the generated prefix front rejects. The handler still begins at an explicit
+protected test cut; production handler entry is not admitted by this component.
+
+The next connection is the original caller after writeback, guard arguments and
+guard helper, followed by the already lowered context helper and remaining
+prefix effects. Guard validation must preserve its original scope-header reads,
+cookie comparisons, nested security-check CALL and tail transfer/RET semantics.
+The older guard projection/clobber wrapper is insufficient evidence of those CPU
+effects. Selected Outer views and actual-handler-bound ordered receipts remain
+separate requirements. Original startup still stops at its suspended
+RaiseException CALL, with zero whole-PE comparisons.

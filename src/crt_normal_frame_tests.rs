@@ -2192,6 +2192,7 @@ fn application_handoff_cases(){let original=std::fs::read(std::env::var("W2L_PE_
 
 // Independent expectations at the real producer, after original prolog/stores/pushes.
 #[inline(never)]fn pending_call_acquisition_one(original:&[u8],mode:u32){
+ let original=if mode==51{let mut changed=original.to_vec();startup_caller_mutate(&mut changed,0x414a1b);changed}else{original.to_vec()};let original=&original[..];
  let mut file=original.to_vec();if mode==35||mode==40{startup_caller_mutate(&mut file,0x415128);}if mode==36||mode==41{startup_caller_mutate(&mut file,0x402877);}if mode==1||mode==2{startup_caller_mutate(&mut file,0x401117+mode-1);}if mode==3{startup_caller_mutate(&mut file,0x415000);}
  let(m,mut registry,main,mut permit)=fixture_with_extra(&[(0x410000,0x420000)]);
  let(mut rt,init)=CrtStreamRuntime::new_initializing_pe32(registry.identity.owner,registry.identity.instance,0x41c080,3,1048576,&file).unwrap();
@@ -2259,7 +2260,18 @@ fn application_handoff_cases(){let original=std::fs::read(std::env::var("W2L_PE_
       event.delivery=CrtNormalDelivery::Calling;
       let got=d.call_activation(rt,0x40111d,0,|rt,h|{
        let mut state=CrtLiveDispatchState{level:b.storage_image(rt,c)?.try_level,depth:1,calls:1,activation:h.return_id,failed:false};
-       let mut view=CrtLiveFrame{rt,event:&event,interrupted:c,epoch:e,binding:&b,state:&mut state};original_handler_prolog(&mut view,h)?;
+       let mut view=CrtLiveFrame{rt,event:&event,interrupted:c,epoch:e,binding:&b,state:&mut state};
+       if mode>=48{
+        let root=CrtCpu::pointer(h.entry[4])?;let image=b.application.unwrap().image;let global=view.rt.process_image_pointer(image,0x41ccb8,4)?;
+        view.rt.store(global,32,if mode==50{CrtValue::Scalar{bits:0,known:0}}else{CrtValue::scalar(u32::from(mode==49))})?;
+        if mode==52{view.rt.store(view.rt.offset(root,4)?,32,CrtValue::Pointer(owned.context))?;}
+        if mode==53{owned.live.set(false);}
+        let got=pending_normalizer_front(&mut view,h,&phase);
+        if mode==48||mode==49{assert_eq!(got,Ok(()));assert_eq!(h.r[0],CrtValue::scalar(0xe0424242));assert_eq!(view.rt.load(owned.record,32)?,h.r[0]);assert_eq!(h.r[5],CrtValue::Pointer(view.rt.offset(root,-4)?));assert_eq!(h.r[4],CrtValue::Pointer(view.rt.offset(root,-48)?));assert!(!h.returned);assert_eq!(h.flags.zf,Some(false));}
+        else{assert_eq!(got,Err(match mode{50=>"CRT unknown scalar bits observed",51=>"pending normalizer code changed",52=>"pending normalizer handler arguments",53=>"pending objects event/lifetime",_=>unreachable!()}));assert!(!owned.live.get());if mode==50{assert_eq!(view.rt.load(view.rt.offset(root,-4)?,32)?,h.entry[5]);}}
+        assert_eq!(view.interrupted.r,before);assert_eq!(view.epoch.registry.normal_epoch.as_ref().unwrap().frames.len(),frame_count);return Err("pending handler remainder unbound");
+       }
+       original_handler_prolog(&mut view,h)?;
        let root=CrtCpu::pointer(h.entry[4])?;let bp=CrtCpu::pointer(h.r[5])?;
        h.r[4]=CrtValue::Pointer(view.rt.offset(root,-i64::from(pending_context_depth())+4)?);h.push(view.rt,CrtValue::Pointer(owned.context))?;h.r[0]=CrtValue::scalar(77);
        let call_sp=CrtCpu::pointer(h.r[4])?;let helper_save=view.rt.offset(call_sp,-8)?;
@@ -2313,7 +2325,7 @@ fn application_handoff_cases(){let original=std::fs::read(std::env::var("W2L_PE_
   })
  });assert_eq!(result,Err("pending acquisition test stop"),"pending acquisition mode{mode}");
 }
-fn pending_call_acquisition_cases(){let original=std::fs::read(std::env::var("W2L_PE_MAPPING_INPUT").unwrap()).unwrap();for mode in 0..48{pending_call_acquisition_one(&original,mode);}}
+fn pending_call_acquisition_cases(){let original=std::fs::read(std::env::var("W2L_PE_MAPPING_INPUT").unwrap()).unwrap();for mode in 0..54{pending_call_acquisition_one(&original,mode);}}
 
 #[inline(never)]fn startup_main_one(original:&[u8],mode:u32){
  let mut file=original.to_vec();if let Some(at)=match mode{1=>Some(0x401717),2=>Some(0x401280),3=>Some(0x401500),4=>Some(0x41b218),5=>Some(0x4012b9),6=>Some(0x402370),25=>Some(0x4011e5),26=>Some(0x4010c0),27=>Some(0x40115c),28=>Some(0x41b1d0),29=>Some(0x4010f0),_=>None}{startup_caller_mutate(&mut file,at);}
@@ -3868,6 +3880,10 @@ if fault==1{{cpu.condition(0)?;}}
         let mut wrong_depth=prefix.clone();wrong_depth.calls.iter_mut().find(|c|c.effect==crate::handler_checks::CallEffect::ValidateContext).unwrap().entry_depth+=4;
         assert_eq!(crate::crt_owned_search::emit_pending_context_call(&wrong_depth,&context_proof,"wrong_depth").unwrap_err(),"pending context prefix reproof");
         prefix_metadata.push_str(&pending_context_call);
+        let pending_normalizer=crate::selection::prove_code_identity(&normalizer,0x414a1b,&std::collections::BTreeSet::from([0x41ccb8]),0xe0424242).unwrap();
+        let mut wrong_front=prefix.clone();wrong_front.front.push_str("cpu.r[0]=CrtValue::scalar(0);");
+        assert_eq!(crate::crt_owned_search::emit_pending_normalizer_front(&wrong_front,&pending_normalizer).unwrap_err(),"pending normalizer prefix reproof");
+        prefix_metadata.push_str(&crate::crt_owned_search::emit_pending_normalizer_front(&prefix,&pending_normalizer).expect("original pending normalizer lowering"));
         let context_site=prefix.calls.iter().find(|c|c.effect==crate::handler_checks::CallEffect::ValidateContext).unwrap();
         prefix_metadata.push_str(&format!("fn pending_context_depth()->u32{{{}}}fn pending_context_continuation()->u32{{{}}}",context_site.entry_depth-4,context_site.va+5));
 

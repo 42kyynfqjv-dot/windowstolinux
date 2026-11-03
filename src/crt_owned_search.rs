@@ -780,6 +780,105 @@ fn complete_owned_restoration_event(frame:&mut CrtOwnedFrameView<'_>,cpu:&CrtCpu
  })();if result.is_err(){frame.failed=true;}result}
 "#;
 
+/// Original entry through normalizer writeback at a protected component cut.
+pub(crate) fn emit_pending_normalizer_front(
+    prefix: &super::handler_checks::PrefixProof,
+    normalizer: &super::selection::CodeIdentity,
+) -> Result<String, String> {
+    let (origin, bytes) = normalizer.original();
+    let call = prefix
+        .calls
+        .first()
+        .ok_or("pending normalizer missing call")?;
+    if call.effect != super::handler_checks::CallEffect::NormalizeRecordCode
+        || call.target != origin
+    {
+        return Err("pending normalizer call binding".into());
+    }
+    use super::handler_checks::{prove_prefix, Bindings, CallEffect};
+    let target = |effect| {
+        prefix
+            .calls
+            .iter()
+            .find(|c| c.effect == effect)
+            .map(|c| c.target)
+            .ok_or("pending normalizer missing callee")
+    };
+    let reproved = prove_prefix(
+        &prefix.source,
+        prefix.entry,
+        &Bindings {
+            normalizer_va: origin,
+            guard_va: target(CallEffect::ValidateGuards)?,
+            context_va: target(CallEffect::ValidateContext)?,
+            cookie_va: prefix.cookie_va,
+            installer_va: prefix.installer_start,
+        },
+    )?;
+    if reproved.calls != prefix.calls
+        || reproved.front != prefix.front
+        || reproved.end != prefix.end
+    {
+        return Err("pending normalizer prefix reproof".into());
+    }
+    let mut graph = super::crt_stream_ir::Graph::decode(bytes, origin)?;
+    let (globals, temporary_bytes) = normalizer.execution_storage();
+    let roles = globals
+        .iter()
+        .map(|&va| (va, "CrtRegionKind::Module".into()))
+        .collect();
+    let global_checks=globals.iter().map(|va|format!("let global=frame.rt.process_image_pointer(image,{va},4)?;let resolved=frame.rt.resolve_absolute({va},CrtRegionKind::Module)?;if global.cap!=resolved.cap||global.address()!=resolved.address(){{return Err(\"pending normalizer global identity\");}}" )).collect::<String>();
+    for (pc, node) in &mut graph.nodes {
+        if !normalizer.reachable().contains(pc) {
+            node.op = Op::Reject("pending normalizer outside proved event domain");
+            node.successors.clear();
+        }
+    }
+    let body = crt_stream_emit::emit_body(
+        &graph,
+        |_, _| Err("pending normalizer unexpected call".into()),
+        &roles,
+        256,
+    )?;
+    let front = prefix.normalizer_front().replace(
+        "normalizer_prefix_call(frame,cpu,objects,",
+        "pending_normalizer_call(frame,cpu,phase,",
+    );
+    Ok(format!(
+        r#"
+fn pending_normalizer_call(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,phase:&CrtPendingSearch,continuation:u32)->RegistryResult<CrtValue>{{
+ frame.validate()?;phase.objects.validate(frame.event,frame.rt,frame.interrupted,frame.epoch,frame.binding)?;
+ let root=CrtCpu::pointer(cpu.entry[4])?;let sp=CrtCpu::pointer(cpu.r[4])?;
+ if frame.state.depth!=1||frame.state.activation!=cpu.return_id||continuation!={continuation}
+  ||sp!=frame.rt.offset(root,-{depth})?||frame.rt.load(sp,32)?!=CrtValue::scalar({code}){{return Err("pending normalizer original callsite/argument");}}
+ let low=frame.rt.offset(sp,-{scratch})?;frame.rt.valid(low,{scratch})?;frame.stack_range(low.address(),u64::from(sp.address()))?;
+ if frame.rt.overlapping_tags(low.address(),{scratch}).iter().any(|(_,v)|matches!(v,CrtValue::ProtectedReturn(_)|CrtValue::OpaqueSaved(_)|CrtValue::ThreadHead(_))){{return Err("pending normalizer protected scratch");}}
+ frame.call(cpu,continuation,|f,cpu|{{let rt=&mut *f.rt;{body}}})
+}}
+fn pending_normalizer_front(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,phase:&CrtPendingSearch)->RegistryResult<()>{{
+ let result=(||{{frame.validate()?;phase.objects.validate(frame.event,frame.rt,frame.interrupted,frame.epoch,frame.binding)?;
+ let root=CrtCpu::pointer(cpu.entry[4])?;
+ if !frame.event.search_started||frame.state.depth!=1||frame.state.activation!=cpu.return_id||cpu.returned||cpu.r!=cpu.entry
+  ||frame.binding.layout.handler!={handler}||frame.event.code!={code}
+  ||frame.rt.load(root,32)?!=CrtValue::ProtectedReturn(cpu.return_id)||frame.rt.tags.values().filter(|v|**v==CrtValue::ProtectedReturn(cpu.return_id)).count()!=1{{return Err("pending normalizer handler entry");}}
+ for(i,p)in[phase.objects.record,frame.binding.at(frame.rt,frame.binding.layout.record)?,phase.objects.context].into_iter().enumerate(){{if frame.rt.load(frame.rt.offset(root,4+i as i64*4)?,32)?!=CrtValue::Pointer(p){{return Err("pending normalizer handler arguments");}}}}
+ let image=frame.binding.application.ok_or("pending normalizer application")?.image;
+ for(base,expected)in[({handler},&{prefix_raw:?}[..]),({origin},&{bytes:?}[..])]{{let p=frame.rt.process_image_code(image,base,expected.len()as u32)?;if frame.rt.memory.read(p.address(),expected.len()as u32).map_err(|_|"pending normalizer code read")?!=expected{{return Err("pending normalizer code changed");}}}}
+ {global_checks}
+ {front}
+ phase.objects.validate(frame.event,frame.rt,frame.interrupted,frame.epoch,frame.binding)?;frame.validate()?;Ok(())
+ }})();if result.is_err(){{phase.objects.live.set(false);frame.state.failed=true;}}result
+}}
+"#,
+        continuation = call.va + 5,
+        depth = call.entry_depth - 4,
+        code = normalizer.event_code(),
+        scratch = temporary_bytes + 4,
+        handler = prefix.entry,
+        prefix_raw = prefix.source
+    ))
+}
+
 /// Original context helper CALL at a proved handler-prefix component cut.
 /// No handler-entry, delivery, disposition or restoration authority is issued.
 pub(crate) fn emit_pending_context_call(
