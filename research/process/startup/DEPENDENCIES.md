@@ -15,10 +15,11 @@ The single-use Inner result advances the component search cursor to that exact
 live Outer frame while the interrupted Inner remains the registry head and CPU
 source. A second checked component invocation now executes Outer's original
 prefix, helpers, finally-only search, epilog and RET against that separately
-validated live frame. The next boundary is **production invocation of the
-checked search and one-time advancement from Outer's actual result to Main**.
-The required Main predecessor view now revalidates across the exact live
-Main-to-Outer-to-Inner chain, but it does not yet consume the Outer result.
+validated live frame. Its actual protected return now issues an event/object-
+bound receipt. Checked single-use consumption verifies the original Main-to-Outer
+CALL and selects the live Main predecessor without changing the interrupted
+Inner source or registry head. The next boundary is **production invocation of
+the checked search and execution of Main's original filter/search path**.
 Captured Windows registers, cleanup and resumption remain unsupported.
 The protected component path executes original handler entry through normalizer
 writeback, the actual guard/security checker and the original context-helper
@@ -27,8 +28,8 @@ installation through0x40226f. The component executes original Inner search
 from0x402272 through its actual epilog/RET and issues a single-use actual-handler
 result after enclosing protected-call completion. Component-only checked ordered
 advancement now consumes that result and selects the direct Outer predecessor.
-Production dispatcher entry remains unconnected. The completed Outer component
-receipt grants no Main advancement, delivery completion or restoration authority.
+Production dispatcher entry remains unconnected. Main selection grants no
+handler execution, delivery completion or restoration authority.
 Five retained Windows component comparisons and zero whole-PE pairs remain.
 
 [Producer proof, ownership, tests and exact delivery limits](PENDING-CALL.md).
@@ -36,7 +37,7 @@ Original Inner search now has finite occurrence-bound return emission derived
 from the original scope-chain proof. Live scope level and original visit edges
 remain checked; acyclic callers retain their duplicate-PC rejection. Prefix
 composition and first Normal predecessor selection execute in the component;
-production dispatch and checked Outer-to-Main advancement remain unimplemented.
+production dispatch and Main's selected handler execution remain unimplemented.
 [Earlier application handoff](APPLICATION-HANDOFF.md).
 
 ## Previous executable checkpoint: Outer entered under live Main

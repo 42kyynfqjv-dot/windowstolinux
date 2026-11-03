@@ -596,7 +596,7 @@ impl CrtPendingSearch {
 /// it grants no handler execution, epilog, cleanup or restoration authority.
 struct CrtPendingNormalView {
  anchor:guest_memory::Capability,identity:RegistryIdentity,epoch:u64,frame:NormalFrameId,previous:RegistryHead,
- normal_count:usize,registers:[CrtValue;8],entry:[CrtValue;8],return_id:u64,return_pop:u16,
+ normal_count:usize,registers:[CrtValue;8],entry:[CrtValue;8],return_id:u64,return_site:Option<(u64,u32)>,return_pop:u16,
  caller:CrtPointer,layout:CrtNormalLayout,cookie:u32,application:Option<CrtApplicationInputs>,
 }
 impl CrtPendingNormalView {
@@ -604,7 +604,7 @@ impl CrtPendingNormalView {
   binding.identity(rt,epoch)?;let image=binding.image(rt,cpu,epoch)?;let frame=binding.id.ok_or("pending predecessor missing frame")?;epoch.validate_image(frame,&image)?;
   let state=epoch.state()?;if state.pending_exception.is_some()||state.delivery.is_some()||state.frames.last().is_none_or(|f|f.id!=frame||!f.installed||f.unlinked||f.next!=0){return Err("pending predecessor issue phase");}
   Ok(Self{anchor:rt.anchor,identity:epoch.registry.identity,epoch:epoch.generation,frame,previous:binding.previous,
-   normal_count:state.frames.len(),registers:cpu.r,entry:cpu.entry,return_id:cpu.return_id,return_pop:cpu.return_pop,
+   normal_count:state.frames.len(),registers:cpu.r,entry:cpu.entry,return_id:cpu.return_id,return_site:cpu.return_site,return_pop:cpu.return_pop,
    caller:binding.caller,layout:binding.layout.clone(),cookie:binding.cookie,application:binding.application})
  }
  fn validate(&self,event:&CrtNormalException,rt:&CrtStreamRuntime,epoch:&NormalCallEpoch<'_>,source:&CrtNormalBinding,selected:&CrtNormalBinding)->RegistryResult<FrameImage<RegistryHead>>{

@@ -599,9 +599,10 @@ pub(crate) fn emit_pending_selected_search_return(
         .iter()
         .map(|(pc, raw)| format!("({pc},&{raw:?}[..]),"))
         .collect::<String>();
+    let outer_call = crate::crt_ptd::raw(crate::crt_startup_caller::OUTER_CALL);
     Ok(format!(
         r#"
-struct CrtPendingOuterReturn{{event:u64,source:NormalFrameId,selected:NormalFrameId,handler:u32,activation:u64,root:CrtPointer,value:CrtValue}}
+struct CrtPendingOuterReturn{{objects:CrtPendingObjects,event:u64,source:NormalFrameId,selected:NormalFrameId,handler:u32,activation:u64,root:CrtPointer,value:CrtValue,consumed:bool}}
 fn pending_outer_search_bytes(rt:&CrtStreamRuntime,binding:&CrtNormalBinding)->RegistryResult<()>{{
  let image=binding.application.ok_or("pending selected search application")?.image;
  for(base,bytes)in[({handler},&{prefix_raw:?}[..]),({origin},&{raw:?}[..]),{helper_regions}]{{let p=rt.process_image_code(image,base,bytes.len()as u32)?;if rt.memory.read(p.address(),bytes.len()as u32).map_err(|_|"pending selected search code read")?!=bytes{{return Err("pending selected search original bytes/table changed");}}}}
@@ -640,9 +641,30 @@ fn pending_outer_component(selection:&mut CrtPendingNormalSelection,event:&mut C
   phase.objects.validate(event,rt,source,epoch,source_binding)?;view.validate(event,rt,epoch,source_binding,outer)?;pending_outer_search_bytes(rt,outer)?;
   let(activation,root)=actual.ok_or("pending selected search missing actual handler")?;
   if value!=CrtValue::scalar(1)||rt.tags.values().any(|v|*v==CrtValue::ProtectedReturn(activation)){{return Err("pending selected search incomplete protected call");}}
-  selection.consumed=true;event.delivery=CrtNormalDelivery::Returned;
-  Ok(CrtPendingOuterReturn{{event:event.generation,source:event.frame,selected:view.frame,handler:{handler},activation,root,value}})
+  selection.consumed=true;phase.returned.set(Some((activation,{handler},root)));event.delivery=CrtNormalDelivery::Returned;
+  Ok(CrtPendingOuterReturn{{objects:phase.objects.clone(),event:event.generation,source:event.frame,selected:view.frame,handler:{handler},activation,root,value,consumed:false}})
  }})();if result.is_err(){{event.fail_capture();}}result
+}}
+impl CrtPendingOuterReturn{{
+ fn select_main(&mut self,event:&mut CrtNormalException,phase:&CrtPendingSearch,rt:&CrtStreamRuntime,source:&CrtCpu,epoch:&NormalCallEpoch<'_>,source_binding:&CrtNormalBinding,outer_view:&CrtPendingNormalView,outer:&CrtNormalBinding,main_view:&CrtPendingNormalView,main:&CrtNormalBinding)->RegistryResult<CrtPendingNormalSelection>{{
+  let result=(||{{
+   if self.consumed||event.delivery!=CrtNormalDelivery::Returned||self.event!=event.generation||self.source!=event.frame
+    ||self.selected!=outer_view.frame||self.handler!={handler}||phase.returned.get()!=Some((self.activation,self.handler,self.root))
+    ||self.objects.source!=phase.objects.source||!std::rc::Rc::ptr_eq(&self.objects.live,&phase.objects.live){{return Err("pending Outer receipt replay/event/handler");}}
+   self.objects.validate(event,rt,source,epoch,source_binding)?;
+   if phase.source!=event.frame||phase.current.get()!=RegistryHead::Normal(outer_view.frame)||phase.previous!=RegistryHead::Normal(outer_view.frame)
+    ||outer_view.previous!=RegistryHead::Normal(main_view.frame)||phase.normal_count!=main_view.normal_count.checked_add(2).ok_or("pending Main frame count")?{{return Err("pending Main search order");}}
+   outer_view.validate(event,rt,epoch,source_binding,outer)?;pending_outer_search_bytes(rt,outer)?;
+   if outer_view.return_site!=Some((outer_view.return_id,0x40131b)){{return Err("pending Main Outer caller activation");}}
+   let application=main.application.ok_or("pending Main application")?;let call=rt.process_image_code(application.image,0x401316,{outer_call_len})?;
+   if rt.memory.read(call.address(),{outer_call_len}).map_err(|_|"pending Main Outer caller read")?!=&{outer_call:?}{{return Err("pending Main Outer caller changed");}}
+   let image=main_view.validate_ancestor(event,rt,epoch,source_binding,outer,main,2)?;
+   if main.layout!=original_main_layout()||image.handler_va!=main.layout.handler||image.scope_va!=main.layout.scope||image.try_level!=0{{return Err("pending Main storage/layout");}}
+   if self.value!=CrtValue::scalar(1)||rt.tags.values().any(|v|*v==CrtValue::ProtectedReturn(self.activation)){{return Err("pending Outer receipt return changed");}}
+   self.consumed=true;phase.returned.set(None);phase.current.set(RegistryHead::Normal(main_view.frame));event.delivery=CrtNormalDelivery::ResultTaken;
+   Ok(CrtPendingNormalSelection{{event:event.generation,source:event.frame,selected:main_view.frame,handler:image.handler_va,scope:image.scope_va,consumed:false}})
+  }})();if result.is_err(){{self.objects.live.set(false);event.fail_capture();}}result
+ }}
 }}
 "#,
         handler = prefix.entry,
@@ -655,6 +677,8 @@ fn pending_outer_component(selection:&mut CrtPendingNormalSelection,event:&mut C
         pair = prefix.handler_pair_offset - 4,
         level = input.proof.initial_level,
         temporary = prefix.temporary_bytes,
+        outer_call_len = outer_call.len(),
+        outer_call = outer_call,
     ))
 }
 

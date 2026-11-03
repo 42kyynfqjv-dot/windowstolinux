@@ -435,5 +435,34 @@ Eight cases issue the view on live Main before the original Main-to-Outer call,
 then revalidate it after original Outer and Inner frame installation and pending
 RaiseException acquisition. Mutated view identity, Main layout, direct child,
 source identity, chain length, registry link and application lifetime reject.
-The original Main call bytes and one-time Outer receipt consumption remain the
-next required checks before search advancement to Main can be claimed.
+This ancestor view is used by the checked Outer-to-Main advancement below;
+the view alone grants no cursor advancement.
+
+## Single-use Outer return selects live Main
+
+The actual protected Outer invocation now publishes its activation, handler and
+root to the pending search's return slot only after original RET, scratch-borrow
+retirement and post-call event/object/source/frame/code validation succeed. The
+receipt retains the exact event-owned object lifetime and is single-use.
+
+Consumption revalidates interrupted Inner, the separately selected Outer and
+the live Main ancestor across all four owned frames. It requires the original
+Main-to-Outer CALL bytes at `0x401316` and the actual Outer caller activation's
+return site `0x40131b`, retained when its suspension view was issued. Receipt
+identity, search cursor, scope level, protected return consumption and object
+lifetime are checked before any cursor or consumption effect. Success clears
+the return slot and selects Main while preserving the Inner CPU and registry
+head. It grants no Main execution, cleanup, delivery completion or resumption.
+
+Twenty-four cases execute both original Inner and Outer search paths in the
+four-frame component. They cover successful Main selection, replay, mismatched
+event/handler/root/activation/object lifetime, stale frame/layout, wrong search
+order, changed original caller code/return site, partial disposition knowledge,
+changed interrupted registers/flags, protected-return aliasing, changed Main
+level/guard and two failures in Outer's actual epilog/scratch retirement. Failure
+retains prior original writes, revokes the event and leaves the cursor unadvanced.
+Successful return leaves handler temporary bytes unknown and the escaped pair
+address numeric, with no surviving pointer borrow into retired scratch. Total
+producer/component cases are137. Production dispatch and Main's filter/search
+execution remain the next separate gates; cleanup, restoration and whole-PE
+entry-to-exit remain unproved.
