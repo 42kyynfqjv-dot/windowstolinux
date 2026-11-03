@@ -421,3 +421,19 @@ Failures revoke the event and preserve earlier original effects. Total
 producer/component cases are105. Production dispatcher invocation, checked
 advancement from the Outer result to Main, incoming-chain containment, cleanup,
 restoration and whole-PE entry-to-exit remain open.
+
+## Live Main ancestor prerequisite
+
+A pending predecessor view can now revalidate a proved live ancestor across an
+exact, finite normal-frame chain. The view still describes only the frame at
+which it was issued. Validation requires the same runtime, epoch, application
+lease, frame identity, projected storage, exact direct child and every installed
+younger link through the interrupted event source. It does not relabel Inner,
+consume a handler result or grant handler, cleanup or restoration authority.
+
+Eight cases issue the view on live Main before the original Main-to-Outer call,
+then revalidate it after original Outer and Inner frame installation and pending
+RaiseException acquisition. Mutated view identity, Main layout, direct child,
+source identity, chain length, registry link and application lifetime reject.
+The original Main call bytes and one-time Outer receipt consumption remain the
+next required checks before search advancement to Main can be claimed.

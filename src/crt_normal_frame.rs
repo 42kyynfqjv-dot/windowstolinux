@@ -608,21 +608,36 @@ impl CrtPendingNormalView {
    caller:binding.caller,layout:binding.layout.clone(),cookie:binding.cookie,application:binding.application})
  }
  fn validate(&self,event:&CrtNormalException,rt:&CrtStreamRuntime,epoch:&NormalCallEpoch<'_>,source:&CrtNormalBinding,selected:&CrtNormalBinding)->RegistryResult<FrameImage<RegistryHead>>{
+  self.validate_ancestor(event,rt,epoch,source,source,selected,1)
+ }
+ /// Revalidate one previously issued live ancestor without relabeling the
+ /// interrupted event source. `child` is the ancestor's direct younger frame;
+ /// `distance` is the exact number of live frames from `selected` to `source`.
+ /// This is read-only predecessor authority and grants no handler, cleanup or
+ /// restoration permission.
+ fn validate_ancestor(&self,event:&CrtNormalException,rt:&CrtStreamRuntime,epoch:&NormalCallEpoch<'_>,source:&CrtNormalBinding,child:&CrtNormalBinding,selected:&CrtNormalBinding,distance:usize)->RegistryResult<FrameImage<RegistryHead>>{
   event.validate_pending(rt,epoch)?;if let Some(app)=self.application{app.validate(rt)?;}
   if rt.anchor!=self.anchor||epoch.registry.identity!=self.identity||epoch.generation!=self.epoch
    ||selected.anchor!=self.anchor||selected.identity!=self.identity||selected.epoch!=self.epoch||selected.id!=Some(self.frame)
    ||selected.previous!=self.previous||selected.caller!=self.caller||selected.layout!=self.layout||selected.cookie!=self.cookie
    ||selected.application!=self.application||selected.initialization.is_some()||selected.done||!selected.consumed.is_empty()||selected.saved_sp_pending
-   ||source.id!=Some(event.frame)||source.previous!=RegistryHead::Normal(self.frame){return Err("pending selected predecessor identity");}
+   ||distance==0||source.id!=Some(event.frame)||child.previous!=RegistryHead::Normal(self.frame){return Err("pending selected predecessor identity");}
   let state=epoch.registry.normal_epoch.as_ref().ok_or("pending selected expired epoch")?;
-  if state.frames.len()!=self.normal_count.checked_add(1).ok_or("pending selected frame count")?
+  if state.frames.len()!=self.normal_count.checked_add(distance).ok_or("pending selected frame count")?
    ||epoch.registry.head!=RegistryHead::Normal(event.frame){return Err("pending selected chain length/head");}
-  let outer=state.frames.get(self.normal_count-1).ok_or("pending selected missing predecessor")?;
-  let inner=state.frames.last().ok_or("pending selected missing source")?;
-  if outer.id!=self.frame||inner.id!=event.frame||inner.previous!=RegistryHead::Normal(self.frame)
-   ||!outer.installed||outer.unlinked||outer.next!=0||!inner.installed||inner.unlinked||inner.next!=0{return Err("pending selected live chain");}
+  let at=self.normal_count.checked_sub(1).ok_or("pending selected missing predecessor")?;
+  let ancestor=state.frames.get(at).ok_or("pending selected missing predecessor")?;
+  if ancestor.id!=self.frame||!ancestor.installed||ancestor.unlinked||ancestor.next!=0{return Err("pending selected live chain");}
+  for n in 1..=distance{
+   let younger=state.frames.get(at+n).ok_or("pending selected missing source")?;
+   let previous=state.frames.get(at+n-1).ok_or("pending selected missing predecessor")?;
+   if !younger.installed||younger.unlinked||younger.next!=0||younger.previous!=RegistryHead::Normal(previous.id){return Err("pending selected live chain");}
+  }
+  let direct=state.frames.get(at+1).ok_or("pending selected missing source")?;
+  let interrupted=state.frames.last().ok_or("pending selected missing source")?;
+  if child.id!=Some(direct.id)||source.id!=Some(interrupted.id)||interrupted.id!=event.frame{return Err("pending selected live chain");}
   let image=selected.project_state(rt,&self.registers,&self.entry,self.return_id,false,self.return_pop)?;
-  NormalCallEpoch::check_image(outer,&image)?;Ok(image)
+  NormalCallEpoch::check_image(ancestor,&image)?;Ok(image)
  }
 }
 struct CrtPendingNormalSelection {event:u64,source:NormalFrameId,selected:NormalFrameId,handler:u32,scope:u32,consumed:bool}

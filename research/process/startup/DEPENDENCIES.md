@@ -17,6 +17,8 @@ source. A second checked component invocation now executes Outer's original
 prefix, helpers, finally-only search, epilog and RET against that separately
 validated live frame. The next boundary is **production invocation of the
 checked search and one-time advancement from Outer's actual result to Main**.
+The required Main predecessor view now revalidates across the exact live
+Main-to-Outer-to-Inner chain, but it does not yet consume the Outer result.
 Captured Windows registers, cleanup and resumption remain unsupported.
 The protected component path executes original handler entry through normalizer
 writeback, the actual guard/security checker and the original context-helper
