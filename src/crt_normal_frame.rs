@@ -573,7 +573,7 @@ impl CrtPendingObjects {
  }
 }
 /// Initial native dispatch phase only; no handler or restoration permission.
-struct CrtPendingSearch {objects:CrtPendingObjects}
+struct CrtPendingSearch {objects:CrtPendingObjects,returned:std::cell::Cell<Option<(u64,u32,CrtPointer)>>}
 impl CrtPendingSearch {
  fn validate(&self,event:&CrtNormalException,rt:&CrtStreamRuntime,cpu:&CrtCpu,epoch:&NormalCallEpoch<'_>,binding:&CrtNormalBinding)->RegistryResult<()>{
   let result=(||{self.objects.validate(event,rt,cpu,epoch,binding)?;
@@ -664,7 +664,7 @@ impl CrtNormalException {
   if self.search_started||self.delivery!=CrtNormalDelivery::Pending||epoch.delivery.is_some()||epoch.registry.normal_epoch.as_ref().is_none_or(|s|s.delivery.is_some()){return Err("pending search initial phase/replay");}
   rt.store(rt.offset(objects.record,4)?,32,CrtValue::Scalar{bits:u32::from(self.noncontinuable),known:0x67})?;
   self.search_started=true;
-  let phase=CrtPendingSearch{objects:objects.clone()};phase.validate(self,rt,cpu,epoch,binding)?;Ok(phase)
+  let phase=CrtPendingSearch{objects:objects.clone(),returned:std::cell::Cell::new(None)};phase.validate(self,rt,cpu,epoch,binding)?;Ok(phase)
  }
  /// Materialize code/count and documented noncontinuable-bit knowledge only.
  /// CONTEXT, ExceptionAddress, nested link and unused parameter bytes stay

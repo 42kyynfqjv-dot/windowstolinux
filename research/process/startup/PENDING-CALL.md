@@ -326,3 +326,42 @@ establisher's pair slot untouched. Total producer/component cases72. Unknown
 record words and raw CONTEXT reads remain checked. Production is still stopped
 at the original pending RaiseException gate. Original finite search/RET and
 separately validated Outer selection remain next requirements.
+
+## Original Inner finally-only search and actual RET
+
+The component adapter now executes the original finite search beginning0x402272
+after the completed prefix. Its certificate permits only a finally-only path
+with no executed helper/API/filter calls, unchanged live scope level and a
+terminal ContinueSearch result. Original instruction visits, bytes, successors
+and finite occurrence bound remain enforced. Inner walks both finally-only
+rows while the interrupted frame stays at level1; its cursor is not written
+back as a new live level.
+
+The adapter validates the exact pending event-owned record and opaque CONTEXT,
+installed pair, handler root/registers, same-image original code and scope table.
+It does not use the older supplied-object validator or manufacture NULL/full-zero
+record facts. The original epilog restores saved registers and executes RET.
+Only afterward does checked retirement remove the handler-local pair's borrow;
+the establisher retains numeric pointer bytes without dereference authority.
+The interrupted source CPU, pending RaiseException return and normal registry
+frames remain live.
+
+An explicit native component invocation runs the whole original handler path
+from its protected entry through shared CALL/RET completion. It still starts
+with component-supplied dispatcher scratch, not an original Windows dispatcher
+or production entry integration. A private, non-Clone result is issued only
+after the enclosing protected call also verifies completion. Its one-time stamp
+binds the actual activation, handler, root and exact same-event objects. Taking
+that result returns the observed scalar1 and consumes the stamp; it grants no
+ordered advancement, selected Outer view, containment or restoration authority.
+The production delivery/capture gate remains closed.
+
+Fourteen new cases cover the successful original search/RET, changed table or
+body, wrong arguments, opaque-context corruption, changed interrupted CPU,
+occupied return slot, wrong handler receipt, replay, actual saved-register RET
+failure, aliased pair, premature result, cross-event receipt and failed event
+lifetime. RET failure retains its protected return and installed pair; no result
+is issued. Success preserves mask0x67, unknown nested link and sealed CONTEXT.
+Total producer/component cases86. Full entry-to-exit and Outer selection remain
+unproved; the next connection needs a selected Normal view separate from the
+interrupted Inner source and checked ordered advancement from this actual result.

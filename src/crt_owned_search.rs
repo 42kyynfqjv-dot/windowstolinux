@@ -407,6 +407,121 @@ fn {name}(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,objects:&CrtNormalObjec
     ))
 }
 
+/// Original finally-only search over exact event-owned opaque objects.
+pub(crate) fn emit_pending_search_return(
+    input: Input<'_>,
+    prefix: &super::handler_checks::PrefixProof,
+    callees: &SearchCallees<'_>,
+) -> Result<String, String> {
+    reprove_pending_prefix(prefix)?;
+    let sources = callees.bind(prefix, &input)?;
+    if input.origin != prefix.end
+        || input.proof.instructions.first().map(|s| s.pc) != Some(input.origin)
+        || input.code.is_empty()
+        || input.code.len() > 1024
+        || input.table.len() < 16
+        || input.table.len() > 4096
+        || input.origin.checked_add(input.code.len() as u32).is_none()
+        || input.proof.source_table != input.table
+        || input.proof.initial_level != input.proof.final_level
+        || !input.proof.call_depths.is_empty()
+        || input.proof.actions.len() != 1
+        || !matches!(
+            input.proof.actions.last(),
+            Some(Action::ReturnDisposition { value: 1, .. })
+        )
+    {
+        return Err("pending search requires finally-only return path".into());
+    }
+    if !matches!(input.proof.actions.last(),Some(Action::ReturnDisposition{pc,..}) if input.proof.instructions.last().map(|s|s.pc)==Some(*pc))
+    {
+        return Err("pending search terminal identity".into());
+    }
+    for step in &input.proof.instructions {
+        let at = step
+            .pc
+            .checked_sub(input.origin)
+            .ok_or("pending search step origin")? as usize;
+        if input.code.get(
+            at..at
+                .checked_add(step.bytes.len())
+                .ok_or("pending search step extent")?,
+        ) != Some(step.bytes.as_slice())
+        {
+            return Err("pending search changed instruction".into());
+        }
+    }
+    let body = crt_stream_emit::emit_dispatch_return_trace(
+        input.proof,
+        |_, _| Err("pending search unbound effect".into()),
+        &BTreeMap::new(),
+        |_, _| Ok("let rt=&mut *frame.rt;".into()),
+    )?;
+    let helper_regions = sources
+        .iter()
+        .map(|(pc, raw)| format!("({pc},&{raw:?}[..]),"))
+        .collect::<String>();
+    Ok(format!(
+        r#"
+struct CrtPendingInnerReturn{{objects:CrtPendingObjects,handler:u32,activation:u64,root:CrtPointer,value:CrtValue,consumed:bool}}
+fn pending_search_bytes(rt:&CrtStreamRuntime,binding:&CrtNormalBinding)->RegistryResult<()>{{
+ let image=binding.application.ok_or("pending search application")?.image;
+ for(base,bytes)in[({handler},&{prefix_raw:?}[..]),({origin},&{raw:?}[..]),{helper_regions}]{{let p=rt.process_image_code(image,base,bytes.len()as u32)?;if rt.memory.read(p.address(),bytes.len()as u32).map_err(|_|"pending search code read")?!=bytes{{return Err("pending search original bytes/table changed");}}}}
+ let table=rt.process_image_pointer(image,{table_va},{table_len})?;if rt.memory.read(table.address(),{table_len}).map_err(|_|"pending search table read")?!=&{table:?}{{return Err("pending search original bytes/table changed");}}Ok(())
+}}
+fn pending_search_body(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,phase:&CrtPendingSearch)->RegistryResult<CrtValue>{{
+ let result=(||{{frame.validate()?;phase.objects.validate(frame.event,frame.rt,frame.interrupted,frame.epoch,frame.binding)?;pending_search_bytes(frame.rt,frame.binding)?;cpu.validate_active(frame.rt)?;
+ let root=CrtCpu::pointer(cpu.entry[4])?;let pair=frame.rt.offset(root,{pair})?;let image=frame.binding.application.ok_or("pending search application")?.image;let table=frame.rt.process_image_pointer(image,{table_va},16)?;let owner=frame.owner_frame()?;
+ if frame.state.depth!=1||frame.state.activation!=cpu.return_id||frame.binding.layout.handler!={handler}||frame.scope_address()!={table_va}||frame.state.level!={level}
+  ||cpu.r[4]!=CrtValue::Pointer(frame.rt.offset(root,-44)?)||cpu.r[5]!=CrtValue::Pointer(frame.rt.offset(root,-4)?)||cpu.r[0]!=CrtValue::Pointer(pair)
+  ||cpu.r[3]!=CrtValue::Pointer(frame.binding.at(frame.rt,frame.binding.layout.record)?)||cpu.r[6]!=CrtValue::Pointer(owner)||cpu.r[7]!=CrtValue::scalar({level}i32 as u32)
+  ||frame.rt.load(frame.rt.offset(root,-12)?,32)?!=CrtValue::Pointer(table)||frame.rt.load(frame.rt.offset(root,-20)?,32)?!=CrtValue::Pointer(owner)
+  ||frame.rt.load(pair,32)?!=CrtValue::Pointer(phase.objects.record)||frame.rt.load(frame.rt.offset(pair,4)?,32)?!=CrtValue::Pointer(phase.objects.context)
+  ||frame.rt.load(frame.binding.at(frame.rt,frame.binding.layout.record-4)?,32)?!=CrtValue::Pointer(pair){{return Err("pending search installed prefix state");}}
+ let value=(||{{{body}}})()?;if !cpu.returned||value!=CrtValue::scalar(1){{return Err("pending search original RET/disposition");}}
+ let low=frame.rt.offset(root,-{temporary})?;frame.retire_handler_scratch(cpu,low,{temporary})?;
+ pending_search_bytes(frame.rt,frame.binding)?;phase.objects.validate(frame.event,frame.rt,frame.interrupted,frame.epoch,frame.binding)?;Ok(value)
+ }})();if result.is_err(){{phase.objects.live.set(false);frame.state.failed=true;}}result
+}}
+/// Explicit native component invocation. Production admission/containment stays separate.
+fn pending_inner_component(event:&mut CrtNormalException,phase:&CrtPendingSearch,rt:&mut CrtStreamRuntime,source:&CrtCpu,epoch:&NormalCallEpoch<'_>,binding:&CrtNormalBinding,dispatcher:&mut CrtCpu)->RegistryResult<CrtPendingInnerReturn>{{
+ let result=(||{{phase.validate(event,rt,source,epoch,binding)?;pending_search_bytes(rt,binding)?;dispatcher.validate_active(rt)?;event.check_handler_stack(rt,source,epoch,dispatcher)?;
+ if phase.returned.get().is_some()||binding.layout.handler!={handler}||binding.layout.scope!={table_va}{{return Err("pending search component phase/handler");}}
+ let sp=CrtCpu::pointer(dispatcher.r[4])?;for(i,p)in[phase.objects.record,binding.at(rt,binding.layout.record)?,phase.objects.context].into_iter().enumerate(){{if rt.load(rt.offset(sp,i as i64*4)?,32)?!=CrtValue::Pointer(p){{return Err("pending search component arguments");}}}}
+ event.delivery=CrtNormalDelivery::Calling;let mut actual=None;
+ let continuation=event.continuation;let value=dispatcher.call_activation(rt,continuation,0,|rt,cpu|{{
+  let mut state=CrtLiveDispatchState{{level:{level},depth:1,calls:1,activation:cpu.return_id,failed:false}};actual=Some((cpu.return_id,CrtCpu::pointer(cpu.entry[4])?));
+  let mut frame=CrtLiveFrame{{rt,event,interrupted:source,epoch,binding,state:&mut state}};
+  pending_normalizer_front(&mut frame,cpu,phase)?;pending_after_normalizer(&mut frame,cpu,phase)?;pending_prefix_tail(&mut frame,cpu,phase)?;pending_search_body(&mut frame,cpu,phase)
+ }})?;
+ phase.objects.validate(event,rt,source,epoch,binding)?;pending_search_bytes(rt,binding)?;
+ let(activation,root)=actual.ok_or("pending search missing actual handler")?;if value!=CrtValue::scalar(1)||rt.tags.values().any(|v|*v==CrtValue::ProtectedReturn(activation)){{return Err("pending search incomplete protected call");}}
+ phase.returned.set(Some((activation,{handler},root)));event.delivery=CrtNormalDelivery::Returned;
+ Ok(CrtPendingInnerReturn{{objects:phase.objects.clone(),handler:{handler},activation,root,value,consumed:false}})
+ }})();if result.is_err(){{event.fail_capture();}}result
+}}
+impl CrtPendingInnerReturn{{fn take(&mut self,event:&mut CrtNormalException,phase:&CrtPendingSearch,rt:&CrtStreamRuntime,source:&CrtCpu,epoch:&NormalCallEpoch<'_>,binding:&CrtNormalBinding)->RegistryResult<u32>{{
+ let result=(||{{if self.consumed||event.delivery!=CrtNormalDelivery::Returned||self.handler!={handler}||phase.returned.get()!=Some((self.activation,self.handler,self.root))
+  ||self.objects.source!=phase.objects.source||!std::rc::Rc::ptr_eq(&self.objects.live,&phase.objects.live){{return Err("pending search receipt replay/event/handler");}}
+ self.objects.validate(event,rt,source,epoch,binding)?;pending_search_bytes(rt,binding)?;
+ if rt.tags.values().any(|v|*v==CrtValue::ProtectedReturn(self.activation))||self.value!=CrtValue::scalar(1){{return Err("pending search receipt return changed");}}
+ self.consumed=true;phase.returned.set(None);event.delivery=CrtNormalDelivery::ResultTaken;self.value.known_scalar()
+ }})();if result.is_err(){{self.objects.live.set(false);event.fail_capture();}}result
+}}}}
+"#,
+        handler = prefix.entry,
+        prefix_raw = prefix.source,
+        origin = input.origin,
+        raw = input.code,
+        table_va = input.table_va,
+        table_len = input.table.len(),
+        table = input.table,
+        pair = prefix.handler_pair_offset - 4,
+        level = input.proof.initial_level,
+        temporary = prefix.temporary_bytes
+    ))
+}
+
 /// Lower the separately proved selected-caller phase after GlobalUnwind returns.
 pub(crate) fn emit_post_global(input: Input<'_>, name: &str) -> Result<String, String> {
     let global = input

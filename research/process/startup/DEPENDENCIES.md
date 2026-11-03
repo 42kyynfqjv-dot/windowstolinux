@@ -9,14 +9,16 @@ Four frames and prior effects remain owned; constructor permissions stay revoked
 The same event now owns disjoint record and opaque CONTEXT storage and can begin
 the initial search phase with only justified flag knowledge. A protected component
 cut executes the original context-helper selector bypass and returns to its live
-handler activation. The next boundary is **complete original handler-prefix
-composition and a separately validated selected Outer view**. No complete handler
-delivery, captured Windows registers, cleanup or resumption is admitted.
+handler activation. The next boundary is **production invocation and a separately
+validated selected Outer view**. Captured Windows registers, cleanup and
+resumption remain unsupported.
 The protected component path executes original handler entry through normalizer
 writeback, the actual guard/security checker and the original context-helper
 CALL/RET, followed by original caller cleanup, TEST and actual pointer-pair
-installation through0x40226f. It stops before0x402272. Production handler entry,
-original search/RET and separately selected Outer view are still unconnected.
+installation through0x40226f. The component executes original Inner search
+from0x402272 through its actual epilog/RET and issues a single-use actual-handler
+result after enclosing protected-call completion. Production dispatcher entry,
+checked ordered advancement and a separately selected Outer view are unconnected.
 Five retained Windows component comparisons and zero whole-PE pairs remain.
 
 [Producer proof, ownership, tests and exact delivery limits](PENDING-CALL.md).

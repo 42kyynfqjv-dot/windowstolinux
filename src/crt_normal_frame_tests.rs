@@ -2194,6 +2194,7 @@ fn application_handoff_cases(){let original=std::fs::read(std::env::var("W2L_PE_
 #[inline(never)]fn pending_call_acquisition_one(original:&[u8],mode:u32){
  let original=if mode==51{let mut changed=original.to_vec();startup_caller_mutate(&mut changed,0x414a1b);changed}else{original.to_vec()};let original=&original[..];
  let mut tail_input=original.to_vec();if mode==64{startup_caller_mutate(&mut tail_input,0x402251);}let original=&tail_input[..];
+ let mut search_input=original.to_vec();if let Some(at)=match mode{73=>Some(0x41b1ec),74=>Some(0x402272),_=>None}{startup_caller_mutate(&mut search_input,at);}let original=&search_input[..];
  let mut changed_guard=original.to_vec();if let Some(at)=match mode{55=>Some(0x4021d0),56=>Some(0x40154c),57=>Some(0x41b1d8),59=>Some(0x415128),_=>None}{startup_caller_mutate(&mut changed_guard,at);}if mode==58{startup_caller_xor(&mut changed_guard,0x41b1d0,0x2e);}let original=&changed_guard[..];
  let mut file=original.to_vec();if mode==35||mode==40{startup_caller_mutate(&mut file,0x415128);}if mode==36||mode==41{startup_caller_mutate(&mut file,0x402877);}if mode==1||mode==2{startup_caller_mutate(&mut file,0x401117+mode-1);}if mode==3{startup_caller_mutate(&mut file,0x415000);}
  let(m,mut registry,main,mut permit)=fixture_with_extra(&[(0x410000,0x420000)]);
@@ -2259,6 +2260,18 @@ fn application_handoff_cases(){let original=std::fs::read(std::env::var("W2L_PE_
       // normalizer/guard prefix composition and the handler remainder stay unbound.
       let mut d=cpu(rt,slot.address()-256,99000+u64::from(mode));
       for arg in [CrtValue::scalar(0),CrtValue::Pointer(owned.context),CrtValue::Pointer(b.at(rt,b.layout.record)?),CrtValue::Pointer(owned.record)]{d.push(rt,arg)?;}
+      if mode>=72&&mode!=81&&mode!=82{
+       let image=b.application.unwrap().image;rt.store(rt.process_image_pointer(image,0x41ccb8,4)?,32,CrtValue::scalar(0))?;
+       if mode==75{rt.store(CrtCpu::pointer(d.r[4])?,32,CrtValue::Pointer(owned.context))?;}
+       if mode==77{rt.tags.insert(owned.context.address(),CrtValue::scalar(0));}
+       if mode==78{c.r[1]=CrtValue::scalar(123);}
+       if mode==79{rt.tags.insert(rt.offset(CrtCpu::pointer(d.r[4])?,-4)?.address(),CrtValue::ProtectedReturn(99881));}
+       if mode==83{let mut premature=CrtPendingInnerReturn{objects:owned.clone(),handler:0x402210,activation:d.return_id,root:CrtCpu::pointer(d.r[4])?,value:CrtValue::scalar(1),consumed:false};assert_eq!(premature.take(&mut event,&phase,rt,c,e,&b),Err("pending search receipt replay/event/handler"));assert_eq!(c.r,before);return Err("pending acquisition test stop");}
+       let result=pending_inner_component(&mut event,&phase,rt,c,e,&b,&mut d);
+       if matches!(mode,72|76|80|84|85){let mut returned=result.expect("original pending Inner search and RET must execute");assert_eq!(event.delivery,CrtNormalDelivery::Returned);assert_eq!(d.r[0],CrtValue::scalar(1));assert_eq!(rt.load(b.at(rt,b.layout.level)?,32)?,CrtValue::scalar(1));assert!(matches!(rt.load(b.at(rt,b.layout.record-4)?,32)?,CrtValue::Scalar{known:u32::MAX,..}));assert!(rt.load(owned.context,32).is_err());assert_eq!(rt.load(rt.offset(owned.record,4)?,32)?,CrtValue::Scalar{bits:0,known:0x67});assert_eq!(rt.load(rt.offset(owned.record,8)?,32)?,CrtValue::Scalar{bits:0,known:0});assert_eq!(event.require_delivery_contract(),Err("pending raise delivery/capture contract unbound"));if matches!(mode,80|84|85){if mode==80{returned.handler+=1;}if mode==84{returned.objects.source[3]+=1;}if mode==85{event.fail_capture();}assert_eq!(returned.take(&mut event,&phase,rt,c,e,&b),Err("pending search receipt replay/event/handler"));}else{assert_eq!(returned.take(&mut event,&phase,rt,c,e,&b),Ok(1));if mode==76{assert_eq!(returned.take(&mut event,&phase,rt,c,e,&b),Err("pending search receipt replay/event/handler"));}}}
+       else{assert_eq!(result.err(),Some(match mode{73|74=>"pending search original bytes/table changed",75=>"pending search component arguments",77=>"pending objects context knowledge changed",78=>"normal exception changed interrupted activation",79=>"CRT call crosses protected state",_=>unreachable!()}),"pending search mode{mode}");assert!(!owned.live.get());assert_eq!(event.delivery,CrtNormalDelivery::Failed);}
+       if mode!=78{assert_eq!(c.r,before);}assert_eq!(e.registry.normal_epoch.as_ref().unwrap().frames.len(),frame_count);event.fail_capture();return Err("pending acquisition test stop");
+      }
       event.delivery=CrtNormalDelivery::Calling;
       let got=d.call_activation(rt,0x40111d,0,|rt,h|{
        let mut state=CrtLiveDispatchState{level:b.storage_image(rt,c)?.try_level,depth:1,calls:1,activation:h.return_id,failed:false};
@@ -2285,6 +2298,7 @@ fn application_handoff_cases(){let original=std::fs::read(std::env::var("W2L_PE_
           if mode==69{h.r[3]=CrtValue::Pointer(owned.context);}
           if mode==71{view.rt.store(view.rt.offset(root,12)?,32,CrtValue::Pointer(owned.record))?;}
           let got=pending_prefix_tail(&mut view,h,&phase);
+          if mode==81||mode==82{assert_eq!(got,Ok(()));if mode==81{view.rt.tags.insert(view.rt.offset(root,-36)?.address(),CrtValue::scalar(0));}else{view.rt.store(view.rt.offset(pair,4)?,32,CrtValue::Pointer(owned.record))?;}let got=pending_search_body(&mut view,h,&phase);assert_eq!(got,Err(if mode==81{"CRT callee saved restoration"}else{"pending search installed prefix state"}));assert!(!owned.live.get());assert_eq!(view.rt.load(root,32)?,CrtValue::ProtectedReturn(h.return_id));assert_eq!(view.rt.load(owner_slot,32)?,CrtValue::Pointer(pair));assert_eq!(view.interrupted.r,before);assert_eq!(view.epoch.registry.normal_epoch.as_ref().unwrap().frames.len(),frame_count);return Err("pending handler remainder unbound");}
           if mode==69{assert_eq!((h.flags.cf,h.flags.zf,h.flags.sf,h.flags.of),(Some(false),Some(false),Some(false),Some(false)));}
           if mode==68{assert_eq!((h.flags.cf,h.flags.zf,h.flags.sf,h.flags.of),(Some(false),Some(true),Some(false),Some(false)));}
           if mode==63||mode==70{assert_eq!(got,Ok(()));assert_eq!(h.r[4],CrtValue::Pointer(view.rt.offset(root,-44)?));assert_eq!(h.r[0],CrtValue::Pointer(pair));assert_eq!(view.rt.load(pair,32)?,CrtValue::Pointer(owned.record));assert_eq!(view.rt.load(view.rt.offset(pair,4)?,32)?,CrtValue::Pointer(owned.context));assert_eq!(view.rt.load(owner_slot,32)?,CrtValue::Pointer(pair));assert_eq!(view.rt.load(view.rt.offset(owned.record,4)?,32)?,CrtValue::Scalar{bits:0,known:0x67});assert_eq!(view.rt.load(view.rt.offset(owned.record,8)?,32)?,CrtValue::Scalar{bits:0,known:0});assert!(view.rt.load(owned.context,32).is_err());assert!(!h.returned);assert_eq!(event.require_delivery_contract(),Err("pending raise delivery/capture contract unbound"));if mode==70{assert_eq!(pending_prefix_tail(&mut view,h,&phase),Err("pending tail activation/callsite"));assert!(!owned.live.get());assert_eq!(view.rt.load(owner_slot,32)?,CrtValue::Pointer(pair));}}
@@ -2353,7 +2367,7 @@ fn application_handoff_cases(){let original=std::fs::read(std::env::var("W2L_PE_
   })
  });assert_eq!(result,Err("pending acquisition test stop"),"pending acquisition mode{mode}");
 }
-fn pending_call_acquisition_cases(){let original=std::fs::read(std::env::var("W2L_PE_MAPPING_INPUT").unwrap()).unwrap();for mode in 0..72{pending_call_acquisition_one(&original,mode);}}
+fn pending_call_acquisition_cases(){let original=std::fs::read(std::env::var("W2L_PE_MAPPING_INPUT").unwrap()).unwrap();for mode in 0..86{pending_call_acquisition_one(&original,mode);}}
 
 #[inline(never)]fn startup_main_one(original:&[u8],mode:u32){
  let mut file=original.to_vec();if let Some(at)=match mode{1=>Some(0x401717),2=>Some(0x401280),3=>Some(0x401500),4=>Some(0x41b218),5=>Some(0x4012b9),6=>Some(0x402370),25=>Some(0x4011e5),26=>Some(0x4010c0),27=>Some(0x40115c),28=>Some(0x41b1d0),29=>Some(0x4010f0),_=>None}{startup_caller_mutate(&mut file,at);}
@@ -3810,6 +3824,7 @@ fn map_local_wrapper(rt:&mut CrtStreamRuntime)->RegistryResult<()>{{rt.map_regio
         let inner_search_guard=crate::handler_guard::prove_guard(&guard,0x4021d0,&security,0x40154c,0x41c000,[-2,0,-48,0],&inner).unwrap();
         let inner_search_callees=crate::crt_owned_search::SearchCallees{normalizer:&inner_search_normalizer,guard:&inner_search_guard,context:&context_proof};
         let inner_search_emitted=crate::crt_owned_search::emit_live_return(crate::crt_owned_search::Input{proof:&inner_search,origin:prefix.end,code:&handler_complete[prefix_bytes.len()..],table_va:0x41b1d0,table:&inner_search_table,bridge:0x402800,filters:&Default::default()},&prefix,&inner_search_callees,"original_inner_search_return").expect("finite original Inner search visits");
+        let pending_search=crate::crt_owned_search::emit_pending_search_return(crate::crt_owned_search::Input{proof:&inner_search,origin:prefix.end,code:&handler_complete[prefix_bytes.len()..],table_va:0x41b1d0,table:&inner_search_table,bridge:0x402800,filters:&Default::default()},&prefix,&inner_search_callees).expect("pending original finally-only search");
         assert!(inner_search_emitted.contains("CRT trace occurrence mismatch"));
         let mut changed_inner_table=inner_search_table.clone();changed_inner_table[28]^=1;
         assert_eq!(crate::crt_owned_search::emit_live_return(crate::crt_owned_search::Input{proof:&inner_search,origin:prefix.end,code:&handler_complete[prefix_bytes.len()..],table_va:0x41b1d0,table:&changed_inner_table,bridge:0x402800,filters:&Default::default()},&prefix,&inner_search_callees,"changed_inner_scope").unwrap_err(),"live search: entry/table/level contract");
@@ -3909,6 +3924,7 @@ if fault==1{{cpu.condition(0)?;}}
         let mut wrong_depth=prefix.clone();wrong_depth.calls.iter_mut().find(|c|c.effect==crate::handler_checks::CallEffect::ValidateContext).unwrap().entry_depth+=4;
         assert_eq!(crate::crt_owned_search::emit_pending_context_call(&wrong_depth,&context_proof,"wrong_depth").unwrap_err(),"pending context prefix reproof");
         prefix_metadata.push_str(&pending_context_call);
+        prefix_metadata.push_str(&pending_search);
         let pending_normalizer=crate::selection::prove_code_identity(&normalizer,0x414a1b,&std::collections::BTreeSet::from([0x41ccb8]),0xe0424242).unwrap();
         let mut wrong_front=prefix.clone();wrong_front.front.push_str("cpu.r[0]=CrtValue::scalar(0);");
         assert_eq!(crate::crt_owned_search::emit_pending_normalizer_front(&wrong_front,&pending_normalizer).unwrap_err(),"pending normalizer prefix reproof");
