@@ -625,7 +625,7 @@ impl CrtPendingNormalView {
   NormalCallEpoch::check_image(outer,&image)?;Ok(image)
  }
 }
-struct CrtPendingNormalSelection {event:u64,source:NormalFrameId,selected:NormalFrameId,handler:u32,scope:u32}
+struct CrtPendingNormalSelection {event:u64,source:NormalFrameId,selected:NormalFrameId,handler:u32,scope:u32,consumed:bool}
 struct CrtNormalException {
  anchor:guest_memory::Capability,identity:RegistryIdentity,epoch:u64,frame:NormalFrameId,
  generation:u64,code:u32,noncontinuable:bool,continuation:u32,acquisition:Option<CrtPendingRaiseProducer>,
@@ -844,7 +844,8 @@ impl CrtNormalException {
 struct CrtLiveDispatchState { level:i32,depth:u32,calls:u32,activation:u64,failed:bool }
 struct CrtLiveFrame<'a,'e> {
  rt:&'a mut CrtStreamRuntime,event:&'a CrtNormalException,
- interrupted:&'a CrtCpu,epoch:&'a NormalCallEpoch<'e>,binding:&'a CrtNormalBinding,
+ interrupted:&'a CrtCpu,epoch:&'a NormalCallEpoch<'e>,source_binding:&'a CrtNormalBinding,
+ binding:&'a CrtNormalBinding,selected_view:Option<&'a CrtPendingNormalView>,
  state:&'a mut CrtLiveDispatchState,
 }
 impl CrtLiveFrame<'_,'_> {
@@ -863,7 +864,11 @@ impl CrtLiveFrame<'_,'_> {
   if self.state.failed||self.event.delivery!=CrtNormalDelivery::Calling||self.state.depth==0||self.state.depth>32 {
    return Err("live dispatch failed/expired phase");
   }
-  let image=self.event.dispatch_source(self.rt,self.interrupted,self.epoch,self.binding)?;
+  let source=self.event.dispatch_source(self.rt,self.interrupted,self.epoch,self.source_binding)?;
+  let image=match self.selected_view{
+   Some(view)=>view.validate(self.event,self.rt,self.epoch,self.source_binding,self.binding)?,
+   None=>{if self.binding.id!=self.source_binding.id{return Err("live dispatch selected frame proof absent");}source},
+  };
   if image.try_level!=self.state.level{return Err("live dispatch unproved scope alias write");}Ok(())
  }
  /// Offsets are relative to the proved original EBP. Full words must fit in
@@ -935,7 +940,7 @@ impl CrtLiveFrame<'_,'_> {
   let parent=self.state.activation;self.state.depth+=1;self.state.calls+=1;
   let result=cpu.call_activation(self.rt,continuation,0,|rt,child|{
    self.state.activation=child.return_id;
-   let mut view=CrtLiveFrame{rt,event:self.event,interrupted:self.interrupted,epoch:self.epoch,binding:self.binding,state:self.state};
+   let mut view=CrtLiveFrame{rt,event:self.event,interrupted:self.interrupted,epoch:self.epoch,source_binding:self.source_binding,binding:self.binding,selected_view:self.selected_view,state:self.state};
    let value=body(&mut view,child)?;view.validate()?;Ok(value)
   });
   self.state.depth-=1;self.state.activation=parent;
@@ -958,7 +963,7 @@ impl CrtNormalException {
   let mut state=CrtLiveDispatchState{level:image.try_level,depth:1,calls:1,activation:0,failed:false};
   let result=dispatcher.call_activation(rt,continuation,0,|rt,handler|{
    state.activation=handler.return_id;
-   let mut view=CrtLiveFrame{rt,event:self,interrupted,epoch,binding,state:&mut state};
+   let mut view=CrtLiveFrame{rt,event:self,interrupted,epoch,source_binding:binding,binding,selected_view:None,state:&mut state};
    let value=body(&mut view,handler)?;view.validate()?;objects.validate(view.event,view.rt,view.epoch)?;Ok(value)
   });
   match result {

@@ -2275,7 +2275,7 @@ fn application_handoff_cases(){let original=std::fs::read(std::env::var("W2L_PE_
       event.delivery=CrtNormalDelivery::Calling;
       let got=d.call_activation(rt,0x40111d,0,|rt,h|{
        let mut state=CrtLiveDispatchState{level:b.storage_image(rt,c)?.try_level,depth:1,calls:1,activation:h.return_id,failed:false};
-       let mut view=CrtLiveFrame{rt,event:&event,interrupted:c,epoch:e,binding:&b,state:&mut state};
+       let mut view=CrtLiveFrame{rt,event:&event,interrupted:c,epoch:e,source_binding:&b,binding:&b,selected_view:None,state:&mut state};
        if mode>=48{
         let root=CrtCpu::pointer(h.entry[4])?;let image=b.application.unwrap().image;let global=view.rt.process_image_pointer(image,0x41ccb8,4)?;
         view.rt.store(global,32,if mode==50{CrtValue::Scalar{bits:0,known:0}}else{CrtValue::scalar(u32::from(mode==49))})?;
@@ -2402,11 +2402,24 @@ fn pending_call_acquisition_cases(){let original=std::fs::read(std::env::var("W2
      _=>{}
     }
     let selected=returned.select_outer(&mut event,&phase,rt,inner_cpu,e,&inner,&view,&outer);
-    if mode==0||mode==6{
-     let selected=selected.expect("actual Inner return must advance to actual Outer");assert_eq!((selected.event,selected.source,selected.selected,selected.handler,selected.scope),(event.generation,event.frame,outer_id,outer.layout.handler,outer.layout.scope));
+    if mode==0||mode==6||mode>=11{
+     let mut selected=selected.expect("actual Inner return must advance to actual Outer");assert_eq!((selected.event,selected.source,selected.selected,selected.handler,selected.scope),(event.generation,event.frame,outer_id,outer.layout.handler,outer.layout.scope));
      assert_eq!(phase.current.get(),RegistryHead::Normal(outer_id));assert_eq!(event.delivery,CrtNormalDelivery::ResultTaken);assert_eq!(inner_cpu.r,source_registers);
      let frames=&e.registry.normal_epoch.as_ref().unwrap().frames;assert_eq!(frames.len(),3);assert_eq!(frames.last().unwrap().id,event.frame);assert_eq!(frames.last().unwrap().previous,RegistryHead::Normal(outer_id));assert_eq!(e.registry.head,RegistryHead::Normal(event.frame));
      assert_eq!(event.require_delivery_contract(),Err("pending raise delivery/capture contract unbound"));
+     if mode>=11{
+      let mut next=cpu(rt,slot.address()-512,99000+u64::from(mode));
+      for arg in [CrtValue::scalar(0),CrtValue::Pointer(owned.context),CrtValue::Pointer(outer.at(rt,outer.layout.record)?),CrtValue::Pointer(owned.record)]{next.push(rt,arg)?;}
+      match mode{13=>view.frame.generation+=1,14=>phase.current.set(RegistryHead::Normal(event.frame)),15=>outer.layout.scope+=4,16=>inner_cpu.r[2]=CrtValue::scalar(0x66),17=>rt.store(CrtCpu::pointer(next.r[4])?,32,CrtValue::Pointer(owned.context))?,18=>selected.event+=1,_=>{}}
+      let got=pending_outer_component(&mut selected,&mut event,&phase,rt,inner_cpu,e,&inner,&view,&outer,&mut next);
+      if matches!(mode,11|12){
+       let receipt=got.expect("actual Outer search must return ContinueSearch");assert_eq!((receipt.event,receipt.source,receipt.selected,receipt.handler,receipt.value),(event.generation,event.frame,outer_id,outer.layout.handler,CrtValue::scalar(1)));assert!(selected.consumed);assert_eq!(event.delivery,CrtNormalDelivery::Returned);assert_eq!(inner_cpu.r,source_registers);assert_eq!(phase.current.get(),RegistryHead::Normal(outer_id));assert_eq!(e.registry.head,RegistryHead::Normal(event.frame));
+       if mode==12{let replay=pending_outer_component(&mut selected,&mut event,&phase,rt,inner_cpu,e,&inner,&view,&outer,&mut next);assert_eq!(replay.err(),Some("pending selected search phase/receipt"));assert_eq!(event.delivery,CrtNormalDelivery::Failed);}
+      }else{
+       assert_eq!(got.err(),Some(match mode{15=>"pending selected predecessor identity",13|14|18=>"pending selected search phase/receipt",16=>"normal exception changed interrupted activation",17=>"pending selected search arguments",_=>unreachable!()}),"pending Outer execution mode{mode}");assert_eq!(event.delivery,CrtNormalDelivery::Failed);assert!(!owned.live.get());
+      }
+      return Err("pending Outer execution stop");
+     }
      if mode==6{assert_eq!(returned.select_outer(&mut event,&phase,rt,inner_cpu,e,&inner,&view,&outer).err(),Some("pending selected search order"));assert_eq!(event.delivery,CrtNormalDelivery::Failed);}
     }else{
      assert_eq!(selected.err(),Some(match mode{1=>"pending selected search order",2=>"pending selected search order",3=>"CRT normal extra protected alias in frame",4=>"normal exception changed interrupted activation",5=>"pending search receipt replay/event/handler",7=>"pending selected predecessor identity",8=>"pending selected Outer storage/layout",9=>"pending selected Inner caller changed",10=>"pending selected Inner caller activation",_=>unreachable!()}),"pending Outer selection mode{mode}");
@@ -2415,9 +2428,9 @@ fn pending_call_acquisition_cases(){let original=std::fs::read(std::env::var("W2
     Err::<CrtValue,_>("pending Outer selection stop")
    })
   })
- });assert_eq!(result,Err("pending Outer selection stop"),"pending Outer selection mode{mode}");
+ });assert_eq!(result,Err(if mode>=11{"pending Outer execution stop"}else{"pending Outer selection stop"}),"pending Outer selection mode{mode}");
 }
-fn pending_outer_selection_cases(){let original=std::fs::read(std::env::var("W2L_PE_MAPPING_INPUT").unwrap()).unwrap();for mode in 0..11{pending_outer_selection_one(&original,mode);}}
+fn pending_outer_selection_cases(){let original=std::fs::read(std::env::var("W2L_PE_MAPPING_INPUT").unwrap()).unwrap();for mode in 0..19{pending_outer_selection_one(&original,mode);}}
 
 #[inline(never)]fn startup_main_one(original:&[u8],mode:u32){
  let mut file=original.to_vec();if let Some(at)=match mode{1=>Some(0x401717),2=>Some(0x401280),3=>Some(0x401500),4=>Some(0x41b218),5=>Some(0x4012b9),6=>Some(0x402370),25=>Some(0x4011e5),26=>Some(0x4010c0),27=>Some(0x40115c),28=>Some(0x41b1d0),29=>Some(0x4010f0),_=>None}{startup_caller_mutate(&mut file,at);}
@@ -3884,6 +3897,11 @@ fn map_local_wrapper(rt:&mut CrtStreamRuntime)->RegistryResult<()>{{rt.map_regio
         assert_eq!((outer_search.initial_level,outer_search.final_level),(0,0));
         let outer_emitted=crate::crt_owned_search::emit_live_return(crate::crt_owned_search::Input{proof:&outer_search,origin:prefix.end,code:&handler_complete[prefix_bytes.len()..],table_va:0x41b1f8,table:&outer_search_table,bridge:0x402800,filters:&Default::default()},&prefix,&inner_search_callees,"original_outer_search_return").expect("original single-row finally-only return emission");
         assert!(outer_emitted.contains("frame.state.level!= 0"));
+        let pending_outer_search=crate::crt_owned_search::emit_pending_selected_search_return(crate::crt_owned_search::Input{proof:&outer_search,origin:prefix.end,code:&handler_complete[prefix_bytes.len()..],table_va:0x41b1f8,table:&outer_search_table,bridge:0x402800,filters:&Default::default()},&prefix,&inner_search_callees).expect("pending selected Outer finally-only search");
+        let mut changed_outer_body=handler_complete[prefix_bytes.len()..].to_vec();changed_outer_body[(outer_search.instructions[2].pc-prefix.end)as usize]^=1;
+        assert_eq!(crate::crt_owned_search::emit_pending_selected_search_return(crate::crt_owned_search::Input{proof:&outer_search,origin:prefix.end,code:&changed_outer_body,table_va:0x41b1f8,table:&outer_search_table,bridge:0x402800,filters:&Default::default()},&prefix,&inner_search_callees).unwrap_err(),"pending selected search changed instruction");
+        let mut changed_outer_table=outer_search_table.clone();changed_outer_table[20]^=1;
+        assert_eq!(crate::crt_owned_search::emit_pending_selected_search_return(crate::crt_owned_search::Input{proof:&outer_search,origin:prefix.end,code:&handler_complete[prefix_bytes.len()..],table_va:0x41b1f8,table:&changed_outer_table,bridge:0x402800,filters:&Default::default()},&prefix,&inner_search_callees).unwrap_err(),"pending selected search requires finally-only return path");
         let return_table=handler_bytes("file-scope-table.bin","feffffff00000000d4ffffff00000000feffffff00000000a8464000");
         let return_dispatch=crate::handler_dispatch::prove_dispatch(&handler_complete[prefix_bytes.len()..],prefix.end,&prefix,dispatch_bindings,crate::handler_dispatch::Entry::Search,&return_table,-2,0xe0420042,&Default::default(),&filter_layout,&std::collections::BTreeSet::from([0x4046a8])).unwrap();
         let return_normalizer=crate::selection::prove_code_identity(&normalizer,0x414a1b,&std::collections::BTreeSet::from([0x41ccb8]),0xe0420042).unwrap();
@@ -3975,6 +3993,7 @@ if fault==1{{cpu.condition(0)?;}}
         assert_eq!(crate::crt_owned_search::emit_pending_context_call(&wrong_depth,&context_proof,"wrong_depth").unwrap_err(),"pending context prefix reproof");
         prefix_metadata.push_str(&pending_context_call);
         prefix_metadata.push_str(&pending_search);
+        prefix_metadata.push_str(&pending_outer_search);
         let pending_normalizer=crate::selection::prove_code_identity(&normalizer,0x414a1b,&std::collections::BTreeSet::from([0x41ccb8]),0xe0424242).unwrap();
         let mut wrong_front=prefix.clone();wrong_front.front.push_str("cpu.r[0]=CrtValue::scalar(0);");
         assert_eq!(crate::crt_owned_search::emit_pending_normalizer_front(&wrong_front,&pending_normalizer).unwrap_err(),"pending normalizer prefix reproof");

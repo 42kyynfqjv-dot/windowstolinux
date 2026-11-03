@@ -471,7 +471,7 @@ fn pending_search_bytes(rt:&CrtStreamRuntime,binding:&CrtNormalBinding)->Registr
  let table=rt.process_image_pointer(image,{table_va},{table_len})?;if rt.memory.read(table.address(),{table_len}).map_err(|_|"pending search table read")?!=&{table:?}{{return Err("pending search original bytes/table changed");}}Ok(())
 }}
 fn pending_search_body(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,phase:&CrtPendingSearch)->RegistryResult<CrtValue>{{
- let result=(||{{frame.validate()?;phase.objects.validate(frame.event,frame.rt,frame.interrupted,frame.epoch,frame.binding)?;pending_search_bytes(frame.rt,frame.binding)?;cpu.validate_active(frame.rt)?;
+ let result=(||{{frame.validate()?;phase.objects.validate(frame.event,frame.rt,frame.interrupted,frame.epoch,frame.source_binding)?;pending_search_bytes(frame.rt,frame.binding)?;cpu.validate_active(frame.rt)?;
  let root=CrtCpu::pointer(cpu.entry[4])?;let pair=frame.rt.offset(root,{pair})?;let image=frame.binding.application.ok_or("pending search application")?.image;let table=frame.rt.process_image_pointer(image,{table_va},16)?;let owner=frame.owner_frame()?;
  if frame.state.depth!=1||frame.state.activation!=cpu.return_id||frame.binding.layout.handler!={handler}||frame.scope_address()!={table_va}||frame.state.level!={level}
   ||cpu.r[4]!=CrtValue::Pointer(frame.rt.offset(root,-44)?)||cpu.r[5]!=CrtValue::Pointer(frame.rt.offset(root,-4)?)||cpu.r[0]!=CrtValue::Pointer(pair)
@@ -481,7 +481,7 @@ fn pending_search_body(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,phase:&Crt
   ||frame.rt.load(frame.binding.at(frame.rt,frame.binding.layout.record-4)?,32)?!=CrtValue::Pointer(pair){{return Err("pending search installed prefix state");}}
  let value=(||{{{body}}})()?;if !cpu.returned||value!=CrtValue::scalar(1){{return Err("pending search original RET/disposition");}}
  let low=frame.rt.offset(root,-{temporary})?;frame.retire_handler_scratch(cpu,low,{temporary})?;
- pending_search_bytes(frame.rt,frame.binding)?;phase.objects.validate(frame.event,frame.rt,frame.interrupted,frame.epoch,frame.binding)?;Ok(value)
+ pending_search_bytes(frame.rt,frame.binding)?;phase.objects.validate(frame.event,frame.rt,frame.interrupted,frame.epoch,frame.source_binding)?;Ok(value)
  }})();if result.is_err(){{phase.objects.live.set(false);frame.state.failed=true;}}result
 }}
 /// Explicit native component invocation. Production admission/containment stays separate.
@@ -492,7 +492,7 @@ fn pending_inner_component(event:&mut CrtNormalException,phase:&CrtPendingSearch
  event.delivery=CrtNormalDelivery::Calling;let mut actual=None;
  let continuation=event.continuation;let value=dispatcher.call_activation(rt,continuation,0,|rt,cpu|{{
   let mut state=CrtLiveDispatchState{{level:{level},depth:1,calls:1,activation:cpu.return_id,failed:false}};actual=Some((cpu.return_id,CrtCpu::pointer(cpu.entry[4])?));
-  let mut frame=CrtLiveFrame{{rt,event,interrupted:source,epoch,binding,state:&mut state}};
+  let mut frame=CrtLiveFrame{{rt,event,interrupted:source,epoch,source_binding:binding,binding,selected_view:None,state:&mut state}};
   pending_normalizer_front(&mut frame,cpu,phase)?;pending_after_normalizer(&mut frame,cpu,phase)?;pending_prefix_tail(&mut frame,cpu,phase)?;pending_search_body(&mut frame,cpu,phase)
  }})?;
  phase.objects.validate(event,rt,source,epoch,binding)?;pending_search_bytes(rt,binding)?;
@@ -522,7 +522,7 @@ impl CrtPendingInnerReturn{{fn take(&mut self,event:&mut CrtNormalException,phas
    let image=view.validate(event,rt,epoch,binding,outer)?;
    if image.try_level!=0{{return Err("pending selected Outer scope changed");}}
    phase.current.set(RegistryHead::Normal(view.frame));
-   Ok(CrtPendingNormalSelection{{event:event.generation,source:event.frame,selected:view.frame,handler:image.handler_va,scope:image.scope_va}})
+   Ok(CrtPendingNormalSelection{{event:event.generation,source:event.frame,selected:view.frame,handler:image.handler_va,scope:image.scope_va,consumed:false}})
   }})();if result.is_err(){{self.objects.live.set(false);event.fail_capture();}}result
 }}}}
 "#,
@@ -538,6 +538,123 @@ impl CrtPendingInnerReturn{{fn take(&mut self,event:&mut CrtNormalException,phas
         temporary = prefix.temporary_bytes,
         inner_call_len = inner_call.len(),
         inner_call = inner_call,
+    ))
+}
+
+/// Execute the same proved handler body for the separately selected live
+/// normal predecessor.  The interrupted source remains the Inner frame; the
+/// selected binding is validated through the pre-CALL view on every access.
+/// Completion yields only an actual-handler receipt and grants no advancement,
+/// cleanup, restoration, or resumption authority.
+pub(crate) fn emit_pending_selected_search_return(
+    input: Input<'_>,
+    prefix: &super::handler_checks::PrefixProof,
+    callees: &SearchCallees<'_>,
+) -> Result<String, String> {
+    reprove_pending_prefix(prefix)?;
+    let sources = callees.bind(prefix, &input)?;
+    if input.origin != prefix.end
+        || input.proof.instructions.first().map(|s| s.pc) != Some(input.origin)
+        || input.code.is_empty()
+        || input.code.len() > 1024
+        || input.table.len() < 16
+        || input.table.len() > 4096
+        || input.origin.checked_add(input.code.len() as u32).is_none()
+        || input.proof.source_table != input.table
+        || input.proof.initial_level != input.proof.final_level
+        || !input.proof.call_depths.is_empty()
+        || input.proof.actions.len() != 1
+        || !matches!(
+            input.proof.actions.last(),
+            Some(Action::ReturnDisposition { value: 1, .. })
+        )
+    {
+        return Err("pending selected search requires finally-only return path".into());
+    }
+    if !matches!(input.proof.actions.last(),Some(Action::ReturnDisposition{pc,..}) if input.proof.instructions.last().map(|s|s.pc)==Some(*pc))
+    {
+        return Err("pending selected search terminal identity".into());
+    }
+    for step in &input.proof.instructions {
+        let at = step
+            .pc
+            .checked_sub(input.origin)
+            .ok_or("pending selected search step origin")? as usize;
+        if input.code.get(
+            at..at
+                .checked_add(step.bytes.len())
+                .ok_or("pending selected search step extent")?,
+        ) != Some(step.bytes.as_slice())
+        {
+            return Err("pending selected search changed instruction".into());
+        }
+    }
+    let body = crt_stream_emit::emit_dispatch_return_trace(
+        input.proof,
+        |_, _| Err("pending selected search unbound effect".into()),
+        &BTreeMap::new(),
+        |_, _| Ok("let rt=&mut *frame.rt;".into()),
+    )?;
+    let helper_regions = sources
+        .iter()
+        .map(|(pc, raw)| format!("({pc},&{raw:?}[..]),"))
+        .collect::<String>();
+    Ok(format!(
+        r#"
+struct CrtPendingOuterReturn{{event:u64,source:NormalFrameId,selected:NormalFrameId,handler:u32,activation:u64,root:CrtPointer,value:CrtValue}}
+fn pending_outer_search_bytes(rt:&CrtStreamRuntime,binding:&CrtNormalBinding)->RegistryResult<()>{{
+ let image=binding.application.ok_or("pending selected search application")?.image;
+ for(base,bytes)in[({handler},&{prefix_raw:?}[..]),({origin},&{raw:?}[..]),{helper_regions}]{{let p=rt.process_image_code(image,base,bytes.len()as u32)?;if rt.memory.read(p.address(),bytes.len()as u32).map_err(|_|"pending selected search code read")?!=bytes{{return Err("pending selected search original bytes/table changed");}}}}
+ let table=rt.process_image_pointer(image,{table_va},{table_len})?;if rt.memory.read(table.address(),{table_len}).map_err(|_|"pending selected search table read")?!=&{table:?}{{return Err("pending selected search original bytes/table changed");}}Ok(())
+}}
+fn pending_outer_search_body(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,phase:&CrtPendingSearch)->RegistryResult<CrtValue>{{
+ let result=(||{{frame.validate()?;phase.objects.validate(frame.event,frame.rt,frame.interrupted,frame.epoch,frame.source_binding)?;pending_outer_search_bytes(frame.rt,frame.binding)?;cpu.validate_active(frame.rt)?;
+ let root=CrtCpu::pointer(cpu.entry[4])?;let pair=frame.rt.offset(root,{pair})?;let image=frame.binding.application.ok_or("pending selected search application")?.image;let table=frame.rt.process_image_pointer(image,{table_va},16)?;let owner=frame.owner_frame()?;
+ if frame.state.depth!=1||frame.state.activation!=cpu.return_id||frame.binding.layout.handler!={handler}||frame.scope_address()!={table_va}||frame.state.level!={level}
+  ||cpu.r[4]!=CrtValue::Pointer(frame.rt.offset(root,-44)?)||cpu.r[5]!=CrtValue::Pointer(frame.rt.offset(root,-4)?)||cpu.r[0]!=CrtValue::Pointer(pair)
+  ||cpu.r[3]!=CrtValue::Pointer(frame.binding.at(frame.rt,frame.binding.layout.record)?)||cpu.r[6]!=CrtValue::Pointer(owner)||cpu.r[7]!=CrtValue::scalar({level}i32 as u32)
+  ||frame.rt.load(frame.rt.offset(root,-12)?,32)?!=CrtValue::Pointer(table)||frame.rt.load(frame.rt.offset(root,-20)?,32)?!=CrtValue::Pointer(owner)
+  ||frame.rt.load(pair,32)?!=CrtValue::Pointer(phase.objects.record)||frame.rt.load(frame.rt.offset(pair,4)?,32)?!=CrtValue::Pointer(phase.objects.context)
+  ||frame.rt.load(frame.binding.at(frame.rt,frame.binding.layout.record-4)?,32)?!=CrtValue::Pointer(pair){{return Err("pending selected search installed prefix state");}}
+ let value=(||{{{body}}})()?;if !cpu.returned||value!=CrtValue::scalar(1){{return Err("pending selected search original RET/disposition");}}
+ let low=frame.rt.offset(root,-{temporary})?;frame.retire_handler_scratch(cpu,low,{temporary})?;
+ pending_outer_search_bytes(frame.rt,frame.binding)?;phase.objects.validate(frame.event,frame.rt,frame.interrupted,frame.epoch,frame.source_binding)?;Ok(value)
+ }})();if result.is_err(){{phase.objects.live.set(false);frame.state.failed=true;}}result
+}}
+fn pending_outer_component(selection:&mut CrtPendingNormalSelection,event:&mut CrtNormalException,phase:&CrtPendingSearch,rt:&mut CrtStreamRuntime,source:&CrtCpu,epoch:&NormalCallEpoch<'_>,source_binding:&CrtNormalBinding,view:&CrtPendingNormalView,outer:&CrtNormalBinding,dispatcher:&mut CrtCpu)->RegistryResult<CrtPendingOuterReturn>{{
+ let result=(||{{
+  phase.objects.validate(event,rt,source,epoch,source_binding)?;
+  if selection.consumed||event.delivery!=CrtNormalDelivery::ResultTaken||selection.event!=event.generation||selection.source!=event.frame
+   ||selection.selected!=view.frame||selection.handler!={handler}||selection.scope!={table_va}
+   ||phase.current.get()!=RegistryHead::Normal(view.frame)||phase.returned.get().is_some(){{return Err("pending selected search phase/receipt");}}
+  let image=view.validate(event,rt,epoch,source_binding,outer)?;
+  if outer.layout!=original_outer_layout()||image.handler_va!={handler}||image.scope_va!={table_va}||image.try_level!={level}{{return Err("pending selected search Outer storage/layout");}}
+  pending_outer_search_bytes(rt,outer)?;dispatcher.validate_active(rt)?;event.check_handler_stack(rt,source,epoch,dispatcher)?;
+  let sp=CrtCpu::pointer(dispatcher.r[4])?;for(i,p)in[phase.objects.record,outer.at(rt,outer.layout.record)?,phase.objects.context].into_iter().enumerate(){{if rt.load(rt.offset(sp,i as i64*4)?,32)?!=CrtValue::Pointer(p){{return Err("pending selected search arguments");}}}}
+  event.delivery=CrtNormalDelivery::Calling;let mut actual=None;let continuation=event.continuation;
+  let value=dispatcher.call_activation(rt,continuation,0,|rt,cpu|{{
+   let mut state=CrtLiveDispatchState{{level:{level},depth:1,calls:1,activation:cpu.return_id,failed:false}};actual=Some((cpu.return_id,CrtCpu::pointer(cpu.entry[4])?));
+   let mut frame=CrtLiveFrame{{rt,event,interrupted:source,epoch,source_binding,binding:outer,selected_view:Some(view),state:&mut state}};
+   pending_normalizer_front(&mut frame,cpu,phase)?;pending_after_normalizer(&mut frame,cpu,phase)?;pending_prefix_tail(&mut frame,cpu,phase)?;pending_outer_search_body(&mut frame,cpu,phase)
+  }})?;
+  phase.objects.validate(event,rt,source,epoch,source_binding)?;view.validate(event,rt,epoch,source_binding,outer)?;pending_outer_search_bytes(rt,outer)?;
+  let(activation,root)=actual.ok_or("pending selected search missing actual handler")?;
+  if value!=CrtValue::scalar(1)||rt.tags.values().any(|v|*v==CrtValue::ProtectedReturn(activation)){{return Err("pending selected search incomplete protected call");}}
+  selection.consumed=true;event.delivery=CrtNormalDelivery::Returned;
+  Ok(CrtPendingOuterReturn{{event:event.generation,source:event.frame,selected:view.frame,handler:{handler},activation,root,value}})
+ }})();if result.is_err(){{event.fail_capture();}}result
+}}
+"#,
+        handler = prefix.entry,
+        prefix_raw = prefix.source,
+        origin = input.origin,
+        raw = input.code,
+        table_va = input.table_va,
+        table_len = input.table.len(),
+        table = input.table,
+        pair = prefix.handler_pair_offset - 4,
+        level = input.proof.initial_level,
+        temporary = prefix.temporary_bytes,
     ))
 }
 
@@ -981,7 +1098,7 @@ pub(crate) fn emit_pending_normalizer_front(
     Ok(format!(
         r#"
 fn pending_normalizer_call(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,phase:&CrtPendingSearch,continuation:u32)->RegistryResult<CrtValue>{{
- frame.validate()?;phase.objects.validate(frame.event,frame.rt,frame.interrupted,frame.epoch,frame.binding)?;
+ frame.validate()?;phase.objects.validate(frame.event,frame.rt,frame.interrupted,frame.epoch,frame.source_binding)?;
  let root=CrtCpu::pointer(cpu.entry[4])?;let sp=CrtCpu::pointer(cpu.r[4])?;
  if frame.state.depth!=1||frame.state.activation!=cpu.return_id||continuation!={continuation}
   ||sp!=frame.rt.offset(root,-{depth})?||frame.rt.load(sp,32)?!=CrtValue::scalar({code}){{return Err("pending normalizer original callsite/argument");}}
@@ -997,7 +1114,7 @@ fn pending_normalizer_call(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,phase:
  }})
 }}
 fn pending_normalizer_front(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,phase:&CrtPendingSearch)->RegistryResult<()>{{
- let result=(||{{frame.validate()?;phase.objects.validate(frame.event,frame.rt,frame.interrupted,frame.epoch,frame.binding)?;
+ let result=(||{{frame.validate()?;phase.objects.validate(frame.event,frame.rt,frame.interrupted,frame.epoch,frame.source_binding)?;
  let root=CrtCpu::pointer(cpu.entry[4])?;
  if !frame.event.search_started||frame.state.depth!=1||frame.state.activation!=cpu.return_id||cpu.returned||cpu.r!=cpu.entry
   ||frame.binding.layout.handler!={handler}||frame.event.code!={code}
@@ -1007,7 +1124,7 @@ fn pending_normalizer_front(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,phase
  for(base,expected)in[({handler},&{prefix_raw:?}[..]),({origin},&{bytes:?}[..])]{{let p=frame.rt.process_image_code(image,base,expected.len()as u32)?;if frame.rt.memory.read(p.address(),expected.len()as u32).map_err(|_|"pending normalizer code read")?!=expected{{return Err("pending normalizer code changed");}}}}
  {global_checks}
  {front}
- phase.objects.validate(frame.event,frame.rt,frame.interrupted,frame.epoch,frame.binding)?;frame.validate()?;Ok(())
+ phase.objects.validate(frame.event,frame.rt,frame.interrupted,frame.epoch,frame.source_binding)?;frame.validate()?;Ok(())
  }})();if result.is_err(){{phase.objects.live.set(false);frame.state.failed=true;}}result
 }}
 "#,
@@ -1137,7 +1254,7 @@ pub(crate) fn emit_pending_guard(
     Ok(format!(
         r#"
 fn pending_guard_call(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,phase:&CrtPendingSearch,continuation:u32)->RegistryResult<()>{{
- let result=(||{{frame.validate()?;phase.objects.validate(frame.event,frame.rt,frame.interrupted,frame.epoch,frame.binding)?;
+ let result=(||{{frame.validate()?;phase.objects.validate(frame.event,frame.rt,frame.interrupted,frame.epoch,frame.source_binding)?;
  let root=CrtCpu::pointer(cpu.entry[4])?;let sp=CrtCpu::pointer(cpu.r[4])?;
  if !frame.event.search_started||frame.state.depth!=1||frame.state.activation!=cpu.return_id||cpu.returned
   ||continuation!={continuation}||sp!=frame.rt.offset(root,-{depth})?{{return Err("pending guard activation/callsite");}}
@@ -1150,7 +1267,7 @@ fn pending_guard_call(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,phase:&CrtP
  let low=frame.rt.offset(sp,-{scratch})?;frame.rt.valid(low,{scratch})?;frame.stack_range(low.address(),u64::from(sp.address()))?;
  if frame.rt.overlapping_tags(low.address(),{scratch}).iter().any(|(_,v)|matches!(v,CrtValue::ProtectedReturn(_)|CrtValue::OpaqueSaved(_)|CrtValue::ThreadHead(_))){{return Err("pending guard protected scratch");}}
  frame.call(cpu,continuation,|frame,cpu|{{{body}}})?;
- phase.objects.validate(frame.event,frame.rt,frame.interrupted,frame.epoch,frame.binding)?;frame.validate()?;Ok(())
+ phase.objects.validate(frame.event,frame.rt,frame.interrupted,frame.epoch,frame.source_binding)?;frame.validate()?;Ok(())
  }})();if result.is_err(){{phase.objects.live.set(false);frame.state.failed=true;}}result
 }}
 "#,
@@ -1195,8 +1312,8 @@ pub(crate) fn emit_pending_after_normalizer(
     Ok(format!(
         r#"
 fn pending_after_normalizer(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,phase:&CrtPendingSearch)->RegistryResult<()>{{
- let result=(||{{frame.validate()?;phase.objects.validate(frame.event,frame.rt,frame.interrupted,frame.epoch,frame.binding)?;{body}
- phase.objects.validate(frame.event,frame.rt,frame.interrupted,frame.epoch,frame.binding)?;Ok(())}})();if result.is_err(){{phase.objects.live.set(false);frame.state.failed=true;}}result
+ let result=(||{{frame.validate()?;phase.objects.validate(frame.event,frame.rt,frame.interrupted,frame.epoch,frame.source_binding)?;{body}
+ phase.objects.validate(frame.event,frame.rt,frame.interrupted,frame.epoch,frame.source_binding)?;Ok(())}})();if result.is_err(){{phase.objects.live.set(false);frame.state.failed=true;}}result
 }}
 "#
     ))
@@ -1231,7 +1348,7 @@ pub(crate) fn emit_pending_prefix_tail(
     Ok(format!(
         r#"
 fn pending_prefix_tail(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,phase:&CrtPendingSearch)->RegistryResult<()>{{
- let result=(||{{frame.validate()?;phase.objects.validate(frame.event,frame.rt,frame.interrupted,frame.epoch,frame.binding)?;cpu.validate_active(frame.rt)?;
+ let result=(||{{frame.validate()?;phase.objects.validate(frame.event,frame.rt,frame.interrupted,frame.epoch,frame.source_binding)?;cpu.validate_active(frame.rt)?;
  let root=CrtCpu::pointer(cpu.entry[4])?;let sp=CrtCpu::pointer(cpu.r[4])?;
  if !frame.event.search_started||frame.state.depth!=1||frame.state.activation!=cpu.return_id||cpu.returned
   ||frame.binding.layout.handler!={handler}||frame.binding.layout.record.checked_add(16)!=Some(frame.binding.layout.bp)
@@ -1243,7 +1360,7 @@ fn pending_prefix_tail(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,phase:&Crt
  let table=frame.rt.process_image_pointer(image,frame.scope_address(),16)?;let owner=frame.binding.at(frame.rt,frame.binding.layout.bp)?;
  for(i,v)in[CrtValue::Pointer(phase.objects.context),CrtValue::Pointer(table),CrtValue::Pointer(owner),CrtValue::scalar(frame.event.code)].into_iter().enumerate(){{if frame.rt.load(frame.rt.offset(sp,i as i64*4)?,32)?!=v{{return Err("pending tail deferred arguments");}}}}
  {body}
- phase.objects.validate(frame.event,frame.rt,frame.interrupted,frame.epoch,frame.binding)?;frame.validate()?;
+ phase.objects.validate(frame.event,frame.rt,frame.interrupted,frame.epoch,frame.source_binding)?;frame.validate()?;
  let pair=frame.rt.offset(root,{pair})?;let slot=frame.binding.at(frame.rt,frame.binding.layout.record-4)?;
  if cpu.r[0]!=CrtValue::Pointer(pair)||frame.rt.load(pair,32)?!=CrtValue::Pointer(phase.objects.record)
   ||frame.rt.load(frame.rt.offset(pair,4)?,32)?!=CrtValue::Pointer(phase.objects.context)||frame.rt.load(slot,32)?!=CrtValue::Pointer(pair){{return Err("pending tail installed pair identity");}}Ok(())
@@ -1352,7 +1469,7 @@ pub(crate) fn emit_pending_context_call(
         r#"
 fn {name}(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,phase:&CrtPendingSearch,continuation:u32)->RegistryResult<()>{{
  let result=(||{{
- frame.validate()?;phase.objects.validate(frame.event,frame.rt,frame.interrupted,frame.epoch,frame.binding)?;
+ frame.validate()?;phase.objects.validate(frame.event,frame.rt,frame.interrupted,frame.epoch,frame.source_binding)?;
  let root=CrtCpu::pointer(cpu.entry[4])?;let activation=cpu.return_id;
  if !frame.event.search_started||frame.event.delivery!=CrtNormalDelivery::Calling||frame.state.depth!=1
   ||frame.state.activation!=activation||cpu.returned||frame.binding.layout.handler!={handler}
@@ -1378,13 +1495,13 @@ fn {name}(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,phase:&CrtPendingSearch
  if frame.rt.overlapping_tags(low.address(),{scratch}).iter().any(|(_,v)|matches!(v,CrtValue::ProtectedReturn(_)|CrtValue::OpaqueSaved(_)|CrtValue::ThreadHead(_))){{return Err("pending context protected helper scratch");}}
  let helper_entry=frame.rt.offset(sp,-4)?;
  frame.call(cpu,continuation,|f,cpu|{{
-  check_root(f.rt)?;phase.objects.validate(f.event,f.rt,f.interrupted,f.epoch,f.binding)?;
+  check_root(f.rt)?;phase.objects.validate(f.event,f.rt,f.interrupted,f.epoch,f.source_binding)?;
   if f.state.depth!=2||f.state.activation!=cpu.return_id||cpu.entry[4]!=CrtValue::Pointer(helper_entry)
    ||f.rt.load(helper_entry,32)?!=CrtValue::ProtectedReturn(cpu.return_id){{return Err("pending context protected helper activation");}}
   let rt=&mut *f.rt;let value=(||{{{body}}})()?;
   if !cpu.returned{{return Err("pending context incomplete helper");}}Ok(value)
  }})?;
- check_root(frame.rt)?;phase.objects.validate(frame.event,frame.rt,frame.interrupted,frame.epoch,frame.binding)?;
+ check_root(frame.rt)?;phase.objects.validate(frame.event,frame.rt,frame.interrupted,frame.epoch,frame.source_binding)?;
  if frame.state.activation!=activation||frame.state.depth!=1{{return Err("pending context lost handler activation");}}Ok(())
  }})();if result.is_err(){{phase.objects.live.set(false);frame.state.failed=true;}}result
 }}

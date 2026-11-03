@@ -394,3 +394,30 @@ producer/component cases are97. The canonical component proves original Inner
 search selects the actual Outer predecessor; it still begins with component-owned
 dispatcher scratch. Production RaiseException delivery, Outer's original search,
 cleanup, restoration, Main completion and whole-PE entry-to-exit remain open.
+
+## Original Outer search on the selected live view
+
+The selected predecessor is now usable as a separate live handler view without
+relabeling the interrupted event source. `CrtLiveFrame` retains both bindings:
+every operation revalidates the suspended Inner CPU/storage through the event,
+then independently reconstructs the selected Outer from its pre-CALL view and
+current guest storage. Nested helper calls carry both identities. Pending object
+checks always use the interrupted Inner source, while ordinary handler frame
+reads and writes use only the selected Outer binding.
+
+After the single-use Inner result moves the search cursor, a second protected
+component invocation executes the original handler prefix, normalizer, guard,
+context helper, pointer-pair installation, finite Outer search, epilog and RET
+against Outer's actual scope table at `0x41b1f8` and live level0. The same exact
+event-owned record and opaque CONTEXT are used. The registry head and interrupted
+CPU remain Inner throughout. Completion consumes the descriptive Outer selection
+once and returns an actual handler receipt; it does not advance to Main or grant
+cleanup, restoration, resumption, or CONTEXT-read authority.
+
+Eight additional cases cover successful Outer execution, receipt replay, stale
+selected identity, premature cursor reversal, changed Outer layout, changed
+interrupted CPU, wrong handler arguments and cross-event selection identity.
+Failures revoke the event and preserve earlier original effects. Total
+producer/component cases are105. Production dispatcher invocation, checked
+advancement from the Outer result to Main, incoming-chain containment, cleanup,
+restoration and whole-PE entry-to-exit remain open.
