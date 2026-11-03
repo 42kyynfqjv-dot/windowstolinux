@@ -461,6 +461,7 @@ pub(crate) fn emit_pending_search_return(
         .iter()
         .map(|(pc, raw)| format!("({pc},&{raw:?}[..]),"))
         .collect::<String>();
+    let inner_call = crate::crt_ptd::raw(crate::crt_startup_caller::INNER_CALL);
     Ok(format!(
         r#"
 struct CrtPendingInnerReturn{{objects:CrtPendingObjects,handler:u32,activation:u64,root:CrtPointer,value:CrtValue,consumed:bool}}
@@ -507,6 +508,22 @@ impl CrtPendingInnerReturn{{fn take(&mut self,event:&mut CrtNormalException,phas
  if rt.tags.values().any(|v|*v==CrtValue::ProtectedReturn(self.activation))||self.value!=CrtValue::scalar(1){{return Err("pending search receipt return changed");}}
  self.consumed=true;phase.returned.set(None);event.delivery=CrtNormalDelivery::ResultTaken;self.value.known_scalar()
  }})();if result.is_err(){{self.objects.live.set(false);event.fail_capture();}}result
+ }}
+ fn select_outer(&mut self,event:&mut CrtNormalException,phase:&CrtPendingSearch,rt:&CrtStreamRuntime,source:&CrtCpu,epoch:&NormalCallEpoch<'_>,binding:&CrtNormalBinding,view:&CrtPendingNormalView,outer:&CrtNormalBinding)->RegistryResult<CrtPendingNormalSelection>{{
+  let result=(||{{
+   if phase.source!=event.frame||phase.current.get()!=RegistryHead::Normal(event.frame)||phase.previous!=RegistryHead::Normal(view.frame)
+    ||phase.normal_count!=view.normal_count.checked_add(1).ok_or("pending selected frame count")?{{return Err("pending selected search order");}}
+   if source.return_site!=Some((source.return_id,0x4011ea)){{return Err("pending selected Inner caller activation");}}
+   let application=outer.application.ok_or("pending selected application")?;let call=rt.process_image_code(application.image,0x4011e5,{inner_call_len})?;
+   if rt.memory.read(call.address(),{inner_call_len}).map_err(|_|"pending selected Inner caller read")?!=&{inner_call:?}{{return Err("pending selected Inner caller changed");}}
+   let image=view.validate(event,rt,epoch,binding,outer)?;
+   if outer.layout!=original_outer_layout()||image.handler_va!=outer.layout.handler||image.scope_va!=outer.layout.scope||image.try_level!=0{{return Err("pending selected Outer storage/layout");}}
+   if self.take(event,phase,rt,source,epoch,binding)?!=1{{return Err("pending selected disposition changed");}}
+   let image=view.validate(event,rt,epoch,binding,outer)?;
+   if image.try_level!=0{{return Err("pending selected Outer scope changed");}}
+   phase.current.set(RegistryHead::Normal(view.frame));
+   Ok(CrtPendingNormalSelection{{event:event.generation,source:event.frame,selected:view.frame,handler:image.handler_va,scope:image.scope_va}})
+  }})();if result.is_err(){{self.objects.live.set(false);event.fail_capture();}}result
 }}}}
 "#,
         handler = prefix.entry,
@@ -518,7 +535,9 @@ impl CrtPendingInnerReturn{{fn take(&mut self,event:&mut CrtNormalException,phas
         table = input.table,
         pair = prefix.handler_pair_offset - 4,
         level = input.proof.initial_level,
-        temporary = prefix.temporary_bytes
+        temporary = prefix.temporary_bytes,
+        inner_call_len = inner_call.len(),
+        inner_call = inner_call,
     ))
 }
 

@@ -357,9 +357,14 @@ impl CrtNormalBinding {
  /// Only inline FS publication may use the incomplete projection. It omits
  /// the unwritten field and cannot serve as a normal/suspended image issuer.
  fn project_storage(&self,rt:&CrtStreamRuntime,cpu:&CrtCpu)->RegistryResult<FrameImage<RegistryHead>>{
-  if cpu.entry!=self.entry||cpu.return_id!=self.return_id||cpu.returned||cpu.return_pop!=self.layout.pop{return Err("CRT normal changed CPU activation");}
+  self.project_state(rt,&cpu.r,&cpu.entry,cpu.return_id,cpu.returned,cpu.return_pop)
+ }
+ /// Rebuild a suspended caller from the exact state captured before its child
+ /// CALL. This is read-only frame identity, never register restoration authority.
+ fn project_state(&self,rt:&CrtStreamRuntime,registers:&[CrtValue;8],entry:&[CrtValue;8],return_id:u64,returned:bool,return_pop:u16)->RegistryResult<FrameImage<RegistryHead>>{
+  if *entry!=self.entry||return_id!=self.return_id||returned||return_pop!=self.layout.pop{return Err("CRT normal changed CPU activation");}
   let l=&self.layout;let frame=self.at(rt,l.bp)?;let low=self.at(rt,l.low)?;let record=self.at(rt,l.record)?;
-  if !self.consumed.contains(&l.bp)&&cpu.r[5]!=CrtValue::Pointer(frame){return Err("CRT normal actual frame pointer");}
+  if !self.consumed.contains(&l.bp)&&registers[5]!=CrtValue::Pointer(frame){return Err("CRT normal actual frame pointer");}
   if rt.load(self.caller,32)?!=CrtValue::ProtectedReturn(self.return_id)
    ||rt.tags.values().filter(|v|**v==CrtValue::ProtectedReturn(self.return_id)).count()!=1
    ||rt.load(record,32)?!=CrtValue::ThreadHead(self.token)
@@ -391,20 +396,20 @@ impl CrtNormalBinding {
    (l.level,FrameWord::Scalar(level as u32)),
    (l.guard,FrameWord::Guard{frame:frame.address(),cookie:self.cookie,bits:frame.address()^self.cookie})]);
   if !self.saved_sp_pending{if let Some(at)=l.saved_sp{words.insert(at,FrameWord::StackAddress(low.address()));}}
-  for &offset in &self.extra_guards{self.word(rt,cpu,offset,1,CrtValue::scalar(frame.address()^self.cookie))?;words.insert(offset,FrameWord::Guard{frame:frame.address(),cookie:self.cookie,bits:frame.address()^self.cookie});}
+  for &offset in &self.extra_guards{self.word_state(rt,registers,offset,1,CrtValue::scalar(frame.address()^self.cookie))?;words.insert(offset,FrameWord::Guard{frame:frame.address(),cookie:self.cookie,bits:frame.address()^self.cookie});}
   for &(offset,register) in &l.saved{
-   let value=self.saved(register);self.word(rt,cpu,offset,register,value)?;
+   let value=self.saved(register);self.word_state(rt,registers,offset,register,value)?;
    // Unknown or pointer bits cannot gain scalar knowledge in the registry.
    words.insert(offset,FrameWord::Saved(register,value.known_scalar().ok()));
   }
-  self.word(rt,cpu,l.guard,1,CrtValue::scalar(frame.address()^self.cookie))?;
+  self.word_state(rt,registers,l.guard,1,CrtValue::scalar(frame.address()^self.cookie))?;
   Ok(FrameImage{entry_sp:self.caller.address(),ebp:frame.address(),esp:low.address(),record:record.address(),
    scope_va:l.scope,handler_va:l.handler,try_level:level,words})
  }
- fn word(&self,rt:&CrtStreamRuntime,cpu:&CrtCpu,offset:i32,register:u8,value:CrtValue)->RegistryResult<()>{
+ fn word_state(&self,rt:&CrtStreamRuntime,registers:&[CrtValue;8],offset:i32,register:u8,value:CrtValue)->RegistryResult<()>{
   let actual=rt.load(self.at(rt,offset)?,32)?;
   if self.consumed.contains(&offset){
-   if actual!=(CrtValue::Scalar{bits:0,known:0})||cpu.r[register as usize]!=value{return Err("CRT normal consumed word/register changed");}
+   if actual!=(CrtValue::Scalar{bits:0,known:0})||registers[register as usize]!=value{return Err("CRT normal consumed word/register changed");}
   }else if actual!=value{return Err("CRT normal saved known-mask/type/guard changed");}Ok(())
  }
  fn install(&mut self,rt:&CrtStreamRuntime,cpu:&CrtCpu,epoch:&mut NormalCallEpoch<'_>,record:CrtPointer,token:CrtThreadHead)->RegistryResult<()>{
@@ -573,14 +578,54 @@ impl CrtPendingObjects {
  }
 }
 /// Initial native dispatch phase only; no handler or restoration permission.
-struct CrtPendingSearch {objects:CrtPendingObjects,returned:std::cell::Cell<Option<(u64,u32,CrtPointer)>>}
+struct CrtPendingSearch {
+ objects:CrtPendingObjects,returned:std::cell::Cell<Option<(u64,u32,CrtPointer)>>,
+ source:NormalFrameId,previous:RegistryHead,normal_count:usize,current:std::cell::Cell<RegistryHead>,
+}
 impl CrtPendingSearch {
  fn validate(&self,event:&CrtNormalException,rt:&CrtStreamRuntime,cpu:&CrtCpu,epoch:&NormalCallEpoch<'_>,binding:&CrtNormalBinding)->RegistryResult<()>{
   let result=(||{self.objects.validate(event,rt,cpu,epoch,binding)?;
-   if !event.search_started||event.delivery!=CrtNormalDelivery::Pending||epoch.delivery.is_some()||epoch.registry.normal_epoch.as_ref().is_none_or(|s|s.delivery.is_some()){return Err("pending search phase/lifetime");}Ok(())})();
+   if !event.search_started||event.delivery!=CrtNormalDelivery::Pending||epoch.delivery.is_some()
+    ||self.source!=event.frame||self.previous!=binding.previous||self.current.get()!=RegistryHead::Normal(event.frame)
+    ||epoch.registry.normal_epoch.as_ref().is_none_or(|s|s.delivery.is_some()||s.frames.len()!=self.normal_count){return Err("pending search phase/lifetime");}Ok(())})();
   if result.is_err(){self.objects.live.set(false);}result
  }
 }
+/// Read-only suspension receipt for one actual normal caller. It is issued
+/// before the child CALL and can later identify only that direct predecessor;
+/// it grants no handler execution, epilog, cleanup or restoration authority.
+struct CrtPendingNormalView {
+ anchor:guest_memory::Capability,identity:RegistryIdentity,epoch:u64,frame:NormalFrameId,previous:RegistryHead,
+ normal_count:usize,registers:[CrtValue;8],entry:[CrtValue;8],return_id:u64,return_pop:u16,
+ caller:CrtPointer,layout:CrtNormalLayout,cookie:u32,application:Option<CrtApplicationInputs>,
+}
+impl CrtPendingNormalView {
+ fn bind(rt:&CrtStreamRuntime,cpu:&CrtCpu,epoch:&NormalCallEpoch<'_>,binding:&CrtNormalBinding)->RegistryResult<Self>{
+  binding.identity(rt,epoch)?;let image=binding.image(rt,cpu,epoch)?;let frame=binding.id.ok_or("pending predecessor missing frame")?;epoch.validate_image(frame,&image)?;
+  let state=epoch.state()?;if state.pending_exception.is_some()||state.delivery.is_some()||state.frames.last().is_none_or(|f|f.id!=frame||!f.installed||f.unlinked||f.next!=0){return Err("pending predecessor issue phase");}
+  Ok(Self{anchor:rt.anchor,identity:epoch.registry.identity,epoch:epoch.generation,frame,previous:binding.previous,
+   normal_count:state.frames.len(),registers:cpu.r,entry:cpu.entry,return_id:cpu.return_id,return_pop:cpu.return_pop,
+   caller:binding.caller,layout:binding.layout.clone(),cookie:binding.cookie,application:binding.application})
+ }
+ fn validate(&self,event:&CrtNormalException,rt:&CrtStreamRuntime,epoch:&NormalCallEpoch<'_>,source:&CrtNormalBinding,selected:&CrtNormalBinding)->RegistryResult<FrameImage<RegistryHead>>{
+  event.validate_pending(rt,epoch)?;if let Some(app)=self.application{app.validate(rt)?;}
+  if rt.anchor!=self.anchor||epoch.registry.identity!=self.identity||epoch.generation!=self.epoch
+   ||selected.anchor!=self.anchor||selected.identity!=self.identity||selected.epoch!=self.epoch||selected.id!=Some(self.frame)
+   ||selected.previous!=self.previous||selected.caller!=self.caller||selected.layout!=self.layout||selected.cookie!=self.cookie
+   ||selected.application!=self.application||selected.initialization.is_some()||selected.done||!selected.consumed.is_empty()||selected.saved_sp_pending
+   ||source.id!=Some(event.frame)||source.previous!=RegistryHead::Normal(self.frame){return Err("pending selected predecessor identity");}
+  let state=epoch.registry.normal_epoch.as_ref().ok_or("pending selected expired epoch")?;
+  if state.frames.len()!=self.normal_count.checked_add(1).ok_or("pending selected frame count")?
+   ||epoch.registry.head!=RegistryHead::Normal(event.frame){return Err("pending selected chain length/head");}
+  let outer=state.frames.get(self.normal_count-1).ok_or("pending selected missing predecessor")?;
+  let inner=state.frames.last().ok_or("pending selected missing source")?;
+  if outer.id!=self.frame||inner.id!=event.frame||inner.previous!=RegistryHead::Normal(self.frame)
+   ||!outer.installed||outer.unlinked||outer.next!=0||!inner.installed||inner.unlinked||inner.next!=0{return Err("pending selected live chain");}
+  let image=selected.project_state(rt,&self.registers,&self.entry,self.return_id,false,self.return_pop)?;
+  NormalCallEpoch::check_image(outer,&image)?;Ok(image)
+ }
+}
+struct CrtPendingNormalSelection {event:u64,source:NormalFrameId,selected:NormalFrameId,handler:u32,scope:u32}
 struct CrtNormalException {
  anchor:guest_memory::Capability,identity:RegistryIdentity,epoch:u64,frame:NormalFrameId,
  generation:u64,code:u32,noncontinuable:bool,continuation:u32,acquisition:Option<CrtPendingRaiseProducer>,
@@ -664,7 +709,8 @@ impl CrtNormalException {
   if self.search_started||self.delivery!=CrtNormalDelivery::Pending||epoch.delivery.is_some()||epoch.registry.normal_epoch.as_ref().is_none_or(|s|s.delivery.is_some()){return Err("pending search initial phase/replay");}
   rt.store(rt.offset(objects.record,4)?,32,CrtValue::Scalar{bits:u32::from(self.noncontinuable),known:0x67})?;
   self.search_started=true;
-  let phase=CrtPendingSearch{objects:objects.clone(),returned:std::cell::Cell::new(None)};phase.validate(self,rt,cpu,epoch,binding)?;Ok(phase)
+  let state=epoch.registry.normal_epoch.as_ref().ok_or("pending search missing epoch")?;
+  let phase=CrtPendingSearch{objects:objects.clone(),returned:std::cell::Cell::new(None),source:self.frame,previous:binding.previous,normal_count:state.frames.len(),current:std::cell::Cell::new(RegistryHead::Normal(self.frame))};phase.validate(self,rt,cpu,epoch,binding)?;Ok(phase)
  }
  /// Materialize code/count and documented noncontinuable-bit knowledge only.
  /// CONTEXT, ExceptionAddress, nested link and unused parameter bytes stay

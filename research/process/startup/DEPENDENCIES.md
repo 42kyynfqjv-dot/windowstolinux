@@ -9,23 +9,30 @@ Four frames and prior effects remain owned; constructor permissions stay revoked
 The same event now owns disjoint record and opaque CONTEXT storage and can begin
 the initial search phase with only justified flag knowledge. A protected component
 cut executes the original context-helper selector bypass and returns to its live
-handler activation. The next boundary is **production invocation and a separately
-validated selected Outer view**. Captured Windows registers, cleanup and
+handler activation. A separately issued read-only suspension view now revalidates
+the actual direct Outer predecessor after the original Inner handler returns.
+The single-use Inner result advances the component search cursor to that exact
+live Outer frame while the interrupted Inner remains the registry head and CPU
+source. The next boundary is **production invocation of this checked search and
+execution of Outer's original search**. Captured Windows registers, cleanup and
 resumption remain unsupported.
 The protected component path executes original handler entry through normalizer
 writeback, the actual guard/security checker and the original context-helper
 CALL/RET, followed by original caller cleanup, TEST and actual pointer-pair
 installation through0x40226f. The component executes original Inner search
 from0x402272 through its actual epilog/RET and issues a single-use actual-handler
-result after enclosing protected-call completion. Production dispatcher entry,
-checked ordered advancement and a separately selected Outer view are unconnected.
+result after enclosing protected-call completion. Component-only checked ordered
+advancement now consumes that result and selects the direct Outer predecessor.
+Production dispatcher entry and the subsequent Outer handler invocation remain
+unconnected.
 Five retained Windows component comparisons and zero whole-PE pairs remain.
 
 [Producer proof, ownership, tests and exact delivery limits](PENDING-CALL.md).
 Original Inner search now has finite occurrence-bound return emission derived
 from the original scope-chain proof. Live scope level and original visit edges
-remain checked; acyclic callers retain their duplicate-PC rejection. Full prefix
-composition and Normal predecessor dispatch remain unimplemented.
+remain checked; acyclic callers retain their duplicate-PC rejection. Prefix
+composition and first Normal predecessor selection execute in the component;
+production dispatch and Outer handler execution remain unimplemented.
 [Earlier application handoff](APPLICATION-HANDOFF.md).
 
 ## Previous executable checkpoint: Outer entered under live Main

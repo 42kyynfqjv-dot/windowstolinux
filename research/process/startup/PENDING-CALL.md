@@ -362,6 +362,35 @@ occupied return slot, wrong handler receipt, replay, actual saved-register RET
 failure, aliased pair, premature result, cross-event receipt and failed event
 lifetime. RET failure retains its protected return and installed pair; no result
 is issued. Success preserves mask0x67, unknown nested link and sealed CONTEXT.
-Total producer/component cases86. Full entry-to-exit and Outer selection remain
-unproved; the next connection needs a selected Normal view separate from the
-interrupted Inner source and checked ordered advancement from this actual result.
+Total producer/component cases86. At that checkpoint, full entry-to-exit and
+Outer selection remained unproved; the next section records the subsequent
+selected Normal view and checked ordered advancement.
+
+## Checked advancement to the live Outer predecessor
+
+A read-only predecessor view is now issued from the actual live Outer activation
+before its protected CALL to Inner. The view retains exact runtime, epoch, frame,
+caller activation and register knowledge. It grants no instruction execution or
+restoration. After Inner suspends at RaiseException and its original handler
+returns, the view reconstructs Outer from current guest storage and checks it
+against the retained registry frame. The live chain must contain exactly the one
+new direct Inner child; both frames must remain installed, unlinked and at epilog
+step zero.
+
+Advancement also checks the original Outer-to-Inner CALL bytes at0x4011e5 and the
+typed child return-site identity0x4011ea. The actual handler-bound Inner receipt is
+then consumed once. Only after a second live Outer storage validation does the
+search cursor move from the interrupted Inner ID to the exact Outer ID. The
+registry head, interrupted CPU, live normal-frame chain and same-event opaque
+objects are unchanged. The returned selection value is descriptive only and has
+no cleanup, handler-invocation, CONTEXT-read or restoration method.
+
+Eleven new cases cover successful advancement, changed selected identity,
+premature cursor movement, protected storage aliasing, changed interrupted CPU,
+cross-event receipt identity, replay, changed Outer layout/scope, changed original
+CALL bytes and wrong protected return site. Failure revokes the event while
+retaining the original Inner handler's earlier level and pair effects. Total
+producer/component cases are97. The canonical component proves original Inner
+search selects the actual Outer predecessor; it still begins with component-owned
+dispatcher scratch. Production RaiseException delivery, Outer's original search,
+cleanup, restoration, Main completion and whole-PE entry-to-exit remain open.

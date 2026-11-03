@@ -2369,6 +2369,56 @@ fn application_handoff_cases(){let original=std::fs::read(std::env::var("W2L_PE_
 }
 fn pending_call_acquisition_cases(){let original=std::fs::read(std::env::var("W2L_PE_MAPPING_INPUT").unwrap()).unwrap();for mode in 0..86{pending_call_acquisition_one(&original,mode);}}
 
+#[inline(never)]fn pending_outer_selection_one(original:&[u8],mode:u32){
+ let mut changed=original.to_vec();if mode==9{startup_caller_mutate(&mut changed,0x4011e5);}let original=&changed[..];
+ let(m,mut registry,main,mut permit)=fixture_with_extra(&[(0x410000,0x420000)]);
+ let(mut rt,init)=CrtStreamRuntime::new_initializing_pe32(registry.identity.owner,registry.identity.instance,0x41c080,3,1048576,original).unwrap();
+ let inputs=CrtEntropyInputs::bind(&rt,init,17,19).unwrap();rt.map_region(0x9000,0x6000,CrtRegionKind::Stack,None).unwrap();rt.store(rt.process_image_pointer(inputs.image,0x41c000,4).unwrap(),32,CrtValue::scalar(0x12345678)).unwrap();
+ let mut c=cpu(&mut rt,0xd000,67000+u64::from(mode));c.return_pop=0;
+ let result=registry.with_normal_calls(&m,&mut permit,&main,|e|{
+  let mut startup=CrtNormalBinding::bind_initializing(&rt,&c,e,startup_layout(),init)?;declared_startup_post_frame(&mut rt,&mut c,&inputs,e,&mut startup)?;assert_eq!(c.pop(&mut rt)?,CrtValue::scalar(1));
+  let app=startup.enter_application(&mut rt,&c,e,init,inputs.image)?;
+  c.call_activation(&mut rt,0x40131b,0,|rt,outer_cpu|{
+   let mut outer=CrtNormalBinding::bind_inline_phase(rt,outer_cpu,e,original_outer_layout(),None,vec![])?;original_outer_prolog(rt,outer_cpu,&app,e,&mut outer)?;original_outer_initial(rt,outer_cpu,&app,e,&mut outer)?;
+   let mut view=CrtPendingNormalView::bind(rt,outer_cpu,e,&outer)?;let outer_id=outer.id.unwrap();
+   outer_cpu.call_activation(rt,0x4011ea,0,|rt,inner_cpu|{
+    let mut inner=CrtNormalBinding::bind_inline_phase(rt,inner_cpu,e,original_inner_layout(),None,vec![])?;original_inner_prolog(rt,inner_cpu,&app,e,&mut inner)?;original_inner_initial(rt,inner_cpu,&app,e,&mut inner)?;
+    let mut event=acquire_original_inner_raise(rt,inner_cpu,e,&inner)?;event.dispatch_source(rt,inner_cpu,e,&inner)?;let source_registers=inner_cpu.r;
+    let owned=event.acquire_pending_objects(rt,inner_cpu,e,&inner)?;let phase=event.begin_pending_search(&owned,rt,inner_cpu,e,&inner)?;
+    let slot=CrtCpu::pointer(inner_cpu.r[4])?;let mut dispatcher=cpu(rt,slot.address()-256,88000+u64::from(mode));
+    for arg in [CrtValue::scalar(0),CrtValue::Pointer(owned.context),CrtValue::Pointer(inner.at(rt,inner.layout.record)?),CrtValue::Pointer(owned.record)]{dispatcher.push(rt,arg)?;}
+    rt.store(rt.process_image_pointer(app.image,0x41ccb8,4)?,32,CrtValue::scalar(0))?;
+    let mut returned=pending_inner_component(&mut event,&phase,rt,inner_cpu,e,&inner,&mut dispatcher)?;
+    assert_eq!(event.delivery,CrtNormalDelivery::Returned);assert_eq!(inner_cpu.r,source_registers);
+    match mode{
+     1=>view.frame.generation+=1,
+     2=>phase.current.set(RegistryHead::Normal(outer_id)),
+     3=>{let p=outer.at(rt,outer.layout.record-4)?;rt.tags.insert(p.address(),CrtValue::ProtectedReturn(991177));},
+     4=>inner_cpu.r[1]=CrtValue::scalar(0x55),
+     5=>returned.objects.source[3]+=1,
+     7=>outer.layout.scope+=4,
+     8=>rt.store(outer.at(rt,outer.layout.level)?,32,CrtValue::scalar((-2i32)as u32))?,
+     10=>inner_cpu.return_site=Some((inner_cpu.return_id,0x4011eb)),
+     _=>{}
+    }
+    let selected=returned.select_outer(&mut event,&phase,rt,inner_cpu,e,&inner,&view,&outer);
+    if mode==0||mode==6{
+     let selected=selected.expect("actual Inner return must advance to actual Outer");assert_eq!((selected.event,selected.source,selected.selected,selected.handler,selected.scope),(event.generation,event.frame,outer_id,outer.layout.handler,outer.layout.scope));
+     assert_eq!(phase.current.get(),RegistryHead::Normal(outer_id));assert_eq!(event.delivery,CrtNormalDelivery::ResultTaken);assert_eq!(inner_cpu.r,source_registers);
+     let frames=&e.registry.normal_epoch.as_ref().unwrap().frames;assert_eq!(frames.len(),3);assert_eq!(frames.last().unwrap().id,event.frame);assert_eq!(frames.last().unwrap().previous,RegistryHead::Normal(outer_id));assert_eq!(e.registry.head,RegistryHead::Normal(event.frame));
+     assert_eq!(event.require_delivery_contract(),Err("pending raise delivery/capture contract unbound"));
+     if mode==6{assert_eq!(returned.select_outer(&mut event,&phase,rt,inner_cpu,e,&inner,&view,&outer).err(),Some("pending selected search order"));assert_eq!(event.delivery,CrtNormalDelivery::Failed);}
+    }else{
+     assert_eq!(selected.err(),Some(match mode{1=>"pending selected search order",2=>"pending selected search order",3=>"CRT normal extra protected alias in frame",4=>"normal exception changed interrupted activation",5=>"pending search receipt replay/event/handler",7=>"pending selected predecessor identity",8=>"pending selected Outer storage/layout",9=>"pending selected Inner caller changed",10=>"pending selected Inner caller activation",_=>unreachable!()}),"pending Outer selection mode{mode}");
+     assert_eq!(event.delivery,CrtNormalDelivery::Failed);assert_eq!(rt.load(inner.at(rt,inner.layout.level)?,32)?,CrtValue::scalar(1));
+    }
+    Err::<CrtValue,_>("pending Outer selection stop")
+   })
+  })
+ });assert_eq!(result,Err("pending Outer selection stop"),"pending Outer selection mode{mode}");
+}
+fn pending_outer_selection_cases(){let original=std::fs::read(std::env::var("W2L_PE_MAPPING_INPUT").unwrap()).unwrap();for mode in 0..11{pending_outer_selection_one(&original,mode);}}
+
 #[inline(never)]fn startup_main_one(original:&[u8],mode:u32){
  let mut file=original.to_vec();if let Some(at)=match mode{1=>Some(0x401717),2=>Some(0x401280),3=>Some(0x401500),4=>Some(0x41b218),5=>Some(0x4012b9),6=>Some(0x402370),25=>Some(0x4011e5),26=>Some(0x4010c0),27=>Some(0x40115c),28=>Some(0x41b1d0),29=>Some(0x4010f0),_=>None}{startup_caller_mutate(&mut file,at);}
  let(m,mut registry,main,mut permit)=fixture_with_extra(&[(0x410000,0x420000)]);let(mut rt,init)=CrtStreamRuntime::new_initializing_pe32(registry.identity.owner,registry.identity.instance,0x41c080,3,1048576,&file).unwrap();let inputs=CrtEntropyInputs::bind(&rt,init,17,19).unwrap();let stack=rt.map_region(0x9000,0x6000,CrtRegionKind::Stack,None).unwrap();rt.store(rt.process_image_pointer(inputs.image,0x41c000,4).unwrap(),32,CrtValue::scalar(0x12345678)).unwrap();let mut c=cpu(&mut rt,if mode%2==0{0xd000}else{0xc000},45000+u64::from(mode));c.return_pop=0;
@@ -3541,7 +3591,7 @@ fn canonical_startup_storage(){
  }
 
 }
-fn main(){match std::env::args().nth(1).unwrap().as_str(){"canonical-startup"=>{pending_call_acquisition_cases();application_handoff_cases();startup_outer_cases();startup_main_cases();startup_argument_cases();startup_callback_cell_cases();startup_release_cases();cpp_filter_cases();cpp_void_cases();feature_initializer_cases();file_global_overlap_boundary_cases();locale_initializer_cases();file_initializer_cases();environment_table_cases();environment_artifact_cases();boolean_artifact_cases();thread_locale_query_cases();fp_original_control_cases();fp_control_entry_cases();post_argv_cases();argv_calloc_cases();argv_count_cases();argv_image_write_cases();protection_complete_data_word_cases();argv_locale_cases();argv_cases();onexit_cases();c_array_cases();c_array_real_cases();startup_caller_cases();exit_table_cases();memcpy_component_cases();locale_result_cases();locale_utf8_initialized_cases();malloc_component_cases();locale_code_page_cases();locale_xadd_cases();ucrt_replacement_cases();ucrt_reference_cases();canonical_startup_storage();canonical_cookie_entropy();entropy_api_boundaries();native_entropy_startup();startup_entry_cases();startup_feature_cases();native_standard_body_cases();command_line_body_cases();locale_startup_prefix_cases();native_fls_producer_cases();initializer_table_cases();virtual_protect_cases();startup_lock_cases();startup_heap_cases();startup_fiber_cases();second_fiber_profile_cases();cache_publication_cases();original_fls_wrapper_fallback_cases();startup_module_cases();startup_resolver_cases();constructor_guard_cases();resident_loader_cases()},"inline-exit"=>{inline_exit_cases();inline_exit_delivery();inline_exit_image()},"abort-locked"=>abort_locked_cases(),"registered-errno"=>registered_errno_cases(),"ordered-search"=>ordered_search_cases(),"live-return"=>live_return_cases(),"chain-effect-lifetime"=>chain_effect_lifetime(),"shared-chain"=>{shared_chain_cases();shared_chain_nested();shared_chain_delivery()},"chain-ownership-gap"=>chain_ownership_gap(),"bound-cxx-invocation"=>bound_invocation(),"prefix-delivery-unwind"=>dispatcher_delivery_unwind(true),"dispatcher-delivery-unwind"=>dispatcher_delivery_unwind(false),"delivery-cached-unwind"=>delivery_cached_unwind(),"delivery-children"=>delivery_children(),"cxx-cached-unwind"=>cxx_cached_unwind(),"cxx-unwind"=>cxx_registered_unwind(),"manager-inherited"=>inherited_registered_manager(),"manager"=>manager_registered(),"live-finally"=>live_finally_cases(),"owned-loop"=>owned_loop_cases(),"owned-local"=>owned_local_cases(),"owned"=>{main_initial_rejections();initial_raise_rejections();owned_main_cases()},"path-edges"=>path_edges(),"live"=>live_dispatch(),"objects"=>captured_objects(),"handler"=>pending_handler_activation(),"pending"=>pending_normal_exception(),"pending-reject"=>reject_normal_exception(),"file"=>file_scope_normal(),"file-failure"=>file_scope_failure(),"nested"=>nested_actual(),"mutations"=>mutations(),"consumed"=>consumed_mutation(),"failure"=>body_failure(),"certificate"=>wrong_certificate(),"observed"=>observed(),_=>panic!("case")}}
+fn main(){match std::env::args().nth(1).unwrap().as_str(){"canonical-startup"=>{pending_call_acquisition_cases();pending_outer_selection_cases();application_handoff_cases();startup_outer_cases();startup_main_cases();startup_argument_cases();startup_callback_cell_cases();startup_release_cases();cpp_filter_cases();cpp_void_cases();feature_initializer_cases();file_global_overlap_boundary_cases();locale_initializer_cases();file_initializer_cases();environment_table_cases();environment_artifact_cases();boolean_artifact_cases();thread_locale_query_cases();fp_original_control_cases();fp_control_entry_cases();post_argv_cases();argv_calloc_cases();argv_count_cases();argv_image_write_cases();protection_complete_data_word_cases();argv_locale_cases();argv_cases();onexit_cases();c_array_cases();c_array_real_cases();startup_caller_cases();exit_table_cases();memcpy_component_cases();locale_result_cases();locale_utf8_initialized_cases();malloc_component_cases();locale_code_page_cases();locale_xadd_cases();ucrt_replacement_cases();ucrt_reference_cases();canonical_startup_storage();canonical_cookie_entropy();entropy_api_boundaries();native_entropy_startup();startup_entry_cases();startup_feature_cases();native_standard_body_cases();command_line_body_cases();locale_startup_prefix_cases();native_fls_producer_cases();initializer_table_cases();virtual_protect_cases();startup_lock_cases();startup_heap_cases();startup_fiber_cases();second_fiber_profile_cases();cache_publication_cases();original_fls_wrapper_fallback_cases();startup_module_cases();startup_resolver_cases();constructor_guard_cases();resident_loader_cases()},"inline-exit"=>{inline_exit_cases();inline_exit_delivery();inline_exit_image()},"abort-locked"=>abort_locked_cases(),"registered-errno"=>registered_errno_cases(),"ordered-search"=>ordered_search_cases(),"live-return"=>live_return_cases(),"chain-effect-lifetime"=>chain_effect_lifetime(),"shared-chain"=>{shared_chain_cases();shared_chain_nested();shared_chain_delivery()},"chain-ownership-gap"=>chain_ownership_gap(),"bound-cxx-invocation"=>bound_invocation(),"prefix-delivery-unwind"=>dispatcher_delivery_unwind(true),"dispatcher-delivery-unwind"=>dispatcher_delivery_unwind(false),"delivery-cached-unwind"=>delivery_cached_unwind(),"delivery-children"=>delivery_children(),"cxx-cached-unwind"=>cxx_cached_unwind(),"cxx-unwind"=>cxx_registered_unwind(),"manager-inherited"=>inherited_registered_manager(),"manager"=>manager_registered(),"live-finally"=>live_finally_cases(),"owned-loop"=>owned_loop_cases(),"owned-local"=>owned_local_cases(),"owned"=>{main_initial_rejections();initial_raise_rejections();owned_main_cases()},"path-edges"=>path_edges(),"live"=>live_dispatch(),"objects"=>captured_objects(),"handler"=>pending_handler_activation(),"pending"=>pending_normal_exception(),"pending-reject"=>reject_normal_exception(),"file"=>file_scope_normal(),"file-failure"=>file_scope_failure(),"nested"=>nested_actual(),"mutations"=>mutations(),"consumed"=>consumed_mutation(),"failure"=>body_failure(),"certificate"=>wrong_certificate(),"observed"=>observed(),_=>panic!("case")}}
 "#;
 
 fn run(case: &str) {
