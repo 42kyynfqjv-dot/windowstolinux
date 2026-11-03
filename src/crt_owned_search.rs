@@ -779,3 +779,146 @@ fn complete_owned_restoration_event(frame:&mut CrtOwnedFrameView<'_>,cpu:&CrtCpu
  if let Some(e)=event{e.finish(frame.machine,frame.registry)?;}Ok(restored)
  })();if result.is_err(){frame.failed=true;}result}
 "#;
+
+/// Original context helper CALL at a proved handler-prefix component cut.
+/// No handler-entry, delivery, disposition or restoration authority is issued.
+pub(crate) fn emit_pending_context_call(
+    prefix: &super::handler_checks::PrefixProof,
+    context: &super::handler_context::ContextCheckProof,
+    name: &str,
+) -> Result<String, String> {
+    use iced_x86::{Code, Decoder, DecoderOptions};
+    let (origin, bytes) = context.original();
+    let calls: Vec<_> = prefix
+        .calls
+        .iter()
+        .filter(|c| c.effect == super::handler_checks::CallEffect::ValidateContext)
+        .collect();
+    if calls.len() != 1
+        || calls[0].target != origin
+        || calls[0].entry_depth < 8
+        || prefix.entry.checked_add(prefix.source.len() as u32) != Some(prefix.end)
+    {
+        return Err("pending context call proof/target".into());
+    }
+    let target = |effect| {
+        prefix
+            .calls
+            .iter()
+            .find(|c| c.effect == effect)
+            .map(|c| c.target)
+            .ok_or("pending context missing prefix callee")
+    };
+    let reproved = super::handler_checks::prove_prefix(
+        &prefix.source,
+        prefix.entry,
+        &super::handler_checks::Bindings {
+            normalizer_va: target(super::handler_checks::CallEffect::NormalizeRecordCode)?,
+            guard_va: target(super::handler_checks::CallEffect::ValidateGuards)?,
+            context_va: origin,
+            cookie_va: prefix.cookie_va,
+            installer_va: prefix.installer_start,
+        },
+    )?;
+    if reproved.calls != prefix.calls || reproved.end != prefix.end {
+        return Err("pending context prefix reproof".into());
+    }
+    let call = calls[0];
+    let mut visits = Vec::new();
+    let mut pc = origin;
+    let mut branches = 0;
+    for _ in 0..bytes.len() {
+        let off = pc
+            .checked_sub(origin)
+            .ok_or("pending context path offset")? as usize;
+        let tail = bytes.get(off..).ok_or("pending context path extent")?;
+        let mut decoder = Decoder::with_ip(32, tail, u64::from(pc), DecoderOptions::NONE);
+        let i = decoder.decode();
+        if i.is_invalid() {
+            return Err("pending context invalid path".into());
+        }
+        let raw = tail
+            .get(..i.len())
+            .ok_or("pending context instruction extent")?;
+        let next = match i.code() {
+            Code::Je_rel8_32 | Code::Je_rel32_32 => {
+                branches += 1;
+                Some(i.near_branch32())
+            }
+            Code::Retnd => None,
+            Code::Push_r32 | Code::Mov_r32_rm32 | Code::Cmp_rm32_imm32 | Code::Pop_r32 => {
+                Some(i.next_ip32())
+            }
+            _ => return Err("pending context bypass effect outside proof".into()),
+        };
+        visits.push(PathStep {
+            pc,
+            bytes: raw,
+            next,
+        });
+        if let Some(n) = next {
+            pc = n;
+        } else {
+            break;
+        }
+    }
+    if branches != 1 || visits.last().is_none_or(|s| s.next.is_some()) {
+        return Err("pending context finite bypass proof".into());
+    }
+    let body = crt_stream_emit::emit_proved_return_path(
+        &visits,
+        |_, _| Err("pending context unexpected call".into()),
+        &BTreeMap::from([(context.selector_va(), "CrtRegionKind::Module".into())]),
+        |_, _| Ok(String::new()),
+        0,
+    )?;
+    Ok(format!(
+        r#"
+fn {name}(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,phase:&CrtPendingSearch,continuation:u32)->RegistryResult<()>{{
+ let result=(||{{
+ frame.validate()?;phase.objects.validate(frame.event,frame.rt,frame.interrupted,frame.epoch,frame.binding)?;
+ let root=CrtCpu::pointer(cpu.entry[4])?;let activation=cpu.return_id;
+ if !frame.event.search_started||frame.event.delivery!=CrtNormalDelivery::Calling||frame.state.depth!=1
+  ||frame.state.activation!=activation||cpu.returned||frame.binding.layout.handler!={handler}
+  ||continuation!={continuation}||cpu.r[5]!=CrtValue::Pointer(frame.rt.offset(root,-4)?)
+  ||cpu.r[4]!=CrtValue::Pointer(frame.rt.offset(root,-{caller_depth})?){{return Err("pending context handler activation/callsite");}}
+ for(i,p)in [phase.objects.record,frame.binding.at(frame.rt,frame.binding.layout.record)?,phase.objects.context].into_iter().enumerate(){{
+  if frame.rt.load(frame.rt.offset(root,4+i as i64*4)?,32)?!=CrtValue::Pointer(p){{return Err("pending context handler arguments");}}
+ }}
+ let sp=CrtCpu::pointer(cpu.r[4])?;
+ if frame.rt.load(sp,32)?!=CrtValue::Pointer(phase.objects.context){{return Err("pending context original argument");}}
+ let image=frame.binding.application.ok_or("pending context source application")?.image;
+ let selector=frame.rt.process_image_pointer(image,{selector},4)?;let resolved=frame.rt.resolve_absolute({selector},CrtRegionKind::Module)?;
+ if selector.cap!=resolved.cap||selector.address()!=resolved.address(){{return Err("pending context selector image identity");}}
+
+ for(base,expected)in [({handler},&{prefix_raw:?}[..]),({origin},&{raw:?}[..])]{{
+  let p=frame.rt.process_image_code(image,base,expected.len()as u32)?;
+  if frame.rt.memory.read(p.address(),expected.len()as u32).map_err(|_|"pending context original read")?!=expected{{return Err("pending context original bytes changed");}}
+ }}
+ let check_root=|rt:&CrtStreamRuntime|->RegistryResult<()>{{
+  if rt.load(root,32)?!=CrtValue::ProtectedReturn(activation)||rt.tags.values().filter(|v|**v==CrtValue::ProtectedReturn(activation)).count()!=1{{return Err("pending context protected handler root");}}Ok(())
+ }};check_root(frame.rt)?;
+ let low=frame.rt.offset(sp,-{scratch})?;frame.rt.valid(low,{scratch})?;frame.stack_range(low.address(),u64::from(sp.address()))?;
+ if frame.rt.overlapping_tags(low.address(),{scratch}).iter().any(|(_,v)|matches!(v,CrtValue::ProtectedReturn(_)|CrtValue::OpaqueSaved(_)|CrtValue::ThreadHead(_))){{return Err("pending context protected helper scratch");}}
+ let helper_entry=frame.rt.offset(sp,-4)?;
+ frame.call(cpu,continuation,|f,cpu|{{
+  check_root(f.rt)?;phase.objects.validate(f.event,f.rt,f.interrupted,f.epoch,f.binding)?;
+  if f.state.depth!=2||f.state.activation!=cpu.return_id||cpu.entry[4]!=CrtValue::Pointer(helper_entry)
+   ||f.rt.load(helper_entry,32)?!=CrtValue::ProtectedReturn(cpu.return_id){{return Err("pending context protected helper activation");}}
+  let rt=&mut *f.rt;let value=(||{{{body}}})()?;
+  if !cpu.returned{{return Err("pending context incomplete helper");}}Ok(value)
+ }})?;
+ check_root(frame.rt)?;phase.objects.validate(frame.event,frame.rt,frame.interrupted,frame.epoch,frame.binding)?;
+ if frame.state.activation!=activation||frame.state.depth!=1{{return Err("pending context lost handler activation");}}Ok(())
+ }})();if result.is_err(){{phase.objects.live.set(false);frame.state.failed=true;}}result
+}}
+"#,
+        handler = prefix.entry,
+        continuation = call.va + 5,
+        caller_depth = call.entry_depth - 4,
+        selector = context.selector_va(),
+        prefix_raw = prefix.source,
+        raw = bytes,
+        scratch = context.temporary_bytes() + 4
+    ))
+}

@@ -193,7 +193,30 @@ CPU or expired event rejects and revokes the underlying token.
 
 Eight additional component cases retain exact bit knowledge, no nested-link
 fact, source registers and frame count, and cover reentry, wrong phase, invented
-flag knowledge, changed selector/helper and source/event expiry. Total producer
-component cases39. The original-entry caller is still stopped at the pending
-RaiseException delivery gate. Selected Normal views, full handler read/effect
-composition and original Inner-to-Outer advancement remain unimplemented.
+flag knowledge, changed selector/helper and source/event expiry.
+
+## Protected original context-helper execution
+
+The original context helper now executes its proved selector-bypass instruction
+path inside a real nested protected CALL/RET pair. The generated wrapper re-proves
+the complete handler prefix and validates the actual helper bytes, selector IAT
+cell, application-image capability, handler continuation, three handler arguments,
+context argument, stack bounds, activation depth and unique protected return
+tokens. It executes the original PUSH, MOV, CMP, conditional branch, POP and RET,
+including the real compare flags and scratch writes. The interrupted Inner CPU,
+pending objects and parent activation are revalidated after return.
+
+This is an explicit handler component cut. The test creates the actual protected
+handler activation, executes the original handler prolog and positions the live
+stack at the proved context CALL. It does not execute the preceding normalizer or
+guard calls, the remainder of the handler prefix, handler disposition, selected
+Outer view, cleanup or restoration. The wrapper returns no delivery, selection or
+resumption authority. Failure revokes the pending objects and preserves prior
+helper writes.
+
+Nine new cases cover successful original helper effects, changed selector and
+helper bytes, wrong handler continuation and activation, duplicate return tokens,
+wrong helper or handler arguments and expired objects. Total producer component
+cases are 48. The original-entry caller is still stopped at the pending
+RaiseException delivery gate. Full prefix composition, selected Normal views and
+original Inner-to-Outer advancement remain unimplemented.

@@ -2192,7 +2192,7 @@ fn application_handoff_cases(){let original=std::fs::read(std::env::var("W2L_PE_
 
 // Independent expectations at the real producer, after original prolog/stores/pushes.
 #[inline(never)]fn pending_call_acquisition_one(original:&[u8],mode:u32){
- let mut file=original.to_vec();if mode==35{startup_caller_mutate(&mut file,0x415128);}if mode==36{startup_caller_mutate(&mut file,0x402877);}if mode==1||mode==2{startup_caller_mutate(&mut file,0x401117+mode-1);}if mode==3{startup_caller_mutate(&mut file,0x415000);}
+ let mut file=original.to_vec();if mode==35||mode==40{startup_caller_mutate(&mut file,0x415128);}if mode==36||mode==41{startup_caller_mutate(&mut file,0x402877);}if mode==1||mode==2{startup_caller_mutate(&mut file,0x401117+mode-1);}if mode==3{startup_caller_mutate(&mut file,0x415000);}
  let(m,mut registry,main,mut permit)=fixture_with_extra(&[(0x410000,0x420000)]);
  let(mut rt,init)=CrtStreamRuntime::new_initializing_pe32(registry.identity.owner,registry.identity.instance,0x41c080,3,1048576,&file).unwrap();
  let inputs=CrtEntropyInputs::bind(&rt,init,17,19).unwrap();rt.map_region(0x9000,0x6000,CrtRegionKind::Stack,None).unwrap();rt.store(rt.process_image_pointer(inputs.image,0x41c000,4).unwrap(),32,CrtValue::scalar(0x12345678)).unwrap();
@@ -2251,6 +2251,33 @@ fn application_handoff_cases(){let original=std::fs::read(std::env::var("W2L_PE_
      if mode==33{event.delivery=CrtNormalDelivery::Returned;assert_eq!(event.begin_pending_search(&owned,rt,c,e,&b).err(),Some("pending search initial phase/replay"));assert!(!event.search_started);return Err("pending acquisition test stop");}
      let phase=event.begin_pending_search(&owned,rt,c,e,&b)?;phase.validate(&event,rt,c,e,&b)?;
      assert_eq!(rt.load(rt.offset(owned.record,4)?,32)?,CrtValue::Scalar{bits:0,known:0x67});assert_eq!(rt.load(rt.offset(owned.record,8)?,32)?,CrtValue::Scalar{bits:0,known:0});assert_eq!(c.r,before);assert_eq!(e.registry.normal_epoch.as_ref().unwrap().frames.len(),frame_count);
+     if mode>=39{
+      // Component cut: actual protected handler activation and original prolog;
+      // normalizer/guard prefix composition and the handler remainder stay unbound.
+      let mut d=cpu(rt,slot.address()-256,99000+u64::from(mode));
+      for arg in [CrtValue::scalar(0),CrtValue::Pointer(owned.context),CrtValue::Pointer(b.at(rt,b.layout.record)?),CrtValue::Pointer(owned.record)]{d.push(rt,arg)?;}
+      event.delivery=CrtNormalDelivery::Calling;
+      let got=d.call_activation(rt,0x40111d,0,|rt,h|{
+       let mut state=CrtLiveDispatchState{level:b.storage_image(rt,c)?.try_level,depth:1,calls:1,activation:h.return_id,failed:false};
+       let mut view=CrtLiveFrame{rt,event:&event,interrupted:c,epoch:e,binding:&b,state:&mut state};original_handler_prolog(&mut view,h)?;
+       let root=CrtCpu::pointer(h.entry[4])?;let bp=CrtCpu::pointer(h.r[5])?;
+       h.r[4]=CrtValue::Pointer(view.rt.offset(root,-i64::from(pending_context_depth())+4)?);h.push(view.rt,CrtValue::Pointer(owned.context))?;h.r[0]=CrtValue::scalar(77);
+       let call_sp=CrtCpu::pointer(h.r[4])?;let helper_save=view.rt.offset(call_sp,-8)?;
+       if mode==43{view.rt.tags.insert(view.rt.offset(root,-20)?.address(),CrtValue::ProtectedReturn(h.return_id));}
+       if mode==44{view.rt.store(call_sp,32,CrtValue::Pointer(owned.record))?;}
+       if mode==45{view.state.activation+=1;}
+       if mode==46{owned.live.set(false);}
+       if mode==47{view.rt.store(view.rt.offset(root,4)?,32,CrtValue::Pointer(owned.context))?;}
+       let result=pending_context_activation_call(&mut view,h,&phase,pending_context_continuation()+u32::from(mode==42));
+       if mode==39{assert_eq!(result,Ok(()));assert_eq!(h.r[0],CrtValue::scalar(77));assert_eq!(h.r[5],CrtValue::Pointer(bp));assert_eq!(h.r[4],CrtValue::Pointer(call_sp));assert_eq!((h.flags.zf,h.flags.cf,h.flags.of),(Some(true),Some(false),Some(false)));assert!(!h.returned);assert!(view.rt.load(owned.context,32).is_err());}
+       else{
+        let expected=match mode{40=>"CRT branch disagrees with semantic proof",41=>"pending context original bytes changed",42|45=>"pending context handler activation/callsite",43=>"pending context protected handler root",44=>"pending context original argument",46=>"pending objects event/lifetime",47=>"pending context handler arguments",_=>unreachable!()};assert_eq!(result,Err(expected),"active observation mode{mode}");assert!(!owned.live.get());
+        if mode==40{assert_eq!(view.rt.load(helper_save,32)?,CrtValue::Pointer(bp));assert!(matches!(view.rt.load(view.rt.offset(call_sp,-4)?,32)?,CrtValue::ProtectedReturn(_)));}
+       }
+       assert_eq!(view.interrupted.r,before);assert_eq!(view.epoch.registry.normal_epoch.as_ref().unwrap().frames.len(),frame_count);
+       Err::<CrtValue,_>("pending handler remainder unbound")
+      });assert_eq!(got,Err("pending handler remainder unbound"));event.fail_capture();assert_eq!(c.r,before);return Err("pending acquisition test stop");
+     }
      if mode==32{assert_eq!(event.begin_pending_search(&owned,rt,c,e,&b).err(),Some("pending search initial phase/replay"));phase.validate(&event,rt,c,e,&b)?;}
      if mode==34{rt.store(rt.offset(owned.record,4)?,32,CrtValue::scalar(0))?;assert_eq!(phase.validate(&event,rt,c,e,&b),Err("pending objects record knowledge changed"));assert!(!owned.live.get());return Err("pending acquisition test stop");}
      if mode==37{c.r[1]=CrtValue::scalar(77);}
@@ -2286,7 +2313,7 @@ fn application_handoff_cases(){let original=std::fs::read(std::env::var("W2L_PE_
   })
  });assert_eq!(result,Err("pending acquisition test stop"),"pending acquisition mode{mode}");
 }
-fn pending_call_acquisition_cases(){let original=std::fs::read(std::env::var("W2L_PE_MAPPING_INPUT").unwrap()).unwrap();for mode in 0..39{pending_call_acquisition_one(&original,mode);}}
+fn pending_call_acquisition_cases(){let original=std::fs::read(std::env::var("W2L_PE_MAPPING_INPUT").unwrap()).unwrap();for mode in 0..48{pending_call_acquisition_one(&original,mode);}}
 
 #[inline(never)]fn startup_main_one(original:&[u8],mode:u32){
  let mut file=original.to_vec();if let Some(at)=match mode{1=>Some(0x401717),2=>Some(0x401280),3=>Some(0x401500),4=>Some(0x41b218),5=>Some(0x4012b9),6=>Some(0x402370),25=>Some(0x4011e5),26=>Some(0x4010c0),27=>Some(0x40115c),28=>Some(0x41b1d0),29=>Some(0x4010f0),_=>None}{startup_caller_mutate(&mut file,at);}
@@ -3836,7 +3863,14 @@ if fault==1{{cpu.condition(0)?;}}
         assert!(crate::crt_stream_ir::Graph::decode_instruction(&[0x90,0x90],0x430000).is_err());
 
         let owned_header=format!("fn original_main_header()->[i32;4]{{{:?}}}",main_header);
-        let prefix_metadata=format!("fn owned_prefix_handler()->u32{{{}}}fn owned_prefix_temporary()->u32{{{}}}",prefix.entry,prefix.temporary_bytes);
+        let mut prefix_metadata=format!("fn owned_prefix_handler()->u32{{{}}}fn owned_prefix_temporary()->u32{{{}}}",prefix.entry,prefix.temporary_bytes);
+        let pending_context_call=crate::crt_owned_search::emit_pending_context_call(&prefix,&context_proof,"pending_context_activation_call").expect("proved original context bypass CALL");
+        let mut wrong_depth=prefix.clone();wrong_depth.calls.iter_mut().find(|c|c.effect==crate::handler_checks::CallEffect::ValidateContext).unwrap().entry_depth+=4;
+        assert_eq!(crate::crt_owned_search::emit_pending_context_call(&wrong_depth,&context_proof,"wrong_depth").unwrap_err(),"pending context prefix reproof");
+        prefix_metadata.push_str(&pending_context_call);
+        let context_site=prefix.calls.iter().find(|c|c.effect==crate::handler_checks::CallEffect::ValidateContext).unwrap();
+        prefix_metadata.push_str(&format!("fn pending_context_depth()->u32{{{}}}fn pending_context_continuation()->u32{{{}}}",context_site.entry_depth-4,context_site.va+5));
+
         let context_types=crate::handler_context::EMITTED_TYPES;
         let mut alternate_context=context_code.clone();alternate_context[1..3].copy_from_slice(&[0x89,0xe5]);
         crate::handler_context::prove_context_check(&alternate_context,0x402877,0x415128).expect("independent equivalent prolog proof");

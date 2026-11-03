@@ -6,15 +6,19 @@ The explicit native-profile entry executes Main, Outer and Inner through the
 original RaiseException CALL `0x401117`, IAT `0x415000`. The original prefix and
 arguments now issue a pending CALL only after its protected return push succeeds.
 Four frames and prior effects remain owned; constructor permissions stay revoked.
-The next boundary is **same-event record/CONTEXT acquisition and delivery**.
-No handler delivery, captured Windows registers, cleanup or resumption is admitted.
+The same event now owns disjoint record and opaque CONTEXT storage and can begin
+the initial search phase with only justified flag knowledge. A protected component
+cut executes the original context-helper selector bypass and returns to its live
+handler activation. The next boundary is **complete original handler-prefix
+composition and a separately validated selected Outer view**. No complete handler
+delivery, captured Windows registers, cleanup or resumption is admitted.
 Five retained Windows component comparisons and zero whole-PE pairs remain.
 
 [Producer proof, ownership, tests and exact delivery limits](PENDING-CALL.md).
 Original Inner search now has finite occurrence-bound return emission derived
 from the original scope-chain proof. Live scope level and original visit edges
-remain checked; acyclic callers retain their duplicate-PC rejection. Object
-acquisition and Normal predecessor dispatch remain unimplemented.
+remain checked; acyclic callers retain their duplicate-PC rejection. Full prefix
+composition and Normal predecessor dispatch remain unimplemented.
 [Earlier application handoff](APPLICATION-HANDOFF.md).
 
 ## Previous executable checkpoint: Outer entered under live Main
