@@ -93,7 +93,14 @@ impl SearchCallees<'_> {
     }
 }
 
-pub(crate) fn emit(input: Input<'_>, name: &str) -> Result<String, String> {
+struct BoundSearchPath<'a> {
+    path: Vec<PathStep<'a>>,
+    actions: BTreeMap<u32, &'a Action>,
+    stop_pc: u32,
+    stop_target: u32,
+    level: i32,
+}
+fn bind_search_path<'a>(input: &Input<'a>) -> Result<BoundSearchPath<'a>, String> {
     let stop = input
         .proof
         .actions
@@ -145,14 +152,12 @@ pub(crate) fn emit(input: Input<'_>, name: &str) -> Result<String, String> {
         });
     }
     let mut actions = BTreeMap::new();
-    let mut functions = String::new();
     for action in &input.proof.actions[..stop] {
         let Action::Filter {
             pc,
             bridge,
             scope,
             target,
-            proof,
             ..
         } = action
         else {
@@ -174,6 +179,28 @@ pub(crate) fn emit(input: Input<'_>, name: &str) -> Result<String, String> {
         {
             return Err("owned search: filter/table/bridge binding".into());
         }
+    }
+    Ok(BoundSearchPath {
+        path,
+        actions,
+        stop_pc: *stop_pc,
+        stop_target: *stop_target,
+        level: *preserved_level,
+    })
+}
+
+pub(crate) fn emit(input: Input<'_>, name: &str) -> Result<String, String> {
+    let bound = bind_search_path(&input)?;
+    let path = bound.path;
+    let actions = bound.actions;
+    let stop_pc = &bound.stop_pc;
+    let stop_target = &bound.stop_target;
+    let preserved_level = bound.level;
+    let mut functions = String::new();
+    for (&pc, action) in &actions {
+        let Action::Filter { proof, .. } = action else {
+            unreachable!()
+        };
         functions.push_str(&format!("fn search_filter_{pc}(frame:&mut CrtOwnedFrameView<'_>,cpu:&mut CrtCpu)->RegistryResult<CrtValue>{{if cpu.r[5]!=CrtValue::Pointer(frame.owner_frame()?){{return Err(\"owned search filter EBP\");}}{}}}\n",proof.live_body()));
     }
     let mut consumed = 0;
@@ -248,6 +275,163 @@ fn {name}(frame:&mut CrtOwnedFrameView<'_>,cpu:&mut CrtCpu,objects:&CrtOwnedPref
 "#,
         origin = input.origin,
         table_va = input.table_va
+    ))
+}
+
+/// Original selected Normal-frame prefix/filter execution ending before the
+/// proved global-unwind CALL. Reaching this cut never completes the handler.
+pub(crate) fn emit_pending_main_search(
+    input: Input<'_>,
+    prefix: &super::handler_checks::PrefixProof,
+    callees: &SearchCallees<'_>,
+    main: &super::frame_proof::ProvenFrame,
+    layout: &super::selection::FilterLayout,
+    bridge_source: (u32, &[u8]),
+) -> Result<String, String> {
+    reprove_pending_prefix(prefix)?;
+    let sources = callees.bind(prefix, &input)?;
+    let bound = bind_search_path(&input)?;
+    if input.origin != prefix.end
+        || main.scope_va() != input.table_va
+        || main.handler_va() != prefix.entry
+        || layout.start != main.esp_offset()
+        || layout.end != 0
+        || layout.exception_pointers_offset != prefix.owner_pair_offset
+        || layout
+            .writable_words
+            .iter()
+            .any(|o| !main.ordinary_words().contains(o) || *o == layout.exception_pointers_offset)
+        || bound.level != input.proof.initial_level
+        || bound.actions.is_empty()
+        || bridge_source.0 != input.bridge
+    {
+        return Err("pending Main search frame/filter contract".into());
+    }
+    let bridge = super::unwind_bridges::prove_filter(bridge_source.1, bridge_source.0)?;
+    let bridge_body = bridge.filter_native()?;
+    let mut functions = String::new();
+    let mut regions = sources;
+    regions.push(bridge_source);
+    for (&pc, action) in &bound.actions {
+        let Action::Filter { target, proof, .. } = action else {
+            unreachable!()
+        };
+        let filter = &input.filters[target];
+        let actual = super::selection::prove_filter(
+            filter.bytes,
+            filter.origin,
+            layout,
+            input.proof.event_code,
+        )?;
+        if actual.live_body() != proof.live_body()
+            || actual.body() != proof.body()
+            || actual.result() != proof.result()
+        {
+            return Err("pending Main search filter proof/source changed".into());
+        }
+        regions.push((filter.origin, filter.bytes));
+        functions.push_str(&format!("fn pending_main_filter_{pc}(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu)->RegistryResult<CrtValue>{{if cpu.r[5]!=CrtValue::Pointer(frame.owner_frame()?){{return Err(\"pending Main filter owner\");}}{}}}\n",actual.live_body()));
+    }
+    let body = crt_stream_emit::emit_proved_path(
+        &bound.path,
+        |pc, target| {
+            if pc == bound.stop_pc {
+                if target != Target::Direct(bound.stop_target) {
+                    return Err("pending Main changed global boundary".into());
+                }
+                return Ok("frame.validate()?;phase.objects.validate(frame.event,frame.rt,frame.interrupted,frame.epoch,frame.source_binding)?;if cpu.r[1]!=CrtValue::Pointer(frame.binding.at(frame.rt,frame.binding.layout.record)?)||cpu.r[2]!=CrtValue::Pointer(phase.objects.record){return Err(\"pending Main global arguments\");}return Ok(());".into());
+            }
+            let Some(Action::Filter {
+                bridge,
+                scope,
+                target: filter,
+                proof,
+                ..
+            }) = bound.actions.get(&pc).copied()
+            else {
+                return Err("pending Main unbound search call".into());
+            };
+            if target != Target::Direct(*bridge) {
+                return Err("pending Main changed filter call".into());
+            }
+            let raw = input.filters[filter].bytes;
+            Ok(format!(
+                r#"
+frame.validate()?;phase.objects.validate(frame.event,frame.rt,frame.interrupted,frame.epoch,frame.source_binding)?;
+if cpu.r[7]!=CrtValue::scalar({scope}u32)||cpu.r[1]!=CrtValue::scalar({filter})||cpu.r[2]!=CrtValue::Pointer(frame.owner_frame()?){{return Err("pending Main table-selected filter");}}
+let image=frame.binding.application.ok_or("pending Main application")?.image;let target=frame.rt.process_image_code(image,{filter},{length})?;cpu.r[1]=CrtValue::Pointer(target);
+let value=frame.call(cpu,{continuation},|f,c|pending_main_bridge(f,c,target,&{raw:?},|g,k|{{pending_main_filter_{pc}(g,k)?;k.finish(g.rt)}}))?;
+if value!=CrtValue::scalar({result}u32){{return Err("pending Main filter result changed");}}
+"#,
+                length = raw.len(),
+                continuation = pc + 5,
+                result = proof.result() as u32
+            ))
+        },
+        &BTreeMap::new(),
+        |_, op| {
+            Ok(if matches!(op, Op::Call(_)) {
+                String::new()
+            } else {
+                "let rt=&mut *frame.rt;".into()
+            })
+        },
+    )?;
+    let helper_regions = regions
+        .iter()
+        .map(|(pc, raw)| format!("({pc},&{raw:?}[..]),"))
+        .collect::<String>();
+    Ok(format!(
+        r#"
+{functions}
+fn pending_main_bridge<F>(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,target:CrtPointer,expected:&[u8],mut invoke:F)->RegistryResult<CrtValue>where F:FnMut(&mut CrtLiveFrame<'_,'_>,&mut CrtCpu)->RegistryResult<CrtValue>{{{bridge_body}}}
+fn pending_main_search_bytes(rt:&CrtStreamRuntime,binding:&CrtNormalBinding)->RegistryResult<()>{{
+ let image=binding.application.ok_or("pending Main application")?.image;
+ for(base,bytes)in[({handler},&{prefix_raw:?}[..]),({origin},&{raw:?}[..]),{helper_regions}]{{let p=rt.process_image_code(image,base,bytes.len()as u32)?;if rt.memory.read(p.address(),bytes.len()as u32).map_err(|_|"pending Main code read")?!=bytes{{return Err("pending Main search code changed");}}}}
+ let p=rt.process_image_pointer(image,{table_va},{table_len})?;if rt.memory.read(p.address(),{table_len}).map_err(|_|"pending Main table read")?!=&{table:?}{{return Err("pending Main search table changed");}}Ok(())
+}}
+fn pending_main_search_body(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,phase:&CrtPendingSearch)->RegistryResult<()>{{
+ let result=(||{{frame.validate()?;phase.objects.validate(frame.event,frame.rt,frame.interrupted,frame.epoch,frame.source_binding)?;pending_main_search_bytes(frame.rt,frame.binding)?;cpu.validate_active(frame.rt)?;
+ let root=CrtCpu::pointer(cpu.entry[4])?;let pair=frame.rt.offset(root,{pair})?;let image=frame.binding.application.ok_or("pending Main application")?.image;let table=frame.rt.process_image_pointer(image,{table_va},16)?;let owner=frame.owner_frame()?;
+ if frame.state.depth!=1||frame.state.activation!=cpu.return_id||frame.binding.layout.handler!={handler}||frame.scope_address()!={table_va}||frame.state.level!={level}
+  ||cpu.r[4]!=CrtValue::Pointer(frame.rt.offset(root,-44)?)||cpu.r[5]!=CrtValue::Pointer(frame.rt.offset(root,-4)?)||cpu.r[0]!=CrtValue::Pointer(pair)
+  ||cpu.r[3]!=CrtValue::Pointer(frame.binding.at(frame.rt,frame.binding.layout.record)?)||cpu.r[6]!=CrtValue::Pointer(owner)||cpu.r[7]!=CrtValue::scalar({level}i32 as u32)
+  ||frame.rt.load(frame.rt.offset(root,-12)?,32)?!=CrtValue::Pointer(table)||frame.rt.load(frame.rt.offset(root,-20)?,32)?!=CrtValue::Pointer(owner)
+  ||frame.rt.load(pair,32)?!=CrtValue::Pointer(phase.objects.record)||frame.rt.load(frame.rt.offset(pair,4)?,32)?!=CrtValue::Pointer(phase.objects.context)
+  ||frame.rt.load(frame.binding.at(frame.rt,frame.binding.layout.record-4)?,32)?!=CrtValue::Pointer(pair){{return Err("pending Main installed prefix state");}}
+ {body}
+ }})();if result.is_err(){{phase.objects.live.set(false);frame.state.failed=true;}}result
+}}
+fn pending_main_component(selection:&mut CrtPendingNormalSelection,event:&mut CrtNormalException,phase:&CrtPendingSearch,rt:&mut CrtStreamRuntime,source:&CrtCpu,epoch:&NormalCallEpoch<'_>,source_binding:&CrtNormalBinding,outer_view:&CrtPendingNormalView,outer:&CrtNormalBinding,view:&CrtPendingNormalView,main:&CrtNormalBinding,dispatcher:&mut CrtCpu)->RegistryResult<CrtValue>{{
+ let result=(||{{phase.objects.validate(event,rt,source,epoch,source_binding)?;
+  if selection.consumed||event.delivery!=CrtNormalDelivery::ResultTaken||selection.event!=event.generation||selection.source!=event.frame
+   ||selection.selected!=view.frame||selection.handler!={handler}||selection.scope!={table_va}
+   ||phase.current.get()!=RegistryHead::Normal(view.frame)||phase.returned.get().is_some(){{return Err("pending Main component phase/receipt");}}
+  outer_view.validate(event,rt,epoch,source_binding,outer)?;let image=view.validate_ancestor(event,rt,epoch,source_binding,outer,main,2)?;
+  if main.layout!=original_main_layout()||image.handler_va!={handler}||image.scope_va!={table_va}||image.try_level!={level}{{return Err("pending Main component frame/layout");}}
+  pending_main_search_bytes(rt,main)?;dispatcher.validate_active(rt)?;event.check_handler_stack(rt,source,epoch,dispatcher)?;
+  let sp=CrtCpu::pointer(dispatcher.r[4])?;for(i,p)in[phase.objects.record,main.at(rt,main.layout.record)?,phase.objects.context].into_iter().enumerate(){{if rt.load(rt.offset(sp,i as i64*4)?,32)?!=CrtValue::Pointer(p){{return Err("pending Main component arguments");}}}}
+  event.delivery=CrtNormalDelivery::Calling;let continuation=event.continuation;
+  dispatcher.call_activation(rt,continuation,0,|rt,cpu|{{
+   let mut state=CrtLiveDispatchState{{level:{level},depth:1,calls:1,activation:cpu.return_id,failed:false}};
+   let mut frame=CrtLiveFrame{{rt,event,interrupted:source,epoch,source_binding,binding:main,selected_view:Some(CrtSelectedNormalView::Through{{view,child_view:outer_view,child:outer}}),state:&mut state}};
+   pending_normalizer_front(&mut frame,cpu,phase)?;pending_main_helpers::pending_after_normalizer(&mut frame,cpu,phase)?;pending_prefix_tail(&mut frame,cpu,phase)?;pending_main_search_body(&mut frame,cpu,phase)?;
+   if cpu.returned{{return Err("pending Main premature handler return");}}
+   Err("pending Main global unwind effect unbound at {stop_pc:#x}")
+  }})
+ }})();if result.is_err(){{event.fail_capture();}}result
+}}
+"#,
+        handler = prefix.entry,
+        prefix_raw = prefix.source,
+        origin = input.origin,
+        raw = input.code,
+        table_va = input.table_va,
+        table_len = input.table.len(),
+        table = input.table,
+        pair = prefix.handler_pair_offset - 4,
+        level = input.proof.initial_level,
+        stop_pc = bound.stop_pc
     ))
 }
 
@@ -635,7 +819,7 @@ fn pending_outer_component(selection:&mut CrtPendingNormalSelection,event:&mut C
   event.delivery=CrtNormalDelivery::Calling;let mut actual=None;let continuation=event.continuation;
   let value=dispatcher.call_activation(rt,continuation,0,|rt,cpu|{{
    let mut state=CrtLiveDispatchState{{level:{level},depth:1,calls:1,activation:cpu.return_id,failed:false}};actual=Some((cpu.return_id,CrtCpu::pointer(cpu.entry[4])?));
-   let mut frame=CrtLiveFrame{{rt,event,interrupted:source,epoch,source_binding,binding:outer,selected_view:Some(view),state:&mut state}};
+   let mut frame=CrtLiveFrame{{rt,event,interrupted:source,epoch,source_binding,binding:outer,selected_view:Some(CrtSelectedNormalView::Direct(view)),state:&mut state}};
    pending_normalizer_front(&mut frame,cpu,phase)?;pending_after_normalizer(&mut frame,cpu,phase)?;pending_prefix_tail(&mut frame,cpu,phase)?;pending_outer_search_body(&mut frame,cpu,phase)
   }})?;
   phase.objects.validate(event,rt,source,epoch,source_binding)?;view.validate(event,rt,epoch,source_binding,outer)?;pending_outer_search_bytes(rt,outer)?;

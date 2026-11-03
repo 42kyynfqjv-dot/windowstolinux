@@ -2462,7 +2462,7 @@ fn pending_outer_selection_cases(){let original=std::fs::read(std::env::var("W2L
 fn pending_main_view_cases(){let original=std::fs::read(std::env::var("W2L_PE_MAPPING_INPUT").unwrap()).unwrap();for mode in 0..8{pending_main_view_one(&original,mode);}}
 
 #[inline(never)]fn pending_main_selection_one(original:&[u8],mode:u32){
- let mut changed=original.to_vec();if mode==10{startup_caller_mutate(&mut changed,0x401316);}let original=&changed[..];
+ let mut changed=original.to_vec();if let Some(at)=match mode{10=>Some(0x401316),36=>Some(0x402800),37=>Some(0x401333),38=>Some(0x41b218),_=>None}{startup_caller_mutate(&mut changed,at);}let original=&changed[..];
  let(m,mut registry,root,mut permit)=fixture_with_extra(&[(0x410000,0x420000)]);
  let(mut rt,init)=CrtStreamRuntime::new_initializing_pe32(registry.identity.owner,registry.identity.instance,0x41c080,3,1048576,original).unwrap();
  let inputs=CrtEntropyInputs::bind(&rt,init,17,19).unwrap();rt.map_region(0x9000,0x6000,CrtRegionKind::Stack,None).unwrap();rt.store(rt.process_image_pointer(inputs.image,0x41c000,4).unwrap(),32,CrtValue::scalar(0x12345678)).unwrap();
@@ -2487,11 +2487,11 @@ fn pending_main_view_cases(){let original=std::fs::read(std::env::var("W2L_PE_MA
      let mut selection=inner_return.select_outer(&mut event,&phase,rt,inner_cpu,e,&inner,&outer_view,&outer)?;
      let mut next=cpu(rt,slot.address()-512,139000+u64::from(mode));
      for arg in [CrtValue::scalar(0),CrtValue::Pointer(owned.context),CrtValue::Pointer(outer.at(rt,outer.layout.record)?),CrtValue::Pointer(owned.record)]{next.push(rt,arg)?;}
-     if mode>=22{
+     if mode==22||mode==23{
       event.delivery=CrtNormalDelivery::Calling;let mut actual=None;let mut did_return=false;
       let failure=next.call_activation(rt,event.continuation,0,|rt,h|{
        actual=Some((h.return_id,CrtCpu::pointer(h.entry[4])?));let mut state=CrtLiveDispatchState{level:0,depth:1,calls:1,activation:h.return_id,failed:false};
-       let mut frame=CrtLiveFrame{rt,event:&event,interrupted:inner_cpu,epoch:e,source_binding:&inner,binding:&outer,selected_view:Some(&outer_view),state:&mut state};
+       let mut frame=CrtLiveFrame{rt,event:&event,interrupted:inner_cpu,epoch:e,source_binding:&inner,binding:&outer,selected_view:Some(CrtSelectedNormalView::Direct(&outer_view)),state:&mut state};
        pending_normalizer_front(&mut frame,h,&phase)?;pending_after_normalizer(&mut frame,h,&phase)?;pending_prefix_tail(&mut frame,h,&phase)?;
        let root=CrtCpu::pointer(h.entry[4])?;let corrupt=frame.rt.offset(root,if mode==22{-36}else{-60})?;
        frame.rt.tags.insert(corrupt.address(),if mode==22{CrtValue::scalar(0)}else{CrtValue::ProtectedReturn(999991)});
@@ -2524,9 +2524,39 @@ fn pending_main_view_cases(){let original=std::fs::read(std::env::var("W2L_PE_MA
       21=>inner_cpu.flags.cf=Some(!flags.cf.unwrap()),_=>{}
      }
      let cursor=phase.current.get();let got=returned.select_main(&mut event,&phase,rt,inner_cpu,e,&inner,&outer_view,&outer,&main_view,&main);
-     if mode<=1{
+     if mode<=1||mode>=24{
       let selected=got.expect("actual Outer return must select actual live Main");assert_eq!((selected.event,selected.source,selected.selected,selected.handler,selected.scope),(event.generation,event.frame,main_id,main.layout.handler,main.layout.scope));
       assert!(returned.consumed);assert_eq!(phase.current.get(),RegistryHead::Normal(main_id));assert_eq!(phase.returned.get(),None);assert_eq!(event.delivery,CrtNormalDelivery::ResultTaken);
+      if mode>=24{
+       let mut chosen=selected;let mut main_dispatch=cpu(rt,slot.address()-768,149000+u64::from(mode));
+       for arg in [CrtValue::scalar(0),CrtValue::Pointer(owned.context),CrtValue::Pointer(main.at(rt,main.layout.record)?),CrtValue::Pointer(owned.record)]{main_dispatch.push(rt,arg)?;}
+       let handler_root=rt.offset(CrtCpu::pointer(main_dispatch.r[4])?,-4)?;
+       let local1=main.at(rt,main.layout.bp-776)?;let local2=main.at(rt,main.layout.bp-780)?;let old1=rt.load(local1,32)?;let old2=rt.load(local2,32)?;
+       match mode{
+        25=>chosen.consumed=true,26=>chosen.event+=1,27=>chosen.selected=outer_id,28=>phase.current.set(RegistryHead::Normal(outer_id)),29=>main_view.frame.generation+=1,
+        30=>main.layout.scope+=4,31=>outer_view.frame.generation+=1,32=>outer.previous=main.previous,
+        33=>rt.store(CrtCpu::pointer(main_dispatch.r[4])?,32,CrtValue::Pointer(owned.context))?,34=>inner_cpu.r[0]=CrtValue::scalar(0),35=>owned.live.set(false),
+        39=>rt.store(rt.offset(owned.record,4)?,32,CrtValue::scalar(0))?,40=>{rt.tags.insert(local2.address(),CrtValue::ProtectedReturn(999992));},
+        41=>rt.store(main.at(rt,main.layout.level)?,32,CrtValue::scalar(1))?,42=>chosen.scope+=4,
+        43=>rt.store(rt.process_image_pointer(app.image,0x41ccb8,4)?,32,CrtValue::Scalar{bits:0,known:0})?,_=>{}
+       }
+       let before_tags=rt.tags.clone();let generation=rt.generation;
+       let got=pending_main_component(&mut chosen,&mut event,&phase,rt,inner_cpu,e,&inner,&outer_view,&outer,&main_view,&main,&mut main_dispatch);
+       assert_eq!(got,Err(match mode{24=>"pending Main global unwind effect unbound at 0x402332",25..=29|42=>"pending Main component phase/receipt",30..=32=>"pending selected predecessor identity",33=>"pending Main component arguments",34=>"normal exception changed interrupted activation",35=>"pending objects event/lifetime",36|37=>"pending Main search code changed",38=>"pending Main search table changed",39=>"pending objects record knowledge changed",40=>"CRT normal extra protected alias in frame",41=>"pending Main component frame/layout",43=>"CRT unknown scalar bits observed",_=>unreachable!()}),"pending Main execution mode{mode}");
+       assert_eq!(event.delivery,CrtNormalDelivery::Failed);assert!(!owned.live.get());assert!(!main_dispatch.returned);assert!(phase.returned.get().is_none());
+       if mode==24{
+        assert_eq!(rt.load(local1,32)?,CrtValue::scalar(0xe0424242));assert_eq!(rt.load(local2,32)?,CrtValue::scalar(0xe0424242));
+        assert_eq!(main_dispatch.r[1],CrtValue::Pointer(main.at(rt,main.layout.record)?));assert_eq!(main_dispatch.r[2],CrtValue::Pointer(owned.record));
+        assert_eq!(rt.load(main.at(rt,main.layout.record-4)?,32)?,CrtValue::Pointer(rt.offset(handler_root,-32)?));
+        assert!(matches!(rt.load(handler_root,32)?,CrtValue::ProtectedReturn(_)));assert!(!chosen.consumed);
+        assert_eq!(rt.load(rt.offset(owned.record,4)?,32)?,CrtValue::Scalar{bits:0,known:0x67});assert_eq!(rt.load(rt.offset(owned.record,8)?,32)?,CrtValue::Scalar{bits:0,known:0});
+       }else if mode==43{
+        assert_eq!(rt.load(local1,32)?,old1);assert_eq!(rt.load(local2,32)?,old2);assert!(matches!(rt.load(handler_root,32)?,CrtValue::ProtectedReturn(_)));assert_ne!(rt.tags,before_tags);
+       }else{assert_eq!(rt.tags,before_tags);assert_eq!(rt.generation,generation);}
+       if mode!=34{assert_eq!(inner_cpu.r,before);}assert_eq!(e.registry.head,RegistryHead::Normal(event.frame));assert_eq!(e.registry.normal_epoch.as_ref().unwrap().frames.len(),4);assert_eq!(rt.initialization,None);
+       assert_eq!(event.require_delivery_contract(),Err("pending raise delivery/capture contract unbound"));assert!(rt.load(owned.context,32).is_err());
+       return Err("pending Main selection stop");
+      }
       if mode==1{assert_eq!(returned.select_main(&mut event,&phase,rt,inner_cpu,e,&inner,&outer_view,&outer,&main_view,&main).err(),Some("pending Outer receipt replay/event/handler"));assert_eq!(event.delivery,CrtNormalDelivery::Failed);assert!(!owned.live.get());}
      }else{
       assert_eq!(got.err(),Some(match mode{2..=5|15|17|20=>"pending Outer receipt replay/event/handler",6|7|16=>"pending Main search order",8=>"pending selected predecessor identity",9=>"pending Main Outer caller activation",10=>"pending Main Outer caller changed",11|14=>"pending Outer receipt return changed",12=>"pending objects event/lifetime",13|21=>"normal exception changed interrupted activation",18=>"pending Main storage/layout",19=>"CRT normal saved known-mask/type/guard changed",_=>unreachable!()}),"pending Main selection mode{mode}");
@@ -2541,7 +2571,7 @@ fn pending_main_view_cases(){let original=std::fs::read(std::env::var("W2L_PE_MA
   })
  });assert_eq!(result,Err("pending Main selection stop"),"pending Main selection mode{mode}");
 }
-fn pending_main_selection_cases(){let original=std::fs::read(std::env::var("W2L_PE_MAPPING_INPUT").unwrap()).unwrap();for mode in 0..24{pending_main_selection_one(&original,mode);}}
+fn pending_main_selection_cases(){let original=std::fs::read(std::env::var("W2L_PE_MAPPING_INPUT").unwrap()).unwrap();for mode in 0..44{pending_main_selection_one(&original,mode);}}
 
 #[inline(never)]fn startup_main_one(original:&[u8],mode:u32){
  let mut file=original.to_vec();if let Some(at)=match mode{1=>Some(0x401717),2=>Some(0x401280),3=>Some(0x401500),4=>Some(0x41b218),5=>Some(0x4012b9),6=>Some(0x402370),25=>Some(0x4011e5),26=>Some(0x4010c0),27=>Some(0x40115c),28=>Some(0x41b1d0),29=>Some(0x4010f0),_=>None}{startup_caller_mutate(&mut file,at);}
@@ -4111,6 +4141,18 @@ if fault==1{{cpu.condition(0)?;}}
         prefix_metadata.push_str(&crate::crt_owned_search::emit_pending_normalizer_front(&prefix,&pending_normalizer).expect("original pending normalizer lowering"));
         prefix_metadata.push_str(&crate::crt_owned_search::emit_pending_guard(&prefix,&inner_search_guard).expect("original pending guard lowering"));
         let after_normalizer=crate::crt_owned_search::emit_pending_after_normalizer(&prefix).unwrap();prefix_metadata.push_str(&after_normalizer);
+        let pending_main_guard=crate::handler_guard::prove_guard(&guard,0x4021d0,&security,0x40154c,0x41c000,main_header,&main).unwrap();
+        let main_search_callees=crate::crt_owned_search::SearchCallees{normalizer:&pending_normalizer,guard:&pending_main_guard,context:&context_proof};
+        let pending_main_search=crate::crt_owned_search::emit_pending_main_search(crate::crt_owned_search::Input{proof:&dispatch,origin:prefix.end,code:&handler_complete[prefix_bytes.len()..],table_va:main.scope_va(),table:&main_table,bridge:0x402800,filters:&filters},&prefix,&main_search_callees,&main,&filter_layout,(0x402800,&bridge_bytes)).expect("pending original Main search to global CALL cut");
+        let mut changed_main_caller=handler_complete[prefix_bytes.len()..].to_vec();changed_main_caller[(0x402292-prefix.end)as usize]^=1;
+        assert_eq!(crate::crt_owned_search::emit_pending_main_search(crate::crt_owned_search::Input{proof:&dispatch,origin:prefix.end,code:&changed_main_caller,table_va:main.scope_va(),table:&main_table,bridge:0x402800,filters:&filters},&prefix,&main_search_callees,&main,&filter_layout,(0x402800,&bridge_bytes)).unwrap_err(),"owned search: changed original instruction");
+        let mut changed_main_filter=target_filter.clone();let immediate=changed_main_filter.windows(4).position(|w|w==[0x42,0x42,0x42,0xe0]).unwrap();changed_main_filter[immediate]^=1;
+        let changed_filters=std::collections::BTreeMap::from([(0x401333,crate::selection::OriginalFilter{origin:0x401333,bytes:&changed_main_filter})]);
+        assert_eq!(crate::crt_owned_search::emit_pending_main_search(crate::crt_owned_search::Input{proof:&dispatch,origin:prefix.end,code:&handler_complete[prefix_bytes.len()..],table_va:main.scope_va(),table:&main_table,bridge:0x402800,filters:&changed_filters},&prefix,&main_search_callees,&main,&filter_layout,(0x402800,&bridge_bytes)).unwrap_err(),"pending Main search filter proof/source changed");
+        assert_eq!(crate::crt_owned_search::emit_pending_main_search(crate::crt_owned_search::Input{proof:&dispatch,origin:prefix.end,code:&handler_complete[prefix_bytes.len()..],table_va:main.scope_va(),table:&main_table,bridge:0x402800,filters:&filters},&prefix,&main_search_callees,&main,&filter_layout,(0x402801,&bridge_bytes)).unwrap_err(),"pending Main search frame/filter contract");
+        assert!(crate::crt_owned_search::emit_pending_main_search(crate::crt_owned_search::Input{proof:&dispatch,origin:prefix.end,code:&handler_complete[prefix_bytes.len()..],table_va:main.scope_va(),table:&main_table,bridge:0x402800,filters:&filters},&prefix,&main_search_callees,&main,&filter_layout,(0x402800,&bad_bridge)).is_err());
+        prefix_metadata.push_str(&pending_main_search);
+        prefix_metadata.push_str(&format!("mod pending_main_helpers{{use super::*;{} {} }}",crate::crt_owned_search::emit_pending_guard(&prefix,&pending_main_guard).unwrap(),after_normalizer.replace("fn pending_after_normalizer", "pub(super) fn pending_after_normalizer")));
         prefix_metadata.push_str(&crate::crt_owned_search::emit_pending_prefix_tail(&prefix).unwrap());let mut wrong_pair=prefix.clone();wrong_pair.handler_pair_offset+=4;assert_eq!(crate::crt_owned_search::emit_pending_prefix_tail(&wrong_pair).unwrap_err(),"pending caller prefix reproof");
         let mut wrong_caller=prefix.clone();wrong_caller.caller.push_str("cpu.r[0]=CrtValue::scalar(0);");assert_eq!(crate::crt_owned_search::emit_pending_after_normalizer(&wrong_caller).unwrap_err(),"pending caller prefix reproof");
         let optional_guard=crate::handler_guard::prove_guard(&guard,0x4021d0,&security,0x40154c,0x41c000,[-48,0,-48,0],&inner).unwrap();

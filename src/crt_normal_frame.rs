@@ -857,10 +857,15 @@ impl CrtNormalException {
 /// Scope cursor knowledge is shared across nested native calls; frame words are
 /// always loaded from CRT storage, never copied back from a FrameImage.
 struct CrtLiveDispatchState { level:i32,depth:u32,calls:u32,activation:u64,failed:bool }
+#[derive(Clone,Copy)]
+enum CrtSelectedNormalView<'a>{
+ Direct(&'a CrtPendingNormalView),
+ Through{view:&'a CrtPendingNormalView,child_view:&'a CrtPendingNormalView,child:&'a CrtNormalBinding},
+}
 struct CrtLiveFrame<'a,'e> {
  rt:&'a mut CrtStreamRuntime,event:&'a CrtNormalException,
  interrupted:&'a CrtCpu,epoch:&'a NormalCallEpoch<'e>,source_binding:&'a CrtNormalBinding,
- binding:&'a CrtNormalBinding,selected_view:Option<&'a CrtPendingNormalView>,
+ binding:&'a CrtNormalBinding,selected_view:Option<CrtSelectedNormalView<'a>>,
  state:&'a mut CrtLiveDispatchState,
 }
 impl CrtLiveFrame<'_,'_> {
@@ -881,7 +886,11 @@ impl CrtLiveFrame<'_,'_> {
   }
   let source=self.event.dispatch_source(self.rt,self.interrupted,self.epoch,self.source_binding)?;
   let image=match self.selected_view{
-   Some(view)=>view.validate(self.event,self.rt,self.epoch,self.source_binding,self.binding)?,
+   Some(CrtSelectedNormalView::Direct(view))=>view.validate(self.event,self.rt,self.epoch,self.source_binding,self.binding)?,
+   Some(CrtSelectedNormalView::Through{view,child_view,child})=>{
+    child_view.validate(self.event,self.rt,self.epoch,self.source_binding,child)?;
+    view.validate_ancestor(self.event,self.rt,self.epoch,self.source_binding,child,self.binding,2)?
+   },
    None=>{if self.binding.id!=self.source_binding.id{return Err("live dispatch selected frame proof absent");}source},
   };
   if image.try_level!=self.state.level{return Err("live dispatch unproved scope alias write");}Ok(())

@@ -466,3 +466,40 @@ address numeric, with no surviving pointer borrow into retired scratch. Total
 producer/component cases are137. Production dispatch and Main's filter/search
 execution remain the next separate gates; cleanup, restoration and whole-PE
 entry-to-exit remain unproved.
+
+## Main prefix and original filter to an unexecuted global CALL
+
+A selected Main handler now uses a distinct two-link live view: each access
+revalidates interrupted Inner, the intervening Outer view and Main's own storage.
+Nested helper calls retain the same route. Main uses its original scope header
+`[-28,0,-796,0]` and guard proof rather than Outer's differently sized frame.
+The original normalizer, guard/security checker, context-selector bypass and
+pointer-pair stores execute on that view with the same event-owned objects.
+
+The existing original search-path validator is shared with the owned-frame
+backend. Main's path is bounded by its proved instructions through the first
+global-unwind CALL. Its filter proof is rederived from the actual target bytes
+and checked against the dispatcher proof; a changed filter cannot retain a
+stale disposition certificate. Target authority comes from checked code in the
+same mapped image after live table/handler validation. The original filter
+bridge at `0x402800` calls the original body at `0x401333`, which reads the
+installed pair/record code and writes Main offsets `-776` and `-780`. Opaque
+CONTEXT bytes remain unread and unknown.
+
+The composed component stops before CALL `0x402332 -> 0x402840`. It does not
+push that call's return, finish the active Main handler, retire its temporary
+pair, issue a disposition receipt or authorize cleanup/restoration/resumption.
+Rejection revokes event authority while retaining original writes and the live
+handler return word. The production entry still stops at the suspended original
+RaiseException CALL until its dispatcher invocation is connected.
+
+Twenty new runtime cases cover the exact reached-call boundary, replay,
+event/selected-frame/order mismatches, stale Main/Outer views, child-chain
+corruption, wrong arguments, source CPU mutation, expired objects, changed
+bridge/filter/header bytes, record-knowledge corruption, protected aliasing,
+scope changes and an unknown normalizer global after earlier prefix effects.
+Compiler mutations also reject altered caller/filter bytes and bridge identity.
+Total producer/component cases are157. Five retained Windows component
+comparisons and zero whole-PE pairs remain; no new Windows delivery equivalence
+is claimed. Global unwind, incoming containment, cleanup and restoration remain
+separate gates.

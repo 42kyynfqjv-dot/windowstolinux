@@ -18,8 +18,12 @@ prefix, helpers, finally-only search, epilog and RET against that separately
 validated live frame. Its actual protected return now issues an event/object-
 bound receipt. Checked single-use consumption verifies the original Main-to-Outer
 CALL and selects the live Main predecessor without changing the interrupted
-Inner source or registry head. The next boundary is **production invocation of
-the checked search and execution of Main's original filter/search path**.
+Inner source or registry head. Main's original prefix, Main-specific guard and
+filter now execute through a separately checked two-link view, writing the
+original Main locals before stopping at **global-unwind CALL `0x402332` to
+`0x402840`**. The handler remains active; no global-unwind effect or restoration
+authority is supplied. Production invocation from the pending event remains a
+separate boundary.
 Captured Windows registers, cleanup and resumption remain unsupported.
 The protected component path executes original handler entry through normalizer
 writeback, the actual guard/security checker and the original context-helper
@@ -37,7 +41,7 @@ Original Inner search now has finite occurrence-bound return emission derived
 from the original scope-chain proof. Live scope level and original visit edges
 remain checked; acyclic callers retain their duplicate-PC rejection. Prefix
 composition and first Normal predecessor selection execute in the component;
-production dispatch and Main's selected handler execution remain unimplemented.
+production dispatch and Main's global-unwind effects remain unimplemented.
 [Earlier application handoff](APPLICATION-HANDOFF.md).
 
 ## Previous executable checkpoint: Outer entered under live Main
