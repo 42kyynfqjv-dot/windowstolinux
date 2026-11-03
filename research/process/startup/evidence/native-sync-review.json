@@ -1,0 +1,36 @@
+{
+  "kind": "Bounded native synchronization component and callable issuer; zero new Windows pairs",
+  "reviewed_parent": "8fb463441d6eee638618b2306eeb04242f98f00e",
+  "parent_ci_at_review": {
+    "41045734143": "8 successful jobs; Linux LLVM comparisons in progress",
+    "41045726142": "8 successful jobs; Linux LLVM comparisons in progress",
+    "41045726130": "success"
+  },
+  "crt_passed": 270,
+  "ignored_artifact_tests_separately_executed": 2,
+  "new_native_test_functions": 3,
+  "python_run": 70,
+  "python_existing_skip": 1,
+  "clippy": "passed strict",
+  "fmt": "passed",
+  "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "generated_rust_sha256": "cd0e7186beb53ff7f4c197701f7583317a9495a36787f138300cd62429c654e7",
+  "retained_recorded_windows_component_pairs": 5,
+  "new_windows_pairs": 0,
+  "actual_entry_boundary": "LoadLibraryExW CALL402b00/IAT415074; system-provider/API-set initialization remains unbound",
+  "test_correction": "Initial stdcall regression tried forbidden protected-slot overwrite. Memory guard correctly rejected it before invocation. Test now supplies mismatched return identity, asserts no effect, then executes valid call. Initial log retained.",
+  "limits": [
+    "startup-exclusive single owned thread; Module/global objects only; flags zero",
+    "allocation failure is unclosed rejection, not implemented BOOL-zero/LastError",
+    "no new Windows API execution or complete loader support",
+    "original call/code certificate and object-index binding remain required",
+    "no XP/7 or full startup/rcedit claim; historical Windows timeouts unresolved"
+  ],
+  "logs_sha256": {
+    "crt.log": "873e9527c473f934178e098cad07379d99d300f0e6428beaab781020c667c1aa",
+    "crt-final.log": "cf5b59630a7be0f16d27d19c144a3d38296be80cf2efdda9186bd984247d0959",
+    "python.log": "0d3f08faf76b349a6aff13f57b95810e99fc4f6874a35cb4933a904cbd8e861d",
+    "clippy-final.log": "736e2582f563605dd272e5fb977840b0c0767377d27b6940c440caf75eec7157",
+    "report.json": "4e0e07b603a33adc622bbf3c29a731874f762ed894ae740bcf5daa61e61a61cf"
+  }
+}

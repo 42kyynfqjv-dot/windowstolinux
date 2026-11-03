@@ -1,0 +1,114 @@
+{
+  "schema": 1,
+  "status": "Independent expectations frozen before original formatter integration; not Windows observations or PE translation results",
+  "sources": [
+    "https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/printf-printf-l-wprintf-wprintf-l?view=msvc-170",
+    "https://learn.microsoft.com/en-us/cpp/c-runtime-library/format-specification-syntax-printf-and-wprintf-functions?view=msvc-170",
+    "https://learn.microsoft.com/en-us/cpp/cpp/data-type-ranges?view=msvc-170",
+    "https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/calloc?view=msvc-170",
+    "https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/fflush?view=msvc-170"
+  ],
+  "domain": {
+    "format_bytes_before_first_nul_max": 4096,
+    "supplied_argument_slots_max": 64,
+    "consumed_initialized_scalar32_arguments_max": 64,
+    "logical_output_bytes_max": 16384,
+    "conversions": ["d", "i", "u", "ld", "li", "lu", "%"],
+    "integer_model": "Microsoft x86 int and long are 32 bits; signed decimal uses two's-complement interpretation",
+    "locale": "owned initialized narrow C locale and resolved options; these vectors do not grant that state",
+    "extra_arguments": "Unused trailing slots are allowed and are not read or promoted into known values",
+    "termination": "An initialized NUL must be reached within the format bound; bytes and arguments after it are not consumed",
+    "logical_vs_physical": "The logical formatted stream contains LF; the separately proved narrow text writer may emit CRLF. Counts do not include inserted CR bytes",
+    "errors": "Public printf errors are negative, not universally -1. Exact private results, pending errno and cleanup require instruction proof"
+  },
+  "format_cases": [
+    {"id": "empty_ignores_unknown_trailing", "format_ascii": "\u0000%d", "arguments_u32": [null, 4294967295], "expected_ascii": "", "consumed_arguments": 0},
+    {"id": "literals_percent_controls", "format_ascii": "%% plain\tCR\rLF\n\u0000", "arguments_u32": [], "expected_ascii": "% plain\tCR\rLF\n", "consumed_arguments": 0},
+    {"id": "signed_limits_all_signed_forms", "format_ascii": "%d|%i|%ld|%li\u0000", "arguments_u32": [2147483648, 2147483647, 4294967295, 0], "expected_ascii": "-2147483648|2147483647|-1|0", "consumed_arguments": 4},
+    {"id": "unsigned_limits_both_width_forms", "format_ascii": "%u/%lu/%u/%lu\u0000", "arguments_u32": [4294967295, 2147483648, 0, 1], "expected_ascii": "4294967295/2147483648/0/1", "consumed_arguments": 4},
+    {"id": "same_word_distinct_signedness", "format_ascii": "%d %u %ld %lu\u0000", "arguments_u32": [4294967295, 4294967295, 4294967295, 4294967295], "expected_ascii": "-1 4294967295 -1 4294967295", "consumed_arguments": 4},
+    {"id": "mixed_fields_and_percent", "format_ascii": "r=%li; u=%u; z=%d%%\n\u0000", "arguments_u32": [2147483648, 4294967295, 0], "expected_ascii": "r=-2147483648; u=4294967295; z=0%\n", "consumed_arguments": 3},
+    {"id": "decimal_digit_transitions", "format_ascii": "%d,%d,%d,%u,%u,%lu\u0000", "arguments_u32": [9, 10, 99, 100, 999, 1000], "expected_ascii": "9,10,99,100,999,1000", "consumed_arguments": 6},
+    {"id": "reordered_signedness", "format_ascii": "<%u><%d><%lu><%li>\u0000", "arguments_u32": [1, 4294967295, 2, 2147483648], "expected_ascii": "<1><-1><2><-2147483648>", "consumed_arguments": 4},
+    {"id": "unused_unknown_word_is_not_read", "format_ascii": "%d\u0000", "arguments_u32": [7, null, 2147483648], "expected_ascii": "7", "consumed_arguments": 1},
+    {"id": "nul_stops_before_unsafe_conversion", "format_ascii": "%u\u0000%n%ls", "arguments_u32": [17, null], "expected_ascii": "17", "consumed_arguments": 1},
+    {"id": "negative_digit_transitions", "format_ascii": "%li,%d,%ld,%i\u0000", "arguments_u32": [4294967295, 4294967287, 4294967286, 4294967196], "expected_ascii": "-1,-9,-10,-100", "consumed_arguments": 4},
+    {"id": "existing_cr_preserved_before_lf", "format_ascii": "a\r\nb\n%d\u0000", "arguments_u32": [0], "expected_ascii": "a\r\nb\n0", "consumed_arguments": 1}
+  ],
+  "domain_rejections": [
+    {"id": "missing_consumed_word", "format_ascii": "%d %u\u0000", "arguments_u32": [1], "reason": "missing argument; public C behavior is undefined, so no invented value"},
+    {"id": "unknown_consumed_word", "format_ascii": "%ld\u0000", "arguments_u32": [null], "reason": "consumed scalar is not initialized"},
+    {"id": "width", "format_ascii": "%08u\u0000", "arguments_u32": [7], "reason": "outside bounded grammar, not invalid printf"},
+    {"id": "precision", "format_ascii": "%.3d\u0000", "arguments_u32": [7], "reason": "outside bounded grammar, not invalid printf"},
+    {"id": "write_pointer", "format_ascii": "%n\u0000", "arguments_u32": [4096], "reason": "pointer effects outside bounded grammar"},
+    {"id": "string", "format_ascii": "%s\u0000", "arguments_u32": [4096], "reason": "pointer traversal outside bounded grammar"},
+    {"id": "wide_integer", "format_ascii": "%lld\u0000", "arguments_u32": [1, 0], "reason": "64-bit argument outside bounded grammar"},
+    {"id": "float", "format_ascii": "%f\u0000", "arguments_u32": [0, 0], "reason": "floating-point conversion outside bounded grammar"},
+    {"id": "unterminated_percent", "format_ascii": "%\u0000", "arguments_u32": [], "reason": "unproved malformed-format/invalid-parameter effects"},
+    {"id": "missing_terminator", "format_ascii": "abc", "arguments_u32": [], "reason": "no initialized terminating NUL"}
+  ],
+  "buffer_effect_cases": [
+    {
+      "id": "ordinary_calloc_success",
+      "instruction_region": "411de9..411e45",
+      "entry_flags": 2,
+      "allocation": {"callee_va": "0x407cf0", "arguments": [4096, 1], "outcome": "live owned zeroed allocation"},
+      "expected": {"flags": 66, "capacity": 4096, "count": 0, "pointer_offset": 0, "next_byte_write_calls": 0},
+      "unclosed_effects": ["allocator identity and error context", "new-mode/new-handler and exceptional effects", "post-allocation helper 407d50(0)"]
+    },
+    {
+      "id": "ordinary_calloc_failure_is_unbuffered",
+      "instruction_region": "411de9..411e45;40ff99..41006b",
+      "entry_flags": 2,
+      "allocation": {"callee_va": "0x407cf0", "arguments": [4096, 1], "outcome": null},
+      "expected": {"flags": 1026, "capacity": 2, "count": 0, "base": "same FILE+20", "next_byte_write_calls": 1, "next_byte_request_hex": "43"},
+      "unclosed_effects": ["allocator errno is not assumed unchanged or cleared", "new-mode/new-handler and exceptional effects", "post-allocation helper 407d50(0)"]
+    },
+    {
+      "id": "temporary_failure_still_buffers",
+      "instruction_region": "409e12..409ebd",
+      "entry_flags": 2,
+      "allocation": {"callee_va": "0x408730", "arguments": [4096], "outcome": null},
+      "expected": {"flags": 642, "capacity": 2, "count": 2, "base": "same FILE+20", "first_byte_write_calls": 0},
+      "unclosed_effects": ["temporary-buffer eligibility and cache ownership", "allocator and helper 407d50(0) error effects"]
+    },
+    {
+      "id": "capacity_short_retains_new_byte",
+      "instruction_region": "40ff99..41006b",
+      "entry_flags": 130,
+      "capacity": 2,
+      "buffer_before_hex": "4142",
+      "incoming_byte": 67,
+      "backend": [{"request_hex": "4142", "success": true, "written": 1}],
+      "ordered_effects": ["pointer=base+1", "count=capacity-1", "write old AB once", "store incoming C at base", "return AL=0", "caller sets stream error"],
+      "expected": {"buffer_after_hex": "43", "pointer_offset": 1, "count": 1, "flags_after_caller": 146, "write_calls": 1}
+    },
+    {
+      "id": "deferred_format_success_then_flush_failure",
+      "instruction_region": "408420..408489",
+      "entry_flags": 66,
+      "capacity": 16,
+      "format_case": "existing_cr_preserved_before_lf",
+      "backend": [{"request_hex": "610d0d0a620d0a30", "success": false, "last_error": 6, "failed_written_unobserved": 4294967295}],
+      "ordered_effects": ["format queues 6 logical bytes", "printf success returns 6 with zero backend calls", "later flush sets pointer=base,count=0", "write once", "set stream error"],
+      "expected": {"printf_before_flush": 6, "flush_result_u32": 4294967295, "flags_after": 82, "pointer_offset": 0, "count": 0, "write_calls": 1, "no_retry": true},
+      "unclosed_effects": ["the selected initial buffering state must be established", "a later flush cannot retroactively change a completed Main return"]
+    },
+    {
+      "id": "temporary_completion_clears_fields_after_failed_flush",
+      "instruction_region": "409ebd..409efb",
+      "entry_flags": 642,
+      "begin_result_al": 1,
+      "flush_result": "failure sets stream-error bit 0x10",
+      "ordered_effects": ["conditional flush", "flags &= 0xfffffd7f", "capacity=0", "base=NULL", "pointer=NULL"],
+      "expected": {"flags_after": 18, "capacity": 0, "base": null, "pointer": null},
+      "unclosed_effects": ["cache lifetime remains distinct from cleared FILE pointer fields", "do not infer deallocation from this function"]
+    }
+  ],
+  "evidence_counts": {"fresh_windows_observations": 0, "actual_windows_elf_pairs": 0, "whole_pe_translations": 0},
+  "limits": [
+    "These predictions neither prove original formatter instruction coverage nor provide ownership or initialization authority.",
+    "The formatter, context, lock/exception cleanup, allocation helpers and stream teardown must compose before ordinary CRT admission.",
+    "No locale-general, arbitrary format, full startup, rcedit, or XP/7 compatibility claim."
+  ]
+}

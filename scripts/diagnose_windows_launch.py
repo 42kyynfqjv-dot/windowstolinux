@@ -11,12 +11,17 @@ from imported_fixture import fixture
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'corpus'))
 from generate import build
 from launch import execute
+from launch_controls import run_controls
+from make_output_probe import output_probe
+from windows_original_contexts import run_contexts
 
 assert sys.platform == 'win32', 'Windows baseline required'
 root = Path(os.environ['RUNNER_TEMP']) / 'w2l-launch-diagnosis'
 root.mkdir(exist_ok=True)
 cases = [('max', fixture(b'A'*64), b'A'*64),
          ('corpus14', build(14), b'C14'), ('hello', fixture(b'Hello'), b'Hello')]
+controls = run_controls(root / 'host-controls')
+print('independent host exit controls '+json.dumps(controls), flush=True)
 records = []
 for mode in ['reused', 'fresh']:
     for repetition in range(3):
@@ -42,4 +47,8 @@ for mode in ['reused', 'fresh']:
             if not record['passed']:
                 (root/f'failed-{len(records)}.exe').write_bytes(image)
             print('launch probe result '+json.dumps(record), flush=True)
+contexts = run_contexts(root/'exact-contexts', Path.cwd(), output_probe(), build(0), build(1))
+assert len(contexts)==9 and all(r['passed'] for r in contexts), 'exact original context probe failed; see exact-contexts/report.json'
 assert len(records)==18 and all(r['passed'] for r in records), 'launch probe failed; see report.json'
+
+assert len(controls)==2 and all(r['passed'] for r in controls), 'independent host exit control failed; see host-controls/report.json'

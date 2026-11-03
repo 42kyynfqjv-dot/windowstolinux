@@ -1,0 +1,146 @@
+{
+  "base_commit": "e17247d573cbe0a64c7aaf2a2698965bbe1760a5",
+  "scope": "original caller comparison/malloc and explicit native uninitialized HeapAlloc component; no whole-PE translation",
+  "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "source_sha256": {
+    "examples/crt_stream.rs": "c89c0868802afbe7945d418f517455146acfc90750853d45f86836fef903ca10",
+    "src/crt_malloc.rs": "af3c0d33b48d1eae3d7be1123f9e00ec3dc876f887cdd97f695022d9f20ca075",
+    "src/crt_locale_startup.rs": "ed677a1c83b4e5513ff0280cdc19aa56261d29aabc8db7f58b4b51efe11a1efa",
+    "src/crt_stream_cpu.rs": "51528fc120f6927b51f2f2bcbf9a0c75d0a8247dbd97ec1320fe745763cc36d2",
+    "src/crt_stream_runtime.rs": "595613342c172403289cee445d9d6b99fe75f48e72f5b49b4470f9739ae89ad4",
+    "src/crt_normal_frame_tests.rs": "2db39713d04e045a0b190951b53992c2b3123e58d5ae01d3a3ed67243ed6e6d0",
+    "research/process/startup/check_normal_wrapper.py": "62456fbe822388e35bc715c2b489246ae0c1490774697c317a48a9649ceb6e92"
+  },
+  "predecessor_review": {
+    "head": "e17247d573cbe0a64c7aaf2a2698965bbe1760a5",
+    "source_hashes": "verified against git commit before edits",
+    "ci": [
+      {
+        "run": 41269413336,
+        "name": "Rust CI PR",
+        "conclusion": "success"
+      },
+      {
+        "run": 41269409929,
+        "name": "Rust CI push",
+        "conclusion": "success"
+      },
+      {
+        "run": 41269409920,
+        "name": "Pinned startup inventory",
+        "conclusion": "success",
+        "native_unwind_job": 124741496737
+      }
+    ],
+    "prior_evidence_sha256": "e0e1961f9fbadcacffaaac4cdd631d5507c921107bcaed638b28412123240510",
+    "review": "original selector/constructor guards, matching process code-page token, unknown state and field initialization, original instruction/effect ordering and strict expectations checked; no runtime defect identified",
+    "remaining_restrictions": "native UTF8 explicit process profile only; no Windows target default ACP or full PE equivalence assertion"
+  },
+  "next_boundary": {
+    "pc": "0x40b289",
+    "reason": "actual 544-byte Buffer returned by original malloc; before original caller local pointer store; initialization flag remains zero on actual differing-code-page path"
+  },
+  "implemented": [
+    "original argument cleanup/code-page local store and reference comparison",
+    "actual equal-code-page branch through owned original aligned epilog and callback return",
+    "original malloc and mode getter instruction graphs bound to original PE",
+    "native flags0 preserves unknown bytes, flags8 still initializes zero",
+    "canonical heap handle, exact fresh allocation identity, Buffer role and extent",
+    "pre-effect stdcall ABI/stack/heap/flags checks",
+    "resource failure rejects without fabricated guest NULL, exception or LastError",
+    "declared NULL conformance inputs reach actual mode getter and rejected errno/new-handler effects; no native failure equivalence claim"
+  ],
+  "checks": {
+    "crt_stream": {
+      "passed": 302,
+      "ignored": 2,
+      "artifact_dependent": "both passed in full replay"
+    },
+    "unwind_slice": 185,
+    "python": {
+      "run": 84,
+      "skip": 1
+    },
+    "clippy": "passed",
+    "fmt": "passed",
+    "canonical": "passed",
+    "malloc_declared_cases": 18,
+    "locale_prefix_declared_cases": 34,
+    "uninitialized_allocation_sizes": [
+      1,
+      4,
+      7,
+      544
+    ],
+    "allocation_negative_modes": 10,
+    "api_modes": 5,
+    "existing_selector_cases": 18,
+    "existing_constructor_cases": 4
+  },
+  "log_sha256": {
+    "canonical-final.log": "7c5edd742ca58bd72cf28490b1b73fe575132114e7d7f16fc6a00402307fa5f3",
+    "root.log": "b537dbc0d9b789109bb50da3bc4d3b262e935b232b441fe3fe9dcf13f09c2988",
+    "unwind.log": "29d1ff1d5a091fc7751e90044c635f374ec9779209a4816371a8c3f7f5ccd6ce",
+    "python.log": "05c2ea05d0da06b62ea1bf5337bd70e0ef4f126d30cc1796dd91d3b28b13d849",
+    "clippy.log": "a6db17ca4a56bb3a65c034c1a8981f91a48086da1f61a78672def0995ef4f724",
+    "fmt.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "replay.log": "899c01f00e6bbbf8cfb554779127763f7be30915317793e75fb51dbc50eef1c7"
+  },
+  "full_replay": {
+    "status": "passed",
+    "report_sha256": "61e67290e8208c06d6e1d42a49e13914bd8d40796a68a36a8b4f7d0763583f42",
+    "comparisons": 5,
+    "rust_sha256": "88c871eb9de8aa34b44a65cee4bb57fd469e436f8dac3293b9dfaab5e45268c2",
+    "scope": "Live registry fixture; body EAX/flags inputs; original stack/FS/saved-state restoration only",
+    "new_windows_elf_pairs": 0
+  },
+  "primary_contract": {
+    "url": "https://learn.microsoft.com/en-us/windows/win32/api/heapapi/nf-heapapi-heapalloc",
+    "retrieved_sha256": "f529a4757b1da77675ab8fcd0a586a202ad10efce28a4c8cde44ade706b5dc42",
+    "meaning": "flags0 does not initialize bytes; HEAP_ZERO_MEMORY8 does"
+  },
+  "preserved_local_failures": [
+    {
+      "log_sha256": "8360e6bc541c7fcf0e1fcdd850f842ea4e991dfabdd455d4568c709fdc33c249",
+      "cause": "obsolete prior boundary assertion, actual execution reached40b289"
+    },
+    {
+      "log_sha256": "518e0365682f720545672efdd76216e01205ec9ac0c4306f8d86dd4b15ff7bc5",
+      "cause": "original-entry expected two heap objects; new actual allocation creates third"
+    },
+    {
+      "log_sha256": "89419284beb9e5ed84c4301d9d179b37e47ebca46fc683467ec7f3045592b5f7",
+      "cause": "isolated locale fixture omitted canonical heap publication; API correctly rejected. Fixture now explicitly publishes canonical heap; actual entry already uses original producer"
+    }
+  ],
+  "review_notes": [
+    "no e17247d runtime defect found in source/token/unknown-state/effect ordering review",
+    "selected caller uses actual disjoint original ranges and actual jump target; fast return uses checked aligned activation, not fragment success",
+    "new API returns only actual fresh Buffer capability; contents have no manufactured scalar/pointer knowledge",
+    "descriptor zero-initialization restriction retained when generic flags0 was admitted",
+    "declared failed API inputs kept distinct from actual native allocation and Windows observations"
+  ],
+  "next_scope": [
+    "40b289 local pointer store, argument cleanup and actual nonzero test",
+    "bounded REP MOVSD at40b2b6/40b2c2 remains rejected by shared lifting",
+    "preserve count/register progression, initialization, typed aliases, overlap and partial effects within existing Cdecl32Forward DF0 domain",
+    "then original40b485 code-page initialization and GetCPInfo/validation/publication/reference release"
+  ],
+  "limits": [
+    "explicit native UTF8 process profile, not target default Windows ACP acquisition/equivalence",
+    "malloc errno/new-handler effects remain rejected; no arbitrary resource failure or zero-size native API support",
+    "heap-reference freeing and exceptional EH4 cleanup remain unbound",
+    "no whole startup/rcedit/default admission",
+    "native close/EOF and Windows delivery/collided unwind remain unproved",
+    "historical original-Windows case19 timeout remains unresolved"
+  ],
+  "archive_manifest_sha256": "583cc657ac3432a0a6eb79044ff3f02097df12df02ac0a4cefb0108202deb818",
+  "repeat_emission": {
+    "identical": true,
+    "rust_sha256": "88c871eb9de8aa34b44a65cee4bb57fd469e436f8dac3293b9dfaab5e45268c2",
+    "fresh_mtime_proved": true,
+    "before_mtime_ns": 1793505645964173412,
+    "after_mtime_ns": 1793505666318832290,
+    "log_sha256": "cfd86c4fcf71ebe790f9570bcaa19636aebc0c40f088d8d49fd07ec7126c4144"
+  }
+}

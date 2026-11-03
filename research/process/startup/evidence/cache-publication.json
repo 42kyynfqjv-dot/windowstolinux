@@ -1,0 +1,77 @@
+{
+  "kind": "Original indexed lock and cache publication; explicit-profile native component only",
+  "reviewed_parent": "1d8639e5a8728c0875e1487c13807e547717c3db",
+  "source_sha256": {
+    "examples/crt_stream.rs": "c12e02526967b42cba98fcbfc59473ebd2401a9ed09766eb38f30b567ffb5d94",
+    "src/crt_global_lock.rs": "198dde0b9b43751d62f53cc79a7d5fe76c73f1221e62fcdff0adc0c8c7ef6ee4",
+    "src/crt_startup_fiber.rs": "d5baca26781b13835b6cd2f2fbbcf4517174d07823c247ad6d5b7e2318e36c1a",
+    "src/crt_stream_runtime.rs": "bd11b54c49efab01e620799859c43365ebce6726e3fd13dd65537a135ea73b9f",
+    "src/crt_normal_frame_tests.rs": "28f43cfb32d276a402d331e2de07bbe812769252eb6bcaeda97912fc2a6a97c8",
+    "research/process/startup/check_normal_wrapper.py": "eeb276e323565a2fa4800466f125b2227745be77de40d567519b9cd5b2dee33a"
+  },
+  "validation": {
+    "crt_passed": 286,
+    "ignored_in_full": 2,
+    "artifact_tests": "both passed in completed final replay",
+    "cache_publication_native_cases": 22,
+    "python_run": 76,
+    "python_skip": 1,
+    "guard_mutants_detected": 7,
+    "emitted_frame_vectors": 10,
+    "clippy_all_targets": "passed",
+    "format": "passed",
+    "repeated_generation": "same hash with later emission timestamp"
+  },
+  "component": {
+    "profile": "w2l-native-second-fiber-20348-2398cc6a-v1",
+    "executed": "original indexed enter, RW enable, XCHG407ec8, RO restore, original indexed leave, selector, original FLS allocation/store",
+    "logical_id": 14,
+    "native_owned_slot_in_entry": 15,
+    "independent_permuted_slot": 5,
+    "cache_cell": "41e00c=ffffffff, read-only",
+    "second_fls_index_allocated": true,
+    "second_fls_index": 1,
+    "second_callback": "40a100",
+    "index_cell": "41c170=1",
+    "next_boundary": "CALL40a428->40a332 registered PTD acquisition context unbound",
+    "default_admission": "402b00 blocked"
+  },
+  "evidence": {
+    "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+    "rust_sha256": "bd164b1580e4d86a615a20af7965d41eba4386ed8e122293b4f7417378758b1f",
+    "report_sha256": "de10a3c705895eaca147fce17c61a72449027e06c1cd71c59f7f9866eef7c8f8",
+    "recorded_windows_wrapper_comparisons": 5,
+    "new_windows_elf_pairs": 0,
+    "whole_pe_pairs": 0
+  },
+  "prior_ci": {
+    "head": "1d8639e5a8728c0875e1487c13807e547717c3db",
+    "completed_success": [
+      41097873035,
+      41097862644,
+      41097862743
+    ]
+  },
+  "log_sha256": {
+    "full.log": "00140734adce2c1bd586b104a03bf0b82d522c7bcb3a9895ae89d4a35d7bd219",
+    "cases-final.log": "9367ae663ee456add0fdea672d25f13f485fd6b6507c9e176016381f1c8c13ba",
+    "clippy-reviewed.log": "2cd5fc0962bda9cc514f4d4a770bf58cece2281e652ab34f98be70d1e665f0d4",
+    "python.log": "1794ea9fb89d17d5ac623ee4431c93e29f0f3f41bb34cbeff724399fb5df0888",
+    "memory-mutations.log": "9e375eb448d2c6575b085cf190827436072230e94625022c8b4551a3f0f3ba7e",
+    "replay-final.log": "89e3078f7685bbc4f001a9f67318a9a34da8c245e8daae903afafbe30e6e9b37"
+  },
+  "retained_attempts": {
+    "cases-reviewed.log": "public protection correctly rejected opaque lock bytes; separated public rejection assertion from independent low-level adversarial mutation",
+    "clippy.log": "cfg(test)-only reused proof module; normal build inclusion fixed",
+    "clippy-final.log": "intermediate integer inference compile error; explicit u32 fixed",
+    "replay-reviewed": "retained failed attempt encountered that compile error; final replay completed after sources frozen"
+  },
+  "recovery": "same workspace recovered without reset; source hashes and completed report verified after transport disconnect",
+  "limits": [
+    "bounded explicit profile; no default/whole-startup/rcedit admission",
+    "native resource policy does not establish Windows resource-failure equivalence",
+    "PTD/context acquisition and remaining startup/formatter/delivery/unwind contracts remain unproved",
+    "historical Windows timeout causes unresolved",
+    "new-head CI and independent substantive review still required"
+  ]
+}

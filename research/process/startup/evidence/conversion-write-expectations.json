@@ -1,0 +1,9 @@
+{
+ "frozen_before_implementation":true,
+ "supported_write_domain":"CP65001 or canonical explicit native UTF8 ACP0; flags0; count-1 or positive1..32767; NULL default/used; capacity>=actual UTF8 bytes and bounded owned writable destination",
+ "ownership":"reread source under live capability at the write call, prove actual selected bytes, reject source/destination and protected-call-frame overlap; query never supplies destination authority",
+ "effects":"write actual converted bytes only, NUL included only for count-1 or embedded positive-count input; untouched output remains unknown/unchanged; complete ordinary word overwrite removes old authority, partial/control overwrite rejects",
+ "failure":"insufficient-capacity and strict/error effects stay unbound; preserve recorded Windows prefix/replacement writes and do not simulate successful or atomic failures",
+ "original":"execute40ad10 length store, original40ae0d cookie/return and406727 publication only when actual instructions complete; reject before unbound count/parser call406755->406813",
+ "whole_PE_pairs":0
+}

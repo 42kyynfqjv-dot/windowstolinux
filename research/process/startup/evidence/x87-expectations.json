@@ -1,0 +1,10 @@
+{
+  "frozen_before_implementation": true,
+  "scope": "bounded FNCLEX guest-state integration; no new whole-PE Windows/ELF pairs",
+  "profile": "explicit modern user-mode x87 available/enabled, CR0.EM=0 TS=0; no legacy 486/Pentium/Quark DOS-compatible pending IRQ window; single stationary guest thread/fiber; no kernel state acquisition claim",
+  "initial_knowledge": "unknown guest x87 status/control/tag/data/pointers and MXCSR, never host/default-Windows capture",
+  "operation": "statusbits0..7 and15 become knownzero (80ff), TOP11..13 preserved (3800), C0/C1/C2/C3 knowledge removed (4700). Control/tag/data/IP/DP/opcode/MXCSR and integer flags/XMM unchanged. Nonwaiting clears even pending unmasked exceptions, without FWAIT dispatch. Waiting/other x87 operations remain rejected.",
+  "ownership": "explicit runtime/init/process/thread owner; first use fixes current stationary fiber; expired owner/init/thread/fiber rejects before effect; repeat instruction allowed but caller replay grants no entry/return authority",
+  "next_original_instructions": "execute FNCLEX40158a then original401e00 empty preinitializer array with equal bounds; preserve actual push401591; reject before CALL401596 ->401b0f registration until justified",
+  "validation": "independent bitmask oracle, all status words, masked/unmasked controls, unknown bits and unaffected state, pending exceptions; native x86_64 host observation in isolated authored probe with saved/restored host FPU state, no proprietary binaries; lifetime/changed-code and actual-entry component tests"
+}

@@ -1,0 +1,212 @@
+{
+  "scope": "original authored Windows observations only; no translated pairs",
+  "probe_commit": "9664382a2a9521a2640a6c2c45d45277ac71378c",
+  "api": {
+    "run": 41282533822,
+    "job": 124777199658,
+    "artifact": 13073996795,
+    "artifact_sha256": "1dc0b7320747f84a1bc40a655a1dfad33fa7f5d97303cd0083efebd195aceb96",
+    "report": {
+      "scope": "original authored Windows API only; zero translated pairs",
+      "host": "Windows-2022Server-10.0.20348-SP0",
+      "compiler_version": "14.44.35207",
+      "sdk": "10.0.26100.0\\",
+      "compiler_sha256": "fc26dcba228dd91cd09429670f298f4608833c84841a4ceca8c4955b4d495a7b",
+      "linker_sha256": "83d4fbff908e88be425898184d8470be1f139bf843190c24e041b019c9c69a78",
+      "sources": {
+        "code_page_raw_probe.c": "6bbfb85b0f3b0f326aae92152d478de00195a17708ffb156a9c378f1326a6812",
+        "code-page-raw-expectations.json": "00e8fed3ef350dfd342c87f23cf933b60d41cac488741bcc49a7a12cc5f73d52"
+      },
+      "flags": [
+        "/nologo",
+        "/O1",
+        "/MT",
+        "/W4",
+        "/WX",
+        "D:\\a\\_temp\\code-page-raw-observation\\code_page_raw_probe.c",
+        "/Fe:D:\\a\\_temp\\code-page-raw-observation\\code-page-probe.exe",
+        "/Fo:D:\\a\\_temp\\code-page-raw-observation\\code-page-probe.obj",
+        "/link",
+        "/MACHINE:X86",
+        "/SUBSYSTEM:CONSOLE"
+      ],
+      "status": "matched",
+      "observations": 2,
+      "pe_sha256": "464c03c9dda0ea7c0d82ad6132059605d376352bb21fdb161a2e5b0392ae4976",
+      "launch_sha256": "03b4495a66facbc6e1277371b82baee37992cf46f54d6f6dbe188a6f7b8e9e3d",
+      "exit": 0,
+      "stdout_sha256": "636284e4db7b1c44cdcf3e5bc5a02559045f8906e8055f6747a8fd706d14079f",
+      "observed_acp": 1252,
+      "cases": [
+        {
+          "code_page": 65001,
+          "valid": 1,
+          "last_error": 305419896
+        },
+        {
+          "code_page": 4294967295,
+          "valid": 0,
+          "last_error": 305419896
+        }
+      ]
+    }
+  },
+  "ci_at_probe_commit": {
+    "41282533828": "success/push Rust",
+    "41282533822": "success/startup",
+    "41282537080": "failure/original imported hello launch; API and UTF8 implementation not exercised by this failing fixture"
+  },
+  "failed_imported_launch": {
+    "run": 41282537080,
+    "job": 124777208552,
+    "artifact": 13074246257,
+    "archive_sha256": "37633b5ebed56ad3ba20fd4971c18fb654758cd3266feafbea9ff57a099ac34c",
+    "launch": {
+      "case": "hello",
+      "platform": "windows",
+      "pe_sha256": "30a0afa2dba23697256b96df129e62a9cc7c099edf68bfcb87eaf125fc3757e3",
+      "command": [
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\tmp9r5j976a\\fixture.exe"
+      ],
+      "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+      "os": "Windows-2025Server-10.0.26100-SP0",
+      "python": "3.12.10",
+      "environment": {
+        "RUNNER_OS": "Windows",
+        "RUNNER_ARCH": "X64",
+        "ImageOS": "win25-vs2026",
+        "ImageVersion": "20261030.294.1"
+      },
+      "expected": {
+        "stdout_hex": "48656c6c6f",
+        "stderr_hex": "",
+        "exit": 0
+      },
+      "timeout_seconds": 15,
+      "timeout": true,
+      "executed_sha256": "30a0afa2dba23697256b96df129e62a9cc7c099edf68bfcb87eaf125fc3757e3",
+      "pid": 8240,
+      "spawn_seconds": 0.012743000000000393,
+      "stage": "failed",
+      "poll_at_timeout": null,
+      "wait_seconds": 15.329671699999949,
+      "timeout_wait_seconds": 15.001852399999962,
+      "process_state_capture": {
+        "exit": 0,
+        "seconds": 0.3206466999999975
+      },
+      "exit_after_kill": 1,
+      "failure": "TimeoutExpired: Command '['C:\\\\Users\\\\RUNNER~1\\\\AppData\\\\Local\\\\Temp\\\\tmp9r5j976a\\\\fixture.exe']' timed out after 15 seconds",
+      "elapsed_seconds": 15.34310460000006,
+      "final_poll": 1,
+      "stdout_hex": "48656c6c6f",
+      "stderr_hex": ""
+    },
+    "owned_process_observer": {
+      "pid": 8240,
+      "expected_creation_time": 134379895799997956,
+      "observer": "wct-toolhelp-v1",
+      "identity": {
+        "pid": 8240,
+        "creation_time": 134379895799997956,
+        "alive": true,
+        "cpu_seconds": 0.015625,
+        "handles": 70
+      },
+      "identity_verified": true,
+      "modules": [
+        {
+          "name": "fixture.exe",
+          "base": 4194304,
+          "size": 16384
+        },
+        {
+          "name": "ntdll.dll",
+          "base": 140733986504704,
+          "size": 2506752
+        },
+        {
+          "name": "wow64.dll",
+          "base": 140733974577152,
+          "size": 348160
+        },
+        {
+          "name": "wow64base.dll",
+          "base": 140733968154624,
+          "size": 45056
+        },
+        {
+          "name": "wow64win.dll",
+          "base": 140733958062080,
+          "size": 561152
+        },
+        {
+          "name": "wow64con.dll",
+          "base": 140733950328832,
+          "size": 98304
+        },
+        {
+          "name": "wow64cpu.dll",
+          "base": 1996685312,
+          "size": 40960
+        },
+        {
+          "name": "fixture.exe",
+          "base": 4194304,
+          "size": 16384
+        },
+        {
+          "name": "ntdll.dll",
+          "base": 1996750848,
+          "size": 1835008
+        },
+        {
+          "name": "KERNEL32.DLL",
+          "base": 1975451648,
+          "size": 983040
+        },
+        {
+          "name": "KERNELBASE.dll",
+          "base": 1981808640,
+          "size": 2904064
+        },
+        {
+          "name": "apphelp.dll",
+          "base": 1956249600,
+          "size": 712704
+        },
+        {
+          "name": "msvcrt.dll",
+          "base": 1962868736,
+          "size": 815104
+        }
+      ],
+      "threads": [
+        {
+          "tid": 7308,
+          "cycle": false,
+          "nodes": [
+            {
+              "object_type": 8,
+              "object_status": 2,
+              "tid": 7308,
+              "wait_ms": 46084,
+              "context_switches": 1
+            }
+          ]
+        }
+      ]
+    },
+    "all_artifact_entry_sha256": {
+      "hello/launch.json": "75f24d845ce88977983ea8444c7789425a9fd4f7b1dd25a6e532ce0ec12f04c0",
+      "hello/process-state.stdout": "5354aa5e30725ed8120cece2b02e6a0ebcdab67fa77f8e62df9f74233d435138",
+      "hello/program.bin": "30a0afa2dba23697256b96df129e62a9cc7c099edf68bfcb87eaf125fc3757e3",
+      "hello/process-state.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "hello/stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "hello/stdout": "185f8db32271fe25f561a6fc938b2e264306ec304eda518007d1764826381969"
+    },
+    "fixed_diagnostic_contexts": "9/9 passed earlier in same job; not a diagnosis or replacement for failed launch",
+    "cause": "unresolved; expected Hello/empty stderr, independently identity-verified alive at15seconds; killed/reaped; no reported WCT cycle does not locate cause",
+    "distinct_from": "6daf5ad two Windows2022 original timeouts and historical case19; new Windows2025/image20261030.294.1 occurrence"
+  }
+}

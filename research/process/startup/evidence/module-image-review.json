@@ -1,0 +1,58 @@
+{
+  "kind": "checked image and original managed query component; not whole-PE evidence",
+  "reviewed_parent": "e37bb855ed3d9498e87be1789b0a0c62abf3c26b",
+  "parent_review": "Retained inline ownership/retirement tests passed; removing token check still reproduces premature retirement. No additional parent semantic defect found.",
+  "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "generated_rust_sha256": "badb807a1699f2fc59c08b7de2a87ac83504706154c3e2e22a4afc622247f6ba",
+  "recorded_windows_comparisons": 5,
+  "new_windows_observations": 0,
+  "new_whole_pe_pairs": 0,
+  "query_native_cases": 15,
+  "additional_exit_composition_cases": 2,
+  "word_compare_truth_cases": 24,
+  "inline_exit_total_cases": 26,
+  "changed_query_byte_rejections": 66,
+  "crt_suite": {
+    "passed": 244,
+    "ignored": 1,
+    "ignored_scope": "vector comparison passed separately in recorded replay"
+  },
+  "converter_tests": 175,
+  "python_tests": 60,
+  "python_skips": 1,
+  "clippy": "passed -D warnings",
+  "review_fix": "Applied API outcomes invalidate LastError knowledge; lifetime rejection before the API preserves prior effects. Success preservation was not established.",
+  "modeled_contracts": [
+    "Main-module selection and acquisition result are explicit component inputs.",
+    "Image view requires existing owned module capability and exact mapped root under initialization.",
+    "GetModuleHandleW borrows authority; no reference is acquired.",
+    "Startup process-owned main-module producer remains unavailable; default pending path still rejects."
+  ],
+  "next_gap": "Introduce process-owned main-image bootstrap authority without inventing a LoadLibrary reference; then manager406cfa and managed termination406f55 effects.",
+  "parent_ci": [
+    {
+      "id": 41010499656,
+      "status": "in_progress",
+      "conclusion": null
+    },
+    {
+      "id": 41010493842,
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 41010493797,
+      "status": "completed",
+      "conclusion": "success"
+    }
+  ],
+  "logs": {
+    "crt-reviewed.log": "43678d1bd6080dbe55dee4f67bde033ce9b660c0b927a640cff2768b6bd23d9b",
+    "root.log": "718c64688f8151458dbcc07fb7a0987a33b908b63ccf4a3fc8030b8e5302f584",
+    "clippy-reviewed.log": "02db5a66fa0c60ca8618bd08aac556eac4f3ec863e8630a0d353dba6a0f6e126",
+    "python.log": "e5791a2e4c1d81a508060fc548d9c1284f85519c2e9e749f2ff6db34d557993a",
+    "replay-reviewed.log": "645bb54c8e47a289a878e27751c9eac7725118e4b4630fbee7315c4cb9e9fad0",
+    "predecessor-retirement-mutant.log": "12ae8577b7a9294d4e88e9fdfb19eea8dfe1151ca679a3b934f7ce68a6daf90b"
+  },
+  "limits": "No full startup/rcedit claim. Historical original-Windows timeouts unresolved. New head CI must be checked after publication."
+}

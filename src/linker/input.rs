@@ -3,6 +3,7 @@ use super::*;
 use iced_x86::{Decoder, DecoderOptions, Instruction, Mnemonic, OpKind, Register};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
+const MAX_ACTIVATIONS: usize = 4;
 mod proof;
 use proof::{prove, Proven};
 #[derive(Clone, Copy, Debug)]
@@ -412,38 +413,25 @@ fn normalize(i: &Instruction, b: &[u8]) -> Result<Op, String> {
     }
 }
 fn validate_calls(graph: &Graph, entry: u32) -> Result<(), String> {
-    let mut pending = vec![(entry, vec![entry], Vec::<u32>::new(), BTreeSet::new())];
-    let mut steps = 0;
-    while let Some((pc, mut targets, mut returns, mut seen)) = pending.pop() {
-        need(seen.insert((pc, returns.clone())), "input: control cycle")?;
-        steps += 1;
-        need(steps <= 4096, "input: call graph budget")?;
-        let &(op, next) = graph.get(&pc).ok_or("input: missing control target")?;
-        match op {
-            Op::Call(t) => {
-                need(
-                    targets.len() <= 4 && !targets.contains(&t),
-                    "input: call cycle/depth",
-                )?;
-                targets.push(t);
-                returns.push(next);
-                pending.push((t, targets, returns, seen));
-            }
-            Op::Ret => {
-                if let Some(t) = returns.pop() {
-                    targets.pop();
-                    pending.push((t, targets, returns, seen));
-                }
-            }
-            Op::Branch(_, t) => {
-                pending.push((t, targets.clone(), returns.clone(), seen.clone()));
-                pending.push((next, targets, returns, seen));
-            }
-            Op::Jump(t) => pending.push((t, targets, returns, seen)),
-            _ => pending.push((next, targets, returns, seen)),
+    use super::control::{Edge, Error};
+    super::control::validate(entry, MAX_ACTIVATIONS, 4096, |pc| {
+        graph.get(&pc).map(|&(op, next)| match op {
+            Op::Call(target) => Edge::Call { target, next },
+            Op::Ret => Edge::Return,
+            Op::Branch(_, target) => Edge::Branch(target, next),
+            Op::Jump(target) => Edge::Next(target),
+            _ => Edge::Next(next),
+        })
+    })
+    .map_err(|e| {
+        match e {
+            Error::Cycle => "input: control cycle",
+            Error::Budget => "input: call graph budget",
+            Error::MissingTarget => "input: missing control target",
+            Error::RecursionOrDepth => "input: call cycle/depth",
         }
-    }
-    Ok(())
+        .into()
+    })
 }
 pub(super) fn translate(image: &Candidate<'_>) -> Result<String, String> {
     let graph = decode(image)?;
@@ -465,9 +453,14 @@ impl Proven {
         s.push_str(
             "}\nstruct Machine { r:[u32;6], stack:Vec<u32>, bytes:[u8;12], cf:bool,zf:bool }\n",
         );
-        // Direct Rust functions for the acyclic graph. No runtime opcode/PC decoder.
+        writeln!(s, "const MAX_ACTIVATIONS:usize={MAX_ACTIVATIONS};").unwrap();
+        s.push_str("mod activation {\n");
+        s.push_str(include_str!("activation.rs"));
+        s.push_str("\n}\n");
+        s.push_str(include_str!("input/continuation.txt"));
+        // Each compiled block returns an explicit guest control effect.
         for (&pc, &(op, next)) in &self.graph {
-            writeln!(s, "fn b{pc}(s:&mut Machine)->u32 {{").unwrap();
+            writeln!(s, "fn b{pc}(s:&mut Machine)->Flow {{").unwrap();
             match op {
                 Op::AllocateN(n)=>writeln!(s,"s.stack.extend([0;{}]);",n/4).unwrap(),
                 Op::PushReg(r)=>writeln!(s,"s.stack.push(s.r[{r}]);").unwrap(),
@@ -486,18 +479,18 @@ impl Proven {
                 Op::CompareRegs(a,b)=>writeln!(s,"s.cf=s.r[{a}]<s.r[{b}];s.zf=s.r[{a}]==s.r[{b}];").unwrap(),
                 Op::Multiply(d,r,k)=>writeln!(s,"s.r[{d}]=s.r[{r}].wrapping_mul({k});").unwrap(),
                 Op::Select(c,d,r)=>writeln!(s,"if {} {{s.r[{d}]=s.r[{r}];}}",condition(c)).unwrap(),
-                Op::Jump(t)=>{writeln!(s,"b{t}(s)}}").unwrap();continue;},
+                Op::Jump(t)=>{writeln!(s,"Flow::Next({t})}}").unwrap();continue;},
                 Op::Allocate=>s.push_str("s.stack.extend([0,0]);\n"),
                 Op::Buffer|Op::BufferAt(_)=>writeln!(s,"s.r[0]={};",self.addresses[&pc]).unwrap(),
                 Op::Push(n)=>writeln!(s,"s.stack.push({n});").unwrap(),
                 Op::PushEax=>s.push_str("s.stack.push(s.r[0]);\n"),
                 Op::Name=>s.push_str("s.stack.push(0);\n"),
                 Op::Cleanup=>s.push_str("s.stack.truncate(s.stack.len()-2);\n"),
-                Op::Call(t)=>writeln!(s,"s.stack.push(0);s.r[0]=b{t}(s);s.stack.pop();").unwrap(),
+                Op::Call(t)=>{writeln!(s,"Flow::Call{{target:{t},next:{next}}}}}").unwrap();continue;},
                 Op::Argument(d,o)=>writeln!(s,"s.r[{d}]=s.stack[s.stack.len()-1-{}];",o/4).unwrap(),
                 Op::CompareArgument(o,v)=>writeln!(s,"let v=s.stack[s.stack.len()-1-{}];s.cf=v<{v};s.zf=v=={v};",o/4).unwrap(),
                 Op::ReadWord(d,r,o)=>writeln!(s,"let o=s.r[{r}] as usize+{o};s.r[{d}]=u16::from_le_bytes(s.bytes[o..o+2].try_into().unwrap()) as u32;").unwrap(),
-                Op::Acquire => s.push_str(&"s.stack.truncate(s.stack.len()-3);let a=match acquisition::acquire(){Ok(v)=>v.project_capacity(CAPACITY).unwrap(),Err(_)=>return 203};s.r[0]=a.returned;s.r[1]=0;s.r[2]=0;for (i,v) in a.bytes.into_iter().enumerate(){if let Some(v)=v{s.bytes[i]=v;}}\n".replace("CAPACITY",&self.capacity.to_string())),
+                Op::Acquire => s.push_str(&"s.stack.truncate(s.stack.len()-3);let a=match acquisition::acquire(){Ok(v)=>v.project_capacity(CAPACITY).unwrap(),Err(_)=>return Flow::Terminal(203)};s.r[0]=a.returned;s.r[1]=0;s.r[2]=0;for (i,v) in a.bytes.into_iter().enumerate(){if let Some(v)=v{s.bytes[i]=v;}}\n".replace("CAPACITY",&self.capacity.to_string())),
                 Op::Move(d,v) => writeln!(s,"s.r[{d}]=s.r[{v}];").unwrap(),
                 Op::Mov(r,v) => writeln!(s,"s.r[{r}]={v};").unwrap(),
                 Op::Test(r) => writeln!(s,"s.cf=false;s.zf=s.r[{r}]==0;").unwrap(),
@@ -516,7 +509,7 @@ impl Proven {
                 }
                 Op::Save => s.push_str("s.stack.push(s.r[3]);\n"),
                 Op::Restore => s.push_str("s.r[3]=s.stack.pop().unwrap();\n"),
-                Op::Ret => {s.push_str("s.r[0]}\n");continue;}
+                Op::Ret => {s.push_str("Flow::Return}\n");continue;}
                 Op::Lea(d,a,b,k,c) => writeln!(s,"s.r[{d}]=s.r[{a}].wrapping_add(s.r[{b}].wrapping_mul({k})).wrapping_add({c});").unwrap(),
                 Op::Scaled(d,v,k,c) => writeln!(s,"s.r[{d}]=s.r[{v}].wrapping_mul({k}).wrapping_add({c});").unwrap(),
                 Op::ZeroExtend(d,v) => writeln!(s,"s.r[{d}]=s.r[{v}] & 65535;").unwrap(),
@@ -530,12 +523,17 @@ impl Proven {
                 },
                 Op::Branch(c,t) => {
                     let condition=condition(c);
-                    writeln!(s,"if {condition} {{ b{t}(s) }} else {{ b{next}(s) }} }}").unwrap();continue;
+                    writeln!(s,"Flow::Next(if {condition} {{ {t} }} else {{ {next} }}) }}").unwrap();continue;
                 }
             }
-            writeln!(s, "b{next}(s)}}").unwrap();
+            writeln!(s, "Flow::Next({next})}}").unwrap();
         }
-        writeln!(s,"fn main(){{let mut s=Machine{{r:[0;6],stack:vec![0],bytes:[0;12],cf:false,zf:false}};std::process::exit(b{}(&mut s) as i32);}}",self.entry).unwrap();
+        s.push_str("fn block(pc:u32,s:&mut Machine)->Flow {match pc {\n");
+        for pc in self.graph.keys() {
+            writeln!(s, "{pc}=>b{pc}(s),").unwrap();
+        }
+        s.push_str("_=>Flow::Terminal(203),}}\n");
+        writeln!(s,"fn main(){{let mut s=Machine{{r:[0;6],stack:vec![0],bytes:[0;12],cf:false,zf:false}};std::process::exit(execute({},&mut s) as i32);}}",self.entry).unwrap();
         s
     }
 }

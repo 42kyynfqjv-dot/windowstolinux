@@ -1,0 +1,211 @@
+{
+  "kind": "original exit-table initialization; explicit native-profile component execution",
+  "source_commit": "c3ddcb496c91feccc5a7dfcb098254e7ba9a3a6f",
+  "scope": "unchanged authored PE actual-entry component completes initializer callbacks, not whole-program conversion",
+  "expectations": {
+    "source": "frozen before implementing emitter; original disassembly and independently authored byte-state outcomes",
+    "path": "exit-table-expectations.json",
+    "sha256": "25b454dfdd4af49f65885104f1743b241de00ab5dde712e4ea865e6894189deb",
+    "independence_limit": "no fresh Windows observation or whole-program comparison for these new cases"
+  },
+  "entry_progress": {
+    "callback": "index15,target0x407565",
+    "helper": "original0x4074fc for tables0x41ce88 then0x41ce94",
+    "completed": "actual original initializer callbacks/loop return through0x40197c to0x401632",
+    "next_boundary": "explicit rejection before original POP ECX at0x401632",
+    "retained": "argument1, actual outer EH4 frame, saved state/protected return, previous initializer effects",
+    "not_claimed": "ordinary program return, full startup, default admission or rcedit"
+  },
+  "contracts": {
+    "helper": "NULL returns UINT_MAX; otherwise compare first/third scalar words; unequal preserves all words; equal reads current scalar cookie and stores0/4/8 in order; return0",
+    "knowledge": "middle not read on unequal branch, unknown comparison rejects, typed words cannot create encoded pointer authority; cookie is required known scalar only on selected store path",
+    "identity": "complete live canonical12-byte module view and process/init identity; no heap retag, process/fiber shadow state or host API success stub",
+    "repeat": "original helper executes again using current cookie/words; no invented one-shot suppression",
+    "cleanup": "actual paired401bd5 MOV AL,1/RET is a no-op; no table drain/free/reset or exceptional-cleanup claim",
+    "failure": "earlier word/table effects remain committed on later permission/code/lifetime/ABI rejection",
+    "concurrency": "existing single-guest-thread exclusive initialization domain"
+  },
+  "review_of_predecessor": {
+    "head": "ce55f54912394130f208e713c193d2a89c6e918b",
+    "audit": "shared updater lock5, actual copy table/paths, private/global reference order, normal EH4 cleanup and RET12; unsupported copy/free/exception paths remain explicit",
+    "added_regression": "distinct heap old global count reaches0 after copies/PTD publication; non-null-free rejects, old/new allocations live, root/lock retained, replay cannot repeat effects",
+    "runtime_gate": "a now-reachable successful component fragment is explicitly rejected at401632 rather than exposed as full-startup completion"
+  },
+  "cases": {
+    "exit_helper": 21,
+    "exit_wrapper": 10,
+    "declared_initializer_success_and_rollback": 2,
+    "initializer_table_total": 20,
+    "inherited_result_total": 28,
+    "result_replay_rejections": 28,
+    "shared_global_nonnull_free_rejection_added": 1,
+    "retained_copy_matrix": 378,
+    "retained_copy_knowledge_negative": 11,
+    "retained_locale_callbacks": 45,
+    "retained_initializer_cookie": 49,
+    "retained_word": 152
+  },
+  "checks": {
+    "root": 182,
+    "crt": 315,
+    "crt_ignored": 2,
+    "artifact_ignored_scope": "both named artifact checks passed in full recorded-input replay; canonical check freshly repeated with identical Rust",
+    "unwind": 185,
+    "startup_python": {
+      "run": 89,
+      "skip": 1
+    },
+    "tools_python": {
+      "run": 106,
+      "skip": 0
+    },
+    "corpus_python": {
+      "run": 18,
+      "skip": 1
+    },
+    "clippy_all_targets": "passed",
+    "format": "passed"
+  },
+  "replay": {
+    "kind": "original prolog/epilog component comparison with explicit unexecuted body boundary",
+    "scope": "Live registry fixture; body EAX/flags inputs; original stack/FS/saved-state restoration only",
+    "comparisons": 5,
+    "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+    "rust_sha256": "2d23b973ef30813954596600dd50282701183c492effbbcb104d94bd549c49b4",
+    "new_whole_pe_windows_elf_pairs": 0,
+    "fresh_identical_rust": true,
+    "emission_mtime_before_ns": 1793527208599507203,
+    "emission_mtime_after_ns": 1793527248277755710,
+    "report_sha256": "617d7928effd9c3861aa424b2c250808fa91aa9f0725359710306cb1631461aa",
+    "observer_report_sha256": "0feb586c7170dfd7e2390cf92ce1e5efa050c3e208d6c8903312e2d054c506cc",
+    "wrapper_vectors_sha256": "6f9b74742366c0f207d397ccf8b1af4afc2d01b34fae21cafb68d38d71a6ec66"
+  },
+  "named_gates": {
+    "exit-table-graph": {
+      "stdout": "3e80bff196052a2685f5d975c97da702943d27bc7df26ccbd6131389864679e4",
+      "stderr": "ab1e8ab4b828624e75e6e8c917ac437f104b9cd0b496a9d073a4a52c0abca136"
+    },
+    "locale-shared-copy": {
+      "stdout": "577050896b9bd614d9f2b42840bc1c8d8e43270749ef966ef215eba5b309d63c",
+      "stderr": "29423147df5f27152c143f40399d5189737a902b622fb79efc6e1b2754336583"
+    },
+    "startup-atomics": {
+      "stdout": "4dd9077429c70968356a9e0eb1f7e751edf73087192d78c7919d4c68b5a24b06",
+      "stderr": "ab1e8ab4b828624e75e6e8c917ac437f104b9cd0b496a9d073a4a52c0abca136"
+    },
+    "installed-code-pages": {
+      "stdout": "cf4061ef5c9573c8b34f72d5d0225582e1ffa78f6e35662796d6bced260aa6d3",
+      "stderr": "ab1e8ab4b828624e75e6e8c917ac437f104b9cd0b496a9d073a4a52c0abca136"
+    },
+    "word-register": {
+      "stdout": "a12aabf6e5824a21f7d3c3585c0760aeb29b19df721e458e0d364c3905a2102a",
+      "stderr": "ab1e8ab4b828624e75e6e8c917ac437f104b9cd0b496a9d073a4a52c0abca136"
+    },
+    "repeated-copy": {
+      "stdout": "879ef750e72fd4a25a45ed3c4675a4c6509c4428a329f1c92a2e664d06ece2d8",
+      "stderr": "29423147df5f27152c143f40399d5189737a902b622fb79efc6e1b2754336583"
+    },
+    "cookie-record": {
+      "stdout": "0921abdb8847e7b8c5112de57dccab6f3a3c252ac879a295067d1f914e7912e7",
+      "stderr": "ab1e8ab4b828624e75e6e8c917ac437f104b9cd0b496a9d073a4a52c0abca136"
+    },
+    "locale-alignment": {
+      "stdout": "f02dfb2cb4f909788bfe3ce6cc3d8b447596b0a4049a302c91d3dfeb81a9e07d",
+      "stderr": "ab1e8ab4b828624e75e6e8c917ac437f104b9cd0b496a9d073a4a52c0abca136"
+    }
+  },
+  "original_regions": {
+    "HELPER": {
+      "address": "0x4074fc",
+      "length": 41,
+      "sha256": "a8fcba7d2c8a99bf92b3947d55062b6b3bc19d9a518cc2a0749e23f0bc68dea7"
+    },
+    "WRAPPER": {
+      "address": "0x407565",
+      "length": 26,
+      "sha256": "4db859bf1b807c01ad8a5266dec4b3a0e22147bbe0f4bdb05a63e8692331e85a"
+    }
+  },
+  "source_sha256": {
+    "src/crt_exit_tables.rs": "512a39b6484c7d76256f9c7992bd58c6a7b6744eca497b5416af5b0543c7a232",
+    "src/crt_startup_table.rs": "d3596dba36798b294db7e08e3e3e530d2f06d73dd300d32776f65434a57d088c",
+    "src/crt_startup_entry.rs": "3b6862e3f8d642d4910f21ae484d0137a499222c3d33129cc52cf111e1895e64",
+    "src/crt_normal_frame_tests.rs": "35aa3f814d298d5a9db4050409b5efb72dc9775ac3ead2fc2b6e04db947d3351",
+    "src/crt_locale_shared.rs": "ae077aa00ff7d22909c53db322f90937163fc6e8f10b37d05ef370db7bd43bed",
+    "src/crt_locale_memcpy.rs": "861def4a53a957c00b621381a5c9b0dff205575d257e4f299819f72554e2312b",
+    "research/process/startup/check_normal_wrapper.py": "ec48dc88dc533f51fe1c1ce7ba47cb0a95a06dc5af2c76fce233f08886543995"
+  },
+  "local_log_sha256": {
+    "canonical-classes.log": "fc6a2f6b9c5f0768580246d1ad34c30684a0070ac15ff79e6c46164cef043313",
+    "canonical-cleanup.log": "b229fa14d4cf1a5fe067df9745a7a8062c8a652ae1b17b10672a85e77454055a",
+    "canonical-final-sanity.log": "c07e12d412428f1459f0a4eb1b10afb6c4c0ca92e824128b377da2851306bca7",
+    "canonical-fresh-identical.log": "cf01a7e9e671a09f32cb2f534e0b548de1f9e66565831f75fa928b54d9daee74",
+    "canonical-identity.log": "0087423ed3abdde5a9b7d23845394a67059d20b2a374fbff4f48c4a5bf4c28d7",
+    "canonical-initial.log": "f25315f5972b905aa3fafcc6946bd47c348cf903bee152e20588686d39f87b47",
+    "canonical-provenance.log": "00b2f364182d113310b5d9137a2d815940618320a84d9e0ffdcc33730888bce2",
+    "clippy-final.log": "99f71393b9903dca098310bb446022a4bdee195ea9996f351a787195555210a6",
+    "clippy-initial.log": "024f29e4191fe51c06fb2fd54b4c1965d1bef815c3bb1daa95bdc0820ddfdbba",
+    "corpus-python.log": "82a1d771cb6d4312203f796b90c7b700cee32c115be04f5b5ddecba0a4afc79b",
+    "crt.log": "6203e67c52a1c579851d4f4314665fc4be5f690bae9a5c662a19a4a571750f72",
+    "fmt-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "graph.log": "81743d7db851397b1efbe7ef1a135ed3e289499d180f373f3dde11b66de805ed",
+    "replay-final.log": "1b080bcdbd0a3e3f39d028b5ca8ed59beffc7e4953d46fb1d982766826faf81d",
+    "root.log": "39f5fcdbf282bda545f0b2da45b05d5cea0fba7286c1a806ecf90c8b5656581e",
+    "startup-python.log": "b51f72627fd800fa1dfd5f1b10ad2c587b06603a09067e905df8d1a6af57481b",
+    "tools-python.log": "dbc4c12ecce251cbeff6b58f335c1e783ea26aab7a1d4c2fcab1b7e00881ed9b",
+    "unwind.log": "efc4d52dd661913ed53a0aec09a910721d3bf22ef6a0eb36dd8876de34f96e14"
+  },
+  "base_ci": [
+    {
+      "id": 41293857609,
+      "head": "ce55f54912394130f208e713c193d2a89c6e918b",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41293857609"
+    },
+    {
+      "id": 41293854355,
+      "head": "ce55f54912394130f208e713c193d2a89c6e918b",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41293854355"
+    },
+    {
+      "id": 41293854298,
+      "head": "ce55f54912394130f208e713c193d2a89c6e918b",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41293854298"
+    }
+  ],
+  "final_head_ci": "pending after publication; exact run references/status tracked in existing SUB-579; no final-head pass claimed in this record",
+  "preserved_local_failures": "negative expectations corrected for actual unknown-operand/init-storage/provenance rejection points; bounded subview transport distinguished from invalid foreign-owner transport; no runtime gate weakened, no removed case",
+  "limitations": [
+    "zero new whole-PE Windows/ELF pairs; five previously recorded wrapper comparisons only",
+    "no default admission/full startup/formatter/rcedit support",
+    "no onexit drain/free, arbitrary pointer decoding, non-null free, malloc errno/new-handler or exceptional EH4 cleanup",
+    "actual delivery/containment/collided unwind, native close/EOF and Windows resource/encoding/XP7 equivalence unresolved",
+    "historical Windows hello/corpus/output-probe/case19 and other original-launch timeout causes unresolved; later passes are not diagnosis"
+  ],
+  "next_scope": {
+    "first_instruction": "POP ECX at0x401632, then AL test/branches and original scope activation",
+    "first_call": "0x401647 ->0x401913",
+    "actual_guard": "0x4021bf reads live0x41d2f0; nonzero path needs FS:[0x18]/StackBase and LOCK CMPXCHG0x401935",
+    "routing": "Sol for bounded caller/flag execution; only escalate if needed live thread/atomic ownership reasoning is concrete; no Ultra"
+  },
+  "reproduction": {
+    "commands": [
+      "cargo test --locked",
+      "cargo test --locked --example crt_stream",
+      "cargo test --locked --example unwind_slice",
+      "cargo clippy --locked --all-targets -- -D warnings",
+      "cargo fmt --all -- --check",
+      "PYTHONPATH=research/process/startup python3 -m unittest discover -s research/process/startup",
+      "python3 -m unittest discover -s tools",
+      "PYTHONPATH=corpus python3 -m unittest discover -s corpus",
+      "python3 research/process/startup/check_normal_wrapper.py ORIGINAL_DIRECTORY OBSERVER_DIRECTORY NEW_OUTPUT_DIRECTORY"
+    ],
+    "environment": "configured Rust toolchain; CARGO_INCREMENTAL=0 CARGO_NET_OFFLINE=true TMPDIR=/workspace/w2l-build-tmp W2L_Z3=/workspace/.tools/w2l-z3/bin/z3; original authored PE and recorded Windows vectors required for artifact gates",
+    "limits": "no timeout/proof/stack increases; fixed resource policy preserved"
+  }
+}

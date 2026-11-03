@@ -1,0 +1,14 @@
+{
+  "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "rust_sha256": "1d4353871658ac3470ff65cd4be5703d8bea347fed26ef5413801ba861ef5300",
+  "unwind_state_source_sha256": "a7af76d806cb4b18da8a149939059ebb82745da1776a26608b0fc55199a982bc",
+  "unwind_state_native_cases": 12,
+  "unwind_state_new_windows_pairs": 0,
+  "cxx_record_rust_tests": 10,
+  "comparisons": 5,
+  "whole_pe_translation_pairs": 0,
+  "scope": "Original unwind state helpers on owned record plus independent signed-byte/full-word boundaries; no cleanup or resumption receipt",
+  "crt_tests": 208,
+  "crt_ignored": 1,
+  "changed_state_helper_bytes_rejected": 43
+}

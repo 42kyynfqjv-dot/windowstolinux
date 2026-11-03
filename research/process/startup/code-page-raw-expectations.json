@@ -1,0 +1,14 @@
+{
+  "scope": "Raw BOOL bit patterns for this pinned Windows profile; nonzero2 is not silently normalized to1. ACP/LastError remain observations.",
+  "magic": 844120918,
+  "cases": [
+    {
+      "code_page": 65001,
+      "valid": 1
+    },
+    {
+      "code_page": 4294967295,
+      "valid": 0
+    }
+  ]
+}

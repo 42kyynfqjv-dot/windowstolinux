@@ -1,0 +1,151 @@
+{
+  "base_commit": "1a9c0abd6658cae49983ae28545de9bbbc1e478b",
+  "scope": "original post-allocation stores and bounded REP MOVSD component; no whole-PE claim",
+  "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "source_sha256": {
+    "examples/crt_stream.rs": "535cb4a3c2696c1e288ce2f240a497527f2ab7c351f93099e7469f9a11c6d638",
+    "src/crt_repeat_copy.rs": "93510e0ac7c26c284188e46fba9aae50290d074baf3d2f06f497132eaca7db17",
+    "src/crt_locale_startup.rs": "294be4042beae33735515b222eb1efe8ca7a3f4ff552449af91b5e352d91a377",
+    "src/crt_stream_cpu.rs": "4a3ee3922c67dc0a8f1b00cb2bdd2577c3894f8d334ef2cd2f3512e2fccf845b",
+    "src/crt_stream_emit.rs": "97f96bc75bdf6a903a8faafa5b1f97115cbfecd86df0cafe14c41fa8f2668c50",
+    "src/crt_stream_ir.rs": "36edcd959301a4043d3b7f8f12db000e457cefeb1fe52a002af3417c27fcd88f",
+    "src/crt_normal_frame_tests.rs": "cd51b9bae5c3c7cf4c0587618a9da7e1821e307d7c47ec139cd1c56e17084007",
+    "research/process/startup/check_normal_wrapper.py": "6068caa1ac23416035e5c92f420c266578ffdd1d087220849ec5dd3c4acabb5b"
+  },
+  "predecessor_review": {
+    "source_hashes": "verified against git commit before edits",
+    "ci": [
+      {
+        "run": 41271496474,
+        "name": "Rust CI PR",
+        "conclusion": "success"
+      },
+      {
+        "run": 41271492270,
+        "name": "Rust CI push",
+        "conclusion": "success"
+      },
+      {
+        "run": 41271492266,
+        "name": "Pinned startup inventory",
+        "conclusion": "success"
+      }
+    ],
+    "runtime": "heap flags0/8 initialization and identity, failure ordering and aligned return checked; no predecessor runtime defect found",
+    "reporting_gap": "old full replay listed standalone allocation coverage run in aggregate suite; new replay explicitly requires that named check itself, plus both new REP checks"
+  },
+  "next_boundary": {
+    "pc": "0x40b2c7",
+    "target": "0x40b485",
+    "reason": "both136-word copies and original first-word AND executed; before multibyte initialization call; actual entry flag0 and old references preserved"
+  },
+  "runtime_contract": {
+    "opcode": "F3 A5 only; default emission rejects without dedicated effect",
+    "abi": "Cdecl32Forward requires DF0; unknown Windows flags/direction not captured or cleared",
+    "count": "known scalar ECX, consumer bound136, reusable maximum262144",
+    "memory": "per-word owned reads/writes, forward overlap order, partial knowledge and data pointer identities preserved",
+    "control": "saved/return/thread-head/dispatcher tokens rejected",
+    "failure": "completed writes and ESI/EDI/ECX progress preserved; no Windows exception/resumption receipt issued",
+    "zero": "no data cursor validation/read/write for zero count"
+  },
+  "checks": {
+    "crt_stream": {
+      "passed": 304,
+      "ignored": 2,
+      "artifact_dependent": "both covered by full replay"
+    },
+    "unwind_slice": 185,
+    "python": {
+      "run": 84,
+      "skip": 1
+    },
+    "clippy": "passed",
+    "fmt": "passed",
+    "canonical": "passed",
+    "rep_byte_oracle_vectors": 7,
+    "zero_cursor_cases": 3,
+    "partial_unknown_data_cases": 1,
+    "typed_pointer_retirement_cases": 1,
+    "partial_failure_modes": 10,
+    "locale_prefix_declared_cases": 40,
+    "default_and_catchall_thread_rejection": true,
+    "unsupported_encoding_vectors": 7,
+    "named_replay_gates": {
+      "native-uninitialized": [
+        "crt_malloc::native_uninitialized_buffer_preserves_unknown_bytes_identity_and_failure_atomicity"
+      ],
+      "repeated-copy": [
+        "crt_repeat_copy::repeated_copy_requires_dedicated_effect_and_exact_supported_encoding",
+        "crt_repeat_copy::repeated_copy_preserves_overlap_knowledge_authority_and_partial_progress"
+      ]
+    }
+  },
+  "log_sha256": {
+    "root-final.log": "c6bc0a6c6df091d93c27c884d8031208b0c66d5784321a65b9bac08e3d099681",
+    "canonical-final.log": "9f975f4bb97838583c7671a2baacb3a252cfd1c634029b0f62d345708c997bde",
+    "unwind.log": "ca3eb7332265eb8580494146e9eaa47d5b7d9cf63ba62c7fc50782e97a9f0e1c",
+    "python-final.log": "15754b16ec0b91eb44390ae75a58c8ffbd692bdf9dfee57af8e345a5ccbf65fa",
+    "clippy-final.log": "6c847eb96b3c6655c69e47dde0d0e7e76fac64d3986717912d33af07559830a4",
+    "fmt.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "replay.log": "de20cea09141fbc4042e613d3deb416a146233b008e03cff44fde8d790d808e8",
+    "repeat.log": "8302e2de8d2d53d59c32c868e9f430da80054ffc30b9a5fcf12ae50bc00d8be1"
+  },
+  "named_replay_gate_log_sha256": {
+    "native-uninitialized": {
+      "stdout": "cf1bc5554212a40276cbe2d0e67ac4c49d4b802e7f14bbbfeee70bd5bfd3eb68",
+      "stderr": "29423147df5f27152c143f40399d5189737a902b622fb79efc6e1b2754336583"
+    },
+    "repeated-copy": {
+      "stdout": "3038f0c5665db2375a9fa551a3bc39841ee7386091f09bf819af6d352991677f",
+      "stderr": "ab1e8ab4b828624e75e6e8c917ac437f104b9cd0b496a9d073a4a52c0abca136"
+    }
+  },
+  "full_replay": {
+    "status": "passed",
+    "report_sha256": "087f0d676367821fe820c8c6eff4c13defe59140e0554fde8067e38708ede209",
+    "comparisons": 5,
+    "rust_sha256": "93fe67168fec7b0aac2482af1af9383ea602cf26411ad0953b1aad161077e6fe",
+    "scope": "Live registry fixture; body EAX/flags inputs; original stack/FS/saved-state restoration only",
+    "new_windows_elf_pairs": 0
+  },
+  "repeat_emission": {
+    "identical": true,
+    "rust_sha256": "93fe67168fec7b0aac2482af1af9383ea602cf26411ad0953b1aad161077e6fe",
+    "fresh_mtime_proved": true,
+    "before_mtime_ns": 1793507996271076968,
+    "after_mtime_ns": 1793508254872348626,
+    "log_sha256": "8302e2de8d2d53d59c32c868e9f430da80054ffc30b9a5fcf12ae50bc00d8be1"
+  },
+  "primary_contract": {
+    "url": "https://learn.microsoft.com/en-us/cpp/c-runtime-library/direction-flag?view=msvc-170",
+    "retrieved_sha256": "87ed9ee50c8be5711be3e557674784d2c2b2637e2261c40fabde996e687eb542",
+    "premise": "CRT function-boundary DF clear and preserved/restored"
+  },
+  "preserved_local_failures": [
+    {
+      "log_sha256": "f27a65bcf89aeabec28873ee890c9f923ebad6d73d9e7eb49a8887730f64ac63",
+      "cause": "test expected retired pointer-value transport to fail; model intentionally retains identity and rejects dereference. Corrected test verifies dead dereference and non-revival after allocation, preserving checks"
+    },
+    {
+      "log_sha256": "78905b5b667e9f5db848667bfa95d44e499e6ae41c0447070e3314d86f8ad213",
+      "cause": "test-only Op import unused in ordinary example; restricted import to cfg(test); -D warnings retained"
+    }
+  ],
+  "next_original_inventory": {
+    "initializer": "0x40b485 selects65001 then IsValidCodePage at0x40b4e6/IAT4150cc; UTF8 field writes and helper40b090 built-in loops/cookie epilogs",
+    "unexecuted_other_branches": "65001 bypasses GetCPInfo and NLS mappings; their other-codepage behavior remains unsupported",
+    "followup": "original caller reference/publication/cleanup and heap-reference lifetime; no arbitrary semantic role from copied bytes",
+    "platform_evidence": "separate UTF8 manifest observer does not establish target default Windows ACP; matched unchanged-binary evidence still required",
+    "initializer_disassembly_sha256": "fbc3a85d65d01f7e63ecfd2276fad55b589b4c45718352321781a71c840b2b03",
+    "classification_disassembly_sha256": "8c8733930fe3cee52517ae6fd27c08372452d5c9c1a2d36bce5c174cb73196bb"
+  },
+  "limits": [
+    "component/provided environment premises remain separate from whole unchanged PE execution",
+    "default admission/full startup/rcedit unproved",
+    "malloc errno/new-handler and reference freeing remain unbound",
+    "exceptional EH4 cleanup, Windows delivery/collided unwind unproved",
+    "native close/EOF and broad encoding/resource/XP7 equivalence unproved",
+    "historical original-Windows case19 timeout unresolved"
+  ],
+  "archive_manifest_sha256": "2b90e136ec53836ab38d68e38dfc3144fd9057b9da8ea88c9454caf80ed4dd58"
+}

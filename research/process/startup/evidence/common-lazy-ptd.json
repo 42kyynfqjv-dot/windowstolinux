@@ -1,0 +1,56 @@
+{
+  "kind": "independent Sol review and connected common-handler component",
+  "reviewed_commit": "1788a76afbdc66895af893471a100de9b33eb491",
+  "reviewed_ci": {
+    "40995444671": "success",
+    "40995440369": "success",
+    "40995440136": "success"
+  },
+  "common_handler_native_cases": 24,
+  "crt_tests": 229,
+  "python_tests": 60,
+  "python_skipped": 1,
+  "root_tests": "175 passed at reviewed predecessor; root sources unchanged by this component change",
+  "clippy": "passed",
+  "whole_pe_pairs": 0,
+  "new_windows_observations": 0,
+  "recorded_windows_wrapper_comparisons": 5,
+  "heap_free_boundary": {
+    "original_va": "0x407d50",
+    "length": 58,
+    "sha256": "d42a40724c82ea991845cf96d2978ce313af1c0fe4327edf1eb3271125079c93",
+    "hex": "8bff558bec837d0800742dff75086a00ff35c8d24100ff159850410085c0751856ff154450410050e895feffff598bf0e848ffffff89305e5dc3",
+    "imports": {
+      "0x415098": [
+        "kernel32.dll",
+        "HeapFree"
+      ],
+      "0x415044": [
+        "kernel32.dll",
+        "GetLastError"
+      ]
+    },
+    "false_result_path": [
+      "GetLastError",
+      "error mapping at 0x407c12",
+      "errno accessor at 0x407ccd",
+      "normal return"
+    ],
+    "kernel_limit": "Space::heap_free represents successful retirement or out-of-domain rejection. It does not model a supplied BOOL/LastError failure.",
+    "status": "Normal-return failure remains rejected by the checked lazy free callback."
+  },
+  "remaining_effect_cuts": [
+    "common producer API outcomes/availability remain explicit",
+    "pending-event ordered adapter remains cached-only",
+    "original free body with owned BOOL/LastError and justified failure lifetime/alias/errno effects",
+    "actual acquisition, delivery, incoming-chain containment, termination and complete startup remain unproved"
+  ],
+  "test_development_corrections": [
+    "Lazy replay test required the new callback signature.",
+    "Lazy failure before SetLastError does not restore saved LastError; assertion corrected at that failure boundary."
+  ],
+  "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "wrapper_rust_sha256": "aedf1f817e42f95331861e73866590152796db03de12f68fe597b19af8f63e26",
+  "lazy_common_handler_source_sha256": "9a65ca1d3223af82eb2abe2b291376f9e7add6e30f30ca8fd167329b3ac3f477",
+  "ordered_native_cases": 76
+}

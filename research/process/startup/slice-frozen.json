@@ -1,0 +1,17 @@
+{
+  "source_sha256": "6359f9cdbc2c3a964485983b6ac39de1d3fbc6e428ee8b48d46111de08053254",
+  "expected_result": 42,
+  "disposition": 0,
+  "ip_delta": 2,
+  "preserved_registers": [
+    "ECX",
+    "EDX",
+    "EBX",
+    "ESP",
+    "EBP",
+    "ESI",
+    "EDI"
+  ],
+  "flags": 514,
+  "scope": "authored x86 test image, SAFESEH disabled only for its manual raw registration; no system security changes"
+}

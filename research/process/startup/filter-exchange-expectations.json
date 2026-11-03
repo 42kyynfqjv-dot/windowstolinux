@@ -1,0 +1,12 @@
+{
+  "scope": "registration/exchange only; callbacks are never invoked; previous initial callback is restored; distinct target premise plus five exchanges",
+  "magic": 827475541,
+  "checks": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+  ]
+}

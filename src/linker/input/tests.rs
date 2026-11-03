@@ -1,4 +1,148 @@
 use super::*;
+#[test]
+fn emitted_activation_storage_preserves_context_and_cleanup_lifetimes() {
+    let dir = std::env::temp_dir().join(format!("w2l-event-phases-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let source = format!(
+        r#"
+#![allow(dead_code)]
+mod activation {{ {} }}
+use activation::*;
+fn context() -> Context {{ Context {{registers:[Some(10),Some(11),Some(12),Some(13),Some(0x8000),Some(0x8100),Some(16),Some(17)],ip:Some(0x1000),flags:Some(0x202)}} }}
+fn main() {{
+ let mut stack=Stack::new(3).unwrap();
+ let a=stack.push(100,1,context()).unwrap();
+ let b=stack.push(200,2,context()).unwrap();
+ let c=stack.push(300,3,context()).unwrap();
+ let mut other=Stack::new(3).unwrap();let foreign=other.push(100,1,context()).unwrap();
+ let mut captured=context();stack.begin_search(captured.clone(),true).unwrap();
+ captured.registers[0]=Some(99);
+ assert_eq!(stack.pop_normal(c).err(),Some(Error::Phase));
+ assert_eq!(stack.select_unwind(foreign),Err(Error::Identity));
+ stack.select_unwind(a).unwrap();
+ assert_eq!(stack.event_context().unwrap(),&context());
+ assert_eq!(stack.retire_cleaned(b).err(),Some(Error::Identity));
+ let mut order=Vec::new();
+ while let Some(frame)=stack.cleanup_frame().unwrap() {{
+   // Observe original frame state while live, before retirement.
+   assert_eq!(frame.saved.registers[4],Some(0x8000));
+   order.push(frame.next);let id=frame.id;stack.retire_cleaned(id).unwrap();
+ }}
+ assert_eq!(order,vec![300,200]);assert_eq!(stack.top().unwrap().id,a);
+ assert_eq!(stack.event_context().unwrap(),&context());
+ assert_eq!(stack.retire_cleaned(a).err(),Some(Error::Identity));
+ stack.block();assert_eq!(stack.pop_normal(a).err(),Some(Error::Phase));
+ let mut retry=Stack::new(1).unwrap();let mut original=context();
+ retry.begin_search(original.clone(),true).unwrap();original.registers[0]=Some(99);
+ assert_eq!(retry.retry_candidate().unwrap(),&context());
+ assert_eq!(retry.push(0,0,context()),Err(Error::Phase));
+ assert_eq!(retry.retry_candidate().err(),Some(Error::Phase));
+ for missing in 0..10 {{
+  let mut unknown=context();
+  match missing {{0..=7=>unknown.registers[missing]=None,8=>unknown.ip=None,_=>unknown.flags=None}}
+  let mut failed=Stack::new(1).unwrap();
+  assert_eq!(failed.begin_search(unknown,true),Err(Error::UnknownContext));
+  assert_eq!(failed.push(0,0,context()),Err(Error::Phase));
+  assert_eq!(failed.retry_candidate().err(),Some(Error::Phase));
+ }}
+ let mut failed=Stack::new(1).unwrap();
+ failed.begin_search(context(),false).unwrap();
+ assert_eq!(failed.retry_candidate().err(),Some(Error::Noncontinuable));
+ let mut stale=Stack::new(1).unwrap();let old=stale.push(1,1,context()).unwrap();
+ stale.pop_normal(old).unwrap();let fresh=stale.push(1,1,context()).unwrap();
+ assert_ne!(old,fresh);assert_eq!(stale.pop_normal(old).err(),Some(Error::Identity));
+ stale.begin_search(context(),true).unwrap();
+ assert_eq!(stale.select_unwind(old),Err(Error::Identity));
+ stale.select_unwind(fresh).unwrap();
+ assert!(stale.cleanup_frame().unwrap().is_none());
+ assert_eq!(retry.select_unwind(foreign),Err(Error::Phase));
+}}
+"#,
+        include_str!("../activation.rs")
+    );
+    let file = dir.join("phases.rs");
+    let bin = dir.join("phases");
+    std::fs::write(&file, source).unwrap();
+    assert!(std::process::Command::new("rustc")
+        .args(["--edition=2021"])
+        .arg(&file)
+        .arg("-o")
+        .arg(&bin)
+        .status()
+        .unwrap()
+        .success());
+    assert!(std::process::Command::new(&bin).status().unwrap().success());
+    std::fs::remove_dir_all(dir).unwrap();
+}
+#[test]
+fn structural_calls_do_not_grant_startup_emission_authority() {
+    let graph = BTreeMap::from([
+        (0, (Op::Call(10), 1)),
+        (1, (Op::Ret, 2)),
+        (10, (Op::Ret, 11)),
+    ]);
+    assert!(validate_calls(&graph, 0).is_ok());
+    // The environment-specific proof still requires acquisition before helpers.
+    // Removing this condition would not supply a startup/context proof.
+    assert_eq!(
+        prove(graph, 0).err().as_deref(),
+        Some("input: internal call context")
+    );
+}
+#[test]
+fn emitted_continuations_keep_nested_state_and_terminal_effects() {
+    let dir = std::env::temp_dir().join(format!("w2l-continuations-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("control.rs");
+    let bin = dir.join("control");
+    let source = format!(
+        r#"
+const MAX_ACTIVATIONS:usize=4;
+struct Machine {{ r:[u32;6], stack:Vec<u32>, mode:u32 }}
+{}
+fn block(pc:u32,s:&mut Machine)->Flow {{ match pc {{
+  0=>Flow::Call{{target:10,next:1}},
+  1=>{{s.r[0]+=1;Flow::Return}},
+  10=>Flow::Call{{target:20,next:11}},
+  11=>{{s.r[0]+=10;Flow::Return}},
+  20=>match s.mode {{
+   0=>{{s.r[0]=30;Flow::Return}},
+   1=>Flow::Terminal(77),
+   2=>{{s.stack.pop();Flow::Return}},
+   3=>{{*s.stack.last_mut().unwrap()=999;Flow::Return}},
+   4=>{{s.r[3]=99;Flow::Return}},
+   5=>Flow::Call{{target:20,next:11}},
+   _=>unreachable!(),
+  }},
+  _=>panic!("unvalidated continuation"),
+}} }}
+fn main() {{
+ for (mode,expected) in [(0,41),(1,77),(2,203),(3,203),(4,203),(5,203)] {{
+  let mut s=Machine{{r:[0,0,0,7,8,9],stack:vec![0],mode}};
+  assert_eq!(execute(0,&mut s),expected);
+  if mode==0 {{assert_eq!(s.stack,vec![0]);assert_eq!(&s.r[3..],&[7,8,9]);}}
+  if mode==1 {{assert_eq!(s.r[0],0);assert_eq!(s.stack.len(),3);}}
+ }}
+}}
+"#,
+        format_args!(
+            "mod activation {{ {} }}\n{}",
+            include_str!("../activation.rs"),
+            include_str!("continuation.txt")
+        )
+    );
+    std::fs::write(&file, source).unwrap();
+    assert!(std::process::Command::new("rustc")
+        .arg("--edition=2021")
+        .arg(&file)
+        .arg("-o")
+        .arg(&bin)
+        .status()
+        .unwrap()
+        .success());
+    assert!(std::process::Command::new(&bin).status().unwrap().success());
+    std::fs::remove_dir_all(dir).unwrap();
+}
 fn code() -> Vec<u8> {
     // Literal compiler-form program; expectations below are not generated by the lifter.
     let text="83ec088d04246a03506808204000ff15002040008bc885c97509b8c800000083c408c383f9417609b8cb00000083c408c383f9027609b8c900000083c408c38b1424568d42d06683f809772b0fb7d283ea3083f90275198b7424068d46d06683f80977138d14920fb7c68d52e88d14508bc25e83c408c3b8ca0000005e83c408c3";

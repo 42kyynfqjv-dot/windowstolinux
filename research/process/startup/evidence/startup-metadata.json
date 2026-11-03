@@ -1,0 +1,99 @@
+{
+  "kind": "Bounded native launch-policy output and shared descriptor-handle lifetime; original-instruction component only",
+  "reviewed_parent": "09ffd984f9a38d5982d7f76acd1272cafa5f17e1",
+  "engineering_parent": "de24bdc86bd6e863a180556ef83b225c3337344b",
+  "source_sha256": {
+    "examples/crt_stream.rs": "420aa4d2119addec8d20ac8cadc384cf9665ba731c2212be51a219e511760aaa",
+    "src/crt_stream_runtime.rs": "5f568c0ced17d90ddf66bdebf2d6c1b08722c666627cc467a6d2dc177bb21f03",
+    "src/crt_stream_cpu.rs": "c92386e3fbe05865dc2e683a2540b3a964dd6ca6b40f2772f801c0569c220a6e",
+    "src/crt_resident_loader.rs": "9e406be837b8e764aff087c95f20090459535d1375b8136957f56de38c894d08",
+    "src/crt_startup_descriptors.rs": "cbd83f5e8759f4181d5ee7533a9ce5adbd08f575e89be1c23d9d5a0c4c29b071",
+    "src/crt_normal_frame_tests.rs": "5d48b0c7a10ea5696b1c70e542968e6691b1fc1c39951718382f744706155fcc",
+    "research/process/startup/check_normal_wrapper.py": "f3e4ad719d377ded998b84eed66d4d29a0e8a271384d55d994ec01a8fafb7f3a"
+  },
+  "validation": {
+    "crt_passed": 294,
+    "ignored_in_full": 2,
+    "artifact_replay": "completed; both artifact-dependent tests passed",
+    "new_crt_tests": 3,
+    "shared_handle_lifetime_sequences": 1,
+    "metadata_output_scenarios": 11,
+    "profile_abi_scenarios": 10,
+    "python_run": 76,
+    "python_skip": 1,
+    "clippy": "passed",
+    "format": "passed",
+    "repeat_rust": "identical explicit later emission, mtime advanced"
+  },
+  "evidence": {
+    "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+    "rust_sha256": "bad00f8455c5cafc0e49b6b0ee1147694c33c86e664538a9c01d7b0c109201ab",
+    "report_sha256": "536c75de8884c5d1c7c81f9823e5f1a5d2bf63affc81a2d33d179c25e3ce6cec",
+    "recorded_windows_wrapper_comparisons": 5,
+    "new_windows_observations": 0,
+    "new_windows_elf_pairs": 0,
+    "whole_pe_pairs": 0
+  },
+  "component": {
+    "additional_opt_in": "w2l-native-startup-metadata-v1",
+    "known_output_fields": {
+      "cb_offset0": 68,
+      "cbReserved2_offset50": 0,
+      "lpReserved2_offset52": 0
+    },
+    "all_other_fields": "unknown; old initialized bytes lose knowledge",
+    "source_of_metadata": "declared native launch policy with no Windows CRT serialized inheritance, not Windows acquisition",
+    "executed": "original GetStartupInfoW call and original empty-inheritance branch return",
+    "next_boundary": "CALL4086c3 ->4085e7; standard initializer rejected before execution",
+    "previous_profile_boundary": "CALL408543 GetStartupInfoW without metadata opt-in",
+    "retained": "same UCRT allocation, descriptor block/capacity64, 64 record objects and outer callback EH4 frame/lock7 lease",
+    "not_acquired": [
+      "Windows startup snapshot",
+      "nonempty inherited CRT block",
+      "native standard handles or file types"
+    ]
+  },
+  "review_fixes": [
+    "shared aliases retain separate CRT identity and share handle generation",
+    "successful close invalidates all cached aliases",
+    "unobserved close revokes alias authority without invented successful guest result",
+    "close clears prior LastError knowledge because backend supplies no close error code",
+    "numeric handle reuse never revives old authority"
+  ],
+  "prior_ci": {
+    "09ffd98": [
+      41252118444,
+      41252114224,
+      41252114248
+    ],
+    "de24bdc": [
+      41122364983,
+      41122354848,
+      41122354870
+    ],
+    "conclusion": "all six completed success, verified before publication"
+  },
+  "historical_timeout": {
+    "run": 41107853543,
+    "case": 19,
+    "artifact": 13002965454,
+    "cause": "unresolved; no retries or threshold change"
+  },
+  "next_gate": "original4085e7 with actual owned native GetStdHandle/GetFileType producers; retrieval is not validation/new ownership; fd0 must not become guest NULL",
+  "limits": [
+    "default/full startup/rcedit/XP7 unsupported",
+    "metadata opt-in is a declared native launch policy, not proof of arbitrary Windows launch equivalence",
+    "nonempty CRT inheritance, standard-handle producers and callback8 completion still unbound",
+    "resource failure equivalence, errno, exceptional containment and rollback remain unproved"
+  ],
+  "log_sha256": {
+    "full.log": "372dc8bc97b7f7749b38789daac1607f1c7f068a0dd7497433f61ed05cdf20cf",
+    "replay.log": "70c38433d8a6d415c4f23755cfdd0979ecd8ad91eb72686afb585490b09d32c1",
+    "repeat.log": "d3a3aa04944bfe5b75912752c40267743df03479278b42238dc6126d5337e1e6",
+    "shared-handle.log": "7ed31c6253f13498e057971bcca2d3663e79f2884b71b55a9bce0a4222ef633d",
+    "clippy.log": "cc18f3f8fa49793c83e9c7d5a5443796659578ecf311fdf5c273143122101e47",
+    "python.log": "9eb3efd696bcebdaf7d5c7bf08287f4a8dbc58cc12717444fb195f15cb3e1dbd",
+    "format.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "callback-disassembly.log": "233aeb4e8522dbec374a9e677458116740d6bbd54ec3d09e25a7aed0c91aadba"
+  }
+}

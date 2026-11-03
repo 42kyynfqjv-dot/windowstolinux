@@ -1,0 +1,11 @@
+{
+  "scope": "Original instruction component; no new Windows observations or whole-PE pairs",
+  "frozen_before_implementation": "2026-11-01",
+  "source": "unchanged authored unwind.exe SHA256 1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4; original 4074fc and407565",
+  "helper_contract": "NULL returns UINT_MAX without dereference. Otherwise compare first/third32-bit words. If different, preserve all words; if equal, read live cookie once, then store it at offsets0,4,8 in that order. Return0. Cookie/encoded words are scalar bits, not pointer authority.",
+  "wrapper_contract": "Initialize separate canonical module tables41ce88 then41ce94 through original calls. Preserve first-table effects if the second call rejects. Return AL1 only after both. Reinitialization follows current words/cookie; no invented one-shot success or freeing.",
+  "negative_contract": "Wrong storage owner, stale or truncated map, unknown comparison, typed encoding, readonly/failing writes, changed code and expired initialization reject without fabricated effects. Earlier original stores remain committed.",
+  "cleanup_contract": "The actual paired callback401bd5 is a no-op with AL1; it does not drain, free, reset or uninitialize these tables. Onexit execution and non-null freeing remain unsupported.",
+  "entry_contract": "After all initializer callbacks, original startup initializer returns to401632 with outer frame and argument live. Reject before unlifted next instruction; do not report whole startup success.",
+  "expected_positive_vectors": [{"table":[0,17,0],"cookie":305419896,"after":[305419896,305419896,305419896]},{"table":[4,17,8],"cookie":305419896,"after":[4,17,8]},{"table":[4294967295,0,4294967295],"cookie":4294967295,"after":[4294967295,4294967295,4294967295]}]
+}

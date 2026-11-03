@@ -1,0 +1,122 @@
+{
+  "original_pe_sha256": "ce252fb1eddd05c3ea6acd73871995b1badd32446d76c6df07abaf8fa44fd22f",
+  "evidence_commit": "e9c32e7f51f3cd5657c7ab2afac8ac63f346ba98",
+  "workflow_run": 40591497396,
+  "context_artifact": 12773084652,
+  "source_sha256": "a1144bed962feee113607b3183e2b54757b81779384ed1820dbc300255491c0e",
+  "observed_probe_pe_sha256": "e8793cbea14fcbfeb7902c0cdf51bafad55abfe8206136bfef85e1223e8d2ed1",
+  "compiler_sha256": "fc26dcba228dd91cd09429670f298f4608833c84841a4ceca8c4955b4d495a7b",
+  "platform": "Windows-2022Server-10.0.20348-SP0",
+  "expected_and_observed": [
+    {
+      "mode": "r",
+      "stdout_hex": "5652",
+      "stderr_hex": "",
+      "exit": 0
+    },
+    {
+      "mode": "u",
+      "stdout_hex": "494f4648",
+      "stderr_hex": "",
+      "exit": 0
+    }
+  ],
+  "decoder_observations": [
+    {
+      "name": "filter_callback",
+      "address": "0x47cfc0",
+      "size": 23,
+      "slice_sha256": "6e2b3bd553f0ffdd43df815cf3341fce2e76a73e8f9b243867c06b12310701fb",
+      "exit": 0,
+      "stderr": "",
+      "emission_allowed": false
+    },
+    {
+      "name": "nonlocal_transfer",
+      "address": "0x47cff7",
+      "size": 2,
+      "slice_sha256": "00ddff629a38849a38d4b0d384a73c29efd55344ca2124a8601eb360dc6b638c",
+      "exit": 1,
+      "stderr": "0047cff7: stream: unsupported instruction Jmp\n",
+      "emission_allowed": false
+    },
+    {
+      "name": "thread_stack_validation",
+      "address": "0x47cceb",
+      "size": 7,
+      "slice_sha256": "6ff4985ac478283685f00674b56cbc236a47ad540579c8f19655c69c58d9725b",
+      "exit": 1,
+      "stderr": "0047cceb: stream: instruction prefix outside policy\n",
+      "emission_allowed": false
+    },
+    {
+      "name": "floating_point_state",
+      "address": "0x4f4168",
+      "size": 4,
+      "slice_sha256": "54bb7ff6cf614ecdb4ce8438a1a11505352fbd52906bca3b66ba64b72506dd59",
+      "exit": 1,
+      "stderr": "004f4168: stream: unsupported instruction Stmxcsr\n",
+      "emission_allowed": false
+    }
+  ],
+  "direct_dependencies": [
+    {
+      "call_site": "0x47b2a9",
+      "chain": [
+        "0x40869d",
+        "0x4f4148"
+      ]
+    },
+    {
+      "call_site": "0x47b2cf",
+      "chain": [
+        "0x4031bb",
+        "0x47ccdc"
+      ]
+    },
+    {
+      "call_site": "0x47b312",
+      "chain": [
+        "0x407bee",
+        "0x47cfc0"
+      ]
+    },
+    {
+      "call_site": "0x47b34f",
+      "chain": [
+        "0x403e0e",
+        "0x47d020"
+      ]
+    },
+    {
+      "call_site": "0x47b3b2",
+      "chain": [
+        "0x407757",
+        "0x47d000"
+      ]
+    },
+    {
+      "call_site": "0x47b3e8",
+      "chain": [
+        "0x406172",
+        "0x47cfe0"
+      ]
+    },
+    {
+      "call_site": "0x47d02b",
+      "chain": [
+        "0x403b1b",
+        "0x47ce50"
+      ]
+    },
+    {
+      "call_site": "0x47cfe8",
+      "chain": [
+        "0x407ebe",
+        "0x486950"
+      ]
+    }
+  ],
+  "limitation": "Bounded static slices and independent original-only probes. No CFG closure, rcedit execution-context observation, or newly translated startup programs.",
+  "translated_pairs": 0
+}

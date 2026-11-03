@@ -1,7 +1,9 @@
 """Check authored layout independently; optionally execute original Windows PE."""
 import struct
-import subprocess
+import hashlib
+import os
 import sys
+import tempfile
 from pathlib import Path
 from make_output_probe import output_probe
 
@@ -22,8 +24,12 @@ if '--execute-windows' in sys.argv:
     assert sys.platform == 'win32'
     exe = Path('output-probe.exe').resolve()
     exe.write_bytes(b)
-    with open('output-probe.stdout', 'wb') as out, open('output-probe.stderr', 'wb') as err:
-        result = subprocess.run([str(exe)], stdout=out, stderr=err, timeout=15)
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'corpus'))
+    from launch import execute
+    evidence = Path(os.environ.get('RUNNER_TEMP', tempfile.gettempdir())) / 'w2l-output-probe-launch'
+    result = execute([str(exe)], 'output-probe.stdout', 'output-probe.stderr', evidence,
+                     dict(case='output-probe', platform='windows', pe_sha256=hashlib.sha256(b).hexdigest()),
+                     dict(stdout_hex='48656c6c6f', stderr_hex='', exit=0), timeout=15)
     out, err = Path('output-probe.stdout').read_bytes(), Path('output-probe.stderr').read_bytes()
     print(f'Original output probe: stdout={out.hex()} stderr={err.hex()} exit={result.returncode}')
     assert (out, err, result.returncode) == (b'Hello', b'', 0)

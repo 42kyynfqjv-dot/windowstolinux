@@ -1,0 +1,227 @@
+{
+  "scope": "explicit-profile guest x87 effect and original startup component; no whole-PE admission",
+  "reviewed_predecessor": "3b0bcf927299592e1e32972dc6c54ee864287df3",
+  "predecessor_exact_head_CI": [
+    {
+      "id": 41303752543,
+      "head": "3b0bcf927299592e1e32972dc6c54ee864287df3",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 41303748714,
+      "head": "3b0bcf927299592e1e32972dc6c54ee864287df3",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 41303748803,
+      "head": "3b0bcf927299592e1e32972dc6c54ee864287df3",
+      "status": "completed",
+      "conclusion": "success"
+    }
+  ],
+  "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "source_hashes": {
+    "src/crt_x87.rs": "edc5e5892aa59dcde3169a66f2a0964d0c38b142d0c8d09f21a0603822ee0695",
+    "src/crt_stream_runtime.rs": "29bcf9d191efac2a7ebfb12eaf41f2399f693598763a83b7813ec07e3776c363",
+    "src/crt_stream_ir.rs": "29969a70be3d95672890325cded128c05b6a6cadc724755b64cdd06417b18298",
+    "src/crt_stream_emit.rs": "c9dc41de2953bb932d7097845d194b4ee3550a3c601a318899d90b7ea5912685",
+    "src/crt_c_initializers.rs": "17f83813456405f844ae24aea41e4dcd1527926f61430dbe8d1109e013c4bb22",
+    "src/crt_normal_frame_tests.rs": "67f2d24fc66c291839b4a0eddb88908f52ec5b947fff6a2392f6eb5fad0e93f8",
+    "research/process/startup/check_normal_wrapper.py": "fd9854851b240f1761887d4cef6b409cb9509e3eafc121fcf8ed44b29ee402e7",
+    "research/process/startup/inventory_x87.py": "41d80e71cce415d89f87a811b465681c1ca77fd755adea4844888147aa0afc94"
+  },
+  "profile": "w2l-modern-enabled-stationary-x87-v1",
+  "profile_limits": "declared modern user-mode x87 available/enabled EM=TS=0; excludes legacy DOS-compatible interrupt window; unknown initial bytes, not OS acquisition or host FPU capture; current stationary thread/fiber only",
+  "primary_sources": {
+    "primary_url": "https://www.intel.com/content/dam/www/public/us/en/documents/manuals/64-ia-32-architectures-software-developer-vol-2a-manual.pdf",
+    "pdf_sha256": "71f69c75ae9ce3d4a103333266ac2f22d44f097e5b32279931151d7598993545",
+    "section": "Vol.2A3-321..322,FCLEX/FNCLEX",
+    "extracted_section_sha256": "ed472b8a401ce475e173c44980db3695585a847857e6509553da132924ba3864"
+  },
+  "expectations_sha256": "322018c34577b1811f8d5c8f6a29ae0370dd68b1ce9248e637406cf9ef8da588",
+  "inventory_sha256": "8ff76b019d53c5a09e4bee3ef5a6f7fac34f0069cf9906d60179719c1b44d72b",
+  "linear_floating_inventory_entries": 264,
+  "native_Linux_x86_64_instruction_observations": {
+    "cases": 42,
+    "scope": "authored isolated native probe; not original Windows observations or translated PE pairs",
+    "raw_path": "x87-native-linux-observations.txt",
+    "raw_sha256": "36b0cc89614f053303f5c456a3d2d188bbe9efe730c9cc04a9fc6cd396eaa280",
+    "provenance": {
+      "scope": "authored native Linux x86_64 instruction probe; not Windows or PE translation",
+      "host": {
+        "system": "Linux",
+        "machine": "x86_64",
+        "release": "6.18.57"
+      },
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "source_hashes": {
+        "src/crt_x87.rs": "edc5e5892aa59dcde3169a66f2a0964d0c38b142d0c8d09f21a0603822ee0695",
+        "src/crt_stream_runtime.rs": "29bcf9d191efac2a7ebfb12eaf41f2399f693598763a83b7813ec07e3776c363",
+        "src/crt_stream_cpu.rs": "d9cdea2a13d9642b968df567711619ce7b0b3dd2258160ec638b84ab86f9e35d",
+        "src/crt_stream_callees_tests.rs": "cdf3bc92e4eb527356b5745d1b6b6ba11df62f7007c2a1afa4bf35c9961916b0"
+      },
+      "observations_sha256": "36b0cc89614f053303f5c456a3d2d188bbe9efe730c9cc04a9fc6cd396eaa280",
+      "binary_retention": "Existing native helper removes successful child source and executable. No native binary hash claimed; exact source, toolchain, raw rows and successful test log retained.",
+      "reproduction": "W2L_X87_EVIDENCE=OUTPUT cargo test --locked --example crt_stream crt_x87::native_fnclex_observations_preserve_host_state_and_compare_only_defined_bits"
+    }
+  },
+  "independent_cases": {
+    "status_control": 262144,
+    "partial_knowledge": 7,
+    "context_lifecycle": 11,
+    "emitted_call_modes": 7,
+    "additional_original_body_cases": 4,
+    "all_original_body_cases": 16,
+    "waiting_and_unbound_forms_rejected": true
+  },
+  "effect": "known-zero status80ff; preserve only existing TOP3800; discard undefined C0/C1/C2/C3 knowledge4700; control/tag/data/IP/DP/opcode/MXCSR/integer flags/XMM unchanged",
+  "new_entry_boundary": "before CALL401596 ->401b0f; actual FNCLEX and empty helper401e00 returned, original PUSH401591 retained callback401e2c",
+  "original_order_limit": "only first C callback prefix reached, five later callbacks not executed in unchanged-entry order",
+  "new_whole_PE_windows_elf_pairs": 0,
+  "retained_recorded_windows_wrapper_component_pairs": 5,
+  "focused_tests": "five x87 tests and canonical original-entry artifact check passed",
+  "checks": {
+    "root": 182,
+    "crt": 322,
+    "crt_ignored": 2,
+    "unwind": 185,
+    "all_targets_clippy": "passed",
+    "startup_python": {
+      "run": 89,
+      "skip": 1
+    },
+    "tools_python": {
+      "run": 106,
+      "skip": 0
+    },
+    "corpus_python": {
+      "run": 18,
+      "skip": 1
+    },
+    "fmt": "passed",
+    "canonical_fresh_identical_rust": "passed"
+  },
+  "full_replay": "passed; both artifact checks and five retained recorded original-Windows wrapper components, zero whole-PE pairs",
+  "review": "No demonstrated predecessor C-array lifetime/guard/order/result defect; strict expected success/failure tests retained. New x87 consumer uses explicit runtime/init/owner and default emission still rejects. No formal approval.",
+  "local_failure": "initial lifetime oracle mislabeled retired anchor as initialization owner/lifetime; actual storage-lifetime rejection occurs first; corrected expectation only, failed log retained. A local edit-script assertion aborted before writing normal-frame test changes; inspected/reapplied, no work lost.",
+  "limits": "full startup/formatter/rcedit/default admission, other x87/waiting operations, actual Windows capture/delivery, cleanup/free and broader equivalence remain unsupported; historical original-Windows timeouts unresolved",
+  "source_commit": "19e978457601c5efd0133bc08b4211ddc3593139",
+  "replay": {
+    "kind": "original prolog/epilog component comparison with explicit unexecuted body boundary",
+    "scope": "Live registry fixture; body EAX/flags inputs; original stack/FS/saved-state restoration only",
+    "comparisons": 5,
+    "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+    "rust_sha256": "67aecc6ae6d15e9eaecab596d7d44b7665be514b70dacafe670bcf74ed6deff4",
+    "whole_pe_translation_pairs": 0,
+    "fresh_identical_rust": true,
+    "mtime_before_ns": 1793536517250930595,
+    "mtime_after_ns": 1793536574372383426,
+    "report_sha256": "4d7e12552009ebf98338d27dda1b512fb2cfe7c5a9e183964b7dd9ee1fe07319",
+    "observer_report_sha256": "0feb586c7170dfd7e2390cf92ce1e5efa050c3e208d6c8903312e2d054c506cc",
+    "wrapper_vectors_sha256": "6f9b74742366c0f207d397ccf8b1af4afc2d01b34fae21cafb68d38d71a6ec66"
+  },
+  "named_gates": {
+    "x87-contract": {
+      "stdout": "79cc59b2bd02ffde9b00c3fc52060b92867950c52fe6afb9bd081c0301ba138c",
+      "stderr": "ab1e8ab4b828624e75e6e8c917ac437f104b9cd0b496a9d073a4a52c0abca136"
+    },
+    "c-initializer-graph": {
+      "stdout": "ed022a7b229e8c83e1f6b5e787dd56f31f73f06b11d05039f9423d46564ecc1d",
+      "stderr": "c7af140a0e0c43a824bdd600e0a75df2c33ebe1451ae3630987d1bca833ee2c8"
+    },
+    "startup-caller-graph": {
+      "stdout": "e872ac701e69475cc874ad2e3d32a4f40c069d8aafab6355e853d406ceaac2f2",
+      "stderr": "c7af140a0e0c43a824bdd600e0a75df2c33ebe1451ae3630987d1bca833ee2c8"
+    },
+    "cookie-record": {
+      "stdout": "9a9b785b0f614fb43b52aa20873f2af0b11e900e09b165897a48640ec4c943be",
+      "stderr": "c7af140a0e0c43a824bdd600e0a75df2c33ebe1451ae3630987d1bca833ee2c8"
+    },
+    "locale-alignment": {
+      "stdout": "a85962194d5179191b386e5bfd80a2d835fa5187c7525b4a78aef68ee1897318",
+      "stderr": "29423147df5f27152c143f40399d5189737a902b622fb79efc6e1b2754336583"
+    }
+  },
+  "new_original_region": {
+    "EMPTY": {
+      "address": "0x401e00",
+      "size": 44,
+      "sha256": "45536bfcacad5f6bfaa9a1e947ad2e00f4afd21843c587de7c16e0e045301e84"
+    },
+    "FIRST": {
+      "address": "0x40155a",
+      "size": 171,
+      "sha256": "2dd83e44be5b5a6c72f6bea4afabf1252886a6b37c7a4f092e94f5483dae6344"
+    }
+  },
+  "local_log_sha256": {
+    "canonical-fresh-identical.log": "d8c3f2cd848d2192645cfe993131c4635ac0d5418f864d15d4bed81bf925e7ba",
+    "canonical.log": "6a1f302e74a5078a751b316ed08cce4f25745f19c871cb98368edc76709edab5",
+    "clippy.log": "e833b1040aacb42f1ea384de31cb6c4094acc8a49146db2cdf0dfd771aeacbc4",
+    "corpus-python.log": "c9b3b77e920442df79366c236cb0e64895d2e1b68391b049d77f32b63ea012c4",
+    "crt.log": "b19996db49e46eeacb7f30cf8ffed7d46371043f198063028f0618063cd545fe",
+    "fmt.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "graph.log": "3f291a6e0b3b20da9664ef6d8f411b4209649d7c86cc260ea4a9edbd0b9f7180",
+    "replay-final.log": "cf59baceda1b9fc24608c44c9e35d30f9e1eafcc5c09b616e3098692b7900930",
+    "root.log": "14d7055e73f52a62133c126721fbd65bc23126322b6ebde2495b2a2490317e0e",
+    "startup-python.log": "4e81dec52635dea7cf54eb267c685eb9bb6a015da01375d69799eecefd0cea6d",
+    "tools-python.log": "2efa521672193904fa869efbb91b9f9393d945bc8ce0032f4313faa4832c8c4b",
+    "unwind.log": "d01143a145dcc8f1dc664c741a5bc0176a5be575c08c5f792504d680050a221b",
+    "x87-tests-final.log": "49f6170a3692ca20e6a56b36096734b4689dddb48aac2f92c130d59e6129036f",
+    "x87-tests-fixed.log": "445b54abbf0379428ea1608a72a13f5066e2243ebb02bac713c67f3f38ff1df2",
+    "x87-tests.log": "cb42ba498380d95423c4ba5d9606e19b051614279026da792e0c02a6d37cda38"
+  },
+  "source_head_ci": [
+    {
+      "id": 41306919611,
+      "name": "Rust CI",
+      "head": "19e978457601c5efd0133bc08b4211ddc3593139",
+      "status": "in_progress",
+      "conclusion": null,
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41306919611"
+    },
+    {
+      "id": 41306914926,
+      "name": "Pinned startup inventory",
+      "head": "19e978457601c5efd0133bc08b4211ddc3593139",
+      "status": "in_progress",
+      "conclusion": null,
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41306914926"
+    },
+    {
+      "id": 41306914975,
+      "name": "Rust CI",
+      "head": "19e978457601c5efd0133bc08b4211ddc3593139",
+      "status": "in_progress",
+      "conclusion": null,
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41306914975"
+    }
+  ],
+  "final_head_ci": "pending after evidence publication; exact IDs/outcomes tracked in SUB-579, no final-head pass claimed",
+  "next_scope": {
+    "call": "0x401596 ->0x401b0f ->0x401ae1",
+    "input": "actual pushed callback0x401e2c, immutable code identity; no supplied success",
+    "requirements": "canonical onexit registration/table identity, encoded pointer ownership, allocation/failure and return contracts; preserve initializers and guest FPU effects",
+    "routing": "Sol independent review/inventory; escalate only precise hard ownership question, no Ultra"
+  },
+  "reproduction": {
+    "commands": [
+      "cargo test --locked",
+      "cargo test --locked --example crt_stream",
+      "cargo test --locked --example unwind_slice",
+      "cargo test --locked --example crt_stream crt_x87::",
+      "cargo clippy --locked --all-targets -- -D warnings",
+      "cargo fmt --all -- --check",
+      "PYTHONPATH=research/process/startup python3 -m unittest discover -s research/process/startup",
+      "python3 -m unittest discover -s tools",
+      "PYTHONPATH=corpus python3 -m unittest discover -s corpus",
+      "python3 research/process/startup/check_normal_wrapper.py ORIGINAL OBSERVED NEW_OUTPUT",
+      "python3 research/process/startup/inventory_x87.py PE OUTPUT"
+    ],
+    "repeat": "W2L_EH4_CODE=OUTPUT W2L_EH4_EVIDENCE=OUTPUT W2L_EH4_VECTORS=OBSERVED/normal-wrapper-vectors.txt W2L_PE_MAPPING_INPUT=ORIGINAL/unwind.exe cargo test --locked --example crt_stream canonical_image_cookie_and_original_record_initialization_compose -- --ignored",
+    "environment": "configured Rust toolchain; CARGO_INCREMENTAL=0 CARGO_NET_OFFLINE=true TMPDIR=/workspace/w2l-build-tmp W2L_Z3=/workspace/.tools/w2l-z3/bin/z3",
+    "limits": "all previous timeout/stack/proof/resource bounds unchanged"
+  }
+}

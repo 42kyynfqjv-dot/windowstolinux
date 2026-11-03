@@ -1,0 +1,1959 @@
+{
+  "source_commit": "6daf5ad5a98ea786084ea86ad1f5077cb8f765f2",
+  "scope": "original authored Windows processes only; no converter/REP execution in failed paths; no new translated pairs",
+  "diagnosis": "Both expected stdout results existed, retained owned handles remained alive at15s, killed/reaped. Single owned-thread WCT reports are not call stacks or causal proof. Root cause unresolved; historical case19 remains separate.",
+  "runs": {
+    "41274514852": "failure/authored-windows-fixture; other8jobs passed",
+    "41274512166": "failure/authored-windows-fixture; other8jobs passed",
+    "41274512180": "success/all13jobs"
+  },
+  "images": {
+    "corpus0": "ed3cbff6115a348caa3b8618cd0fc7fd1a3e0ceb826745d1888f1f41844cbb4c",
+    "corpus1": "52b0377c5641d44a3dc2dd1e916fb96b91851556a11dd8bce01daa4edc14299b",
+    "output-probe": "7e93a771370cfd33aaf44e59b8c8656be77e4ac715176bf924a90034bae57e33"
+  },
+  "failures": [
+    {
+      "case": "corpus1",
+      "run_id": 41274514852,
+      "job_id": 124753860802,
+      "artifact_id": 13070591073,
+      "artifact_sha256": "1fb396f798041e634cffe5bf5f6d6acc9ef23b2b8d4d2a4f4613091a6d2178a7",
+      "launch": {
+        "case": 1,
+        "platform": "windows",
+        "pe_sha256": "52b0377c5641d44a3dc2dd1e916fb96b91851556a11dd8bce01daa4edc14299b",
+        "command": [
+          "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\tmph4h0grm_\\case.exe"
+        ],
+        "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+        "os": "Windows-2025Server-10.0.26100-SP0",
+        "python": "3.12.10",
+        "environment": {
+          "RUNNER_OS": "Windows",
+          "RUNNER_ARCH": "X64",
+          "ImageOS": "win25-vs2026",
+          "ImageVersion": "20261021.278.1"
+        },
+        "expected": {
+          "stdout_hex": "433031",
+          "stderr_hex": "",
+          "exit": 0
+        },
+        "timeout_seconds": 15,
+        "timeout": true,
+        "executed_sha256": "52b0377c5641d44a3dc2dd1e916fb96b91851556a11dd8bce01daa4edc14299b",
+        "pid": 8464,
+        "spawn_seconds": 0.02085409999995136,
+        "stage": "failed",
+        "poll_at_timeout": null,
+        "wait_seconds": 15.322945199999992,
+        "timeout_wait_seconds": 14.999945700000012,
+        "process_state_capture": {
+          "exit": 0,
+          "seconds": 0.3161024999999995
+        },
+        "exit_after_kill": 1,
+        "failure": "TimeoutExpired: Command '['C:\\\\Users\\\\RUNNER~1\\\\AppData\\\\Local\\\\Temp\\\\tmph4h0grm_\\\\case.exe']' timed out after 15 seconds",
+        "elapsed_seconds": 15.344462799999974,
+        "final_poll": 1,
+        "stdout_hex": "433031",
+        "stderr_hex": ""
+      },
+      "observer_raw_utf8": "{\"stage\": \"identity\", \"identity\": {\"pid\": 8464, \"creation_time\": 134379821522566845, \"alive\": true, \"cpu_seconds\": 0.0, \"handles\": 62}}\r\n{\"stage\": \"modules\", \"result\": [{\"name\": \"case.exe\", \"base\": 4194304, \"size\": 16384}, {\"name\": \"ntdll.dll\", \"base\": 140713869049856, \"size\": 2506752}, {\"name\": \"wow64.dll\", \"base\": 140713854042112, \"size\": 348160}, {\"name\": \"wow64base.dll\", \"base\": 140713834250240, \"size\": 45056}, {\"name\": \"wow64win.dll\", \"base\": 140713844473856, \"size\": 561152}, {\"name\": \"wow64con.dll\", \"base\": 140713834315776, \"size\": 98304}, {\"name\": \"wow64cpu.dll\", \"base\": 2003238912, \"size\": 40960}, {\"name\": \"case.exe\", \"base\": 4194304, \"size\": 16384}, {\"name\": \"ntdll.dll\", \"base\": 2003304448, \"size\": 1835008}, {\"name\": \"KERNEL32.DLL\", \"base\": 1994719232, \"size\": 983040}, {\"name\": \"KERNELBASE.dll\", \"base\": 1997406208, \"size\": 2904064}, {\"name\": \"msvcrt.dll\", \"base\": 1976107008, \"size\": 815104}]}\r\n{\"stage\": \"threads\", \"result\": [{\"tid\": 10120, \"cycle\": false, \"nodes\": [{\"object_type\": 8, \"object_status\": 2, \"tid\": 10120, \"wait_ms\": 24275, \"context_switches\": 1}]}]}\r\n{\"pid\": 8464, \"expected_creation_time\": 134379821522566845, \"observer\": \"wct-toolhelp-v1\", \"identity\": {\"pid\": 8464, \"creation_time\": 134379821522566845, \"alive\": true, \"cpu_seconds\": 0.0, \"handles\": 62}, \"identity_verified\": true, \"modules\": [{\"name\": \"case.exe\", \"base\": 4194304, \"size\": 16384}, {\"name\": \"ntdll.dll\", \"base\": 140713869049856, \"size\": 2506752}, {\"name\": \"wow64.dll\", \"base\": 140713854042112, \"size\": 348160}, {\"name\": \"wow64base.dll\", \"base\": 140713834250240, \"size\": 45056}, {\"name\": \"wow64win.dll\", \"base\": 140713844473856, \"size\": 561152}, {\"name\": \"wow64con.dll\", \"base\": 140713834315776, \"size\": 98304}, {\"name\": \"wow64cpu.dll\", \"base\": 2003238912, \"size\": 40960}, {\"name\": \"case.exe\", \"base\": 4194304, \"size\": 16384}, {\"name\": \"ntdll.dll\", \"base\": 2003304448, \"size\": 1835008}, {\"name\": \"KERNEL32.DLL\", \"base\": 1994719232, \"size\": 983040}, {\"name\": \"KERNELBASE.dll\", \"base\": 1997406208, \"size\": 2904064}, {\"name\": \"msvcrt.dll\", \"base\": 1976107008, \"size\": 815104}], \"threads\": [{\"tid\": 10120, \"cycle\": false, \"nodes\": [{\"object_type\": 8, \"object_status\": 2, \"tid\": 10120, \"wait_ms\": 24275, \"context_switches\": 1}]}]}\r\n",
+      "observer_parsed": [
+        {
+          "stage": "identity",
+          "identity": {
+            "pid": 8464,
+            "creation_time": 134379821522566845,
+            "alive": true,
+            "cpu_seconds": 0.0,
+            "handles": 62
+          }
+        },
+        {
+          "stage": "modules",
+          "result": [
+            {
+              "name": "case.exe",
+              "base": 4194304,
+              "size": 16384
+            },
+            {
+              "name": "ntdll.dll",
+              "base": 140713869049856,
+              "size": 2506752
+            },
+            {
+              "name": "wow64.dll",
+              "base": 140713854042112,
+              "size": 348160
+            },
+            {
+              "name": "wow64base.dll",
+              "base": 140713834250240,
+              "size": 45056
+            },
+            {
+              "name": "wow64win.dll",
+              "base": 140713844473856,
+              "size": 561152
+            },
+            {
+              "name": "wow64con.dll",
+              "base": 140713834315776,
+              "size": 98304
+            },
+            {
+              "name": "wow64cpu.dll",
+              "base": 2003238912,
+              "size": 40960
+            },
+            {
+              "name": "case.exe",
+              "base": 4194304,
+              "size": 16384
+            },
+            {
+              "name": "ntdll.dll",
+              "base": 2003304448,
+              "size": 1835008
+            },
+            {
+              "name": "KERNEL32.DLL",
+              "base": 1994719232,
+              "size": 983040
+            },
+            {
+              "name": "KERNELBASE.dll",
+              "base": 1997406208,
+              "size": 2904064
+            },
+            {
+              "name": "msvcrt.dll",
+              "base": 1976107008,
+              "size": 815104
+            }
+          ]
+        },
+        {
+          "stage": "threads",
+          "result": [
+            {
+              "tid": 10120,
+              "cycle": false,
+              "nodes": [
+                {
+                  "object_type": 8,
+                  "object_status": 2,
+                  "tid": 10120,
+                  "wait_ms": 24275,
+                  "context_switches": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "pid": 8464,
+          "expected_creation_time": 134379821522566845,
+          "observer": "wct-toolhelp-v1",
+          "identity": {
+            "pid": 8464,
+            "creation_time": 134379821522566845,
+            "alive": true,
+            "cpu_seconds": 0.0,
+            "handles": 62
+          },
+          "identity_verified": true,
+          "modules": [
+            {
+              "name": "case.exe",
+              "base": 4194304,
+              "size": 16384
+            },
+            {
+              "name": "ntdll.dll",
+              "base": 140713869049856,
+              "size": 2506752
+            },
+            {
+              "name": "wow64.dll",
+              "base": 140713854042112,
+              "size": 348160
+            },
+            {
+              "name": "wow64base.dll",
+              "base": 140713834250240,
+              "size": 45056
+            },
+            {
+              "name": "wow64win.dll",
+              "base": 140713844473856,
+              "size": 561152
+            },
+            {
+              "name": "wow64con.dll",
+              "base": 140713834315776,
+              "size": 98304
+            },
+            {
+              "name": "wow64cpu.dll",
+              "base": 2003238912,
+              "size": 40960
+            },
+            {
+              "name": "case.exe",
+              "base": 4194304,
+              "size": 16384
+            },
+            {
+              "name": "ntdll.dll",
+              "base": 2003304448,
+              "size": 1835008
+            },
+            {
+              "name": "KERNEL32.DLL",
+              "base": 1994719232,
+              "size": 983040
+            },
+            {
+              "name": "KERNELBASE.dll",
+              "base": 1997406208,
+              "size": 2904064
+            },
+            {
+              "name": "msvcrt.dll",
+              "base": 1976107008,
+              "size": 815104
+            }
+          ],
+          "threads": [
+            {
+              "tid": 10120,
+              "cycle": false,
+              "nodes": [
+                {
+                  "object_type": 8,
+                  "object_status": 2,
+                  "tid": 10120,
+                  "wait_ms": 24275,
+                  "context_switches": 1
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "stderr_hex": "",
+      "pe_matches_current_generator": true
+    },
+    {
+      "case": "output-probe",
+      "run_id": 41274512166,
+      "job_id": 124753852940,
+      "artifact_id": 13070234892,
+      "artifact_sha256": "c4a40db776e8fb5843c78da4102bac521dda226212f89b920b59f4f3b3cdd4f3",
+      "launch": {
+        "case": "output-probe",
+        "platform": "windows",
+        "pe_sha256": "7e93a771370cfd33aaf44e59b8c8656be77e4ac715176bf924a90034bae57e33",
+        "command": [
+          "D:\\a\\windowstolinux\\windowstolinux\\output-probe.exe"
+        ],
+        "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+        "os": "Windows-2025Server-10.0.26100-SP0",
+        "python": "3.12.10",
+        "environment": {
+          "RUNNER_OS": "Windows",
+          "RUNNER_ARCH": "X64",
+          "ImageOS": "win25-vs2026",
+          "ImageVersion": "20261021.278.1"
+        },
+        "expected": {
+          "stdout_hex": "48656c6c6f",
+          "stderr_hex": "",
+          "exit": 0
+        },
+        "timeout_seconds": 15,
+        "timeout": true,
+        "executed_sha256": "7e93a771370cfd33aaf44e59b8c8656be77e4ac715176bf924a90034bae57e33",
+        "pid": 7844,
+        "spawn_seconds": 0.006029300000022886,
+        "stage": "failed",
+        "poll_at_timeout": null,
+        "wait_seconds": 15.321894399999906,
+        "timeout_wait_seconds": 14.999784900000009,
+        "process_state_capture": {
+          "exit": 0,
+          "seconds": 0.3142404999999826
+        },
+        "exit_after_kill": 1,
+        "failure": "TimeoutExpired: Command '['D:\\\\a\\\\windowstolinux\\\\windowstolinux\\\\output-probe.exe']' timed out after 15 seconds",
+        "elapsed_seconds": 15.328424300000052,
+        "final_poll": 1,
+        "stdout_hex": "48656c6c6f",
+        "stderr_hex": ""
+      },
+      "observer_raw_utf8": "{\"stage\": \"identity\", \"identity\": {\"pid\": 7844, \"creation_time\": 134379821367972197, \"alive\": true, \"cpu_seconds\": 0.015625, \"handles\": 70}}\r\n{\"stage\": \"modules\", \"result\": [{\"name\": \"output-probe.exe\", \"base\": 4194304, \"size\": 16384}, {\"name\": \"ntdll.dll\", \"base\": 140704319537152, \"size\": 2506752}, {\"name\": \"wow64.dll\", \"base\": 140704283820032, \"size\": 348160}, {\"name\": \"wow64base.dll\", \"base\": 140704295485440, \"size\": 45056}, {\"name\": \"wow64win.dll\", \"base\": 140704309968896, \"size\": 561152}, {\"name\": \"wow64con.dll\", \"base\": 140704297975808, \"size\": 98304}, {\"name\": \"wow64cpu.dll\", \"base\": 2003501056, \"size\": 40960}, {\"name\": \"output-probe.exe\", \"base\": 4194304, \"size\": 16384}, {\"name\": \"ntdll.dll\", \"base\": 2003566592, \"size\": 1835008}, {\"name\": \"KERNEL32.DLL\", \"base\": 1974075392, \"size\": 983040}, {\"name\": \"KERNELBASE.dll\", \"base\": 1969225728, \"size\": 2904064}, {\"name\": \"apphelp.dll\", \"base\": 1963065344, \"size\": 712704}, {\"name\": \"msvcrt.dll\", \"base\": 2000486400, \"size\": 815104}]}\r\n{\"stage\": \"threads\", \"result\": [{\"tid\": 8096, \"cycle\": false, \"nodes\": [{\"object_type\": 8, \"object_status\": 2, \"tid\": 8096, \"wait_ms\": 38984, \"context_switches\": 1}]}]}\r\n{\"pid\": 7844, \"expected_creation_time\": 134379821367972197, \"observer\": \"wct-toolhelp-v1\", \"identity\": {\"pid\": 7844, \"creation_time\": 134379821367972197, \"alive\": true, \"cpu_seconds\": 0.015625, \"handles\": 70}, \"identity_verified\": true, \"modules\": [{\"name\": \"output-probe.exe\", \"base\": 4194304, \"size\": 16384}, {\"name\": \"ntdll.dll\", \"base\": 140704319537152, \"size\": 2506752}, {\"name\": \"wow64.dll\", \"base\": 140704283820032, \"size\": 348160}, {\"name\": \"wow64base.dll\", \"base\": 140704295485440, \"size\": 45056}, {\"name\": \"wow64win.dll\", \"base\": 140704309968896, \"size\": 561152}, {\"name\": \"wow64con.dll\", \"base\": 140704297975808, \"size\": 98304}, {\"name\": \"wow64cpu.dll\", \"base\": 2003501056, \"size\": 40960}, {\"name\": \"output-probe.exe\", \"base\": 4194304, \"size\": 16384}, {\"name\": \"ntdll.dll\", \"base\": 2003566592, \"size\": 1835008}, {\"name\": \"KERNEL32.DLL\", \"base\": 1974075392, \"size\": 983040}, {\"name\": \"KERNELBASE.dll\", \"base\": 1969225728, \"size\": 2904064}, {\"name\": \"apphelp.dll\", \"base\": 1963065344, \"size\": 712704}, {\"name\": \"msvcrt.dll\", \"base\": 2000486400, \"size\": 815104}], \"threads\": [{\"tid\": 8096, \"cycle\": false, \"nodes\": [{\"object_type\": 8, \"object_status\": 2, \"tid\": 8096, \"wait_ms\": 38984, \"context_switches\": 1}]}]}\r\n",
+      "observer_parsed": [
+        {
+          "stage": "identity",
+          "identity": {
+            "pid": 7844,
+            "creation_time": 134379821367972197,
+            "alive": true,
+            "cpu_seconds": 0.015625,
+            "handles": 70
+          }
+        },
+        {
+          "stage": "modules",
+          "result": [
+            {
+              "name": "output-probe.exe",
+              "base": 4194304,
+              "size": 16384
+            },
+            {
+              "name": "ntdll.dll",
+              "base": 140704319537152,
+              "size": 2506752
+            },
+            {
+              "name": "wow64.dll",
+              "base": 140704283820032,
+              "size": 348160
+            },
+            {
+              "name": "wow64base.dll",
+              "base": 140704295485440,
+              "size": 45056
+            },
+            {
+              "name": "wow64win.dll",
+              "base": 140704309968896,
+              "size": 561152
+            },
+            {
+              "name": "wow64con.dll",
+              "base": 140704297975808,
+              "size": 98304
+            },
+            {
+              "name": "wow64cpu.dll",
+              "base": 2003501056,
+              "size": 40960
+            },
+            {
+              "name": "output-probe.exe",
+              "base": 4194304,
+              "size": 16384
+            },
+            {
+              "name": "ntdll.dll",
+              "base": 2003566592,
+              "size": 1835008
+            },
+            {
+              "name": "KERNEL32.DLL",
+              "base": 1974075392,
+              "size": 983040
+            },
+            {
+              "name": "KERNELBASE.dll",
+              "base": 1969225728,
+              "size": 2904064
+            },
+            {
+              "name": "apphelp.dll",
+              "base": 1963065344,
+              "size": 712704
+            },
+            {
+              "name": "msvcrt.dll",
+              "base": 2000486400,
+              "size": 815104
+            }
+          ]
+        },
+        {
+          "stage": "threads",
+          "result": [
+            {
+              "tid": 8096,
+              "cycle": false,
+              "nodes": [
+                {
+                  "object_type": 8,
+                  "object_status": 2,
+                  "tid": 8096,
+                  "wait_ms": 38984,
+                  "context_switches": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "pid": 7844,
+          "expected_creation_time": 134379821367972197,
+          "observer": "wct-toolhelp-v1",
+          "identity": {
+            "pid": 7844,
+            "creation_time": 134379821367972197,
+            "alive": true,
+            "cpu_seconds": 0.015625,
+            "handles": 70
+          },
+          "identity_verified": true,
+          "modules": [
+            {
+              "name": "output-probe.exe",
+              "base": 4194304,
+              "size": 16384
+            },
+            {
+              "name": "ntdll.dll",
+              "base": 140704319537152,
+              "size": 2506752
+            },
+            {
+              "name": "wow64.dll",
+              "base": 140704283820032,
+              "size": 348160
+            },
+            {
+              "name": "wow64base.dll",
+              "base": 140704295485440,
+              "size": 45056
+            },
+            {
+              "name": "wow64win.dll",
+              "base": 140704309968896,
+              "size": 561152
+            },
+            {
+              "name": "wow64con.dll",
+              "base": 140704297975808,
+              "size": 98304
+            },
+            {
+              "name": "wow64cpu.dll",
+              "base": 2003501056,
+              "size": 40960
+            },
+            {
+              "name": "output-probe.exe",
+              "base": 4194304,
+              "size": 16384
+            },
+            {
+              "name": "ntdll.dll",
+              "base": 2003566592,
+              "size": 1835008
+            },
+            {
+              "name": "KERNEL32.DLL",
+              "base": 1974075392,
+              "size": 983040
+            },
+            {
+              "name": "KERNELBASE.dll",
+              "base": 1969225728,
+              "size": 2904064
+            },
+            {
+              "name": "apphelp.dll",
+              "base": 1963065344,
+              "size": 712704
+            },
+            {
+              "name": "msvcrt.dll",
+              "base": 2000486400,
+              "size": 815104
+            }
+          ],
+          "threads": [
+            {
+              "tid": 8096,
+              "cycle": false,
+              "nodes": [
+                {
+                  "object_type": 8,
+                  "object_status": 2,
+                  "tid": 8096,
+                  "wait_ms": 38984,
+                  "context_switches": 1
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "stderr_hex": "",
+      "pe_matches_current_generator": true
+    }
+  ],
+  "predefined_controls": [
+    {
+      "run_id": 41274514852,
+      "artifact_id": 13071370041,
+      "artifact_sha256": "42e278926fa2c2a62d466c946d548c6e9574200c0c25945e403a584243c513c2",
+      "samples": [
+        {
+          "case": "max",
+          "mode": "reused",
+          "repetition": 0,
+          "pe_sha256": "0610c518a55c36259f91be3c1d2f7c9f8eca153dcfb1970f42e6bdee53f0fe0b",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "command": [
+            "D:\\a\\_temp\\w2l-launch-diagnosis\\reused.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "41414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "0610c518a55c36259f91be3c1d2f7c9f8eca153dcfb1970f42e6bdee53f0fe0b",
+          "pid": 6548,
+          "spawn_seconds": 0.010172699999998258,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.02052770000000237,
+          "elapsed_seconds": 0.031106099999988146,
+          "final_poll": 0,
+          "stdout_hex": "41414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "case": "corpus14",
+          "mode": "reused",
+          "repetition": 0,
+          "pe_sha256": "5406895aa3d7208e10967e09eba072b72a72ffb30f6edb31bcc9634765ef5f2f",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "command": [
+            "D:\\a\\_temp\\w2l-launch-diagnosis\\reused.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "433134",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "5406895aa3d7208e10967e09eba072b72a72ffb30f6edb31bcc9634765ef5f2f",
+          "pid": 7204,
+          "spawn_seconds": 0.003267899999968904,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.004242299999987154,
+          "elapsed_seconds": 0.0077947999999992135,
+          "final_poll": 0,
+          "stdout_hex": "433134",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "case": "hello",
+          "mode": "reused",
+          "repetition": 0,
+          "pe_sha256": "30a0afa2dba23697256b96df129e62a9cc7c099edf68bfcb87eaf125fc3757e3",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "command": [
+            "D:\\a\\_temp\\w2l-launch-diagnosis\\reused.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "48656c6c6f",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "30a0afa2dba23697256b96df129e62a9cc7c099edf68bfcb87eaf125fc3757e3",
+          "pid": 2900,
+          "spawn_seconds": 0.003120899999998983,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.004009300000006988,
+          "elapsed_seconds": 0.007423899999992045,
+          "final_poll": 0,
+          "stdout_hex": "48656c6c6f",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "case": "max",
+          "mode": "reused",
+          "repetition": 1,
+          "pe_sha256": "0610c518a55c36259f91be3c1d2f7c9f8eca153dcfb1970f42e6bdee53f0fe0b",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "command": [
+            "D:\\a\\_temp\\w2l-launch-diagnosis\\reused.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "41414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "0610c518a55c36259f91be3c1d2f7c9f8eca153dcfb1970f42e6bdee53f0fe0b",
+          "pid": 8284,
+          "spawn_seconds": 0.003077199999950153,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.00380939999996599,
+          "elapsed_seconds": 0.0071553999999878215,
+          "final_poll": 0,
+          "stdout_hex": "41414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "case": "corpus14",
+          "mode": "reused",
+          "repetition": 1,
+          "pe_sha256": "5406895aa3d7208e10967e09eba072b72a72ffb30f6edb31bcc9634765ef5f2f",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "command": [
+            "D:\\a\\_temp\\w2l-launch-diagnosis\\reused.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "433134",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "5406895aa3d7208e10967e09eba072b72a72ffb30f6edb31bcc9634765ef5f2f",
+          "pid": 4480,
+          "spawn_seconds": 0.002961499999969419,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.003731399999992391,
+          "elapsed_seconds": 0.006950199999948836,
+          "final_poll": 0,
+          "stdout_hex": "433134",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "case": "hello",
+          "mode": "reused",
+          "repetition": 1,
+          "pe_sha256": "30a0afa2dba23697256b96df129e62a9cc7c099edf68bfcb87eaf125fc3757e3",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "command": [
+            "D:\\a\\_temp\\w2l-launch-diagnosis\\reused.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "48656c6c6f",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "30a0afa2dba23697256b96df129e62a9cc7c099edf68bfcb87eaf125fc3757e3",
+          "pid": 1836,
+          "spawn_seconds": 0.003022600000008424,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.0037810999999692285,
+          "elapsed_seconds": 0.007091599999967002,
+          "final_poll": 0,
+          "stdout_hex": "48656c6c6f",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "case": "max",
+          "mode": "reused",
+          "repetition": 2,
+          "pe_sha256": "0610c518a55c36259f91be3c1d2f7c9f8eca153dcfb1970f42e6bdee53f0fe0b",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "command": [
+            "D:\\a\\_temp\\w2l-launch-diagnosis\\reused.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "41414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "0610c518a55c36259f91be3c1d2f7c9f8eca153dcfb1970f42e6bdee53f0fe0b",
+          "pid": 9964,
+          "spawn_seconds": 0.003056099999980688,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.003749300000038147,
+          "elapsed_seconds": 0.007076399999959904,
+          "final_poll": 0,
+          "stdout_hex": "41414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "case": "corpus14",
+          "mode": "reused",
+          "repetition": 2,
+          "pe_sha256": "5406895aa3d7208e10967e09eba072b72a72ffb30f6edb31bcc9634765ef5f2f",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "command": [
+            "D:\\a\\_temp\\w2l-launch-diagnosis\\reused.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "433134",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "5406895aa3d7208e10967e09eba072b72a72ffb30f6edb31bcc9634765ef5f2f",
+          "pid": 4496,
+          "spawn_seconds": 0.0032378999999878033,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.004009899999971367,
+          "elapsed_seconds": 0.00753700000001345,
+          "final_poll": 0,
+          "stdout_hex": "433134",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "case": "hello",
+          "mode": "reused",
+          "repetition": 2,
+          "pe_sha256": "30a0afa2dba23697256b96df129e62a9cc7c099edf68bfcb87eaf125fc3757e3",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "command": [
+            "D:\\a\\_temp\\w2l-launch-diagnosis\\reused.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "48656c6c6f",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "30a0afa2dba23697256b96df129e62a9cc7c099edf68bfcb87eaf125fc3757e3",
+          "pid": 10004,
+          "spawn_seconds": 0.003204100000004928,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.0038049999999998363,
+          "elapsed_seconds": 0.007286500000020624,
+          "final_poll": 0,
+          "stdout_hex": "48656c6c6f",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "case": "max",
+          "mode": "fresh",
+          "repetition": 0,
+          "pe_sha256": "0610c518a55c36259f91be3c1d2f7c9f8eca153dcfb1970f42e6bdee53f0fe0b",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "command": [
+            "D:\\a\\_temp\\w2l-launch-diagnosis\\max-0.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "41414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "0610c518a55c36259f91be3c1d2f7c9f8eca153dcfb1970f42e6bdee53f0fe0b",
+          "pid": 1084,
+          "spawn_seconds": 0.003322400000001835,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.006905499999959375,
+          "elapsed_seconds": 0.010513000000003103,
+          "final_poll": 0,
+          "stdout_hex": "41414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "case": "corpus14",
+          "mode": "fresh",
+          "repetition": 0,
+          "pe_sha256": "5406895aa3d7208e10967e09eba072b72a72ffb30f6edb31bcc9634765ef5f2f",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "command": [
+            "D:\\a\\_temp\\w2l-launch-diagnosis\\corpus14-0.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "433134",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "5406895aa3d7208e10967e09eba072b72a72ffb30f6edb31bcc9634765ef5f2f",
+          "pid": 10228,
+          "spawn_seconds": 0.003604300000006333,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.0068649999999479405,
+          "elapsed_seconds": 0.010753600000043662,
+          "final_poll": 0,
+          "stdout_hex": "433134",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "case": "hello",
+          "mode": "fresh",
+          "repetition": 0,
+          "pe_sha256": "30a0afa2dba23697256b96df129e62a9cc7c099edf68bfcb87eaf125fc3757e3",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "command": [
+            "D:\\a\\_temp\\w2l-launch-diagnosis\\hello-0.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "48656c6c6f",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "30a0afa2dba23697256b96df129e62a9cc7c099edf68bfcb87eaf125fc3757e3",
+          "pid": 8816,
+          "spawn_seconds": 0.0035126999999874897,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.007066299999962666,
+          "elapsed_seconds": 0.011043500000027962,
+          "final_poll": 0,
+          "stdout_hex": "48656c6c6f",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "case": "max",
+          "mode": "fresh",
+          "repetition": 1,
+          "pe_sha256": "0610c518a55c36259f91be3c1d2f7c9f8eca153dcfb1970f42e6bdee53f0fe0b",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "command": [
+            "D:\\a\\_temp\\w2l-launch-diagnosis\\max-1.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "41414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "0610c518a55c36259f91be3c1d2f7c9f8eca153dcfb1970f42e6bdee53f0fe0b",
+          "pid": 804,
+          "spawn_seconds": 0.0036403000000291286,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.007124900000007983,
+          "elapsed_seconds": 0.011081999999987602,
+          "final_poll": 0,
+          "stdout_hex": "41414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "case": "corpus14",
+          "mode": "fresh",
+          "repetition": 1,
+          "pe_sha256": "5406895aa3d7208e10967e09eba072b72a72ffb30f6edb31bcc9634765ef5f2f",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "command": [
+            "D:\\a\\_temp\\w2l-launch-diagnosis\\corpus14-1.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "433134",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "5406895aa3d7208e10967e09eba072b72a72ffb30f6edb31bcc9634765ef5f2f",
+          "pid": 2504,
+          "spawn_seconds": 0.003781900000035421,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.007085099999983413,
+          "elapsed_seconds": 0.011218200000030265,
+          "final_poll": 0,
+          "stdout_hex": "433134",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "case": "hello",
+          "mode": "fresh",
+          "repetition": 1,
+          "pe_sha256": "30a0afa2dba23697256b96df129e62a9cc7c099edf68bfcb87eaf125fc3757e3",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "command": [
+            "D:\\a\\_temp\\w2l-launch-diagnosis\\hello-1.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "48656c6c6f",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "30a0afa2dba23697256b96df129e62a9cc7c099edf68bfcb87eaf125fc3757e3",
+          "pid": 10056,
+          "spawn_seconds": 0.003830899999968551,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.008330299999954605,
+          "elapsed_seconds": 0.012608000000000175,
+          "final_poll": 0,
+          "stdout_hex": "48656c6c6f",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "case": "max",
+          "mode": "fresh",
+          "repetition": 2,
+          "pe_sha256": "0610c518a55c36259f91be3c1d2f7c9f8eca153dcfb1970f42e6bdee53f0fe0b",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "command": [
+            "D:\\a\\_temp\\w2l-launch-diagnosis\\max-2.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "41414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "0610c518a55c36259f91be3c1d2f7c9f8eca153dcfb1970f42e6bdee53f0fe0b",
+          "pid": 1052,
+          "spawn_seconds": 0.0038466000000312306,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.007507200000020475,
+          "elapsed_seconds": 0.011731200000042463,
+          "final_poll": 0,
+          "stdout_hex": "41414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "case": "corpus14",
+          "mode": "fresh",
+          "repetition": 2,
+          "pe_sha256": "5406895aa3d7208e10967e09eba072b72a72ffb30f6edb31bcc9634765ef5f2f",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "command": [
+            "D:\\a\\_temp\\w2l-launch-diagnosis\\corpus14-2.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "433134",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "5406895aa3d7208e10967e09eba072b72a72ffb30f6edb31bcc9634765ef5f2f",
+          "pid": 1404,
+          "spawn_seconds": 0.0037626000000159365,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.00746750000001839,
+          "elapsed_seconds": 0.011608500000022559,
+          "final_poll": 0,
+          "stdout_hex": "433134",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "case": "hello",
+          "mode": "fresh",
+          "repetition": 2,
+          "pe_sha256": "30a0afa2dba23697256b96df129e62a9cc7c099edf68bfcb87eaf125fc3757e3",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "command": [
+            "D:\\a\\_temp\\w2l-launch-diagnosis\\hello-2.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "48656c6c6f",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "30a0afa2dba23697256b96df129e62a9cc7c099edf68bfcb87eaf125fc3757e3",
+          "pid": 4624,
+          "spawn_seconds": 0.0043147000000089974,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.007237900000006903,
+          "elapsed_seconds": 0.011978499999997894,
+          "final_poll": 0,
+          "stdout_hex": "48656c6c6f",
+          "stderr_hex": "",
+          "passed": true
+        }
+      ],
+      "host_controls": [
+        {
+          "control": "normal-runtime-exit",
+          "scope": "host Python runtime, not 32-bit fixture CRT",
+          "command": [
+            "C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\python.exe",
+            "-c",
+            "import os; os.write(1,b'Hello')"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "48656c6c6f",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "4d6f5f81a4bca11191c4c7c6b43632694d0a4ce74e068619d8fdc161d469859a",
+          "pid": 5204,
+          "spawn_seconds": 0.006705299999964609,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.01605130000001509,
+          "elapsed_seconds": 0.023110999999971682,
+          "final_poll": 0,
+          "stdout_hex": "48656c6c6f",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "control": "immediate-exit",
+          "scope": "host Python runtime, not 32-bit fixture CRT",
+          "command": [
+            "C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\python.exe",
+            "-c",
+            "import os; os.write(1,b'Hello'); os._exit(0)"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "48656c6c6f",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "4d6f5f81a4bca11191c4c7c6b43632694d0a4ce74e068619d8fdc161d469859a",
+          "pid": 7200,
+          "spawn_seconds": 0.001441899999974794,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.01868650000000116,
+          "elapsed_seconds": 0.02040230000000065,
+          "final_poll": 0,
+          "stdout_hex": "48656c6c6f",
+          "stderr_hex": "",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "run_id": 41274512166,
+      "artifact_id": 13071195862,
+      "artifact_sha256": "c56149935b06eed0e18834ac72dabed6f1636fa1feba26818eebb96c5f6a43d1",
+      "samples": [
+        {
+          "case": "max",
+          "mode": "reused",
+          "repetition": 0,
+          "pe_sha256": "0610c518a55c36259f91be3c1d2f7c9f8eca153dcfb1970f42e6bdee53f0fe0b",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "command": [
+            "D:\\a\\_temp\\w2l-launch-diagnosis\\reused.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "41414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "0610c518a55c36259f91be3c1d2f7c9f8eca153dcfb1970f42e6bdee53f0fe0b",
+          "pid": 8692,
+          "spawn_seconds": 0.016429599999923994,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.026303099999950064,
+          "elapsed_seconds": 0.0431528999999955,
+          "final_poll": 0,
+          "stdout_hex": "41414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "case": "corpus14",
+          "mode": "reused",
+          "repetition": 0,
+          "pe_sha256": "5406895aa3d7208e10967e09eba072b72a72ffb30f6edb31bcc9634765ef5f2f",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "command": [
+            "D:\\a\\_temp\\w2l-launch-diagnosis\\reused.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "433134",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "5406895aa3d7208e10967e09eba072b72a72ffb30f6edb31bcc9634765ef5f2f",
+          "pid": 8488,
+          "spawn_seconds": 0.004413600000020779,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.004909600000019054,
+          "elapsed_seconds": 0.009666300000048977,
+          "final_poll": 0,
+          "stdout_hex": "433134",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "case": "hello",
+          "mode": "reused",
+          "repetition": 0,
+          "pe_sha256": "30a0afa2dba23697256b96df129e62a9cc7c099edf68bfcb87eaf125fc3757e3",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "command": [
+            "D:\\a\\_temp\\w2l-launch-diagnosis\\reused.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "48656c6c6f",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "30a0afa2dba23697256b96df129e62a9cc7c099edf68bfcb87eaf125fc3757e3",
+          "pid": 732,
+          "spawn_seconds": 0.004604199999903358,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.004734100000064245,
+          "elapsed_seconds": 0.009727300000008654,
+          "final_poll": 0,
+          "stdout_hex": "48656c6c6f",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "case": "max",
+          "mode": "reused",
+          "repetition": 1,
+          "pe_sha256": "0610c518a55c36259f91be3c1d2f7c9f8eca153dcfb1970f42e6bdee53f0fe0b",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "command": [
+            "D:\\a\\_temp\\w2l-launch-diagnosis\\reused.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "41414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "0610c518a55c36259f91be3c1d2f7c9f8eca153dcfb1970f42e6bdee53f0fe0b",
+          "pid": 5996,
+          "spawn_seconds": 0.004415400000084446,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.0046464000000696615,
+          "elapsed_seconds": 0.009413900000026842,
+          "final_poll": 0,
+          "stdout_hex": "41414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "case": "corpus14",
+          "mode": "reused",
+          "repetition": 1,
+          "pe_sha256": "5406895aa3d7208e10967e09eba072b72a72ffb30f6edb31bcc9634765ef5f2f",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "command": [
+            "D:\\a\\_temp\\w2l-launch-diagnosis\\reused.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "433134",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "5406895aa3d7208e10967e09eba072b72a72ffb30f6edb31bcc9634765ef5f2f",
+          "pid": 8468,
+          "spawn_seconds": 0.004264100000000326,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.0048212000000376065,
+          "elapsed_seconds": 0.009423699999956625,
+          "final_poll": 0,
+          "stdout_hex": "433134",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "case": "hello",
+          "mode": "reused",
+          "repetition": 1,
+          "pe_sha256": "30a0afa2dba23697256b96df129e62a9cc7c099edf68bfcb87eaf125fc3757e3",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "command": [
+            "D:\\a\\_temp\\w2l-launch-diagnosis\\reused.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "48656c6c6f",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "30a0afa2dba23697256b96df129e62a9cc7c099edf68bfcb87eaf125fc3757e3",
+          "pid": 1748,
+          "spawn_seconds": 0.004333500000029744,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.00442350000002989,
+          "elapsed_seconds": 0.0090923999999859,
+          "final_poll": 0,
+          "stdout_hex": "48656c6c6f",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "case": "max",
+          "mode": "reused",
+          "repetition": 2,
+          "pe_sha256": "0610c518a55c36259f91be3c1d2f7c9f8eca153dcfb1970f42e6bdee53f0fe0b",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "command": [
+            "D:\\a\\_temp\\w2l-launch-diagnosis\\reused.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "41414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "0610c518a55c36259f91be3c1d2f7c9f8eca153dcfb1970f42e6bdee53f0fe0b",
+          "pid": 2076,
+          "spawn_seconds": 0.004261000000042259,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.004691499999921689,
+          "elapsed_seconds": 0.009354900000062116,
+          "final_poll": 0,
+          "stdout_hex": "41414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "case": "corpus14",
+          "mode": "reused",
+          "repetition": 2,
+          "pe_sha256": "5406895aa3d7208e10967e09eba072b72a72ffb30f6edb31bcc9634765ef5f2f",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "command": [
+            "D:\\a\\_temp\\w2l-launch-diagnosis\\reused.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "433134",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "5406895aa3d7208e10967e09eba072b72a72ffb30f6edb31bcc9634765ef5f2f",
+          "pid": 8452,
+          "spawn_seconds": 0.004259999999931097,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.004688200000032339,
+          "elapsed_seconds": 0.009424500000022817,
+          "final_poll": 0,
+          "stdout_hex": "433134",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "case": "hello",
+          "mode": "reused",
+          "repetition": 2,
+          "pe_sha256": "30a0afa2dba23697256b96df129e62a9cc7c099edf68bfcb87eaf125fc3757e3",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "command": [
+            "D:\\a\\_temp\\w2l-launch-diagnosis\\reused.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "48656c6c6f",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "30a0afa2dba23697256b96df129e62a9cc7c099edf68bfcb87eaf125fc3757e3",
+          "pid": 4644,
+          "spawn_seconds": 0.0047259000000394735,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.0044546000000309505,
+          "elapsed_seconds": 0.009517700000060358,
+          "final_poll": 0,
+          "stdout_hex": "48656c6c6f",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "case": "max",
+          "mode": "fresh",
+          "repetition": 0,
+          "pe_sha256": "0610c518a55c36259f91be3c1d2f7c9f8eca153dcfb1970f42e6bdee53f0fe0b",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "command": [
+            "D:\\a\\_temp\\w2l-launch-diagnosis\\max-0.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "41414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "0610c518a55c36259f91be3c1d2f7c9f8eca153dcfb1970f42e6bdee53f0fe0b",
+          "pid": 6084,
+          "spawn_seconds": 0.004844299999945179,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.008477100000050086,
+          "elapsed_seconds": 0.013673599999947328,
+          "final_poll": 0,
+          "stdout_hex": "41414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "case": "corpus14",
+          "mode": "fresh",
+          "repetition": 0,
+          "pe_sha256": "5406895aa3d7208e10967e09eba072b72a72ffb30f6edb31bcc9634765ef5f2f",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "command": [
+            "D:\\a\\_temp\\w2l-launch-diagnosis\\corpus14-0.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "433134",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "5406895aa3d7208e10967e09eba072b72a72ffb30f6edb31bcc9634765ef5f2f",
+          "pid": 8960,
+          "spawn_seconds": 0.005312099999969178,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.00866120000000592,
+          "elapsed_seconds": 0.014317099999971106,
+          "final_poll": 0,
+          "stdout_hex": "433134",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "case": "hello",
+          "mode": "fresh",
+          "repetition": 0,
+          "pe_sha256": "30a0afa2dba23697256b96df129e62a9cc7c099edf68bfcb87eaf125fc3757e3",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "command": [
+            "D:\\a\\_temp\\w2l-launch-diagnosis\\hello-0.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "48656c6c6f",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "30a0afa2dba23697256b96df129e62a9cc7c099edf68bfcb87eaf125fc3757e3",
+          "pid": 3260,
+          "spawn_seconds": 0.005082600000037019,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.008555800000067393,
+          "elapsed_seconds": 0.014099999999984902,
+          "final_poll": 0,
+          "stdout_hex": "48656c6c6f",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "case": "max",
+          "mode": "fresh",
+          "repetition": 1,
+          "pe_sha256": "0610c518a55c36259f91be3c1d2f7c9f8eca153dcfb1970f42e6bdee53f0fe0b",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "command": [
+            "D:\\a\\_temp\\w2l-launch-diagnosis\\max-1.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "41414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "0610c518a55c36259f91be3c1d2f7c9f8eca153dcfb1970f42e6bdee53f0fe0b",
+          "pid": 3268,
+          "spawn_seconds": 0.005306300000029296,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.0091635999999653,
+          "elapsed_seconds": 0.014879299999961404,
+          "final_poll": 0,
+          "stdout_hex": "41414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "case": "corpus14",
+          "mode": "fresh",
+          "repetition": 1,
+          "pe_sha256": "5406895aa3d7208e10967e09eba072b72a72ffb30f6edb31bcc9634765ef5f2f",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "command": [
+            "D:\\a\\_temp\\w2l-launch-diagnosis\\corpus14-1.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "433134",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "5406895aa3d7208e10967e09eba072b72a72ffb30f6edb31bcc9634765ef5f2f",
+          "pid": 9188,
+          "spawn_seconds": 0.005091600000014296,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.008758299999954033,
+          "elapsed_seconds": 0.014251400000034664,
+          "final_poll": 0,
+          "stdout_hex": "433134",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "case": "hello",
+          "mode": "fresh",
+          "repetition": 1,
+          "pe_sha256": "30a0afa2dba23697256b96df129e62a9cc7c099edf68bfcb87eaf125fc3757e3",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "command": [
+            "D:\\a\\_temp\\w2l-launch-diagnosis\\hello-1.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "48656c6c6f",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "30a0afa2dba23697256b96df129e62a9cc7c099edf68bfcb87eaf125fc3757e3",
+          "pid": 5056,
+          "spawn_seconds": 0.004904600000031678,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.008856599999944592,
+          "elapsed_seconds": 0.014180300000020907,
+          "final_poll": 0,
+          "stdout_hex": "48656c6c6f",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "case": "max",
+          "mode": "fresh",
+          "repetition": 2,
+          "pe_sha256": "0610c518a55c36259f91be3c1d2f7c9f8eca153dcfb1970f42e6bdee53f0fe0b",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "command": [
+            "D:\\a\\_temp\\w2l-launch-diagnosis\\max-2.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "41414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "0610c518a55c36259f91be3c1d2f7c9f8eca153dcfb1970f42e6bdee53f0fe0b",
+          "pid": 2124,
+          "spawn_seconds": 0.005057200000010198,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.008672999999930653,
+          "elapsed_seconds": 0.014117199999986951,
+          "final_poll": 0,
+          "stdout_hex": "41414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "case": "corpus14",
+          "mode": "fresh",
+          "repetition": 2,
+          "pe_sha256": "5406895aa3d7208e10967e09eba072b72a72ffb30f6edb31bcc9634765ef5f2f",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "command": [
+            "D:\\a\\_temp\\w2l-launch-diagnosis\\corpus14-2.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "433134",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "5406895aa3d7208e10967e09eba072b72a72ffb30f6edb31bcc9634765ef5f2f",
+          "pid": 888,
+          "spawn_seconds": 0.005222699999990255,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.008416699999997945,
+          "elapsed_seconds": 0.013984499999992295,
+          "final_poll": 0,
+          "stdout_hex": "433134",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "case": "hello",
+          "mode": "fresh",
+          "repetition": 2,
+          "pe_sha256": "30a0afa2dba23697256b96df129e62a9cc7c099edf68bfcb87eaf125fc3757e3",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "command": [
+            "D:\\a\\_temp\\w2l-launch-diagnosis\\hello-2.exe"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "48656c6c6f",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "30a0afa2dba23697256b96df129e62a9cc7c099edf68bfcb87eaf125fc3757e3",
+          "pid": 7428,
+          "spawn_seconds": 0.005107299999963288,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.008556600000019898,
+          "elapsed_seconds": 0.014015699999958997,
+          "final_poll": 0,
+          "stdout_hex": "48656c6c6f",
+          "stderr_hex": "",
+          "passed": true
+        }
+      ],
+      "host_controls": [
+        {
+          "control": "normal-runtime-exit",
+          "scope": "host Python runtime, not 32-bit fixture CRT",
+          "command": [
+            "C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\python.exe",
+            "-c",
+            "import os; os.write(1,b'Hello')"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "48656c6c6f",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "4d6f5f81a4bca11191c4c7c6b43632694d0a4ce74e068619d8fdc161d469859a",
+          "pid": 4992,
+          "spawn_seconds": 0.007482199999913064,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.024866599999995742,
+          "elapsed_seconds": 0.0327434999999241,
+          "final_poll": 0,
+          "stdout_hex": "48656c6c6f",
+          "stderr_hex": "",
+          "passed": true
+        },
+        {
+          "control": "immediate-exit",
+          "scope": "host Python runtime, not 32-bit fixture CRT",
+          "command": [
+            "C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\python.exe",
+            "-c",
+            "import os; os.write(1,b'Hello'); os._exit(0)"
+          ],
+          "cwd": "D:\\a\\windowstolinux\\windowstolinux",
+          "os": "Windows-2025Server-10.0.26100-SP0",
+          "python": "3.12.10",
+          "environment": {
+            "RUNNER_OS": "Windows",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "win25-vs2026",
+            "ImageVersion": "20261021.278.1"
+          },
+          "expected": {
+            "exit": 0,
+            "stdout_hex": "48656c6c6f",
+            "stderr_hex": ""
+          },
+          "timeout_seconds": 15,
+          "timeout": false,
+          "executed_sha256": "4d6f5f81a4bca11191c4c7c6b43632694d0a4ce74e068619d8fdc161d469859a",
+          "pid": 8156,
+          "spawn_seconds": 0.002153100000100494,
+          "stage": "finished",
+          "exit": 0,
+          "wait_seconds": 0.02525330000003123,
+          "elapsed_seconds": 0.02778010000008635,
+          "final_poll": 0,
+          "stdout_hex": "48656c6c6f",
+          "stderr_hex": "",
+          "passed": true
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "frozen_before_implementation": true,
+  "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "locale": "execute40aabe actual constructor, read owned locale-info+8;65001 branch returns65001; otherwise actual AreFileApisANSI resolution and query required, never inferred from GetACP",
+  "cleanup": "original temporary-view flag controls PTD+350 bit1 clear; preserve unproved constructor mutation/cleanup rejection",
+  "resolver": "actual index0, AreFileApisANSI symbol4166f4, module-index18 kernel32; named unimplemented export must reject, never be treated as missing",
+  "conversion": "CP_UTF8 modern profile query/copy byte lengths includingNUL for input-1; positive count no synthesized terminator; invalid UTF16 and insufficient capacity buffer effects are to be observed, not assumed atomic",
+  "Windows_observations": "isolated authored child only; file-mode changes restored and no filesystem I/O under altered mode; original API raw results/buffers retained separately from modeled or translated evidence",
+  "new_whole_PE_pairs": 0
+}

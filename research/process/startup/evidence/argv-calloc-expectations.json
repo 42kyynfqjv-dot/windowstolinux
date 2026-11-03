@@ -1,0 +1,9 @@
+{
+  "kind": "frozen shared allocation and errno expectations before implementation; not Windows observations",
+  "success": "Original caller uses slots*4+bytes checked arithmetic, then actual flags8 allocation from canonical live process heap. Every allocated byte is zero from actual allocation semantics; whole identity is retained.",
+  "errno": "Overflow follows original errno accessor under live registry, thread/fiber and UCRT FLS ownership. Accessor binding does not initialize a cell; original subsequent store writes12. No ThreadData retagging, shadow cell or test success_after producer.",
+  "failure": "Native budget/resource failure rejects with prior effects and no fabricated Windows NULL or errno. Zero API results remain a separately declared conformance effect where tested; new-handler behavior remains unbound.",
+  "free": "Original free(NULL) instructions return without a heap effect; nonNULL free/errno remains unbound.",
+  "publication": "Continue caller only through demonstrated original instructions. Do not synthesize argc/argv publication or initialize extra bytes.",
+  "cases": ["zeroed sizes1,9,64,544", "multiplication overflow", "allocation budget rejection", "stale/foreign heap", "stale registry", "cross-fiber publication", "stale or subobject UCRT pointer", "unknown errno contents", "typed errno overwrite rejection", "prior writes before failure", "changed calloc/errno/getter/free code", "second independent allocation identity", "reentry and stale aliases"]
+}

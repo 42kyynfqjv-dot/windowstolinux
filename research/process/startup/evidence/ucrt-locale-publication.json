@@ -1,0 +1,75 @@
+{
+  "kind": "Original UCRT locale publication and getter completion; explicit-profile component only",
+  "reviewed_parent": "555e21ef33adb4c3b28b2ab75466ef13d2540eb1",
+  "source_sha256": {
+    "examples/crt_stream.rs": "cbb83493b953aed525a087c05c5e7b56d25c41e0860aea891e9d456ddc72befa",
+    "research/process/startup/check_normal_wrapper.py": "cd295c855e795a6fc9c2501287f9f27ef4868450f38e992a54d14dcae871b6b0",
+    "src/crt_normal_frame_tests.rs": "06fa1faede441f7767647498190e73394581a3891d209416cb49ec881c9e1296",
+    "src/crt_stream_emit.rs": "36496c8775de98f26acda4f4286dfae6f20c47622def35f11a67358f6a2fcd19",
+    "src/crt_stream_runtime.rs": "c13283911e4248a1f646e2d76dbdf5453ff9de96104c07f481cc510f226aede0",
+    "src/crt_ucrt_locale.rs": "d95296c97585c979c04376e0ed5edcfccba32182a56ecba5892b30d3cabfebe3",
+    "src/crt_ucrt_ptd.rs": "eb358f3427dd3ac62789f962f527f7d39af61085b51d0f81b2af4b10a6fe3c7f",
+    "src/crt_ucrt_locale_replace.rs": "b7384252b91439e579a475d8989e825f989ff446967e757cd23d76fcddb1ed3a"
+  },
+  "validation": {
+    "crt_passed": 290,
+    "ignored_in_full": 2,
+    "artifact_replay": "completed; both artifact-dependent tests passed",
+    "replacement_cases": 20,
+    "additional_pe_mutations": 7,
+    "python_run": 76,
+    "python_skip": 1,
+    "clippy": "passed",
+    "format": "passed",
+    "repeat_rust": "identical separate emissions"
+  },
+  "evidence": {
+    "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+    "rust_sha256": "d387a780f41909561c5323c0063f19e0eed84ea548cb9b0143e82405381a99ab",
+    "report_sha256": "abe0669591c6b09a9bfe5ef308cd0230c4b633f35b9ccc51eda6b348192d1a69",
+    "recorded_windows_wrapper_comparisons": 5,
+    "new_windows_elf_pairs": 0,
+    "whole_pe_pairs": 0
+  },
+  "component": {
+    "executed": [
+      "original second-helper EH4 registration and lock4",
+      "original replacement atUCRT+4c before reference acquisition",
+      "original module-backed reference loops and increments",
+      "original child null/shared-static branch paths; dynamicXADD cut before40c686",
+      "original normal cleanup/RET12",
+      "original free NULL path and LastError restoration",
+      "original UCRT getter epilog/return; C++ record removed",
+      "initializer callback7 completion and callback8 selection"
+    ],
+    "next_boundary": "indirect CALL40c946 ->408697, initializer callback8 unbound",
+    "retained_failure_effects": "replacement and prior increments remain when later child/code/reference effect rejects",
+    "allocation": "same canonical868-byte Buffer/current-fiber slot; distinct from40-byte VCRUNTIME"
+  },
+  "limits": [
+    "No dynamic XADD, prior locale release/free or nonnull free",
+    "No exceptional dispatch/containment through helpers",
+    "No default/full startup/rcedit/XP7 or Windows resource-failure equivalence",
+    "Case19 original Windows timeout unresolved"
+  ],
+  "retained_attempts": {
+    "component-lock-fixture.log": "test constructed logical lock4 at wrong indexed address; fixture corrected to actual table address",
+    "old-record-oracle.log": "test expected retained unlinked C++ entry; actual validated getter retirement removes it"
+  },
+  "historical_timeout": {
+    "run": 41107853543,
+    "case": 19,
+    "artifact": 13002965454,
+    "cause": "unresolved; no retry or threshold changes"
+  },
+  "next_scope": "callback408697 scope41b5c0 lock7 calls40bf2a/408537/4085e7; bind existing descriptor/standard-handle components to live producers",
+  "log_sha256": {
+    "replay.log": "14087a7673df5e7f8aaa79a83d08c453070827147f67ebd16360859ebcc2a3bb",
+    "full.log": "773b2bdf59d417ee140bd0ac67011a7e44c1b0cb1e36041963825cd874f916f0",
+    "entry.log": "e6e025f1659429bc2fe46dbdb59566d3e9d4cfce137642d99968819594a4489a",
+    "clippy.log": "d9cfcfef7f0f03f02dadeb76585cfa5844181d516e74e2c02d115a835a8e3d49",
+    "component-lock-fixture.log": "803b197172256e26b1b345cda1e7bab6eb8226c56817881c3f097a0524fd4b4d",
+    "python.log": "c908a73995698a1f023a2a04f99ccaec0e7635ff6d797381cd82a3df53a69a78",
+    "old-record-oracle.log": "a8b294a22419a71bd06dc46e4956ab3c34aba505a53227100c676ddf037c95aa"
+  }
+}

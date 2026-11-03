@@ -1,0 +1,145 @@
+{
+  "kind": "checked aligned activation and original entry component; no whole-PE translation",
+  "base_commit": "f390576db3f78cb1d9c542871d9edbd07b5f6acd",
+  "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "next_boundary": {
+    "call": "0x40b25a",
+    "target": "0x40b38a",
+    "reason": "original EH4 lock5/UCRT multibyte reference getter and replacement body remains unbound"
+  },
+  "implemented": [
+    "same-live-stack alignment with bounds/protected-word checks",
+    "actual protected CALL retains numeric continuation knowledge separately from authority",
+    "checked scalar return mirror; unique original RET slot retained",
+    "runtime/thread/fiber/stack and activation lifetime validation",
+    "failed nested call invalidates continuation knowledge without undoing effects",
+    "Main restoration clears unrelated return-site knowledge"
+  ],
+  "source_sha256": {
+    "src/crt_stream_cpu.rs": "c6e198c9660909e9c15168e705b7a02eaa768cab5314e42e8b3eabfb805cf4b3",
+    "src/crt_aligned_activation.rs": "c6f7003d8192e10ff192741b625a75f4baa01f1e0e52f59854284bbced80695e",
+    "src/crt_locale_startup.rs": "adcee1d4186c96beafcecd0999d6e4a90387717fbe5d3ebb026840a900b45346",
+    "src/crt_owned_frame.rs": "6c766c47c29042cb52a8b0a0714911f86e0d0e6d89f1300a1a3f7baf66b6060a",
+    "src/crt_normal_frame_tests.rs": "59f01a376bdfffe48e2f2cdc45c5e9e4e58ab28210c182c581e99d3edecded6b",
+    "examples/crt_stream.rs": "abc2436aaba892669d0869bdc2b9784416ab03f3a79c427a09549845ae7ce0aa",
+    "research/process/startup/check_normal_wrapper.py": "d0edb35596476f5d9054a758ac0acc507bab5984f5ef2e5efdab0dd2dc6f0889"
+  },
+  "checks": {
+    "crt_stream": {
+      "passed": 301,
+      "ignored": 2,
+      "log_sha256": "f765de1d85f7cecc15fcd54afcb1ac5f3f5ea46c0f1dbf68fae39bbf2da049b7",
+      "note": "final stricter expected-error assertions and two scalar-mask checks also passed in focused replay"
+    },
+    "unwind_slice": {
+      "passed": 185,
+      "log_sha256": "41e9ad7e22c17e4164ec8db4ee53e71507a0171fb36f52a43a053d1b6b7c1a0e"
+    },
+    "python": {
+      "run": 84,
+      "skipped": 1,
+      "log_sha256": "4e426e209593d3d1aaceded8bfa2ddb0ed74f08a4369c750b9e17f27499540e1"
+    },
+    "clippy": {
+      "status": "passed",
+      "log_sha256": "cc4b6a3cfbed815f11766e17d90cf61844a69d349e72de04e4c78ec122e6ca3e"
+    },
+    "focused": {
+      "passed": 2,
+      "log_sha256": "782ef48817343a0a6578b07969a18069154aa764725e3beb537fe6e5b5b38ae9"
+    },
+    "canonical": {
+      "status": "passed again in full replay",
+      "prefix_declared_cases": 20,
+      "retained_standalone_log_sha256": "21d3290a7aa0faf313728d836ee1c2e595632063a65929f573ae4698424b054d"
+    },
+    "format": {
+      "status": "passed",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "aligned_native_cases": {
+    "positive_top_level": 4,
+    "frame_lifetimes_in_nested_runs": 12,
+    "negative_modes": 18,
+    "partial_frame_failure": 1,
+    "two_stack_residues": true,
+    "two_local_extents": true,
+    "body": "authored frame conformance only; original locale body not executed",
+    "additional": "numeric alignment/unknown-mask/partial-width/lifetime/protected-word checks and prefix mutation proof"
+  },
+  "full_replay": {
+    "status": "passed",
+    "report_sha256": "241bd062cabb59ed50c6f6c2b1286aa395792efd9f3d113505eb18b97bf6300b",
+    "rust_sha256": "48ea86af29919381597b60745384c30c56257fd9492b516514ecdf16fc9ef115",
+    "comparisons": 5,
+    "scope": "Live registry fixture; body EAX/flags inputs; original stack/FS/saved-state restoration only",
+    "log_sha256": "46b2e094b0656bb3da5cd0e3bc445cad693ef671c54e246a18d0224d278612da"
+  },
+  "new_windows_elf_pairs": 0,
+  "pre_fix_reproducer": {
+    "source": "/workspace/w2l-build-tmp/w2l-crt-original-callees-48088-aligned-return-authority/run.rs",
+    "source_sha256": "951bedd3319185532cde74b43041d9a1da8cc556d81c0f261764478fed4e0ca5",
+    "binary_sha256": "3a4621328083adf4016f3e546cc232774d04da9333abfdcebc04f35d1599db85",
+    "exit_code": 101,
+    "stderr_sha256": "ca2f3a62eaed4056575268d1585908b9304b709433fe1b66cbfb2c2f670deed3"
+  },
+  "review_findings": [
+    {
+      "finding": "failed nested child left aligned parent lease live",
+      "fix": "invalidate return-site observation on failed/incomplete protected call, preserve prior registers/writes",
+      "reproducer": "negative aligned mode9"
+    },
+    {
+      "finding": "cross-thread/fiber/runtime or retired anchor must not retain lease",
+      "fix": "validate those lifetimes on every lease use",
+      "reproducer": "negative modes12/13/14/17"
+    }
+  ],
+  "retained_local_failures": [
+    {
+      "path": "/workspace/w2l-evidence/aligned-activation/replay",
+      "cause": "strict negative test expected callee-saved error for corrupted EBX; actual original epilog changes ESP so earlier stack-identity check rejects",
+      "fix": "correct expected first rejection only; no runtime relaxation",
+      "log_sha256": "48ce3717190df05adc10980fb1880de29965ea71560dc401a33022786db990b3"
+    },
+    {
+      "path": "/workspace/w2l-evidence/aligned-activation/canonical.log",
+      "cause": "previous boundary expected callback address in EBX; original prolog now saves that value and puts live frame pointer in EBX",
+      "fix": "check original saved value and source return through owned frame"
+    }
+  ],
+  "predecessor_ci": {
+    "head": "f390576db3f78cb1d9c542871d9edbd07b5f6acd",
+    "runs": [
+      41262712589,
+      41262706930,
+      41262706913
+    ],
+    "conclusion": "all success, rechecked before integration"
+  },
+  "historical_windows_timeout": {
+    "run": 41107853543,
+    "artifact": 13002965454,
+    "case": 19,
+    "cause": "unresolved"
+  },
+  "archive": {
+    "manifest_sha256": "20e37f9e143c72a115809c989a6866d5e9a8319180ff4836980f4a74f958b41e",
+    "scope": "120 older generated native binaries gzip archived with verified uncompressed hashes; sources/original PE/Windows observations preserved"
+  },
+  "limits": [
+    "explicit native launch profile only; default admission rejected",
+    "aligned nonlocal cleanup remains unbound",
+    "first locale body call/GetACP/GetCPInfo not executed",
+    "five recorded Windows comparisons are retained wrapper components",
+    "no full startup/rcedit/XP7 compatibility",
+    "native close/EOF equivalence unresolved"
+  ],
+  "fresh_emission": {
+    "rust_sha256": "48ea86af29919381597b60745384c30c56257fd9492b516514ecdf16fc9ef115",
+    "mtime_after_report": true,
+    "log_sha256": "636342c188e4f48b03749f24aa41462f8dc58e0ba00d57edff0abcd99d99e126",
+    "status": "passed"
+  }
+}

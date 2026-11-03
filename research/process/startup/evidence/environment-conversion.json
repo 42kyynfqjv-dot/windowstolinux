@@ -1,0 +1,46 @@
+{
+  "scope": "Original controlled environment conversion/return component; no complete PE execution",
+  "boundary": "0x406a22 original environment result continuation unbound",
+  "producer_address": "0x40b966",
+  "producer_bytes": 160,
+  "producer_sha256": "a3649456ee2a1edf8d7599529cab0e3ad0793dad5ca8df5c4089ae71eba7575a",
+  "canonical_rust_sha256": "16735b2624af2dd19cf8bfe87986109fa525f1f53fdbedfef91e7016188fbb05",
+  "original_artifact_cases": 16,
+  "conversion_native_cases": 12,
+  "new_windows_pairs": 0,
+  "whole_pe_pairs": 0,
+  "source_policy": "synthetic controlled declarations only; no host environment read/logged",
+  "old_head": "f6cd2afeeb16214237d8be9c3520d3ea89a31f57",
+  "old_replay": {
+    "rust_sha256": "74807fccad6b12ae32335e6b7152d42244d94bcb469033e4e80cefc6f8cb3e3f",
+    "report_sha256": "a898ae4788b5d683e8ff498f9921091b580fb7b7868aca43935c79b02b4c8527",
+    "source_files": 551,
+    "retained_windows_component_comparisons": 5,
+    "whole_pe_pairs": 0
+  },
+  "guard_review": {
+    "old_guard_independently_failed_hidden_source_regressions": 2,
+    "new_test_functions": 4,
+    "CRLF_checkout_supported": true,
+    "old_manifest_untracked_files": 0,
+    "old_manifest_files_matching_exact_commit_blobs": 551
+  },
+  "validation": {
+    "crt": "350 passed,2 ignored artifact gates separately handled",
+    "canonical": "original producer returns narrow buffer; caller rejects at0x406a22;16 artifact cases pass",
+    "conversion_native": "12 strict cases pass under512KiB",
+    "python": "114 tests,1 skip",
+    "clippy": "all targets warnings denied pass",
+    "fmt": "cargo fmt --all -- --check pass",
+    "low_stack": "all152 word cases pass512KiB plus64KiB environment padding",
+    "final_head": "fresh pushed-head replay and CI remain separate gates"
+  },
+  "limits": [
+    "No environment pointer table yet",
+    "Only checked native65001 ACP policy",
+    "Nonnull free/errno and exception cleanup remain rejected",
+    "Unsupported resource/API failure effects not fabricated",
+    "Full propagation/startup/rcedit/default support unproved",
+    "Historical Windows timeouts unresolved"
+  ]
+}

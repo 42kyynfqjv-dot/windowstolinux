@@ -1,0 +1,28 @@
+{
+  "commit": "72974f03e647a261811fb2876edbe8fa04c8c714",
+  "run": 40983904709,
+  "job": 123830245636,
+  "kind": "original Windows output-probe wait timeout; cause unresolved",
+  "timeout_seconds": 15,
+  "artifact_id": 12945762783,
+  "artifact_zip_sha256": "96dfadc2a100625596ee5de92de395a9252171aec384ff1b516bf2865a799149",
+  "artifact_contents_downloaded": false,
+  "original_stdout_stderr_contents": "not established from available job log",
+  "translation_cause_proven": false,
+  "rerun_requested": false,
+  "log_excerpt": [
+    "2026-10-30T01:07:29.4154843Z ##[group]Run Write-Host \"Output probe OS: $([System.Environment]::OSVersion.VersionString)\"",
+    "2026-10-30T01:07:29.4155728Z \u001b[36;1mWrite-Host \"Output probe OS: $([System.Environment]::OSVersion.VersionString)\"\u001b[0m",
+    "2026-10-30T01:07:29.4156659Z \u001b[36;1mWrite-Host \"32-bit CRT file version: $($crt.VersionInfo.FileVersion)\"\u001b[0m",
+    "2026-10-30T01:07:29.8238939Z Output probe OS: Microsoft Windows NT 10.0.26100.0",
+    "2026-10-30T01:07:29.8616210Z 32-bit CRT file version: 7.0.26100.33648 (WinBuild.160101.0800)",
+    "2026-10-30T01:07:45.3917024Z     raise TimeoutExpired(self.args, timeout)",
+    "2026-10-30T01:07:45.3917842Z subprocess.TimeoutExpired: Command '['D:\\\\a\\\\windowstolinux\\\\windowstolinux\\\\output-probe.exe']' timed out after 15 seconds",
+    "2026-10-30T01:07:45.8499104Z ##[warning]No files were found with the provided path: D:\\a\\_temp/w2l-corpus-launch/*. No artifacts will be uploaded.",
+    "2026-10-30T01:07:46.0838935Z ##[warning]No files were found with the provided path: D:\\a\\_temp/w2l-imported-launch/*. No artifacts will be uploaded.",
+    "2026-10-30T01:07:46.6717133Z SHA256 digest of uploaded artifact zip is 96dfadc2a100625596ee5de92de395a9252171aec384ff1b516bf2865a799149",
+    "2026-10-30T01:07:47.0806390Z Artifact output-probe-launch-evidence.zip successfully finalized. Artifact ID 12945762783",
+    "2026-10-30T01:07:47.0808525Z Artifact output-probe-launch-evidence has been successfully uploaded! Final size is 2064 bytes. Artifact ID is 12945762783",
+    "2026-10-30T01:07:47.0819563Z Artifact download URL: https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/40983904709/artifacts/12945762783"
+  ]
+}

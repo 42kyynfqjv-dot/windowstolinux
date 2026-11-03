@@ -1,0 +1,133 @@
+{
+  "kind": "Actual Linux standard endpoint acquisition and original callback8 completion; component only",
+  "source_commit": "fc9093eb478991c56a3f0ac207614f41bc07034b",
+  "reviewed_parent": "5ce115cc3fd8c6903a0e4217e7e02f9ed4b6e30e",
+  "source_sha256": {
+    "src/crt_stream_runtime.rs": "47dd786ff75b8da28cca6e6431366bc35e421bc2391ea6059161bd6823ed83e4",
+    "src/crt_stream_cpu.rs": "f80f5efd9a8f4227f13c43b6fe7f5524c568064db41223d8d980e906390044f7",
+    "src/crt_stream_review_tests.rs": "f62bffcccf6e4d1c4a25ef141f49fdeeb61e76135ecb5fc463c1da684077b9d2",
+    "src/crt_resident_loader.rs": "92dc2dc73dd16499914fb7bc0693f4e545fc352deebef4e41a87b68a5a1c6682",
+    "src/crt_startup_descriptors.rs": "1a87424b08caa095ced3a43c914e7331742c2fb3d3f90247449f93070defd47a",
+    "src/crt_normal_frame_tests.rs": "68ecbc78a912aa3b848daa589d71fcdb5273a10f2c8007cf68f263a768f94fc4",
+    "src/crt_startup_table.rs": "3271289a634b66cb1a54f75076ca33e41d75431db190694c438e8d34dccd9905",
+    "research/process/startup/check_normal_wrapper.py": "5dd435606cf40447984d5c404913df54becf481e0e5e3b65e4fede00da0265e6",
+    "examples/crt_stream.rs": "420aa4d2119addec8d20ac8cadc384cf9665ba731c2212be51a219e511760aaa"
+  },
+  "validation": {
+    "crt_passed": 296,
+    "ignored_in_full": 2,
+    "artifact_replay": "fresh complete replay passed; both artifact-dependent tests completed",
+    "unwind_slice_passed": 185,
+    "new_linux_unit_tests": 2,
+    "native_acquisition_lifetime_scenarios": 13,
+    "atomic_publication_duplicate_file_fd_reuse_sequences": 1,
+    "original_standard_body_scenarios": 9,
+    "body_mutants": 2,
+    "python_run": 76,
+    "python_skip": 1,
+    "clippy": "passed",
+    "format": "passed",
+    "later_rust_emission": "identical; mtime advanced"
+  },
+  "evidence": {
+    "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+    "rust_sha256": "e9b4ac51302809bb6971674c39a8394f8bbad478f68b1ef0ec2022d88f840a6e",
+    "report_sha256": "49bed15332fd7f2137c68008d6bed9de592639111d84957c8b055db0d79f46b1",
+    "recorded_windows_wrapper_comparisons": 5,
+    "new_windows_observations": 0,
+    "new_windows_elf_pairs": 0,
+    "whole_pe_pairs": 0
+  },
+  "native_producer": {
+    "acquisition": "real Linux std::io standard descriptors cloned into owned Files before process-table publication",
+    "process_handle_authority": "independent from CRT descriptor/record/lock identities; virtual handles distinct from host fd0",
+    "retrieval": "table copy; no OS validation, duplication or CRT descriptor creation",
+    "type_query": "actual owned resource metadata; supported DISK/CHAR/PIPE classes only",
+    "failure": "unsupported acquisition/query/resource outcomes reject; no guessed Windows NULL/error result",
+    "scalar_or_stale_value": "numeric bits do not grant owned endpoint access"
+  },
+  "component": {
+    "executed": [
+      "original4085e7 standard-handle loop and original field/classification writes",
+      "actual native process-table retrieval and file-type queries",
+      "callback8 original cleanup, epilog and return"
+    ],
+    "next_boundary": "CALL40c946 ->407093, table index9, before callback execution",
+    "next_imports": [
+      "GetCommandLineA atIAT41508c",
+      "GetCommandLineW atIAT415090"
+    ],
+    "retained": "canonical UCRT Buffer868, Descriptor3584/block/capacity64 and64 record objects; callback8 outer lock7 released",
+    "supplied_inputs_remain": [
+      "declared native launch policy without Windows CRT inheritance",
+      "parent activation/initial thread-chain premises",
+      "CPU/entropy test environments in connected fixture",
+      "actual Windows delivery and broader startup effects unproved"
+    ]
+  },
+  "ci_review": {
+    "head": "5ce115c",
+    "rust_runs_passed": [
+      41253717612,
+      41253713735
+    ],
+    "failed_startup_run": 41253713718,
+    "failed_job": 124693927907,
+    "failure": "E0433: CRT-only helper referenced by new tests in shared runtime file included transitively by unwind_slice",
+    "repair": "tests moved to CRT review-test module; no coverage disabled; exact command now185passed locally",
+    "decoded_failure_log_sha256": "c45165fbb854d99ca89b3d921c116f1bac9c8633b049f70bd296afcfb0d198ac",
+    "checkpoint_runs_pending": [
+      41256060511,
+      41256056609,
+      41256056664
+    ]
+  },
+  "resource_incident": {
+    "first_replay": "retained, not accepted",
+    "failed_component": "inline-exit native linking",
+    "observed_linker_failure": "ld signal7/Bus error during disk exhaustion",
+    "following_tool_error": "sandbox start failed ENOSPC",
+    "cause_qualification": "resource association recorded; no claim about historical Windows failures",
+    "recovery": [
+      "selected regenerable Cargo build caches removed",
+      "five superseded local generated failed-attempt binaries removed; source/logs retained",
+      "older native build products archived with hash-verified decompression"
+    ],
+    "archived_binary_count": 120,
+    "archive_manifest_sha256": "aeda01e847a3a8a02bca0eccfe3d29ca18a5c842b57aea1c721f0459de4be4fc",
+    "fresh_replay": "passed with unchanged limits/source after space recovery"
+  },
+  "historical_windows_timeout": {
+    "run": 41107853543,
+    "case": 19,
+    "artifact": 13002965454,
+    "cause": "unresolved; no threshold relaxation/retry"
+  },
+  "limits": [
+    "Linux-only acquisition; other hosts stop before standard initializer",
+    "native profile is not Windows startup-data acquisition",
+    "general SetStdHandle/CloseHandle/ReadFile/WriteFile and Windows error/resource-failure equivalence not newly bound",
+    "owned duplicates retain original host fd references; complete guest-close/pipe-EOF equivalence unproved",
+    "command-line strings, full formatter/startup/rcedit/default/XP7 unsupported"
+  ],
+  "log_sha256": {
+    "full.log": "710e4fa3d5799cc55c44f3b60003e2657aac0658ca44f71ab1d755ab31602306",
+    "resources.log": "c9e710b8da25ea4a5e8114ee7eecfabaf08450432c3762cdd84b5f2d5adf835b",
+    "unwind-slice.log": "118fe33dd6c9ffb4ca9a923ac7a0e9ce5da024f66eff36fdeb4809f887210dca",
+    "python.log": "3ca7070005294a6c0d43e7d327923b20b21cfd90697b8712e157d2ad69b92085",
+    "clippy.log": "635138896b40014c913b709cbe21b86dc230d6376c5f5ee89fafcdbc800b64ba",
+    "format.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "entry-attempt1.log": "f15795a0c4401b40565465179b279698e234f01a1cfca97c5640d11573176017",
+    "entry-attempt2.log": "42f11ce62f9b0404c271009a498122d7ecc8847893f59fdee9b6a9e5b9317a4d",
+    "entry-attempt3.log": "1c34715090f29369130a4ac67226395a3dfa5a25729100bfbf5dde2d7a0281fc",
+    "entry-attempt4.log": "95a0d5d547e10fee6570aa088eac10e085f26c504ac9ec95db686e4402dba1de",
+    "entry-attempt5.log": "290d22b76cc91c107b433d359f672e28e28563538e3b634e922493986e956020",
+    "entry-attempt6.log": "b51f7140c5ae02381c1d623219ead4cb66c3db6d8fc6225fbc204425c6ed1d02",
+    "entry-attempt7.log": "d07eb8be934f1ac76aa8852c2731f13ca9cd0c3325aae967df234933712613f9",
+    "replay.log": "234e1c23994310e35852088262359d965921625ef53104ff8fa5e29cef7c0ab1",
+    "replay-final.log": "81729476ade39df6f6300e6fef0d9b99c75922f98be92ed99620b0fc35dcf6de",
+    "repeat.log": "808b9d5d9c7c69cfad9ba7d9fe3ce6d7a1cd011b5fe66391a5c9048823f06403",
+    "next-callback.log": "740119e4dfecb391781c1c57769c58dba2a558624d00e843dd2b7dfe8ebb862a"
+  },
+  "failed_replay_inline_exit_sha256": "35ab324b3b8cf1917f2b7fe3bd4f80f3f5ea85a497593cf043bf0ab8253c6a97"
+}

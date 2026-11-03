@@ -1,0 +1,14 @@
+{
+  "scope": "Original Windows IsValidCodePage only; GetACP and LastError are observations, not asserted defaults or target-PE acquisition",
+  "magic": 827343702,
+  "cases": [
+    {
+      "code_page": 65001,
+      "valid": 1
+    },
+    {
+      "code_page": 4294967295,
+      "valid": 0
+    }
+  ]
+}

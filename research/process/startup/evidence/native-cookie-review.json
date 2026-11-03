@@ -1,0 +1,44 @@
+{
+  "kind": "bounded Linux native cookie acquisition and original-record cycle; component evidence",
+  "parent": "5991159f4928a10a10c1f7048ec38751c53ef6fb",
+  "parent_ci": {
+    "41023021557": "success",
+    "41023016862": "success",
+    "41023016976": "success"
+  },
+  "crt_tests": 252,
+  "ignored": 2,
+  "converter_tests": 175,
+  "python_tests": 60,
+  "python_skips": 1,
+  "clippy": "passed",
+  "native_cookie_runtime_cycles_linux": 1,
+  "native_cookie_runtime_cycles_windows": 0,
+  "new_windows_entropy_pairs": 0,
+  "whole_pe_pairs": 0,
+  "profile": "One guest process in one native Linux process; trusted procfs thread-self, stable PID namespace and host std clock contract. Nanosecond process-local counter for private cookie entropy only. No general QPC/process spawning/SIMD exception-context support.",
+  "review": [
+    "No preexisting tree changes; 5991159 published and all three workflows passed.",
+    "Native ID acquisition uses host OS/procfs values, never model capability numbers. Runtime anchor, model owner/thread, initialization and host thread revalidate on every API call.",
+    "The native test independently rejects changed IDs, foreign runtime, cross-host-thread use and expired initialization.",
+    "Actual time/counter acquisition flows through original initializer and record lifecycle. Injecting future Instant origin rejects at actual QPC call and preserves default cookie.",
+    "Independent fixed vectors cover FILETIME epoch, 100ns truncation, overflows and malformed procfs identities. Prior API boundary/alias/failure tests remain.",
+    "Review removed a wall-clock monotonicity assumption from the test; only the monotonic counter is required to be nondecreasing."
+  ],
+  "remaining": "Original startup40161f caller plus manager/locale/FILE composition; loader, actual delivery/unwind and physical-exit contracts still unproven. No full startup/rcedit claim.",
+  "historical_windows_timeouts": "Unresolved; no cause inferred from passed CI.",
+  "logs": {
+    "replay.log": "a0bb91a01ba7fb682e6db55fd3cf2eac2312a502031f040e0d9eebf8a2020183",
+    "unit.log": "54b1395d7105be462d69b8948827431b82619604bf9c0c65878d38c5f60030af",
+    "clippy.log": "be61e4e8589ba72675f3ed9a378040e7dbb1d00370ef7642160d877b635a0169",
+    "python.log": "81565d4286451a750c6ec3c15dc122001f64b84a0c3021dc2ae898e05ac45bca",
+    "root.log": "bb11bc6a7e32b87c8955923c3b17222f264d09f36ece058a6ebe04e7dc4d63ad",
+    "crt.log": "897211275ad81a0bd068bb2428a1bb8867fb530f54cca0d8974ee0993e586e09"
+  },
+  "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "rust_sha256": "7e0bfcca1cc843ba5877a2e2aca07d89aa8b9def3807a0169717239ad802b1d5",
+  "cookie_entropy_sha256": "275bc744d538e6dd726db6aa5929e04c162e00f93eb8a4a0c30ba5b0e351c245",
+  "native_cookie_runtime_cycles": 1,
+  "replay": "passed; both ignored tests completed separately; native Linux acquisition and record cycle executed",
+  "retained_recorded_windows_comparisons": 5
+}

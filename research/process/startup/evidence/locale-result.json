@@ -1,0 +1,198 @@
+{
+  "timestamp_utc": "2026-11-01T08:19:52.796321+00:00",
+  "scope": "connected original CRT components under explicit native profile; actual entry stops at40b362; declared per-thread-mask return is a component input, not changed original entry data; zero new whole-PE Windows/ELF pairs",
+  "reviewed_base": "c0d42a7f96b58b8777989be73e05b962c8986612",
+  "reviewed_base_exact_head_ci": [
+    {
+      "id": 41285093520,
+      "name": "Rust CI",
+      "event": "pull_request",
+      "status": "completed",
+      "conclusion": "success",
+      "head_sha": "c0d42a7f96b58b8777989be73e05b962c8986612"
+    },
+    {
+      "id": 41285089827,
+      "name": "Rust CI",
+      "event": "push",
+      "status": "completed",
+      "conclusion": "success",
+      "head_sha": "c0d42a7f96b58b8777989be73e05b962c8986612"
+    },
+    {
+      "id": 41285089873,
+      "name": "Pinned startup inventory",
+      "event": "push",
+      "status": "completed",
+      "conclusion": "success",
+      "head_sha": "c0d42a7f96b58b8777989be73e05b962c8986612"
+    }
+  ],
+  "source_sha256": {
+    "src/crt_locale_startup.rs": "608d79aa236d36b12f195642bfe46546de6264335dff97a41626e0f126ca57d8",
+    "src/crt_normal_frame_tests.rs": "5e0eaa6208b418a9cda2fadbd82927a47f3fc347b7783802739b1faa25d34890",
+    "src/crt_stream_cpu.rs": "5480e64418bee41b038b1298260d727037edc7e5ba30cfa9d37721fc28418cfe",
+    "src/crt_stream_emit.rs": "34ee7e94cd71415fb1aab33cd03faaf1c3a0289256b0ffa963968dcd14b2fb66",
+    "src/crt_stream_ir.rs": "8d8dd84736b2a688911f0881f2a9c355b5bef8f0a42194c7ff603f9d4a587d58",
+    "src/crt_stream_runtime.rs": "4a524e5b49065a20ca45e5c76b2feb49ec43dd1ae5ff9ad9c8b78dccb35829c2",
+    "src/crt_locale_code_page.rs": "89b9934c5397f3bf3ec44a9daff1153ca5d259441a9d21b1c35325fbbcb1916a",
+    "src/crt_resident_loader.rs": "60bb4ff32723089bca12e880118e8ed61e016e500f85b51234fb0de59e0d6957",
+    "research/process/startup/check_normal_wrapper.py": "906bd64106ab84e1bd3b43f1d30128e6231968485372b57ed7cc0449144b7c2d",
+    "Cargo.lock": "b57ce0bbee252e9480a33413eeccc166dbc2bcf3a368467b117de81bd776523e"
+  },
+  "source_binding": "enclosing commit; source constants independently matched to unchanged PE; no application-name/hash dispatch or result template",
+  "next_boundary": {
+    "pc": "0x40b362",
+    "call_target": "0x40aeae",
+    "effect": "shared locale publication EH4 wrapper/body/cleanup remains unbound",
+    "retained": "old counter decrement, new allocation reference count1, original pointer published into actual UCRT PTD+72, original local argument writes",
+    "not_published": "global references and initialized flag41d148=0"
+  },
+  "connected_component_return": {
+    "condition": "declared per-thread mask skips shared publication branch",
+    "effects": "original null-free body, saved-register/aligned epilog, exact protected RET; connected callback sets initialized flag after return",
+    "not_claimed": "actual entry reaching normal exit or default/full startup/rcedit support"
+  },
+  "contracts": {
+    "atomic": "explicit effect qualification for original memXCHG/LOCK XADD; live process/image/initialization, aligned writable known scalar word, canonical module or whole unowned heap buffer; no callback between check/read/write",
+    "concurrency": "one guest thread, serialized initialization only; general guest concurrency remains unsupported; existing indexed-lock reference operations unchanged",
+    "authority": "no numeric heap-pointer discovery, buffer copy/retag or shadow counter; live whole allocation retained; new/old alias rejected before reference write",
+    "continuation": "single-use claim bound to active aligned identity/thread/fiber and protected return/mirror, consumed on failure too",
+    "free": "original null branch executes; non-null APIs/errno reject with preceding decrement/arguments retained; no allocation freed or guessed outcome",
+    "codepages": "unchanged opt-in measured65001/UINT_MAX validity profile; no new encoding/ACP equivalence"
+  },
+  "cases": {
+    "result_native": 21,
+    "result_replay_rejections": 21,
+    "initializing_scalar_atomic_native": 26,
+    "retained_initializer_cookie": 49,
+    "retained_locale_declared": 45,
+    "retained_word": 152
+  },
+  "review_findings": {
+    "prior_documentation": "407126 is a flag XCHG, not a lock; corrected dependency map/current contract without inventing a lease",
+    "production_build": "local Clippy/root compilation caught test-only FREE constant dependency; production constant now byte-checked and equality-tested against existing free component",
+    "test_schema": "three manual negative aligned-frame constructors missed new claim field; named replay gate and aggregate caught compilation failure, then fixtures fixed without removing cases",
+    "test_expectations": "older0x40b2cc rejection/register oracles updated to actual PTD publication and new0x40b362 boundary; one declared callback now completes; component frame setup is not represented as real startup acquisition",
+    "preserved_failures": "all failed local logs hashed below; original Windows hello/case19/other timeout causes unresolved despite reviewed base CI green"
+  },
+  "checks": {
+    "root_passed": 182,
+    "crt_passed": 311,
+    "crt_ignored": 2,
+    "ignored_scope": "both artifact checks executed in complete final replay; canonical artifact repeated with fresh identical Rust",
+    "unwind_passed": 185,
+    "startup_python": {
+      "run": 89,
+      "skip": 1
+    },
+    "tools_python": {
+      "run": 106,
+      "skip": 0
+    },
+    "corpus_python": {
+      "run": 18,
+      "skip": 1
+    },
+    "clippy_all_targets": "passed",
+    "fmt": "passed"
+  },
+  "replay": {
+    "kind": "original prolog/epilog component comparison with explicit unexecuted body boundary",
+    "scope": "Live registry fixture; body EAX/flags inputs; original stack/FS/saved-state restoration only",
+    "comparisons": 5,
+    "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+    "rust_sha256": "cd5fbbd37831b934e4cdaaaf8a1ef18150c877241c5285b7a06dd228206cc49e",
+    "new_whole_pe_windows_elf_pairs": 0,
+    "fresh_identical_rust": true,
+    "emission_mtime_before_ns": 1793521054471753032,
+    "emission_mtime_after_ns": 1793521106353423320,
+    "report_sha256": "370e9a92b6005307d215790be77b17213d4e88cbe5981d26d37b5813f448c528",
+    "observer_report_sha256": "0feb586c7170dfd7e2390cf92ce1e5efa050c3e208d6c8903312e2d054c506cc",
+    "wrapper_vectors_sha256": "6f9b74742366c0f207d397ccf8b1af4afc2d01b34fae21cafb68d38d71a6ec66"
+  },
+  "named_gates": {
+    "startup-atomics": {
+      "stdout": "d70fa1bfe5a9b3a0c29ca7b0d1436db6776a1b81370b0e40fe26618cde5f9fa3",
+      "stderr": "073eb8120178d9034d49c669a602c4f593152cb42dcf4143bdd8ae1bd1d297fa"
+    },
+    "installed-code-pages": {
+      "stdout": "26c781f7bce56bd2c3ae46ec04637f9dbfc074e74030dc77d0c44c95cd7fbcd8",
+      "stderr": "ab1e8ab4b828624e75e6e8c917ac437f104b9cd0b496a9d073a4a52c0abca136"
+    },
+    "word-register": {
+      "stdout": "875e81e62d976c49b8b2a765bc5c848b7ec0e041d9fefe56867c6ffc43f868cc",
+      "stderr": "29423147df5f27152c143f40399d5189737a902b622fb79efc6e1b2754336583"
+    },
+    "repeated-copy": {
+      "stdout": "0e0010ad2a558de247be2c63a1c8df0b0d1f11252b1a5b6695ef8b1da16ed026",
+      "stderr": "ab1e8ab4b828624e75e6e8c917ac437f104b9cd0b496a9d073a4a52c0abca136"
+    },
+    "cookie-record": {
+      "stdout": "82f1e01eb5d76d86a51bf1b2a0bb131e2b702bf1ca8d199ac290a8661e24833c",
+      "stderr": "29423147df5f27152c143f40399d5189737a902b622fb79efc6e1b2754336583"
+    },
+    "locale-alignment": {
+      "stdout": "2f2e14250c7022385585e5691881086fa9efa0a4059ddf76993c674bb91546ea",
+      "stderr": "ab1e8ab4b828624e75e6e8c917ac437f104b9cd0b496a9d073a4a52c0abca136"
+    }
+  },
+  "reproduction": {
+    "commands": [
+      "cargo test --locked",
+      "cargo test --locked --example crt_stream",
+      "cargo test --locked --example unwind_slice",
+      "cargo clippy --locked --all-targets -- -D warnings",
+      "cargo fmt --all -- --check",
+      "PYTHONPATH=research/process/startup python3 -m unittest discover -s research/process/startup",
+      "python3 -m unittest discover -s tools",
+      "PYTHONPATH=corpus python3 -m unittest discover -s corpus",
+      "python3 research/process/startup/check_normal_wrapper.py ORIGINAL_DIRECTORY OBSERVER_DIRECTORY NEW_OUTPUT_DIRECTORY"
+    ],
+    "environment": "configured Rust toolchain, CARGO_INCREMENTAL=0 CARGO_NET_OFFLINE=true W2L_Z3=/workspace/.tools/w2l-z3/bin/z3 TMPDIR=/workspace/w2l-build-tmp; artifact gates set W2L_PE_MAPPING_INPUT; unchanged source PE and recorded vectors required",
+    "limits": "unchanged; no timeout/stack increase or retry-based equivalence claim"
+  },
+  "original_regions": {
+    "RESULT_CALLER": {
+      "address": "0x40b2cc",
+      "length": 190,
+      "sha256": "14b34e2759247c54ba07d15b7f7389e30b65ae351ab0baebc98d3930c40f045c"
+    },
+    "MULTIBYTE_FLAG": {
+      "address": "0x407126",
+      "length": 11,
+      "sha256": "b8a2cd5c5a7d07fa6dcf1495abc92bac7f1dbdd82e1cfd43d3b63677b5a45d65"
+    },
+    "FREE_BODY": {
+      "address": "0x407d50",
+      "length": 58,
+      "sha256": "d42a40724c82ea991845cf96d2978ce313af1c0fe4327edf1eb3271125079c93"
+    }
+  },
+  "log_sha256": {
+    "aligned-fixed.log": "96d0b8e00c9860b9e8207736d98504d128b54a62d6730a894ceb26f84f77c2ec",
+    "atomic-strict.log": "a3a98bf27a1f0190ef78de7a60c3da2b432efee130e705c93bec353923683784",
+    "atomic.log": "c5a3e160c6fe5ccfb72a5680cc07eeb2afce378d0c0351579b589860d962f066",
+    "canonical-caller.log": "6a770cd79c4e4bf77c6a3b728abee841dc6d6072245b1c52d96c0aad54d43082",
+    "canonical-first.log": "b5ec34a3400f58746c87ea8052e68585f8e39a43ff5ae3c6ab8a6b9a0ad687eb",
+    "canonical-independent.log": "20bdc7e50c724ba668fd873e69d0fafb63076758f9f5e817c185e7197ba847f7",
+    "canonical-vectors.log": "57ddc5530203094f3eb0c896b1113203ec0b805377becbd5caac8df8f1aa5dd0",
+    "clippy-fixed-final.log": "b98af27335a253eba0657e7d2f14556a18a9ae09b72bc8a3fee5ed0c2fbb062e",
+    "clippy-fixed.log": "017806ed92ac8260f42af541fd0ef50257ee059daadc7183c2eea0691a64bf66",
+    "clippy.log": "37ad782abf23cb6088777c60dc96d87cf7be0ebe29e0e61b47d8e489c11d60f2",
+    "crt-final.log": "4f8d9d4dd814868ed3104b8d181499b3fc82f284457c997a42ec52e5a0ba644d",
+    "crt-fixed-final.log": "e8963d4384be0d948df04d92697cd0315378a0f56647d3642ff02269ffc923b8",
+    "fmt-fixed-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "python-corpus.log": "a1bc43f45f5da5334818b1e07a70e429aaa807cd06734526dddfb0c274eb8ab7",
+    "python-startup.log": "8dd2e5e0c7dddf07c88487f4178ec9b2d214dd77150e04304b94ed174cbdca07",
+    "python-tools.log": "ae59de07ff3f3a7209aec972d30d2865c40af7e38fbd293f0af0ff3da85af469",
+    "repeat-final.log": "8d3c57c25c0ebdae98f0a7c8fc4443d72f1c5f21b12e9f8206d76e016bbf013e",
+    "replay-final.log": "90758b41aa9bf37bc46519c84df286dfc04be1d47f0fd043621347afa7f42517",
+    "replay.log": "96d1b8579747c7257fd8e8fc9b4178dd503fe5dcbca1d826ecbed3cc0ab8c362",
+    "root-final.log": "1f69044cb3354e6610c55eaba88c504878a10b35e6cc0a0b41955004d2c348ba",
+    "root.log": "44838a0df919bbd565478e84e7eff108159f62b66298aab4a17ced47ec091250",
+    "unwind-fixed-final.log": "6617c3b76e609e30d46e9edef5fdc16bbad0f57c4998f1f0eca84eafbb29ff1d"
+  },
+  "failed_prior_alignment_gate_sha256": "9d3d9e1ce1fa6b16a0e63ea9a5a65b6fc6944451fd0b40adaab0f561def4f9ea",
+  "final_head_ci": "pending after publication; exact run references tracked in existing SUB-579; no final-head green claim in this snapshot"
+}

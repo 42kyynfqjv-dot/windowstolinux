@@ -1,0 +1,23 @@
+{
+  "frozen_before_implementation": true,
+  "memset": {
+    "oracle": "destination[i] = original low8(value) for i in range(count), in original instruction order; unknown bytes outside actual stores stay unknown",
+    "zero_count": "no destination dereference or fill-value observation by REP; original routine still loads arguments",
+    "failure": "earlier completed stores/progress remain; no return or later publication on rejection",
+    "DF": "explicit cdecl forward domain; no implicit support for STD"
+  },
+  "publication": {
+    "encoding": "rol32(address,cookie & 31) xor cookie",
+    "order": [
+      "cookie-fill all32 allocation words",
+      "callback at slot0",
+      "encoded begin",
+      "encoded next",
+      "encoded limit"
+    ],
+    "first_capacity_bytes": 128,
+    "callback": "actual input immutable image target; numeric encodings alone never recover ownership",
+    "nonempty": "reject until producer-bound decode/lifetime association exists",
+    "source_artifact_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4"
+  }
+}

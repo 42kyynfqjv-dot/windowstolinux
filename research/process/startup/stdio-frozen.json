@@ -1,0 +1,882 @@
+{
+  "schema": 1,
+  "status": "Frozen before new CRT stream implementation; predictions from original instructions, not fresh Windows observations",
+  "source_of_expectations": "Independent reading of the authored PE linked CRT machine instructions and primary Microsoft API contracts. No production converter/runtime or shared fixture generator computes expected outcomes.",
+  "artifact": {
+    "directory_hint": "/tmp/w2l-reported-final-7ee6",
+    "pe_sha256": "b5b35164c4af09d010b555c6439a97040568cc221b267ca993b9275f6377ddd9",
+    "object_sha256": "b722d280e5f8d367a826fe83f6523d4d392f6a65eb52b693feb1793a20e9fb66",
+    "source_sha256": "143932ec0de25e0e3269c4d7774d78f411efae331e8aa52dd3c97cae05ecaeb1",
+    "compiler": "Microsoft C/C++ 19.44.35229 x86",
+    "preferred_base": 4194304,
+    "stdout_bytes": 276,
+    "stdout_sha256": "e28a0b9fa06f8f69dd719de0094a4cb91aa8ca650da94c94b02662eb3722bc72",
+    "logical_report_characters": 275,
+    "main_result": 0
+  },
+  "regions": [
+    {
+      "name": "text_writer",
+      "va": "0x40dc26",
+      "size": 219,
+      "sha256": "e26e7a736dd5afc7993a2d2f3e03a0e31d64e86dd050a012412d0b60818899e0"
+    },
+    {
+      "name": "write_result",
+      "va": "0x40e1c8",
+      "size": 129,
+      "sha256": "f203efdd4b820c4c605e58c357174f292e3642e2395c959f8301bbc3fdd4f86e"
+    },
+    {
+      "name": "flush",
+      "va": "0x408420",
+      "size": 105,
+      "sha256": "25e5f347ed4636ea92cf22953f418bc243f64c6c21e62550dbc75f282ab58c31"
+    },
+    {
+      "name": "capacity",
+      "va": "0x40ff99",
+      "size": 210,
+      "sha256": "64d6f1e111c7a78b3ea5cc7bb20be4a02664ef1488f97ce5e5c903c66fe9ca60"
+    },
+    {
+      "name": "allocate_buffer",
+      "va": "0x411de9",
+      "size": 92,
+      "sha256": "978e20e9d1874666e62ed33e0f321b20d38ffd01d3252925e834142dc4c85e5f"
+    },
+    {
+      "name": "temporary_buffer",
+      "va": "0x409e12",
+      "size": 171,
+      "sha256": "e8ac662df3aa60282c9bf24ca1586b6b827952b00ccb528641fcbf12de312b01"
+    },
+    {
+      "name": "temporary_end",
+      "va": "0x409ebd",
+      "size": 62,
+      "sha256": "2e8ee2f523ec3292232aebe5b8ec02358a55e7b5c7d0ec41c05525a50b315693"
+    },
+    {
+      "name": "stream_init",
+      "va": "0x404510",
+      "size": 200,
+      "sha256": "aba9fe49299ebaab26678e88ce15eb3bcdee84636fa95231ea1fe75c353f8827"
+    },
+    {
+      "name": "stream_uninit",
+      "va": "0x4045e8",
+      "size": 76,
+      "sha256": "972120da0d640e7ebf4aab9783a77009e1753bb3b4116e7f7e174cea2db7fcfb"
+    },
+    {
+      "name": "context_constructor",
+      "va": "0x4051e0",
+      "size": 93,
+      "sha256": "5f419899435ee3eaa1f775c62db5d720afa6772c45dd679ddaad9f197edd5cb6"
+    },
+    {
+      "name": "context_destructor",
+      "va": "0x405240",
+      "size": 60,
+      "sha256": "e058169f5570b9dfcd5e7d1139f29ccf2421dcc19a6ef902da474eb705283b9e"
+    }
+  ],
+  "domain": {
+    "descriptor": "owned live open narrow text descriptor; append/console/Unicode/concurrent mutation excluded unless separately proved",
+    "stream": "separate initialized owned FILE, descriptor, buffer and lock identities; full byte bounds and no alias with protected metadata",
+    "locale": "known C-locale narrow integer grammar and complete options; no inference from accessor address",
+    "error_state": "same runtime/thread PTD identity and initialized errno/doserrno; writes commit through original context destructor",
+    "write_api": "synchronous WriteFile; success count 0..requested; failure count is not consumed; GetLastError only on failure",
+    "worker_fields": [
+      "last_failure_code_or_zero",
+      "physical_bytes_reported_on_success",
+      "LF_expansions_in_constructed_chunks"
+    ],
+    "sequence": "construct complete physical chunk, call once, stop on FALSE or positive/zero short; continue only after a full chunk",
+    "chunk_threshold": 5119,
+    "chunk_rule": "check threshold after each complete source-byte expansion; LF may increase chunk length from5118 to5120",
+    "logical_result": "if total physical count is nonzero, wrapping u32 subtraction of all constructed LF expansions; otherwise original descriptor/error branch",
+    "errno_unchanged": "means no pending errno/doserrno update in this original narrow writer/result path; unrelated allocator errors are not silently erased"
+  },
+  "writer_cases": [
+    {
+      "id": "ascii_full",
+      "input_hex": "41424344",
+      "responses": [
+        {
+          "ok": true,
+          "written": 4
+        }
+      ],
+      "request_hex": [
+        "41424344"
+      ],
+      "worker": [
+        0,
+        4,
+        0
+      ],
+      "logical_u32": 4,
+      "errno": "unchanged",
+      "doserrno": "unchanged"
+    },
+    {
+      "id": "ascii_positive_short",
+      "input_hex": "41424344",
+      "responses": [
+        {
+          "ok": true,
+          "written": 2
+        }
+      ],
+      "request_hex": [
+        "41424344"
+      ],
+      "worker": [
+        0,
+        2,
+        0
+      ],
+      "logical_u32": 2,
+      "errno": "unchanged",
+      "doserrno": "unchanged",
+      "calls": 1
+    },
+    {
+      "id": "ascii_zero_success",
+      "input_hex": "41424344",
+      "responses": [
+        {
+          "ok": true,
+          "written": 0
+        }
+      ],
+      "request_hex": [
+        "41424344"
+      ],
+      "worker": [
+        0,
+        0,
+        0
+      ],
+      "logical_u32": 4294967295,
+      "errno": 28,
+      "doserrno": 0
+    },
+    {
+      "id": "ascii_access_denied",
+      "input_hex": "41424344",
+      "responses": [
+        {
+          "ok": false,
+          "error": 5
+        }
+      ],
+      "request_hex": [
+        "41424344"
+      ],
+      "worker": [
+        5,
+        0,
+        0
+      ],
+      "logical_u32": 4294967295,
+      "errno": 9,
+      "doserrno": 5
+    },
+    {
+      "id": "ascii_invalid_handle",
+      "input_hex": "41424344",
+      "responses": [
+        {
+          "ok": false,
+          "error": 6
+        }
+      ],
+      "request_hex": [
+        "41424344"
+      ],
+      "worker": [
+        6,
+        0,
+        0
+      ],
+      "logical_u32": 4294967295,
+      "errno": 9,
+      "doserrno": 6
+    },
+    {
+      "id": "crlf_full",
+      "input_hex": "410a42",
+      "responses": [
+        {
+          "ok": true,
+          "written": 4
+        }
+      ],
+      "request_hex": [
+        "410d0a42"
+      ],
+      "worker": [
+        0,
+        4,
+        1
+      ],
+      "logical_u32": 3,
+      "errno": "unchanged",
+      "doserrno": "unchanged"
+    },
+    {
+      "id": "crlf_short_before_cr",
+      "input_hex": "410a42",
+      "responses": [
+        {
+          "ok": true,
+          "written": 1
+        }
+      ],
+      "request_hex": [
+        "410d0a42"
+      ],
+      "worker": [
+        0,
+        1,
+        1
+      ],
+      "logical_u32": 0,
+      "errno": "unchanged",
+      "doserrno": "unchanged"
+    },
+    {
+      "id": "crlf_short_between_cr_lf",
+      "input_hex": "410a42",
+      "responses": [
+        {
+          "ok": true,
+          "written": 2
+        }
+      ],
+      "request_hex": [
+        "410d0a42"
+      ],
+      "worker": [
+        0,
+        2,
+        1
+      ],
+      "logical_u32": 1,
+      "errno": "unchanged",
+      "doserrno": "unchanged"
+    },
+    {
+      "id": "crlf_short_after_lf",
+      "input_hex": "410a42",
+      "responses": [
+        {
+          "ok": true,
+          "written": 3
+        }
+      ],
+      "request_hex": [
+        "410d0a42"
+      ],
+      "worker": [
+        0,
+        3,
+        1
+      ],
+      "logical_u32": 2,
+      "errno": "unchanged",
+      "doserrno": "unchanged"
+    },
+    {
+      "id": "preexpanded_cr_count_wrap",
+      "input_hex": "0a0a",
+      "responses": [
+        {
+          "ok": true,
+          "written": 1
+        }
+      ],
+      "request_hex": [
+        "0d0a0d0a"
+      ],
+      "worker": [
+        0,
+        1,
+        2
+      ],
+      "logical_u32": 4294967295,
+      "errno": "unchanged",
+      "doserrno": "unchanged"
+    },
+    {
+      "id": "binary_literals",
+      "input_hex": "000d0a1aff",
+      "responses": [
+        {
+          "ok": true,
+          "written": 6
+        }
+      ],
+      "request_hex": [
+        "000d0d0a1aff"
+      ],
+      "worker": [
+        0,
+        6,
+        1
+      ],
+      "logical_u32": 5,
+      "errno": "unchanged",
+      "doserrno": "unchanged"
+    },
+    {
+      "id": "boundary_5118_then_lf",
+      "input_runs": [
+        [
+          "41",
+          5118
+        ],
+        [
+          "0a",
+          1
+        ]
+      ],
+      "responses": [
+        {
+          "ok": true,
+          "written": 5120
+        }
+      ],
+      "request_runs": [
+        [
+          [
+            "41",
+            5118
+          ],
+          [
+            "0d0a",
+            1
+          ]
+        ]
+      ],
+      "worker": [
+        0,
+        5120,
+        1
+      ],
+      "logical_u32": 5119,
+      "errno": "unchanged",
+      "doserrno": "unchanged"
+    },
+    {
+      "id": "boundary_5119_then_lf",
+      "input_runs": [
+        [
+          "41",
+          5119
+        ],
+        [
+          "0a",
+          1
+        ]
+      ],
+      "responses": [
+        {
+          "ok": true,
+          "written": 5119
+        },
+        {
+          "ok": true,
+          "written": 2
+        }
+      ],
+      "request_runs": [
+        [
+          [
+            "41",
+            5119
+          ]
+        ],
+        [
+          [
+            "0d0a",
+            1
+          ]
+        ]
+      ],
+      "worker": [
+        0,
+        5121,
+        1
+      ],
+      "logical_u32": 5120,
+      "errno": "unchanged",
+      "doserrno": "unchanged"
+    },
+    {
+      "id": "short_does_not_attempt_next_chunk",
+      "input_runs": [
+        [
+          "41",
+          5119
+        ],
+        [
+          "42",
+          1
+        ]
+      ],
+      "responses": [
+        {
+          "ok": true,
+          "written": 2
+        }
+      ],
+      "request_runs": [
+        [
+          [
+            "41",
+            5119
+          ]
+        ]
+      ],
+      "worker": [
+        0,
+        2,
+        0
+      ],
+      "logical_u32": 2,
+      "errno": "unchanged",
+      "doserrno": "unchanged",
+      "calls": 1
+    },
+    {
+      "id": "error_after_progress",
+      "input_runs": [
+        [
+          "41",
+          5119
+        ],
+        [
+          "42",
+          1
+        ]
+      ],
+      "responses": [
+        {
+          "ok": true,
+          "written": 5119
+        },
+        {
+          "ok": false,
+          "error": 5
+        }
+      ],
+      "request_runs": [
+        [
+          [
+            "41",
+            5119
+          ]
+        ],
+        [
+          [
+            "42",
+            1
+          ]
+        ]
+      ],
+      "worker": [
+        5,
+        5119,
+        0
+      ],
+      "logical_u32": 5119,
+      "errno": "unchanged",
+      "doserrno": "unchanged"
+    },
+    {
+      "id": "error_after_progress_preexpanded_lf",
+      "input_runs": [
+        [
+          "41",
+          5119
+        ],
+        [
+          "0a",
+          1
+        ]
+      ],
+      "responses": [
+        {
+          "ok": true,
+          "written": 5119
+        },
+        {
+          "ok": false,
+          "error": 5
+        }
+      ],
+      "request_runs": [
+        [
+          [
+            "41",
+            5119
+          ]
+        ],
+        [
+          [
+            "0d0a",
+            1
+          ]
+        ]
+      ],
+      "worker": [
+        5,
+        5119,
+        1
+      ],
+      "logical_u32": 5118,
+      "errno": "unchanged",
+      "doserrno": "unchanged"
+    }
+  ],
+  "flush_cases": [
+    {
+      "id": "flush_full",
+      "flags_before": 66,
+      "queued_hex": "410a42",
+      "writer_case": "crlf_full",
+      "events": [
+        "reset_pointer_to_base",
+        "set_count_zero",
+        "write",
+        "compare_logical_count"
+      ],
+      "return_u32": 0,
+      "flags_after": 66,
+      "pointer_offset_after": 0,
+      "count_after": 0
+    },
+    {
+      "id": "flush_positive_short",
+      "flags_before": 66,
+      "queued_hex": "410a42",
+      "writer_case": "crlf_short_between_cr_lf",
+      "events": [
+        "reset_pointer_to_base",
+        "set_count_zero",
+        "write",
+        "compare_logical_count",
+        "set_stream_error"
+      ],
+      "return_u32": 4294967295,
+      "flags_after": 82,
+      "pointer_offset_after": 0,
+      "count_after": 0
+    },
+    {
+      "id": "flush_error",
+      "flags_before": 66,
+      "queued_hex": "41424344",
+      "writer_case": "ascii_access_denied",
+      "events": [
+        "reset_pointer_to_base",
+        "set_count_zero",
+        "write",
+        "compare_logical_count",
+        "set_stream_error"
+      ],
+      "return_u32": 4294967295,
+      "flags_after": 82,
+      "pointer_offset_after": 0,
+      "count_after": 0
+    },
+    {
+      "id": "flush_empty",
+      "flags_before": 66,
+      "queued_hex": "",
+      "events": [
+        "reset_pointer_to_base",
+        "set_count_zero"
+      ],
+      "calls": 0,
+      "return_u32": 0,
+      "flags_after": 66,
+      "pointer_offset_after": 0,
+      "count_after": 0
+    },
+    {
+      "id": "flush_preserves_existing_error",
+      "flags_before": 82,
+      "queued_hex": "410a42",
+      "writer_case": "crlf_full",
+      "return_u32": 0,
+      "flags_after": 82,
+      "pointer_offset_after": 0,
+      "count_after": 0
+    }
+  ],
+  "buffer_cases": [
+    {
+      "id": "deferred_no_capacity_flush",
+      "capacity": 4,
+      "flags_before": 66,
+      "queued_before_hex": "",
+      "append_hex": "414243",
+      "write_calls": 0,
+      "queued_after_hex": "414243",
+      "count_after": 1
+    },
+    {
+      "id": "capacity_flush_success",
+      "capacity": 2,
+      "flags_before": 130,
+      "queued_before_hex": "4142",
+      "append_hex": "43",
+      "responses": [
+        {
+          "ok": true,
+          "written": 2
+        }
+      ],
+      "requests_hex": [
+        "4142"
+      ],
+      "events": [
+        "set_pointer_base_plus_one",
+        "set_count_capacity_minus_one",
+        "write_prior_buffer",
+        "store_new_character",
+        "return_true"
+      ],
+      "queued_after_hex": "43",
+      "count_after": 1,
+      "flags_after": 130
+    },
+    {
+      "id": "capacity_flush_short",
+      "capacity": 2,
+      "flags_before": 130,
+      "queued_before_hex": "4142",
+      "append_hex": "43",
+      "responses": [
+        {
+          "ok": true,
+          "written": 1
+        }
+      ],
+      "requests_hex": [
+        "4142"
+      ],
+      "events": [
+        "set_pointer_base_plus_one",
+        "set_count_capacity_minus_one",
+        "write_prior_buffer",
+        "store_new_character",
+        "return_false",
+        "caller_sets_stream_error"
+      ],
+      "queued_after_hex": "43",
+      "count_after": 1,
+      "flags_after": 146
+    },
+    {
+      "id": "ordinary_allocation_success",
+      "allocation_bytes": 4096,
+      "allocation_result": "owned allocation",
+      "initial_flags": 2,
+      "flags_after": 66,
+      "capacity": 4096,
+      "pointer_offset_after": 0,
+      "count_after": 0,
+      "next_character_behavior": "slow path stores first byte into buffer, no WriteFile for empty prior buffer"
+    },
+    {
+      "id": "ordinary_allocation_failure",
+      "allocation_bytes": 4096,
+      "allocation_result": null,
+      "initial_flags": 2,
+      "flags_after": 1026,
+      "capacity": 2,
+      "base": "owned FILE+20 embedded cell",
+      "count_after": 0,
+      "next_character_behavior": "direct one-character write; flags&0xc0 is zero, not a two-byte queued buffer",
+      "allocator_errno": "must be derived separately; not assumed unchanged"
+    },
+    {
+      "id": "temporary_allocation_failure",
+      "allocation_bytes": 4096,
+      "allocation_result": null,
+      "initial_flags": 2,
+      "flags_after": 642,
+      "capacity": 2,
+      "base": "owned FILE+20 embedded cell",
+      "count_after": 2,
+      "next_character_behavior": "two-byte temporary buffering; flags&0xc0 is nonzero",
+      "allocator_errno": "must be derived separately; not assumed unchanged"
+    }
+  ],
+  "lifecycle_cases": [
+    {
+      "id": "successful_report_then_exit_flush",
+      "preconditions": [
+        "initialized regular-file stdout",
+        "no callbacks changing this stream",
+        "ordinary buffer allocation succeeds"
+      ],
+      "required_order": [
+        "enter_stream_lock",
+        "format_and_queue",
+        "leave_stream_lock",
+        "main_protected_return",
+        "normal_exit_callbacks",
+        "flush_stdout",
+        "free_owned_stdio_buffer",
+        "delete_stream_lock",
+        "free_stream_table"
+      ],
+      "main_result": 0,
+      "logical_printf_result": 275,
+      "flush_result": 0,
+      "stdio_teardown_closes_standard_handle": false,
+      "qualification": "Order is a gate to prove/observe, not a report of fresh Windows instrumentation. Other callbacks remain separately bounded."
+    },
+    {
+      "id": "formatter_failure_cleanup",
+      "preconditions": [
+        "owned original EH cleanup frame installed",
+        "supported formatter error or explicitly modeled exceptional transfer"
+      ],
+      "required_order": [
+        "enter_stream_lock",
+        "format_effects_before_failure",
+        "original_unlock_cleanup"
+      ],
+      "exception_dispatch": "must retain original exceptional edge; no catch-all suppression or assumed no-exception success"
+    },
+    {
+      "id": "extra_streams_unproved",
+      "preconditions": [
+        "an active stream index>=3 without bound fclose contract"
+      ],
+      "expected": "conversion rejection; 40819d invokes close path40d627 for active additional streams before lock deletion/free"
+    },
+    {
+      "id": "standard_stream_teardown",
+      "preconditions": [
+        "no active additional streams",
+        "ordinary initialized owned standard streams"
+      ],
+      "required_order": [
+        "flush_all",
+        "visit_additional_streams_from_index3",
+        "free_owned_buffer_0",
+        "delete_stream_lock_0",
+        "free_owned_buffer_1",
+        "delete_stream_lock_1",
+        "free_owned_buffer_2",
+        "delete_stream_lock_2",
+        "free_stream_table",
+        "clear_stream_table_pointer"
+      ],
+      "standard_CloseHandle_calls_in_4045e8": 0,
+      "qualification": "This does not claim the OS handle never closes later; process termination is a distinct boundary."
+    }
+  ],
+  "windows_observer_cases": [
+    {
+      "id": "original_regular_file",
+      "mode": "unaltered imported WriteFile",
+      "request_bytes": 276,
+      "worker": [
+        0,
+        276,
+        1
+      ],
+      "lowlevel_u32": 275,
+      "flush_u32": 0,
+      "physical_stdout_bytes": 276,
+      "main_result": 0
+    },
+    {
+      "id": "scripted_short7",
+      "mode": "debugger supplies TRUE/count7 without calling WriteFile",
+      "request_bytes": 276,
+      "worker": [
+        0,
+        7,
+        1
+      ],
+      "lowlevel_u32": 6,
+      "flush_u32": 4294967295,
+      "stream_error": true,
+      "physical_stdout_bytes": 0,
+      "main_result": 0
+    },
+    {
+      "id": "scripted_short1",
+      "mode": "debugger supplies TRUE/count1 without calling WriteFile",
+      "request_bytes": 276,
+      "worker": [
+        0,
+        1,
+        1
+      ],
+      "lowlevel_u32": 0,
+      "flush_u32": 4294967295,
+      "stream_error": true,
+      "physical_stdout_bytes": 0,
+      "main_result": 0
+    },
+    {
+      "id": "scripted_zero",
+      "mode": "debugger supplies TRUE/count0 without calling WriteFile",
+      "request_bytes": 276,
+      "worker": [
+        0,
+        0,
+        1
+      ],
+      "lowlevel_u32": 4294967295,
+      "flush_u32": 4294967295,
+      "errno": 28,
+      "doserrno": 0,
+      "stream_error": true,
+      "physical_stdout_bytes": 0,
+      "main_result": 0
+    },
+    {
+      "id": "real_invalid_handle",
+      "mode": "debugger changes only WriteFile handle argument to INVALID_HANDLE_VALUE; actual OS call executes",
+      "request_bytes": 276,
+      "worker": [
+        6,
+        0,
+        1
+      ],
+      "lowlevel_u32": 4294967295,
+      "flush_u32": 4294967295,
+      "errno": 9,
+      "doserrno": 6,
+      "stream_error": true,
+      "physical_stdout_bytes": 0,
+      "main_result": 0
+    }
+  ],
+  "rejection_gates": [
+    "wrong process/runtime/thread/stream/descriptor owner",
+    "stale buffer or stream generation",
+    "uninitialized FILE field or written byte",
+    "buffer overlaps FILE lock, code, scope metadata or another owner",
+    "invalid WriteFile success count larger than request",
+    "unknown complete options or unknown locale state selecting unsupported parser path",
+    "unproved invalid-parameter callback or exception target",
+    "unproved console, Unicode, append or concurrent mutation branch",
+    "missing original unlock/flush/teardown effect",
+    "unproved additional-stream close or exit callback"
+  ],
+  "evidence_accounting": "Writer/flush/buffer/lifecycle cases are independent conformance expectations. Observer rows are pending expectations, not completed Windows runs. Scripted API results and real OS calls are distinct. No whole-PE or ordinary-CRT compatibility follows from passing components."
+}

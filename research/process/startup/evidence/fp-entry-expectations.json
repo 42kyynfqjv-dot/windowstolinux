@@ -1,0 +1,41 @@
+{
+  "kind": "frozen original FP-entry prefix expectations; no FP-state effect admitted",
+  "boundary": "before waiting FSTCW0x40d00b",
+  "actual_wrapper_args": [
+    0,
+    65536,
+    196608
+  ],
+  "effects": [
+    "execute original mask checks, branches, nested calls and real frame prolog",
+    "preserve prior startup/argv/SLIST effects and protected return authority",
+    "no x87/MXCSR mutation or output-pointer write before unbound FSTCW"
+  ],
+  "failure_cases": [
+    "unknown words retain knowledge through masked decisions; branches whose relevant bits remain unknown reject",
+    "invalid mask withNULLoutput stops at original unbound errno acquisition",
+    "nonnull output query stops at FSTCW before output write",
+    "stale output pointer/code/control mutation rejects",
+    "all initial FP words remain unknown until established"
+  ],
+  "next_contract": [
+    "waitingFSTCW pending exception behavior",
+    "thread/fiber-owned initial/control/status knowledge and lifetime",
+    "FLDCW deferred-unmasked exceptions, output permission/failure ordering",
+    "feature-gated MXCSR state and supported masks; no host-state substitution"
+  ],
+  "source_regions": [
+    {
+      "name": "FP_CONTROL",
+      "address": "0x4076a0",
+      "bytes": 108,
+      "sha256": "f9a5368fd72d7e46ab494548a9141e3e5099be0886e5d6cd4e42a6fef415824d"
+    },
+    {
+      "name": "FP_WORD_PREFIX",
+      "address": "0x40d000",
+      "bytes": 15,
+      "sha256": "b6551fc288e8bcd9a8b1be586ba6fc4e34afbd83808cb81c1e3d373d139e773b"
+    }
+  ]
+}

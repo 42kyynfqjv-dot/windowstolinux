@@ -1,0 +1,62 @@
+{
+  "kind": "bounded generated-native test stack repair; no production runtime change",
+  "base_commit": "1b3fef1728ceb936ee12e01ffeb18bf5e5d4d123",
+  "failed_CI": {
+    "run": 41345071064,
+    "job": 124967900133,
+    "check": "native-unwind-slice cargo test --locked --example crt_stream",
+    "result": "336passed/1failed/2ignored",
+    "failure": "generated main stack overflow in word_register_load_and_zero_extension_preserve_knowledge_flags_and_no_authority"
+  },
+  "reproducer": {
+    "stack_KiB": 512,
+    "environment_padding_bytes": 32768,
+    "before": "failed with stack overflow",
+    "after": "passed all152 declared cases",
+    "larger_environment_padding_bytes": 65536,
+    "larger_environment_after": "passed same512KiB limit"
+  },
+  "selected_frame_bytes": {
+    "before_load_case0": 77512,
+    "before_base": 146040,
+    "after_load_case0": 40,
+    "after_with_base": 108680,
+    "scope": "compiler prologue frame sizes for selected unoptimized functions; not a complete peak-stack measurement"
+  },
+  "repair": "fixture owns runtime/CPU in non-inlined with_base and passes mutable references to each case; no by-value tuple return through case and fixture frames",
+  "case_preservation": "8destinations*5loadmodes +7destinations*8sources*2extensionmodes=152; all assertions/expected errors and final checked==152 retained",
+  "source_sha256": "d575a89a6efb4eb1cd327ab31564ebd430186d5100e2bc9f2215d02fb7a9a050",
+  "tests": {
+    "CRT": 337,
+    "CRT_ignored": 2,
+    "unwind": 185,
+    "clippy": "passed warnings denied",
+    "format": "passed"
+  },
+  "logs": {
+    "before-artifact.json": "e84d186243b9531f99a68db6b5c66c1e520992110a8322068d1fb90efcaf7db5",
+    "after-frames.txt": "b0119deeb44e7aaa5ed83c6a24716f02de6787d6d28c7a4bacc01bc9c4db7390",
+    "after.stderr": "3009f160e676063e2cd07848dbca5e96051cb3eea5bb010995204b061f87db28",
+    "before.stdout": "c1a3c8d4d4642834611f62aeabaab5fd991729a4151a806161ce71d6312629d6",
+    "padded64.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "before-disassembly.txt": "fa38830be876a4d20f9cbed3c3a815e5d3b85e9eaa45173a216f23dafee94451",
+    "clippy.log": "61d016564e0f2d84f5146a34bc7d87e4ea38a9e3346dbb8d6e8ad7693ef9915b",
+    "padded64.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "before.stderr": "c95084e86d5aa5fc252ec18bba2e49254b9823ff6be18a465ba4112e11117807",
+    "padded64.json": "1b3b849d066c26d7aeca49cd8e1550c85c69ef6c2c42f365476d295e7bce4642",
+    "before-frames.txt": "058f54a2fd7a126f319aaf75d81c1b5a5243dd2007402d2d79eca9208d844647",
+    "unwind.log": "8033b2c7490c3c9cc6a983894f9816777dd903439cd833ed7e3068bb45d63593",
+    "environment-size.json": "b8fe1890fbd1ff913b2364157934fb3d1e81a1a7701fb1df55f51e264168353d",
+    "fmt.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "crt.log": "c2727c4c63e0b590407413ab1fea5f122dfb77d9c1aa153bae28f9b8d59d02c3",
+    "archive-generated-products.json": "ac9520df53718485835b1d8889a965250efb342804bf3e5adef007b6a3f7da1e",
+    "after-disassembly.txt": "8dce4f81b8317e331cc6b65545f4c00113e0075161265445b6e379eb697bc5a8",
+    "after.stdout": "e72bfe3e94b6e4a52931c55defc1f0d9d11da4e32ffbbd97a8943c4a2e5e34b6"
+  },
+  "limits": [
+    "local replay success does not erase exact-head CI failure",
+    "512KiB stack limit unchanged; no test removed or ignored",
+    "CI original Linux failure is distinct from historical original-Windows process timeouts",
+    "production FP-control effect remains unbound; fullstartup/rcedit/defaultadmission unsupported"
+  ]
+}

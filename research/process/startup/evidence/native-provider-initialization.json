@@ -1,0 +1,48 @@
+{
+  "kind": "Native replacement provider initialization component; no original-entry advancement",
+  "reviewed_commit": "61662d88b6ea8ec608f02f911eb4b74227385084",
+  "runtime_sha256": "8116ebf3e71b9c4c0db43ba22d98879b8c7c8ae9b65ce53ec95d9829e0ddb022",
+  "tests_sha256": "f5714a1e75af7ae462ef29d352e287ce4d5f1139d5279d45efd74d27628f4a9a",
+  "native_tests": {
+    "full_passed": 275,
+    "artifact_ignored": 2,
+    "focused_passed": 14
+  },
+  "python": {
+    "run": 75,
+    "existing_skip": 1
+  },
+  "clippy": "passed",
+  "contract": {
+    "initialized_export": "InitializeCriticalSectionEx only",
+    "phase": "exclusive initialization lease",
+    "failure": "owned pending/published namespace cleanup; retain unrelated effects and monotonic serials",
+    "references": "native process-root ownership, exact acquired identity, replay rejection",
+    "windows_dll_execution": false,
+    "windows_error1114_invented": false,
+    "host_oom_model_closed": false
+  },
+  "windows_evidence": {
+    "path": "provider-failure-observed.json",
+    "scope": "ordinary authored DLL observation only",
+    "reviewed_head_job": 124050649239,
+    "reviewed_head_run": 41052167055,
+    "conclusion": "success"
+  },
+  "entry_boundary": "LoadLibraryExW CALL0x402b00 / IAT0x415074",
+  "new_windows_elf_pairs": 0,
+  "logs": {
+    "focused.log": "1a528365078ac126bd632eb2807c4c101f9fe509718fea553ad987527d16e058",
+    "full.log": "bbb492804b75b21486c80be3cc3e0c74d8b71189de1d8bd641301d45b0d7bf91",
+    "python.log": "67b6329041d8636dcec138fd18bbf211dba951c1b1118b9dcf222e5784dfdf23",
+    "clippy.log": "ce77780e52d6b141ec03cce8e9f268a49e064a4500649194657cc2a1cd391045"
+  },
+  "replay": {
+    "kind": "original prolog/epilog component comparison with explicit unexecuted body boundary",
+    "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+    "rust_sha256": "0585561fa2dde988c9c2aebe95749baf60468cc9d0ffc6f6b011526fccfc6100",
+    "comparisons": 5,
+    "scope": "Live registry fixture; body EAX/flags inputs; original stack/FS/saved-state restoration only",
+    "artifact_ignored_tests": "passed in replay"
+  }
+}

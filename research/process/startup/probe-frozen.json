@@ -1,0 +1,31 @@
+{
+  "source_sha256": "db7deeb3153ef3d3540a192e3c6e7b7e6c5f6e7e70880a995b1932382899d086",
+  "configuration": "existing MSVC x86 /O2 /GS, ordinary CRT entry, no source edits after outcomes",
+  "cases": [
+    {
+      "mode": "n",
+      "exit": 0,
+      "stdout_hex": "4246"
+    },
+    {
+      "mode": "u",
+      "exit": 0,
+      "stdout_hex": "424648"
+    },
+    {
+      "mode": "s",
+      "exit": 0,
+      "stdout_hex": "4248"
+    },
+    {
+      "mode": "c",
+      "exit": 0,
+      "stdout_hex": "4243"
+    },
+    {
+      "mode": "e",
+      "exit": 23,
+      "stdout_hex": "42"
+    }
+  ]
+}

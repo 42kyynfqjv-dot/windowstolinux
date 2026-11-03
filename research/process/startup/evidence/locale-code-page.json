@@ -1,0 +1,152 @@
+{
+  "base_commit": "1a08b9552ef00e1e03c3f26f71c21b4b54e7b6c3",
+  "scope": "connected original selector/constructor and explicit native GetACP component; zero whole-PE pairs",
+  "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "next_boundary": {
+    "pc": "0x40b267",
+    "reason": "before remaining caller argument cleanup, reference comparison and original uninitialized allocation path"
+  },
+  "source_sha256": {
+    "examples/crt_stream.rs": "26db078da967597f10549d7541b05b6840131ff3cd273048ac740faa16ab8237",
+    "src/crt_locale_code_page.rs": "7a37f3a1a5484e1e4079f06c820a6c5c2a33664bd38fd4cf969cdaf359183464",
+    "src/crt_locale_startup.rs": "59e122be2941b43470d1f3a6bf70f904d0dec273b4e7ab987c6db5dced78f291",
+    "src/crt_resident_loader.rs": "4a674175daa6a7f1efe47524296a47999c4c8a2f6a78992613c3483e2ef56a49",
+    "src/crt_normal_frame_tests.rs": "540d2a79ce876750edb7dcd79bf9a28a10bd9f775d6325f8f325fa0fcb0ef9fc",
+    "research/process/startup/check_normal_wrapper.py": "cb7f4a2a9470a80278830fa871cf9eaf89453bb99d90b6a119f1a702cb8d054f"
+  },
+  "predecessor_review": {
+    "base": "1a08b9552ef00e1e03c3f26f71c21b4b54e7b6c3",
+    "review": "same-PE source hashes verified against commit; reference old value/wrap/flags and pre-write validation audited; no new predecessor runtime defect identified",
+    "ci": [
+      {
+        "run": 41266825639,
+        "name": "Rust CI PR",
+        "conclusion": "success"
+      },
+      {
+        "run": 41266822227,
+        "name": "Rust CI push",
+        "conclusion": "success"
+      },
+      {
+        "run": 41266822324,
+        "name": "Pinned startup inventory",
+        "conclusion": "success",
+        "native_unwind_job": 124733697345
+      }
+    ],
+    "complete_replay": {
+      "comparisons": 5,
+      "rust_sha256": "a273fa26231c4b0c29dd9edd8ab3b6a1bd47632ad0b1c08c118d107a54d29074",
+      "report_sha256": "9f75328f02f877d860c078d5e54cfdac005222a3e99af9645de7853c67b2b0b8",
+      "scope": "live-registry wrapper component; not whole PE"
+    },
+    "historical_case19": "unresolved, run41107853543 artifact13002965454"
+  },
+  "predecessor_windows_command_line_review": {
+    "head": "1a08b9552ef00e1e03c3f26f71c21b4b54e7b6c3",
+    "run": 41266822324,
+    "job": 124731240052,
+    "artifact": 13068170083,
+    "zip_sha256": "6c25547e5a2c31cce8e7d57f92452f804ce791163a7ca56bd392187d26c973dd",
+    "pe_sha256": "028a36305b9b8d112cee8610e99fd8373c4153d39bff8b64a44377104bcb4014",
+    "source_sha256": "2da6ab35c0968b4edb7b2edd946a6e2b5dae7363313819cf218944482c836204",
+    "manifest_sha256": "76433dcefb453be86234dacbad769bfe31eaf94606213c27ea5a5ad5b3f138c3",
+    "vectors_sha256": "0c431651b0b006357dcd27ab2e97e49e102167d3b753a4d0b4a57026e79a0453",
+    "host": "Windows-2022Server-10.0.20348-SP0",
+    "cases": 10,
+    "verified": "independent struct decoding of every CMD1 packet, A/W NUL bytes, actual CRT argv, ACP65001/stable3, exit and source hash checks",
+    "stdout_sha256": [
+      "90da1341107c0412d19c6274dca3adb6d587c0a638944cee761355d1e955f4a1",
+      "b488cffe9861c2f78fa8b096f21352c446f8bfb2880c0a9569576e6dab8c94f4",
+      "a96d586d2a4971d44207f275816b7719cd90500a2ae08c7b27163d2987224959",
+      "2ef12ef62e55aa59965b126b67395f58269c552859289674aa0abf2a38ab57b2",
+      "3a0fbd9580d2eff8fc05c43d91dc8ffce62859f7dcb6b7a0dc37dc1e18b96d5e",
+      "28c4943d850736c0f7bd89939e98aaad5496de5b4545ec6c2b9191b52c43035c",
+      "8d7f3b8cbca2d49d5e0d904719da58b6905a18375136849736b6fafa9987ecc4",
+      "e5a0d589b7b2fa0c483cf2d104acd41838bf3ac08dd63e08a97a7ee6bd9bb9fa",
+      "88b59e6ca70b09d5cd94610a2284e445148dbd910cef6c5c5bc33febe3c9b0b9",
+      "4fdcb10b55998ffc6cc78625139db4f70729ff8762b1387af16ccf2773accd7b"
+    ],
+    "scope": "original Windows API/CRT observation only; not Windows/ELF translation; target unwind.exe launch ACP not measured"
+  },
+  "checks": {
+    "canonical": "passed",
+    "crt_stream": {
+      "passed": 301,
+      "ignored": 2,
+      "artifact_dependent": "both covered by complete replay"
+    },
+    "unwind_slice": {
+      "passed": 185
+    },
+    "python": {
+      "run": 84,
+      "skip": 1
+    },
+    "clippy": "passed",
+    "fmt": "passed",
+    "selector_declared_cases": 18,
+    "constructor_declared_cases": 4,
+    "locale_prefix_declared_cases": 29,
+    "success_assertions": "four selector branches exact values, constructor exact pointer and field values, repeated success then replay rejection",
+    "negative_assertions": "fourteen selector modes have exact errors and preceding indicator-write assertions; changed caller/selector/constructor and missing-profile entry modes; protected return alias and stale constructor storage checks"
+  },
+  "log_sha256": {
+    "canonical-final.log": "ea983fb7b9bac0c84bf9b5b0d75a302d7561e40004fd2be36c9c835f44db8c54",
+    "root.log": "0c11be09c30e9b09a99668a223ca0c0184b5059debd956fcf83012cb6b667d9c",
+    "unwind.log": "91d0824072e8afce3731e8769542b5787210689d59c1f87b6e4c37b362719f63",
+    "python.log": "80a2fd06467c9d4271b6fa7b8c4ec1cf6f833ba94f8605ec010844d5059494f6",
+    "clippy.log": "037fa8c67247033e7f7776ff9dddc939347f70109260202815a050ba6ae23e56",
+    "fmt.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "replay.log": "1f358a692cfbc713fc3c86be33c2cc9013c7a27d54e6ba74013e2e4cd059034a"
+  },
+  "primary_contracts": [
+    {
+      "url": "https://learn.microsoft.com/en-us/windows/win32/api/winnls/nf-winnls-getacp",
+      "retrieved_sha256": "358f647f8e2f6827539fd397d00c727f82542992ff4f2e9b0f1c3e994e6799f1"
+    },
+    {
+      "url": "https://learn.microsoft.com/en-us/windows/apps/design/globalizing/use-utf8-code-page",
+      "retrieved_sha256": "09589ec1c6bd8dbb2e4109a64d8f8dcf91592e56becd775a72a214d9eb0f0fe9"
+    }
+  ],
+  "full_replay": {
+    "status": "passed",
+    "report_sha256": "c36cd0578550e6013a496a565d773dcd3f6d2e777754d4e334636cda06878e28",
+    "rust_sha256": "5d65c1c53c0ed03086af955f4829b03b0d289ef762ef18993d5509abb7689350",
+    "comparisons": 5,
+    "scope": "Live registry fixture; body EAX/flags inputs; original stack/FS/saved-state restoration only",
+    "new_windows_elf_pairs": 0
+  },
+  "input_contract": "ACP65001 from same live declared UTF8 process token as A/W command line; original target Windows ACP not established by separate manifest observer",
+  "preserved_failures": [
+    {
+      "log_sha256": "1c29d7c85ff6e2ce6c80d63c70983ef17b2cb166ba5fd18fb0bd9a2f3f4384e8",
+      "cause": "initial fragment emission omitted explicit internal fallthrough endpoint; generator rejected unresolved external edge; fixed by declared internal end, not successful return"
+    },
+    {
+      "log_sha256": "008bfad7e981e9c032e5678492259ba8b3a70277c09c8cd0e85589a4dc2ce3bc",
+      "cause": "negative unknown-input test expected later branch error; actual checked scalar read rejects earlier; corrected strict expected error only"
+    }
+  ],
+  "limits": [
+    "component execution only; default admission/full startup/rcedit unproved",
+    "OEM and per-thread locale mutation helper calls rejected",
+    "no universal Windows UTF8/ACP or XP7 claim",
+    "heap reference free remains unbound with decrement preserved",
+    "LOCK XADD exclusive single-guest-thread/lease only",
+    "exceptional EH4 cleanup, delivery and collided unwind remain unproved",
+    "native close/EOF equivalence unproved",
+    "historical original-Windows case19 timeout unresolved"
+  ],
+  "archive_manifest_sha256": "75d5956c0365f675df41d889a6fd60fba29147fcb9c2a464c85dd243f2b2fee4",
+  "repeat_emission": {
+    "identical": true,
+    "rust_sha256": "5d65c1c53c0ed03086af955f4829b03b0d289ef762ef18993d5509abb7689350",
+    "fresh_mtime_proved": true,
+    "before_mtime_ns": 1793503737144974810,
+    "after_mtime_ns": 1793503753740257833,
+    "log_sha256": "9c66c93b8c0a98a066e3c31d00ab8e9c565851c856acea9f4bae02c6c0246d9d"
+  }
+}

@@ -6,6 +6,9 @@ mod guest_memory;
 mod imports;
 mod inspection;
 mod linker;
+#[cfg(test)]
+#[allow(dead_code)]
+mod startup_state;
 use std::fs;
 use std::path::Path;
 

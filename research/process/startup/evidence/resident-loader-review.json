@@ -1,0 +1,49 @@
+{
+  "kind": "Established resident DLL acquisition through original load helper; explicit process environment, no whole-PE translation",
+  "reviewed_parent": "8edb01a3a917cbe3d578ec4a8869b7fb03004ece",
+  "parent_ci_at_review": {
+    "41039232469": "compiler-native-linux: Compare independent LLVM outcomes",
+    "41039226895": "compiler-native-linux: Compare independent LLVM outcomes",
+    "41039226795": "original-user-mode-probes: Compile original CRT text component and compare independent effects"
+  },
+  "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "generated_rust_sha256": "b49632a6796da07ae99349fb0788a5c785cd4086094bb2a3e5180dab6224e800",
+  "crt_passed": 261,
+  "ignored_tests_separately_passed": 2,
+  "python_run": 60,
+  "python_existing_skip": 1,
+  "strict_clippy": "passed",
+  "original_load_helper_cases": 4,
+  "independent_resident_lifecycle_test_functions": 1,
+  "retained_recorded_windows_component_pairs": 5,
+  "new_windows_pairs": 0,
+  "default_entry_first_unsupported": {
+    "call": "0x402b00",
+    "iat": "0x415074",
+    "api": "LoadLibraryExW",
+    "missing_contract": "API-set host mapping and first-load initialization effects"
+  },
+  "premises": [
+    "explicit initialized ordinary resident DLL environment",
+    "no package/SxS/.local redirection",
+    "startup-exclusive module state",
+    "existing module identity/reference authority"
+  ],
+  "unsupported": [
+    "API-set redirection",
+    "first load and dependency initialization",
+    "filesystem or arbitrary host-library search",
+    "actual FlsAlloc/publication",
+    "whole startup/rcedit"
+  ],
+  "logs_sha256": {
+    "initial-test-build.log": "c369726715d0f63e69c1d5b3507dfe37e9f669391af29a562efb457d9346cc4d",
+    "connected.log": "3395c1cfee57f61708184ab96875496e721fe97ee990a73c2adfccd373e07a80",
+    "connected-final.log": "7b667a5e00972b363b5cfd978b9ca3d6122161dee438bf5531f771623b6bba86",
+    "crt-final.log": "14f45ce756a1ab6651861460e3c4d39c81752115815a3c4b60b35c9aa3602e1b",
+    "python.log": "d395e4d3e421565849d30110fc7b2bdb704eb4ea619a6d67f8fed3cf50b79bd7",
+    "clippy-final.log": "2b34696728dc82b03cbf6311d7e3a6a41658bbde097834c3010a78bc82842c1a",
+    "replay/report.json": "cc144985898018f1939fd9828cb384e693fd59c9c5315f9ed4f367e81621e91b"
+  },
+  "historical_windows_timeouts": "unresolved"
+}

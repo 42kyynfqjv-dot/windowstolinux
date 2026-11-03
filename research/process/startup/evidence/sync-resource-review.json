@@ -1,0 +1,88 @@
+{
+  "kind": "Bounded native synchronization resource implementation and review; not whole-PE acceptance",
+  "reviewed_commit": "1bf38aa539b4fbc2f458fcd5df27f2601f3622c5",
+  "runtime_sha256": "adf6269af8d1a0f22e79e272ec542819704c7c41a31afdfa6421bda31b16e156",
+  "tests_sha256": "02fdd0b9a7e748e9e24ba1d0848debe0d3ee01976871fe09b86a165b1fa72ac7",
+  "object_slots": 32,
+  "simultaneous_recursive_leases": 32,
+  "allocation_denial": {
+    "result": "passed",
+    "attempts": 0,
+    "coverage": [
+      "all object slots",
+      "typed-alias rejection",
+      "capacity rejection",
+      "recursive acquisition/release",
+      "sparse delete/reuse",
+      "protected stdcall RET12",
+      "replay rejection",
+      "multiple overlapping typed tags rejected"
+    ]
+  },
+  "mutation": {
+    "kind": "Test-sensitivity mutation, not production failure or Windows evidence",
+    "source_sha256": "2b8ae44567dbdea0f031c969763308be59de72286a77678aed286f587589f1cb",
+    "returncode": 101,
+    "expected": "injected per-call allocation is rejected by allocator-denial positive-success test"
+  },
+  "partial_construction": "passed: truncated and read-only second object preserve first object, error knowledge and prior bytes; stale mapping retains provider borrow",
+  "native_tests": {
+    "provider": 12,
+    "full_passed": 273,
+    "artifact_dependent_ignored": 2
+  },
+  "python": {
+    "run": 73,
+    "existing_skip": 1
+  },
+  "clippy": "passed",
+  "format": "passed",
+  "component_pairs": {
+    "local_against_recorded_windows": 2,
+    "windows_source_sha256": "65d78f954866e96bf1db08f5f4eaa206d3bb96b28448d69b2138017490bb69e1",
+    "windows_pe_sha256": "a98b7df84136da0f6162f42b8ef69e15092d810f645b679e96e3547e9c132117",
+    "fresh_windows_this_local_run": false
+  },
+  "predecessor_ci": {
+    "runs": [
+      41048469312,
+      41048462268,
+      41048462276
+    ],
+    "full_status": "in progress at reviewed read",
+    "sync_windows_job": 124038332222,
+    "sync_native_job": 124038533138,
+    "sync_jobs": "success",
+    "sync_native_report_pe_sha256": "a4e81faff2dddfe9d362ea2eb47764079183b45d25c82a274a93ae4e335be703",
+    "note": "Separate build from prior recorded observation; hash verified within that CI run, not asserted identical across builds"
+  },
+  "original_entry_boundary": "LoadLibraryExW CALL 0x402b00 / IAT 0x415074",
+  "remaining": [
+    "Windows Ex failure-trigger, LastError and object-poststate relation",
+    "process-owned system-provider initial state and loader initialization effects",
+    "actual mapped constructor CALL/target/object-index binding",
+    "actual FLS publication and whole startup"
+  ],
+  "whole_pe_pairs_added": 0,
+  "historical_windows_timeouts": "unresolved",
+  "logs": {
+    "full-tests.log": "1a8c89a4b6345184b547eeeff0372e338f3847944d7f35c3dd35bf03fa13055b",
+    "provider-tests.log": "f19edc3533e5d112065ca15c95e7fecb4392b01e79640a39859122b379841397",
+    "python.log": "b0cf7c6c1711f350bc229b7735f1e713ebeaa970da0ef7ba5ab0359061c3ff95",
+    "clippy.log": "be61e4e8589ba72675f3ed9a378040e7dbb1d00370ef7642160d877b635a0169",
+    "mutant.stderr": "a9f476d3e9bb8765b5c699d1e987268c51fb84cefee8431c5b602eab538f15c1",
+    "replay.log": "9aaa0f25fdf7b12faf514c87c21315ab7965e31627bfbcbf5bc9b34a92fb674e"
+  },
+  "replay": {
+    "kind": "original prolog/epilog component comparison with explicit unexecuted body boundary",
+    "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+    "unwind_binding_rust_tests": 1,
+    "cxx_record_rust_tests": 10,
+    "ptd_component_rust_tests": 7,
+    "rust_sha256": "4afb07faa9bf799b22a8a4f7c7b21e0dac54407f98e5b94aa8fd1c80b99a4fbd",
+    "comparisons": 5,
+    "scope": "Live registry fixture; body EAX/flags inputs; original stack/FS/saved-state restoration only",
+    "result": "passed including two artifact-dependent tests; five retained recorded Windows component comparisons, no new whole-PE acceptance",
+    "report_sha256": "9aaa0f25fdf7b12faf514c87c21315ab7965e31627bfbcbf5bc9b34a92fb674e"
+  }
+}

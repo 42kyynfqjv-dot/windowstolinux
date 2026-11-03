@@ -1,0 +1,63 @@
+{
+  "kind": "FILE role shares canonical PE data storage; native component review",
+  "parent": "9bc57f6911bc613011d41ef457846d9984d95642",
+  "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "generated_rust_sha256": "846d333bc7f79fdf1b9edc386faf1cfb1653961cc30c014a9e1b2042c358bfd3",
+  "crt_tests": 247,
+  "crt_ignored": 1,
+  "converter_tests": 175,
+  "python_tests": 60,
+  "python_skips": 1,
+  "native_file_anchor_cases": 20,
+  "recorded_input_file_queries": 1,
+  "retained_recorded_windows_comparisons": 5,
+  "new_windows_observations": 0,
+  "whole_pe_pairs": 0,
+  "retained_ordered_cases": 85,
+  "retained_inline_cases": 26,
+  "replay": "passed with current file_storage and scalar boundary rules",
+  "clippy": "passed strict all-targets",
+  "review": [
+    "Predecessor permissions and rollback retained; no weakened mapping validation.",
+    "FILE view is bounded inside the existing writable PE section; no additional map or copied data.",
+    "No constructed locks or complete CRT initialization inferred from image bytes.",
+    "Raw module aliases enforce FILE lock/opaque-byte/typed-field rules; process-image lifetime checks do not read FILE storage.",
+    "First full suite caught separate-FILE and initialization extent regressions. Preserved failed log crt.log; corrected full suite passes crt-fixed.log.",
+    "Successful unmodified current native baseline precedes alias-bypass and stale-initialization mutants."
+  ],
+  "mutants": [
+    {
+      "name": "baseline",
+      "exit": 0,
+      "source_sha256": "c55e27d8c4b7f5bbda5dfd35ee2070d69dd1100ef1a306c5c02937fa7ee94f8c",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "module-alias-bypass",
+      "exit": 101,
+      "source_sha256": "b87c12d90e8871b6d221f7acf8915788e01c7fd555343e35252f6d12e8566c4f",
+      "log_sha256": "e41946438933fe166ef568bba51b57d2af79ec850134a86d5b812722eb3342b5"
+    },
+    {
+      "name": "stale-init-authority",
+      "exit": 101,
+      "source_sha256": "b3e12734d9ae32db820311a0c5a2b094122d25cfd0374276b544b20d1919f738",
+      "log_sha256": "ed8e8f60a672c321c12e7a90fd45bc059dc4b98efa6d97be9d2b07a431875129"
+    }
+  ],
+  "remaining": "Migrate original cookie and record producers to canonical section views; connect manager406cfa and managed termination406f55 with actual effects. Delivery, loader and physical exit effects and full startup/rcedit remain unproven.",
+  "historical_windows_timeouts": "Unresolved; none masked or diagnosed by these passing runs.",
+  "parent_ci_at_review": "41016337771/41016331496/41016331323 in progress. Inspected 41016331323: eight jobs passed, compiler-native-linux comparing frozen stateful composition pending.",
+  "logs": {
+    "crt.log": "1466eb1077fd95a6ec2eef4e17ab040f08eda7eadf9c8c1bc3bfc6903a888df1",
+    "crt-fixed.log": "830ca9b77dab63febf4713d13534fd5f3bfdaf74f6e4abdd9226611ec6a39fb9",
+    "focused.log": "a70a2b54f8ce7c53033ec599dc1bb7baba1426a343ea4518ae0c20c24dee5aac",
+    "root.log": "74c7f5b7664921879ef771e0f537315e2ff0fa4cfb9d24b31ab82407ca3c637d",
+    "clippy-final.log": "efb43c83bbb6a1157f6763cfe6ad370eccdd3142c3067c272e3e0e7e69a559ca",
+    "python-final.log": "f6799665ea60973cd6ab09e8c5ae968e3093603c8a890090176c757434138668",
+    "baseline.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "module-alias-bypass.log": "e41946438933fe166ef568bba51b57d2af79ec850134a86d5b812722eb3342b5",
+    "stale-init-authority.log": "ed8e8f60a672c321c12e7a90fd45bc059dc4b98efa6d97be9d2b07a431875129",
+    "replay.log": "6192aefaf0402c584f565c58f1297377e79a44f1f889b3c5f6fba1e0a21b6efd"
+  }
+}

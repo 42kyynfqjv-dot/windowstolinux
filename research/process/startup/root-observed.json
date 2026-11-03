@@ -1,0 +1,43 @@
+{
+  "kind": "original Windows root-boundary observations; zero translated pairs",
+  "platform": "Windows-2022Server-10.0.20348-SP0",
+  "command": [
+    "cl",
+    "/nologo",
+    "/W4",
+    "/O2",
+    "/GS",
+    "D:\\a\\windowstolinux\\windowstolinux\\research\\process\\startup\\root_probe.c",
+    "/FeD:\\a\\_temp\\root-probes\\root.exe",
+    "/FoD:\\a\\_temp\\root-probes\\root.obj"
+  ],
+  "source_sha256": "009780acc25bbbc7a184a68537544aa264119eeabb54e0079df76bc1ce6b1de6",
+  "pe_sha256": "3a439a15ce2acc7157392cfd32e1fd608358325a145114f18e50df125df7a209",
+  "compiler_sha256": "fc26dcba228dd91cd09429670f298f4608833c84841a4ceca8c4955b4d495a7b",
+  "observations": [
+    {
+      "mode": "r",
+      "exit": 0,
+      "stdout_hex": "5452",
+      "stderr_hex": ""
+    },
+    {
+      "mode": "t",
+      "exit": 37,
+      "stdout_hex": "54",
+      "stderr_hex": ""
+    },
+    {
+      "mode": "s",
+      "exit": 0,
+      "stdout_hex": "4648",
+      "stderr_hex": ""
+    }
+  ],
+  "evidence": {
+    "commit": "d4aea434c0ff7591a270136a6c5f538fc366a29b",
+    "workflow_run": 40598659445,
+    "job": 122520935321,
+    "artifact": 12776469490
+  }
+}

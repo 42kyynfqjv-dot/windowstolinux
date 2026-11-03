@@ -1,0 +1,59 @@
+{
+  "scope": "Original UTF16 scanner and caller component, controlled launch only; no whole-PE execution",
+  "next_boundary": "CALL0x40b996 ->0x40b8c5 conversion query unbound",
+  "profile": "w2l-controlled-environment-v1",
+  "scanner_address": "0x40b92f",
+  "region_sha256": {
+    "ENV_SCAN": "b29d5418a9b200e1e11863284fad6ee4ff2e193929a8bcd2fd2fea3ac157f050",
+    "ENV_PRODUCER_PREFIX": "e10904a43a2207e0125869d76c5ac37995ce44f12e06869e3c7747b746d9a003"
+  },
+  "original_pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "canonical_rust_sha256": "74807fccad6b12ae32335e6b7152d42244d94bcb469033e4e80cefc6f8cb3e3f",
+  "native_scanner_cases": 12,
+  "original_artifact_cases": 10,
+  "new_windows_comparisons": 0,
+  "whole_pe_translation_pairs": 0,
+  "canonical_entry": "passed; original scan/count/preparation reaches0x40b996",
+  "supported_empty_count": 1,
+  "validation": {
+    "crt": "349 passed,2 ignored artifact gates handled separately",
+    "canonical": "passed ten original-artifact cases and controlled original entry to0x40b996",
+    "scanner": "12 strict independent cases including maximum declared size;512KiB child",
+    "python": "112 tests,1 skip",
+    "clippy": "all targets warnings denied pass",
+    "fmt": "cargo fmt --all -- --check pass",
+    "low_stack": "all152 word cases under512KiB plus64KiB environment padding pass",
+    "pushed_head_replay_ci": "pending after publication; no completed final-head claim"
+  },
+  "previous_head": "ef59eb65aaff0f085b251aa62580b748b01620e1",
+  "previous_replay": {
+    "rust_sha256": "bdd8aaecb9abbd390e579bc15cc033f87f66d359e0aca683957a4a55045c9038",
+    "matching_recorded_canonical": true,
+    "retained_windows_component_comparisons": 5,
+    "whole_pe_translation_pairs": 0
+  },
+  "preserved_failures": {
+    "mixed_source_replay": "50d4f66 local output169b97b contains later declare_environment; not pinned-head evidence",
+    "original_windows_timeout": {
+      "run": 41359557511,
+      "job": 125006824119,
+      "artifact": 13104642897,
+      "fixture": "changed",
+      "limit_seconds": 15,
+      "cause": "unresolved"
+    }
+  },
+  "limits": [
+    "No real environment data read/logged",
+    "No narrow environment table/original free yet",
+    "No new API failure semantics",
+    "No full propagation/startup/rcedit/default support",
+    "Historical Windows timeouts unresolved"
+  ],
+  "report_review": {
+    "corrected_field": "fp_explicit_profile_boundary",
+    "actual_boundary": "0x40b996 original environment conversion query unbound",
+    "interrupted_replay_head": "aa0d4951403c3f2d8c964c5a3a60b8b24091a26e",
+    "status": "partial outputs retained; final report not claimed; fresh corrected-head replay required"
+  }
+}

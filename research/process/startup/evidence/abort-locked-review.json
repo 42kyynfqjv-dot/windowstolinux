@@ -1,0 +1,69 @@
+{
+  "reviewed_parent": "14f72998ac7f0381dce172fbb1a07e4bcc97a337",
+  "kind": "original registered locked signal query and pending-event continuation component",
+  "new_windows_observations": 0,
+  "new_whole_pe_pairs": 0,
+  "native_locked_cases": 12,
+  "rotate_bit_count_cases": 35,
+  "rotate_unknown_mask_and_count_checks": true,
+  "crt_tests_passed": 239,
+  "crt_suite_ignored": 1,
+  "root_tests_passed": 175,
+  "python_tests": 60,
+  "python_existing_skips": 1,
+  "clippy": "passed",
+  "local_log_sha256": {
+    "crt-verified.log": "17d46fa9243c923ff5fa520f94865e98516f87a6759a000a91b8efc034ca9539",
+    "root.log": "407d6d2992bd432ef7ce4bc183edaf60a3fefc5df53d00cb57ee926104736e5f",
+    "clippy.log": "f7c53d8c5441e751c428fd8981a38225e2a2b8844aa81da11ab1d1a340e7d8ce",
+    "python.log": "4e2d2fe90b3074a4f2a012322a1291ad1c4f52f59314cd1840b664bd3354302c",
+    "old-lock-mutant.log": "75a337e6c804de8fb39d3a283ab0b6656872f6e1ea2c00138d3f6d24a0322afc"
+  },
+  "review_findings": [
+    "Original EH4 registration, canonical thread head, indexed lock3, cookie/encoded cell, ROR, original finally/unlock and RET12 execute under the existing child epoch.",
+    "Original initialized lock indices and unknown caller byte remain instruction-derived; initial lock/module state remains supplied.",
+    "Unknown decoded bits stay unknown and never become function/pointer authority.",
+    "Negative cases assert exact failures and visited checks; failure does not retire the frame or erase prior writes.",
+    "Old global guard released a live lock after thread identity changed; native old-guard mutant observes zero locks instead of one. Corrected anchor/thread/closed validation prevents release.",
+    "Scope bytes are revalidated across body calls; post-unlock corruption rejects without rolling back the already completed unlock."
+  ],
+  "remaining_gate": "Abort407804 TEST/branches, signal22 dispatch40cc14, encoded callback authority and exceptional effects, feature/fast-fail/reporting and exit; initial module/lock/FLS producers and actual delivery remain unproved.",
+  "parent_ci": {
+    "14f7299": {
+      "41004981995": "failure: authored-windows-fixture original untaken process.wait15s timeout, job123897726848",
+      "41004977851": "success",
+      "41004977944": "success"
+    },
+    "7f206c2": "all three workflows41003579881/41003575818/41003575835 success"
+  },
+  "preserved_timeout": {
+    "run": 41004981995,
+    "job": 123897726848,
+    "case": "untaken",
+    "pe_sha256": "b5a3bb8ee10c6ca16d5b9b2b53e39bc214d6fc4a6e6977a1fdf20a7dc7675554",
+    "seconds": 15,
+    "os": "Windows10.0.26100.0",
+    "crt_version": "7.0.26100.33648",
+    "imported_launch_artifact": 12955196422,
+    "artifact_zip_sha256": "a1911ff7c4d7c42a5f7fef5eeff78eaf83e88a6e52760f2f0c61610359876f31",
+    "output_and_cause": "not established from available log; no artifact binary download or rerun",
+    "earlier_cases": "output probe and hello/changed/one/max completed in that job before untaken timeout"
+  },
+  "local_development_corrections": [
+    "Query caller root test had to declare cdecl return_pop0 rather than fixture default RET8.",
+    "Unknown-cookie rejection occurs in prolog preflight; stale module storage is retired through independent memory release because temporary-region retirement rejects modules. These preserve strict actual failure expectations."
+  ],
+  "retained_recorded_windows_comparisons": 5,
+  "replay_report_sha256": "0c19efbfbf45b574de8e9060ff7c5f954e24a853deb64f997f19e97b3f6f80db",
+  "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "rust_sha256": "77c7a88b9023e52e13d6df64b250aa4fdfbdc57a098139eee2f9595e18f03855",
+  "ordered_native_cases": 85,
+  "registered_errno_native_cases": 16,
+  "original_abort_bytes_sha256": {
+    "abort-entry": "0592189e3b4528351b8bde51046a5a358ff5c27f2448f36e4007c7d4b734d5ed",
+    "abort-query": "78c3075082530d874bac4431ba22ff88171469176f14c31022baa68903962974",
+    "abort-locked": "19b588d07d323913e1f7ebca62aa89d2c5fa33130e3bdb44b9034364ac373736",
+    "abort-unlock": "f572c23c0739c08e4ef77ce1fe6036c154aaf76a7932ec587edc1a9f1dcf9db5",
+    "abort-scope": "16fd5fabfeaa475f1eb5bedef2cfb2932882eb5f7c668a990cdd4491a69fe32f"
+  }
+}

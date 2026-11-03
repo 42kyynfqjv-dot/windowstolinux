@@ -1,0 +1,44 @@
+{
+  "kind": "Original Windows second-FLS candidate availability; zero translations",
+  "windows_version": "10.0.20348",
+  "source_sha256": "e1a7a57cca3820fb7f9a94a58a888106d7853b1cfca97ed9e5cb7ef15cfebef0",
+  "pe_sha256": "e419069d182112b71b54e8fecb20018923e66ad5109019a2290ad1962bc46a74",
+  "command": [
+    "cl",
+    "/nologo",
+    "/W4",
+    "/O2",
+    "/GS",
+    "D:\\a\\windowstolinux\\windowstolinux\\research\\process\\startup\\second_fiber_probe.c",
+    "/FeD:\\a\\_temp\\second-fiber-observation\\second-fiber.exe",
+    "/FoD:\\a\\_temp\\second-fiber-observation\\second-fiber.obj"
+  ],
+  "compiler_path": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX86\\x86\\cl.EXE",
+  "compiler_sha256": "fc26dcba228dd91cd09429670f298f4608833c84841a4ceca8c4955b4d495a7b",
+  "rows": [
+    {
+      "candidate": 0,
+      "loaded": true,
+      "load_error": 305419896,
+      "found": false,
+      "lookup_error": 127,
+      "released": true
+    },
+    {
+      "candidate": 1,
+      "loaded": true,
+      "load_error": 305419896,
+      "found": false,
+      "lookup_error": 127,
+      "released": true
+    }
+  ],
+  "provenance": {
+    "head": "573d518448512d5cb5fb5e12dbcc66abb3b06b22",
+    "run": 41094560132,
+    "job": 124196834719,
+    "artifact": 12995886486,
+    "artifact_zip_sha256": "f353b97762987b5bc6899425302a00d0c085deaba576aab5691453ec5891140a",
+    "source": "CI job report; binary hash reported by observer, artifact not separately downloaded"
+  }
+}

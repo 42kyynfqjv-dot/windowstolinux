@@ -1,0 +1,314 @@
+{
+  "scope": "original onexit routing and registered allocation prefix; not completed callback registration or whole-PE admission",
+  "reviewed_predecessor": "dcf78822b1fc098536383367cd39f7473fd27e31",
+  "predecessor_exact_head_CI": [
+    {
+      "id": 41307421773,
+      "head": "dcf78822b1fc098536383367cd39f7473fd27e31",
+      "status": "completed",
+      "conclusion": "failure",
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41307421773"
+    },
+    {
+      "id": 41307416497,
+      "head": "dcf78822b1fc098536383367cd39f7473fd27e31",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41307416497"
+    },
+    {
+      "id": 41307416563,
+      "head": "dcf78822b1fc098536383367cd39f7473fd27e31",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41307416563"
+    }
+  ],
+  "predecessor_original_timeout": {
+    "head": "dcf78822b1fc098536383367cd39f7473fd27e31",
+    "run": 41307421773,
+    "job": 124850559514,
+    "artifact": 13084081086,
+    "artifact_zip_sha256": "c652de609c8759e640c571028a08062bf5f81c5ac303b405dd5b2089a93408f7",
+    "same_generated_original_PE": true,
+    "case": 5,
+    "pe_sha256": "d607cfafa70820bd501cfcaffb6be1c8c272471601458da3605e2c69956ff109",
+    "output": "433035",
+    "expected_output": "433035",
+    "timeout_seconds": 15,
+    "poll_at_timeout": null,
+    "observer_identity_verified": true,
+    "alive": true,
+    "cpu_seconds": 0.0,
+    "threads": [
+      {
+        "tid": 3480,
+        "cycle": false,
+        "nodes": [
+          {
+            "object_type": 8,
+            "object_status": 2,
+            "tid": 3480,
+            "wait_ms": 19899,
+            "context_switches": 2
+          }
+        ]
+      }
+    ],
+    "exit_after_kill": 1,
+    "meaning": "Original Windows PE produced expected C05 bytes but remained alive at timeout. WCT reported thread object_type8/object_status2 without a cycle, not a proven cause or native PC/stack diagnosis. No evidence this PE executed new converter x87 code.",
+    "no_retry_or_limit_change": true,
+    "file_sha256": {
+      "stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "process-state.stdout": "7dc94a27c9306b40984c1bf29cd868951ac8765bc366f6ecd15c25e2456bc5b4",
+      "program.bin": "d607cfafa70820bd501cfcaffb6be1c8c272471601458da3605e2c69956ff109",
+      "process-state.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "launch.json": "fab68ad964ab4d2e3b285d42c28f72ef50d2ed993953cf9deed781425426b5fe",
+      "stdout": "12754373b28abdbee8c79cc020264cdb3c756fc07e3d7a2d9aef6d8e8c53ff53"
+    }
+  },
+  "predecessor_review": "No demonstrated FNCLEX guest-state or ownership defect. Mask80ff is cleared/known, TOP3800 retains existing knowledge, undefined conditions4700 lose knowledge; default/unbound and stale contexts reject. Preserved original Windows timeout does not establish x87 instruction-equivalence failure.",
+  "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "source_hashes": {
+    "src/crt_onexit.rs": "a36469a0d92fab30cb4ef90ce4dcd2230fe55fbaf2546ab3f6e6288614cee7dc",
+    "src/crt_stream_ir.rs": "2bf1a189eff5fd3ee134695ac7ec3f49a274180e01ad45babb9ee9efab26ea8e",
+    "src/crt_c_initializers.rs": "bed995a96b8b8d3485f30d4727b4a4dde678c811019981e15a8a197c767ae4c8",
+    "src/crt_startup_caller.rs": "6986da9636cbbe5f70c0d8a38e070bd0dca5b0881028802ba2c11f2c95b8a1f2",
+    "src/crt_normal_frame_tests.rs": "a368e9e370ec2e37ac2edb7c2091737062bfd8b407f0fc0c914f1ca6fa02ecc8",
+    "research/process/startup/check_normal_wrapper.py": "cb20243b8b42221a8918af26063fdc634151611543d90ccac8aad2c3e3f8eb1f"
+  },
+  "frozen_expectations_sha256": "2b94b0dd3d4ab8a0f41aead13c2d7e8419075adf59f0ee55e40d2c9af891a819",
+  "regions": {
+    "ATEXIT": {
+      "address": "0x401b0f",
+      "size": 21,
+      "sha256": "480dab692673738ed8a27fc691619b57a7ff361a9b84b45c53473ccf8452120e",
+      "disassembly_sha256": "cdfff269d1e11131745b46c64c577f2fd5efebe02c98a8eb4da9b3e31b0ba11c"
+    },
+    "COMMON": {
+      "address": "0x401ae1",
+      "size": 46,
+      "sha256": "bd42c781325ea9ef974ee78430f240ae536d19f45c1d5b6c4c705f379e42ca68",
+      "disassembly_sha256": "0c5edaf3c2061d5f7ad2517a51633b32816428aa04732570b34a3b27841543ba"
+    },
+    "GLOBAL": {
+      "address": "0x4074a8",
+      "size": 22,
+      "sha256": "67240cedb8677c9b7076953aab3087e4c769b6718d3267563e3b7bcbed8e122c",
+      "disassembly_sha256": "103a725d4d3c9cc8bce232d73558a8d24b6d5503413654dc754286e036de7040"
+    },
+    "WRAPPER": {
+      "address": "0x407525",
+      "size": 51,
+      "sha256": "b8780aac9f8ae7520151b8b8ff8511dcf3f0c81928ed57d514d3399428ab1499",
+      "disassembly_sha256": "aa0a299eb4d8a1d26f7b1a5f17d0e990fd91494df405d996e05ee79a2178921a"
+    },
+    "MANAGER": {
+      "address": "0x407260",
+      "size": 76,
+      "sha256": "ad6e7b3f62ab8b6422f06b0267c015e5ad6fc947ac6bf2d6f53915fdbbf4af7b",
+      "disassembly_sha256": "b24dd2608deacbab6838a79789ad9a572918bfae59be1b99c73f1457178b138c"
+    },
+    "CLEANUP": {
+      "address": "0x4072af",
+      "size": 12,
+      "sha256": "b37dfa7cc60709a754f924b88432209956d652613c6e8f914b684b416680ed71",
+      "disassembly_sha256": "fb5ef1e2fc0c36ac7450b896385243cea8670892b0530d3d71e9be10c0ccf2f1"
+    },
+    "BODY": {
+      "address": "0x4072bb",
+      "size": 275,
+      "sha256": "b6160da6cd351d82f3875f277e05df9e0ea5105d212c8c5ce72be45e65011338",
+      "disassembly_sha256": "a32944c8f338ef9aa8744a5332b2844768972abfb4d95fc7a885271b7323238d"
+    },
+    "RECALLOC": {
+      "address": "0x40c850",
+      "size": 109,
+      "sha256": "0273262d94cddcfd739791dd3207b09753c6af27ca207d3622da41657daafc94",
+      "disassembly_sha256": "20fd9572099de2ce5ef1ab09041e230d3a9880ed1c0219c41f46f80fe00152be"
+    },
+    "REALLOC": {
+      "address": "0x410ca0",
+      "size": 105,
+      "sha256": "2fd110c1a950051a5bb24f1ea550c457ef7d7dfbd41e264548d5b4023843123c",
+      "disassembly_sha256": "de4d2de4ed1dd4336c3de8d62cfc943fbe59a306fdc60bbf549025a6fefa16fa"
+    },
+    "ENCODE": {
+      "address": "0x406d62",
+      "size": 31,
+      "sha256": "962c28c6e5fcbfc1c3a0c3187da15dd7985b91793f62dba84919b05672b36542",
+      "disassembly_sha256": "c85324435fe64dea3e1ff30cb4b9410b82e34d529e6bb5d793b5e5c3ca7a206e"
+    }
+  },
+  "actual_entry_next_rejection": "before CALL40c8ae ->402370 original memset",
+  "prior_effects": [
+    "actual routing cc88 UINTMAX selects ce88 table",
+    "actual stack/reference setup, registered12-byte EH4 scope41b500 and logical lock2",
+    "original decode/growth32 entries and NULL recalloc ->realloc ->malloc path",
+    "actual canonical128-byte allocation with all bytes unknown",
+    "callback argument/scopes/frames/lock/x87 and earlier initializer effects retained; encoded table unchanged"
+  ],
+  "completed_native_registrations": 0,
+  "new_whole_PE_Windows_ELF_pairs": 0,
+  "retained_recorded_Windows_wrapper_component_comparisons": 5,
+  "cases": {
+    "routing_declared": 24,
+    "registered_manager": 17,
+    "conditional_memory_selection": 36,
+    "repeated_request_fixture": "401e2c,401605,401e2c with declared manager-result cut, not published callbacks",
+    "live_encoded_buffer_negative": "real64-byte allocation and correct scalar encodings reject without producer-bound association",
+    "actual_resource_failure": "exhausted existing64-region policy; native allocation rejects without guest NULL/errno fabrication",
+    "reentry": "actual partial allocation cannot repeat on the same activation",
+    "routing_replay_rejections": 26,
+    "actual_partial_allocation_reentry_rejections": 1
+  },
+  "limits": "whole startup/formatter/rcedit/default admission remain unsupported; actual memset, nonempty encoded pointer authority, encoding/publication, resize, callback execution/draining and exceptional cleanup remain unbound. Historical original-Windows timeout causes unresolved. No limits raised.",
+  "source_commit": "18fc24ebd54098d3d6c1317c814823cb86bfbe6b",
+  "checks": {
+    "root": 182,
+    "crt": 324,
+    "crt_ignored": 2,
+    "unwind": 185,
+    "startup_python": {
+      "run": 89,
+      "skip": 1
+    },
+    "tools_python": {
+      "run": 106,
+      "skip": 0
+    },
+    "corpus_python": {
+      "run": 18,
+      "skip": 1
+    },
+    "clippy": "all targets -D warnings passed",
+    "fmt": "passed",
+    "full_replay": "passed both artifact gates and five retained recorded wrapper component comparisons",
+    "fresh_identical_Rust": "passed"
+  },
+  "replay": {
+    "kind": "original prolog/epilog component comparison with explicit unexecuted body boundary",
+    "scope": "Live registry fixture; body EAX/flags inputs; original stack/FS/saved-state restoration only",
+    "comparisons": 5,
+    "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+    "rust_sha256": "9bdca3230778e9ccf074e5093d644a4f4c14022484f48da0cbdb650834669d26",
+    "whole_pe_translation_pairs": 0,
+    "mtime_before_ns": 1793539308879679565,
+    "mtime_after_ns": 1793539382368654482,
+    "report_sha256": "1dc48607946af8356515005a95db69e05d8b2734b04c46efc760939bd3dcf973",
+    "observer_report_sha256": "0feb586c7170dfd7e2390cf92ce1e5efa050c3e208d6c8903312e2d054c506cc",
+    "wrapper_vectors_sha256": "6f9b74742366c0f207d397ccf8b1af4afc2d01b34fae21cafb68d38d71a6ec66"
+  },
+  "named_gates": {
+    "onexit-contract": {
+      "stdout": "7ab3ccd54ce677a5a4e425eae030ec7480227024273d9f6ff3a8327524d5643a",
+      "stderr": "ab1e8ab4b828624e75e6e8c917ac437f104b9cd0b496a9d073a4a52c0abca136"
+    },
+    "x87-contract": {
+      "stdout": "327baa03db210066e27909232d6b509043050dc614639f8d576e6c08106b6688",
+      "stderr": "ab1e8ab4b828624e75e6e8c917ac437f104b9cd0b496a9d073a4a52c0abca136"
+    },
+    "c-initializer-graph": {
+      "stdout": "bc9ac8dac17fd18af96b2abced62de1c2c088ea98839485ebd670b18c8478e65",
+      "stderr": "ab1e8ab4b828624e75e6e8c917ac437f104b9cd0b496a9d073a4a52c0abca136"
+    },
+    "startup-caller-graph": {
+      "stdout": "a45a35fb91bd9b48a7d626b98a1b00bb919f58783229c2c1a1d5b23da9002443",
+      "stderr": "ab1e8ab4b828624e75e6e8c917ac437f104b9cd0b496a9d073a4a52c0abca136"
+    },
+    "cookie-record": {
+      "stdout": "201be96504da0a9edf89d5881cac2ddf9376b43299766325adf6337d0c119b3f",
+      "stderr": "29423147df5f27152c143f40399d5189737a902b622fb79efc6e1b2754336583"
+    },
+    "locale-alignment": {
+      "stdout": "5295ee8c5c79ca1baf7888eec4beb1d610b35f3194ae2bbb76f4f915dd2a1826",
+      "stderr": "ab1e8ab4b828624e75e6e8c917ac437f104b9cd0b496a9d073a4a52c0abca136"
+    }
+  },
+  "scope_bytes_sha256": "e5ffcbd151d1ca222577788faf2a3252b5952ad79c83b850f512196ced5d35e3",
+  "local_log_sha256": {
+    "canonical-cases-v2.log": "e511d5efdafa5a7d64e959c74d79211b2446b5b2fe989bd677ca6c43a9925ec6",
+    "canonical-cases-v3.log": "e161061827509217a70834f4afda8c30fb4b9ab3e0c20fd9adfa5622e10780a0",
+    "canonical-cases-v4.log": "6050acba835b33cd420496d295d871f359a677cf253264c9ac262e79c915845e",
+    "canonical-cases.log": "ac1489f07f981c30e92600b568aefcd2ca980fb992bc0e1e9d38a3e0af1d688c",
+    "canonical-fresh-identical.log": "01cf1f8aaa1407a6215b74ba79750a1f25ae04abd892342aa8a1c46f9d3d9ddd",
+    "canonical-v2.log": "b4362a5104ddcb38ec7d9e6d1e35e1a79c4db18881ea0e0ac9dc59c599c241af",
+    "canonical.log": "c55bc7fc6af62e1a288d0c140bf31be28e091b7221c9b022e4a03defd8eebbf1",
+    "clippy.log": "61d016564e0f2d84f5146a34bc7d87e4ea38a9e3346dbb8d6e8ad7693ef9915b",
+    "corpus-python.log": "495f066cb87629374eb04224716a58dff471bf715f054d5a0a13439286564fb5",
+    "crt.log": "643c38da706ca837c459535bbbfc9fc2d3dc77e01878c61b7507221256b4885c",
+    "fmt.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "graph-v2.log": "78234d9a99b9602b0205e2f5bbd30473918910d452976d5c39528bac9167703e",
+    "graph-v3.log": "dd85c8166d1df20c3ae0ccaf5dd165ddcb77c8973810d5d29d302b71ea286c24",
+    "graph.log": "c71a378b25eacc823501a2e51976ab6392b8affb9cf9ad79cc0378894b8f9b76",
+    "replay-final.log": "cb09bb4efde7a963707144ac0e17dee1fe7d65c57c73511cf340a2d44bdb2b42",
+    "root.log": "8bd819d5325a429a662cbd5c44799c87d27fb13a6270e64b7218a3737375eab6",
+    "startup-python.log": "1ea232f3bb7eb822f840d08658530ea47cb7a83fca613318035a41e28df9f2af",
+    "tools-python.log": "7733f3c7275e42d423d84995251d87a941dd48d15b96687053ae4c53f6bd411c",
+    "unwind.log": "d47f5401a43e8ddcbb6228b650a34d542b08feb38bc12f3105db4abc24e4941e"
+  },
+  "local_failure_history": {
+    "graph.log": "CMOVE memory source was unsupported; reused conditional-selection IR and existing unconditional-read emission for bounded32-bit CMOVE/CMOVA, with independent36-case fault/flags matrix",
+    "graph-v2.log": "partial graph had unresolved original branches; explicit rejection nodes were added, not successful fallthrough",
+    "canonical.log": "local formatting binding attached to wrong generated function; compiler rejected, fixed before execution",
+    "canonical-v2.log": "test assumed logical lock2 was owned slot2; actual canonical normalization gives slot3. Fixed expectation using actual storage address, no runtime weakening",
+    "canonical-cases.log": "test reacquired image authority after retiring code; used previously bound live data view to assert retained bytes",
+    "canonical-cases-v2.log": "corrupt guard correctly rejected at saved known-mask/type/guard validation, earlier than expected class; strict oracle corrected",
+    "canonical-cases-v3.log": "new real128-byte allocation correctly raised total live heap allocations3 ->4 and retained its new lock; updated original-entry expected state"
+  },
+  "review": {
+    "predecessor": "FNCLEX status/knowledge/profile/lifetime review found no demonstrated runtime defect; preserved case5 original-Windows timeout is not a guest instruction-equivalence finding",
+    "new_boundary": "Reviewed protected input/return/target identity, distinct exit table routing and argument references, actual EH4 registration/lock/cleanup/RET12, logical-slot normalization, scalar-encoded empty restriction, real NULL allocation and unknown bytes. Normal status returns use declared body cuts only; no native registration completion or encoded pointer authority is issued.",
+    "next_independent_review": "Sol: validate closure versus actual producer distinctions, eager CMOV memory effects, argument/saved-state and callback lifetime, rejected encoded live-address case, and exact-head CI; bounded Astra High for producer-bound encoding/publication/resize contracts if warranted"
+  },
+  "source_head_ci": [
+    {
+      "id": 41310626270,
+      "head": "18fc24ebd54098d3d6c1317c814823cb86bfbe6b",
+      "status": "in_progress",
+      "conclusion": null,
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41310626270",
+      "name": "Rust CI"
+    },
+    {
+      "id": 41310621708,
+      "head": "18fc24ebd54098d3d6c1317c814823cb86bfbe6b",
+      "status": "in_progress",
+      "conclusion": null,
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41310621708",
+      "name": "Pinned startup inventory"
+    },
+    {
+      "id": 41310621709,
+      "head": "18fc24ebd54098d3d6c1317c814823cb86bfbe6b",
+      "status": "in_progress",
+      "conclusion": null,
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41310621709",
+      "name": "Rust CI"
+    }
+  ],
+  "final_head_ci": "pending after evidence publication; exact IDs/outcomes maintained in SUB-579; no final-head pass claimed",
+  "next_scope": {
+    "first_rejected_call": "0x40c8ae ->0x402370 original memset",
+    "then": "actual406d62 encoding, remaining4072bb fill/publication and normalcleanup, with producer/cookie/write-event bound pointer facts and nonnull resize/lifetime/error contracts",
+    "genuine_architectural_gap": "Correct numeric encodings naming an existing live buffer still reject; current scalar bits cannot issue allocation or callback authority. Need a checked producer association with write invalidation and alias lifetime, not address lookup or retagging.",
+    "routing": "Sol independent review and bounded memset inventory; Astra High for concrete encoded ownership/resize design if useful; no Ultra"
+  },
+  "reproduction": {
+    "commands": [
+      "cargo test --locked",
+      "cargo test --locked --example crt_stream",
+      "cargo test --locked --example unwind_slice",
+      "cargo test --locked --example crt_stream crt_onexit::",
+      "cargo clippy --locked --all-targets -- -D warnings",
+      "cargo fmt --all -- --check",
+      "PYTHONPATH=research/process/startup python3 -m unittest discover -s research/process/startup",
+      "python3 -m unittest discover -s tools",
+      "PYTHONPATH=corpus python3 -m unittest discover -s corpus",
+      "python3 research/process/startup/check_normal_wrapper.py ORIGINAL OBSERVED NEW_OUTPUT"
+    ],
+    "repeat": "W2L_EH4_CODE=OUTPUT W2L_EH4_EVIDENCE=OUTPUT W2L_EH4_VECTORS=OBSERVED/normal-wrapper-vectors.txt W2L_PE_MAPPING_INPUT=ORIGINAL/unwind.exe cargo test --locked --example crt_stream canonical_image_cookie_and_original_record_initialization_compose -- --ignored",
+    "environment": "configured Rust toolchain; CARGO_INCREMENTAL=0 CARGO_NET_OFFLINE=true TMPDIR=/workspace/w2l-build-tmp W2L_Z3=/workspace/.tools/w2l-z3/bin/z3",
+    "limits": "no stack/proof/timeout/resource limit increases; failure under existing64-region policy is rejection, not modeled Windows NULL/error equivalence"
+  }
+}

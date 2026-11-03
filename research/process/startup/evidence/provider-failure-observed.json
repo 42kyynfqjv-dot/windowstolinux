@@ -1,0 +1,92 @@
+{
+  "kind": "Original Windows provider-failure observations; zero ELF or forward-entry executions",
+  "commit": "44a1bd6bc7896f4886c831cf7c7516edf255eafa",
+  "run": 41051942996,
+  "job": 124049912153,
+  "artifact": 12974812972,
+  "artifact_zip_sha256_upload_reported": "0dc61e1574728819b215f810fea5f980c8c13aca259a961eca52549e9c65d9cb",
+  "provenance": "Mechanically extracted from job stdout; successful archive digest upload-reported, not independently downloaded locally",
+  "report": {
+    "kind": "Original Windows authored DLL initialization failure; zero translations",
+    "windows_version": "10.0.20348",
+    "source_hashes": {
+      "provider_attach.c": "44015acd0d82e5a82daf4a1c0cf5d9bea06a0f539f32e98ca7725e1aa4792cd5",
+      "provider_load_probe.c": "f41abb8aaa83164ea448479c222087561a6ed6a1130ee5a6bd2e4e9a1ed32fc1"
+    },
+    "compiler_path": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX86\\x86\\cl.EXE",
+    "compiler_sha256": "fc26dcba228dd91cd09429670f298f4608833c84841a4ceca8c4955b4d495a7b",
+    "commands": [
+      [
+        "cl",
+        "/nologo",
+        "/W4",
+        "/O2",
+        "/MT",
+        "/LD",
+        "/DACCEPT_ATTACH=0",
+        "D:\\a\\windowstolinux\\windowstolinux\\research\\process\\startup\\provider_attach.c",
+        "/FeD:\\a\\_temp\\provider-failure-observation\\rejected.dll",
+        "/FoD:\\a\\_temp\\provider-failure-observation\\rejected.obj",
+        "/link",
+        "/IMPLIB:D:\\a\\_temp\\provider-failure-observation\\rejected.lib"
+      ],
+      [
+        "cl",
+        "/nologo",
+        "/W4",
+        "/O2",
+        "/MT",
+        "/LD",
+        "/DACCEPT_ATTACH=1",
+        "D:\\a\\windowstolinux\\windowstolinux\\research\\process\\startup\\provider_attach.c",
+        "/FeD:\\a\\_temp\\provider-failure-observation\\accepted.dll",
+        "/FoD:\\a\\_temp\\provider-failure-observation\\accepted.obj",
+        "/link",
+        "/IMPLIB:D:\\a\\_temp\\provider-failure-observation\\accepted.lib"
+      ],
+      [
+        "cl",
+        "/nologo",
+        "/W4",
+        "/O2",
+        "/MT",
+        "D:\\a\\windowstolinux\\windowstolinux\\research\\process\\startup\\provider_load_probe.c",
+        "/FeD:\\a\\_temp\\provider-failure-observation\\observer.exe",
+        "/FoD:\\a\\_temp\\provider-failure-observation\\observer.obj"
+      ]
+    ],
+    "artifacts": {
+      "accepted.dll": "9eb019b9d4213dcab707365e0055d385260bb2080b7473a1b4675462ad53593f",
+      "rejected.dll": "013511f4e079ad97a6e33b8628f446199a4b6e22af454e1416b478c32c65b7ff",
+      "observer.exe": "ebe6ef4bae631ae1b8825eb32770b3532d0a49b224b851c143c2614eb4773801"
+    },
+    "observation": {
+      "before_absent": true,
+      "first_error": 1114,
+      "after_first_absent": true,
+      "second_error": 1114,
+      "after_second_absent": true,
+      "value": 7,
+      "held_after_one_release": true,
+      "absent_after_final_release": true
+    }
+  },
+  "retained_failure": {
+    "commit": "6aa46e17c35f62be16b8cccf74e5c6dbdfb1acc8",
+    "run": 41051575029,
+    "job": 124048652319,
+    "artifact": 12974104509,
+    "archive_sha256_download_verified": "17cd449e111b623c767d80f9587fe63adc829e489cc697f1c8ba04e9f0d14550",
+    "error": "LNK2001 redundant explicit internal export alias; zero observer executions",
+    "correction": "Removed explicit alias, unchanged C sources and semantic expectations"
+  },
+  "review": {
+    "commit": "3b91f65da740de4924817ce9244977c1b7415ede",
+    "runtime_change": false,
+    "native_focused": 12,
+    "python_run": 75,
+    "python_existing_skip": 1,
+    "result": "No concrete storage/typed-read/failure-order defect found"
+  },
+  "scope": "Authored ordinary DLL false-attach namespace/error observation only. No generalized DllMain effect rollback, API-set initialization, Ex allocation failure or whole-PE support."
+}

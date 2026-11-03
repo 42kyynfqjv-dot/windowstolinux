@@ -1,0 +1,75 @@
+{
+  "kind": "Original callback8 descriptor allocation/initialization; explicit-profile component only",
+  "reviewed_parent": "5f58b019090a4db734d4a7715926c49592fd1ffb",
+  "source_sha256": {
+    "examples/crt_stream.rs": "420aa4d2119addec8d20ac8cadc384cf9665ba731c2212be51a219e511760aaa",
+    "research/process/startup/check_normal_wrapper.py": "f3e4ad719d377ded998b84eed66d4d29a0e8a271384d55d994ec01a8fafb7f3a",
+    "src/crt_normal_frame_tests.rs": "37d0024f05880dcdb881fc4f8c006ff2d78924717d6e6edd23f70a05d28a4d12",
+    "src/crt_startup_table.rs": "3271289a634b66cb1a54f75076ca33e41d75431db190694c438e8d34dccd9905",
+    "src/crt_stream_runtime.rs": "aceb20ebf4389e20defcfc9c525608677a906782f98978ce8d0980615b44e7c2",
+    "src/crt_ucrt_ptd.rs": "01f7357b5fcad6bd61856d668ee2f0a926b2185d71ee7b50a457656317fdbe84",
+    "src/crt_startup_descriptors.rs": "fd784e9103d76ef83bd894469a6c143b63439fefafddbe3da32ccb566d2de25c"
+  },
+  "validation": {
+    "crt_passed": 291,
+    "ignored_in_full": 2,
+    "artifact_replay": "completed; both artifact-dependent tests passed",
+    "resource_cases": 12,
+    "additional_pe_mutations": 7,
+    "mutation_classification": "six descriptor-stage variants plus shared thunk rejected earlier in global-lock startup",
+    "python_run": 76,
+    "python_skip": 1,
+    "clippy": "passed",
+    "format": "passed",
+    "repeat_rust": "identical explicit later emission"
+  },
+  "evidence": {
+    "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+    "rust_sha256": "08b6f4cc652cc82536fd2015709b6b2a1d08c30ba33e2091e986f300727209e1",
+    "report_sha256": "e882d141da6dfd275f53d50adb88c7c867530d91bab257508075767ef3e4db1a",
+    "recorded_windows_wrapper_comparisons": 5,
+    "new_windows_elf_pairs": 0,
+    "whole_pe_pairs": 0
+  },
+  "component": {
+    "executed": [
+      "callback8 registered EH4 prolog and lock7",
+      "nested original registered manager and recursive lock7",
+      "original calloc(64,56) with canonical descriptor role selected before escape",
+      "64 actual native record object initializations and original field stores",
+      "same block publication at41cf08 and capacity64 at41d108",
+      "original manager cleanup and epilog; nested lease released",
+      "original inherited body to named GetStartupInfoW call"
+    ],
+    "next_boundary": "CALL408543 GetStartupInfoW inside408537",
+    "retained": "same UCRT Buffer plus distinct3584-byte Descriptor root,64 record objects,capacity64,outer callback frame/lease",
+    "not_acquired": "startup-info output/inherited or standard OS handles"
+  },
+  "resource_contract": {
+    "metadata_denial": "reject before opaque bytes/object publication; zero/four earlier records tested",
+    "native_record_cap": 8192,
+    "windows_failure_equivalence": "not established; native rejection never fabricates FALSE/NULL/error/exception"
+  },
+  "limits": [
+    "default/full startup/rcedit/XP7 unproven",
+    "startup-info/standard-handle effects still supplied in older isolated tests, not actual acquisition here",
+    "resource failure, errno, exceptional funclet40bfbc and rollback unproved",
+    "historical Windows timeout causes unresolved"
+  ],
+  "historical_timeout": {
+    "run": 41107853543,
+    "case": 19,
+    "artifact": 13002965454,
+    "cause": "unresolved; no retries/threshold changes"
+  },
+  "next_gate": "process-owned startup-info output and reserved-block lifetime, actual inherited/standard handle producers; host fd0 must not become guest NULL",
+  "log_sha256": {
+    "replay.log": "e93aa76dfe6221d807b9faa2496407bdb0fe0285b8197321c82eeec2cb6675f8",
+    "resources.log": "d17ace17482bad247efbc7d9b1ffe1def0e9a6b5f36504a6373d81e602ee5f2d",
+    "full.log": "132bdb70270f4ac5239437831aadac974b558bafca1bc80885cc25ca03b6291a",
+    "entry.log": "ed27afa545ada955635c21a29990eff2260a85e0761ae67aecdfeede9c58131b",
+    "clippy.log": "41378e9ef31b5ce704ca3fdff12fbcd3ccf2d9626ec7117f58ed9c5b67e28d14",
+    "python.log": "11d378fa9aa89152efe3df0548a406d983e1153910324fec454bf4beba6e3450",
+    "repeat.log": "84f0f6c336251f78a441aa72bef5a6a9504115476437ba7e6d65a0ba66547f4c"
+  }
+}

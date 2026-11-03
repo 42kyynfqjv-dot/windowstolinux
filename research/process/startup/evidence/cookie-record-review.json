@@ -1,0 +1,85 @@
+{
+  "kind": "original cookie and normal-record initialization on canonical mapped storage; component evidence",
+  "parent": "aee7c59f394ff83db158fb0ead850687464b06cf",
+  "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "generated_rust_sha256": "453843d37d19ccd26cb80a67ba61a1f56291e86756a5fe0a3acd48495dd281ef",
+  "cookie_initializer_sha256": "7d447a6501029669822a7e701116e73a0b15fa33a704ba552b267f8f30f86e10",
+  "crt_tests": 248,
+  "crt_ignored": 2,
+  "ignored_scope": "Recorded wrapper comparison and recorded cookie/record composition both passed separately in replay.",
+  "converter_tests": 175,
+  "python_tests": 60,
+  "python_skips": 1,
+  "strict_clippy": "passed",
+  "connected_native_cases": 8,
+  "independent_cookie_input_classes": 8,
+  "changed_cookie_code_mutants": 75,
+  "retained_recorded_windows_comparisons": 5,
+  "new_windows_observations": 0,
+  "whole_pe_pairs": 0,
+  "retained_ordered_cases": 85,
+  "retained_inline_cases": 26,
+  "mutant": [
+    {
+      "name": "replay-baseline",
+      "exit": 0,
+      "source_sha256": "453843d37d19ccd26cb80a67ba61a1f56291e86756a5fe0a3acd48495dd281ef",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "replay-guard-mutant",
+      "exit": 101,
+      "source_sha256": "41ade8f169c1e6e9a9b9b728730ef0dd4c67148067837d33647b7e4ee2924165",
+      "log_sha256": "15b01d37a04f115985ff4c04adf6e2dec1fe94c6b1a5e6dd79c6c3f56af96fd0"
+    }
+  ],
+  "review": [
+    "Reviewed prior FILE section identity, alias, permission and rollback contracts; no new predecessor defect found.",
+    "Entry requires live active return authority before code reads or writes; repeated activation cannot update the complement.",
+    "Original cookie/complement separation is64bytes; no remapping or shadow state.",
+    "Default and zero-high-word inputs reject at the actual entropy call; original prior pushes remain and complement is untouched.",
+    "Established-cookie input permits original complement store and record prolog/checked epilog; changed guard/cookie or released mapping reject with exact error classes.",
+    "Fixed initial test runner name and production-build dependency on a cfg(test) helper. Strict Clippy required as_chunks; failures retained locally."
+  ],
+  "entropy_import_inventory": {
+    "0x41502c": [
+      "kernel32.dll",
+      "GetSystemTimeAsFileTime"
+    ],
+    "0x415028": [
+      "kernel32.dll",
+      "GetCurrentThreadId"
+    ],
+    "0x415024": [
+      "kernel32.dll",
+      "GetCurrentProcessId"
+    ],
+    "0x415020": [
+      "kernel32.dll",
+      "QueryPerformanceCounter"
+    ]
+  },
+  "remaining": "Actual helper401b24 output buffers, SIMD local initialization, time/performance-counter error effects, guest process/thread identity and stack address. Original startup40161f and later loader/delivery/termination remain unproven.",
+  "parent_ci_at_review": {
+    "41017830404": "success",
+    "41017825905": "success",
+    "41017825889": "success"
+  },
+  "historical_windows_timeouts": "Unresolved; no causes inferred from passing runs.",
+  "logs": {
+    "focused.log": "a1b5d7ee1ff72ef240bc5941e95e1c3400659082f7420b4c607c1071ce1f72a7",
+    "focused-fixed.log": "4e31d0c015bd4dcfa91e60301c312bc8d66728c71dd698f6fea98fa6af5e5276",
+    "strict.log": "43f3dcf7ba5caaf67db87ae3adbba38565d188eacb847501cf619a9d30a0e1c1",
+    "independent.log": "635b877bcda3b647d18c2e6372f6e3fa18da3d5721e39058c2ac347dcd903630",
+    "replay-guard.log": "c5a846d90e81900cce463e1e46134a25c717b72f66a692ccda4d549fb3eaa5d5",
+    "crt.log": "48c359478cf6d501a6736f9450f9d1f46e11868d355147b3c645db15ef513fad",
+    "root.log": "07944819cb853a4434999549458808cda6c35ffc0b7d3c86361f9a86f3a8537b",
+    "clippy.log": "c29943b7877f2688522148ee1a6a053ba4d17efc867fb54b6973be59fcf03959",
+    "clippy-fixed.log": "c0dc0a2e35aab71b4b24ab100eaa82aaa37ae713cdf3638d939b13d8ebd6a1c7",
+    "clippy-final.log": "279f8b7328d602cab1407169fb3fc1d181e385877b54e8b86a68ea3656a17c60",
+    "python.log": "493393099e70bc209573b9141888255aa6536e3f21c5251f5454bb7eeb711bc0",
+    "replay.log": "1761b63b5e6305bd2c1dfb3d1703c0c897877e445640e5eb498ec1aaa628b044",
+    "replay-baseline.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "replay-guard-mutant.log": "15b01d37a04f115985ff4c04adf6e2dec1fe94c6b1a5e6dd79c6c3f56af96fd0"
+  }
+}

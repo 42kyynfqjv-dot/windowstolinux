@@ -1,0 +1,61 @@
+{
+  "scope": "Original byte boolean and environment-entry components; no environment acquisition or whole-PE admission",
+  "regions": [
+    {
+      "name": "TRUE_BYTE",
+      "address": "0x401bd5",
+      "bytes": 3,
+      "sha256": "e18aacce29affcdddaa5f641ac1ec12552e0fe9d066e6408941b1792818b8619"
+    },
+    {
+      "name": "ENV_THUNK",
+      "address": "0x406c9c",
+      "bytes": 5,
+      "sha256": "a91d076750c3957fc8b4c0c91a986a408766416c32b66ae25bd410c6e209b213"
+    },
+    {
+      "name": "ENV_PREFIX",
+      "address": "0x406a0b",
+      "bytes": 23,
+      "sha256": "3e33f2d48e24f37eabf6fa23cc51b2268f4437c9ceb4a566facd6493f4e0fa5d"
+    },
+    {
+      "name": "ENV_PRODUCER_PREFIX",
+      "address": "0x40b966",
+      "bytes": 8,
+      "sha256": "53545bd37766f4228cd93d6b7a620069df49631f8bdab59495728a1f9f4a1138"
+    }
+  ],
+  "boolean_body_cases": 7,
+  "boolean_artifact_cases": 7,
+  "environment_prefix_cases": 4,
+  "next_boundary": "IAT CALL0x40b96e kernel32!GetEnvironmentStringsW, slot0x4150e4",
+  "dependent_free": "kernel32!FreeEnvironmentStringsW slot0x4150e8",
+  "new_whole_pe_pairs": 0,
+  "local_validation": {
+    "crt": "345 passed,2 ignored artifact gates separately handled",
+    "canonical": "original entry reaches GetEnvironmentStringsW after original bool/query/locale/producer prolog; passed",
+    "clippy": "all targets warnings denied passed",
+    "fmt": "cargo fmt --all -- --check passed",
+    "python": "107 tests,1 skip",
+    "low_stack": "152 cases at512KiB plus64KiB environment padding passed",
+    "rust_sha256": "2d01cad74a0ea5b727b90a5a5413fdf59e41255068a0c5b67b3a63e91d8ad6ff"
+  },
+  "prior_e90af45_replay": {
+    "rust_sha256": "38de1d8dcd6c30b1d1c43a1df60511e125d538014136ee28f8c97de7887f5afe",
+    "comparisons": 5,
+    "whole_pe_translation_pairs": 0
+  },
+  "CI": "new final-head workflows/replay must be checked separately; no final success claimed",
+  "limits": [
+    "no environment snapshot acquired/published",
+    "native environment/encoding/free contracts not established",
+    "full startup/rcedit/default and XP7 support unproved",
+    "historical Windows timeout causes unresolved"
+  ],
+  "retained_development_failures": [
+    "old cut tuple failed structural emission; corrected without weakening graph checks",
+    "unknown comparison rejects numeric knowledge before branch flags; oracle corrected",
+    "failed nested callback retains return frame and preceding writes; oracle corrected"
+  ]
+}

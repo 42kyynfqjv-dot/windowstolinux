@@ -1,0 +1,2 @@
+{"case":"synthetic","entries":3,"units":42,"distinct_live":true,"stable_after_mutation":true,"free_first":true,"free_second":true,"get_last_error":4660,"free_last_error":9029,"compiler":194435229}
+{"case":"empty","entries":0,"units":2,"distinct_live":true,"stable_after_mutation":true,"free_first":true,"free_second":true,"get_last_error":4660,"free_last_error":9029,"compiler":194435229}

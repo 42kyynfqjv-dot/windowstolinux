@@ -1,0 +1,70 @@
+{
+  "reviewed_parent": "7f206c27eb0005f3b219eba744924ff16865f953",
+  "scope": "original abort entry and complete signal-query caller, explicit locked-query rejection",
+  "new_windows_observations": 0,
+  "new_whole_pe_pairs": 0,
+  "reviewed_registry_cases": 16,
+  "new_native_query_cases": 8,
+  "crt_passed": 237,
+  "crt_ignored": 1,
+  "root_passed": 175,
+  "python_tests": 60,
+  "python_existing_skips": 1,
+  "clippy": "passed",
+  "review_findings": [
+    "No admitted-domain registry ownership defect found; all sixteen prior cases rerun with strict result/visited assertions.",
+    "Canonical preflight and original writes remain separate; ordinary data reuse cannot overwrite protected control words.",
+    "Original pending failure executes CALL4077ff to caller40cbcf, then rejects actual target40cafd.",
+    "Conformance callbacks supply standalone query outcomes only, with original argument reads/writes and RET12 checked.",
+    "Saved-frame corruption rejects immediately as protected overwrite; regression asserts the actual error rather than expecting delayed failure."
+  ],
+  "parent_predecessor_ci": {
+    "abb3744": [
+      {
+        "id": 41002080357,
+        "conclusion": "success"
+      },
+      {
+        "id": 41002074502,
+        "conclusion": "success"
+      },
+      {
+        "id": 41002074539,
+        "conclusion": "success"
+      }
+    ],
+    "7f206c2": [
+      {
+        "id": 41003575835,
+        "conclusion": "success"
+      },
+      {
+        "id": 41003579881,
+        "status": "in progress; Linux pending, other jobs successful"
+      },
+      {
+        "id": 41003575818,
+        "status": "in progress; Linux pending, other jobs successful"
+      }
+    ]
+  },
+  "next_gate": "Original40cafd EH4 scope41b740, lock3 acquire40bdcf, cookie/encoded cell41d2d8, ROR ESI,CL, finally40cb59/unlock40be17 and RET12. IR rotate semantics are missing. Signal dispatch, fast-fail/reporting and exit remain unbound.",
+  "historical_windows_timeouts": "unresolved; no new failure diagnosis",
+  "initial_local_failure": "Saved-frame corruption test initially expected a later callee-saved error; protected storage rejects at the attempted write. Prior failure logs retained locally.",
+  "local_log_sha256": {
+    "crt-final.log": "febc3648f5c14e30b2a42351426e96a4d7807dd07e2ae1fd5a36fe7bb65bac9a",
+    "root.log": "b43f2cb837cca488f56abe3e2a23882732990ca6a8a539ade2ebe3f80bacf071",
+    "clippy.log": "4158dc14125fa9febf63260888c7cfc63f9650fa66e07eee02fcf1c93ee40ec9",
+    "python.log": "20c0144cf67cccd7aa70aa012616d3424e018ff98a47275f8fe3a06e54178973"
+  },
+  "retained_windows_comparisons": 5,
+  "ordered_native_cases": 85,
+  "registered_errno_native_cases": 16,
+  "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "rust_sha256": "49b59577fc33a927c42adde77f34e839664cece5900ea6e08795e83989b70010",
+  "replay_report_sha256": "669b2358294afa240d5fc925c098d7b12a438d4fe8241d7b89ec73adf405bef4",
+  "original_abort_code_sha256": {
+    "abort-entry": "0592189e3b4528351b8bde51046a5a358ff5c27f2448f36e4007c7d4b734d5ed",
+    "abort-query": "78c3075082530d874bac4431ba22ff88171469176f14c31022baa68903962974"
+  }
+}

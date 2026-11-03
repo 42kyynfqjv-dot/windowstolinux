@@ -1,5 +1,6 @@
 //! Strict linker-image intake; translation requires the separate typed proof.
 use crate::{range, u16_at, u32_at};
+mod control;
 
 const CODE: u32 = 0x6000_0020;
 const DATA: u32 = 0x4000_0040;

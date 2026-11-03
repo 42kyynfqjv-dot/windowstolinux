@@ -1,0 +1,250 @@
+{
+  "kind": "original native-profile component execution; no whole-PE translation",
+  "base_commit": "decf5897ae1e728986f87aa766ca8dba970164c7",
+  "status": "final aggregates, full coherent semantic-source replay, same-input independent emission and12 original Windows API observations passed; full exact-head CI tracked separately",
+  "next_boundary": "before CALL0x401be4 ->0x4076a0; FP-control effect unbound",
+  "source_sha256": {
+    "src/crt_c_initializers.rs": "b863f10e1023949042500be4ec4e52131979e75dd89525cdd360023b6513a088",
+    "src/crt_normal_frame_tests.rs": "e35d1c2e4cf12e4fcdecfe649a778971e54883e2db5c2fac6d34c4f5acbfafab",
+    "src/crt_stream_runtime.rs": "458524f427e042ebfb565637e17a42c5d68d6a51d7ed039d1059d70565b8db8a",
+    "src/crt_resident_loader.rs": "472edfda8174b2085e889482b1378addeb00e3d31c4af068b1f565cacc7be189",
+    "research/process/startup/check_normal_wrapper.py": "ca7bf17fe51fa2ea7741b740967b7dfe0b6eb5d178777d81ac8fbde3851654f1",
+    "research/process/startup/observe_slist.c": "4c4e419aebf60ccf4e5504214c2c671829201ebfb3c7abd8304227b9e3f4a041",
+    "research/process/startup/observe_slist.py": "144a3ecdd10cd05ad9d90e31d9d5c604bb2ed4a5821d74b44dbc6c7ef0461c56",
+    "research/process/startup/test_observe_slist.py": "646d54cc7b4db4d95ac77a75bea7be3a14fd78eeb6a9f0bb4d51562f01acd812",
+    ".github/workflows/startup-inventory.yml": "4c323c4d981f77dabb121d1a32a2799b852c44f95f4db89d23bea281401544cc",
+    "src/crt_locale_code_page.rs": "1d23e432373162a8003105f45fbd5169c2c46e13b22c522a94b5c46e76ee4b1d"
+  },
+  "requirements_sha256": "d003e9ae85063669a93bbb32393b69c1c6c96e9a1a9186e3eb79212c77d298b3",
+  "connected_effects": [
+    "original result/argument cleanup following actual argc/argv publication",
+    "original InitializeSListHead wrapper and import with opaque process-owned module header",
+    "live flag query and conditional original callback encoding/store",
+    "two original RET0 helpers and actual FP-wrapper argument pushes"
+  ],
+  "SLIST_domain": [
+    "PE32 aligned owned writable Module range8; opaque system-use-only bytes",
+    "initialization expires old read facts; raw guest reads/writes/copies rejected",
+    "same capability/owner retained; reinitialization replaces serial; stale storage rejected",
+    "fixed32 capacity boxed at runtime creation; capacity failure rejects before effects, no Windows resource-error result claimed",
+    "void stdcall4; volatile result/flags and LastError unknown; protected call/saved state validated before effects"
+  ],
+  "cases": {
+    "original_helper_modes": 15,
+    "direct_API_ABI_lifetime_modes": 11,
+    "opaque_negative_modes": 9,
+    "opaque_capacity": 32,
+    "opaque_positive": "initialization/read-fact expiry/adjacent preservation/reinitialization/stale storage",
+    "new_original_Windows_SLIST_observations": 12,
+    "retained_Windows_wrapper_comparisons": 5,
+    "retained_Windows_conversion_API_rows": 158,
+    "new_whole_PE_pairs": 0
+  },
+  "checks": {
+    "focused_opaque_state": "passed",
+    "focused_API_ABI": "passed",
+    "original_connected_gate": "passed from final full replay; new FP boundary explicit",
+    "Python_startup": "101 tests, one skipped",
+    "Python_tools": "106 passed",
+    "Python_corpus": "18 tests, one skipped",
+    "root_Rust": 182,
+    "CRT_Rust": 337,
+    "unwind_Rust": 185,
+    "clippy": "passed warnings denied",
+    "format": "passed",
+    "CRT_ignored": 2,
+    "full_replay": "passed including both ignored artifact gates",
+    "repeat_emission": "same original code catalog/vectors and PE produce identical Rust",
+    "CRT_ignored_artifact_gates_executed_by_full_replay": true
+  },
+  "base_CI": [
+    {
+      "id": 41341194171,
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 41341190130,
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 41341190135,
+      "status": "completed",
+      "conclusion": "success"
+    }
+  ],
+  "review": [
+    "published predecessor source fingerprints match five git-show files",
+    "retained158-row trace SHA25694e18f9c7a6f49141d8e9d9d56351df19a5e19c2ca030444388c950ff58a504d verified",
+    "argc/argv actual stores and pointer/string allocation identity preserved",
+    "opaque header not assumed all-zero; primary SDK has private CpuId state",
+    "no pointer/callable authority issued from callback encoding",
+    "original FP effect and fatal/invalid paths not replaced with successful callbacks"
+  ],
+  "failure_history": {
+    "wrong_unknown_flag_diagnostic": "expected ZF failure corrected to earlier unknown scalar read failure; read/rejection preserved",
+    "initial_aggregate": "334 passed,3 stack overflows,2 ignored; fixed inline state allocation",
+    "next_aggregate": "336 passed,1 numeric fixture stack overflow,2 ignored despite isolated pass",
+    "fix": "box fixed header table at runtime creation; split independent numeric test lifetimes into non-inlined frames; unchanged512KiB limit and all cases/assertions",
+    "partial_replays": "two explicitly interrupted after reproduced local stack defects; original logs retained, neither accepted as final replay",
+    "historical_Windows_timeouts": "unresolved; local stack regression is separate",
+    "Windows_probe_compilation": "MSVC19.44 warning C4127 at observe_slist.c:19 promoted to error C2220. No probe execution occurred; following dependent jobs skipped. Layout condition changed to compile-time typedef, no warning suppression or threshold change.",
+    "repeat_harness_configuration": [
+      "First repeat omitted EH4_CODE and selected existing 34-byte synthetic Main fill fixture; expected source mismatch.",
+      "Second repeat output directory did not exist; generator failed before native execution. Both logs retained; no production or gate change."
+    ]
+  },
+  "next_inventory": [
+    {
+      "name": "fp-control",
+      "address": "0x4076a0",
+      "bytes": 108,
+      "sha256": "f9a5368fd72d7e46ab494548a9141e3e5099be0886e5d6cd4e42a6fef415824d",
+      "scope": "read-only bounded inventory; not admitted"
+    },
+    {
+      "name": "fp-low-level",
+      "address": "0x40d000",
+      "bytes": 912,
+      "sha256": "e460d509f556d0c7e2ba545ad2366576c9aaa3b34647f32e5b160a247e83141c",
+      "scope": "read-only bounded inventory; not admitted"
+    },
+    {
+      "name": "fp-encode-control",
+      "address": "0x40d390",
+      "bytes": 256,
+      "sha256": "d2b9be53fe11e99863678c7084d19ee75d77fa542240cf024a750c4615385425",
+      "scope": "read-only bounded inventory; not admitted"
+    }
+  ],
+  "Windows_probe": {
+    "status": "12 actual Windows PE32 API observations validated; other workflow gates separate",
+    "cases": 12,
+    "scope": "authored PE32 publicAPI observations; private bytes observational, protocol tests synthetic",
+    "source_sha256": "4c4e419aebf60ccf4e5504214c2c671829201ebfb3c7abd8304227b9e3f4a041",
+    "toolchain": "existing Windows2022/MSVC14.44 x86 workflow",
+    "artifact": 13098128613,
+    "failed_run": 41344214535,
+    "failed_job": 124960453455,
+    "failed_artifact": 13098681056,
+    "failed_zip_sha256": "1889e504c9b90fdd1adb9093b5f190e53d94e85a5eeab460c68a02cbd05e24b8",
+    "run": 41344469225,
+    "job": 124961233509,
+    "head": "0d5f8c6b9f1a5808d41063c713222ccd0bafd68a",
+    "pe_sha256": "d600c81d3100b51047f9c5d97162fa1b8116fc62bc9abd076e08f5629eeb8d22",
+    "observations_sha256": "7dbeb5ab0c9c8e9b6fd63bd7b03c5375aa5c8e39ef1d3250bfef7e0ef881562e",
+    "report_sha256": "4a4fd5d00d439ce5c5b8d9b682fc63ead820b614e17bbd6c6d8f9e98433458c2",
+    "compiler_full_version": 194435229,
+    "private_bytes": "observed zero on tested host; opaque contract preserved, no universal byte oracle"
+  },
+  "limits": [
+    "explicit native serialized startup profile only; no default/full startup/rcedit/wholePE admission",
+    "FP control/host-state equivalence unbound; x87 FNCLEX does not imply FSTCW/FLDCW or MXCSR support",
+    "SLIST operations, raw private byte representation and concurrency unbound",
+    "resource failures, nonnull free/new-handler/exceptional cleanup and prior broader equivalence remain open",
+    "no XP7 claim from modern-host API observations",
+    "no Ultra/formal approval/merge/release/denied optional comment retry"
+  ],
+  "log_sha256": {
+    "canonical-v4.log": "ce619f5efa61180f399e3aaccaec8f2b8d612799315ac6b79a213d976c343d6b",
+    "numeric-fixed.log": "73091ff155e34e63b46e98f3d839cb501eb75472769746ff60a0bad72d4e6714",
+    "tools-python.log": "86f52a726d0649e60fb854a4bf8d9ff58f82d17dbbd5cc7df8983b637268efdc",
+    "canonical.log": "58d218fd99b6141a64b96cc4730c966490066e697c31724ea9b975f011f69890",
+    "numeric-layout-fixed.log": "a6eda688b643d1f0392389ad1d2ee37e0fde2e92ad92c5bede024be2aff5d840",
+    "startup-python.log": "0cb96ede9064fdda06c7c06d784b8cf1f89519ce552fbc860eba4afb8d4502df",
+    "slist-model.log": "71d1f74039ed8be129c4229353a752b8b975d24af75f39ce8c54c5781b9b251b",
+    "slist-api.log": "5ae8ce6ecf70c1dd3e85b8c8ca25b06916ca99b8ea3f54cf9c9c6a9caf72ab82",
+    "canonical-v3.log": "f450726046bcab10ca0377edd342d28798cf4cc65c072b0215dbe2d3855a3980",
+    "crt-final.log": "aca839b973932e9358cb8c4bfa0980cd45bbe4c1b3086924c89ee81f2d1abf62",
+    "word-register-fixed.log": "1ba7147a25d54c3cf31951bad9ba47a7b77723e0b4b33ef53d6c34b501ea0f94",
+    "root.log": "e8bdbdaffdb77cda61db103862ed96c3d5ff13808267cec10455d4998d4f7b9d",
+    "catalog-fixed.log": "8e48a3f823adf4e8120009cbdf37315672a0139b4ee0f5eef2413712dda1c3fc",
+    "corpus-python.log": "8b3bf4a78b3fedd204818e7060cefe0ade6c565f85a2a19a633a9766b1eacc79",
+    "crt.log": "a283918f35776c4c592afd2f4dea714d43eb5973841c3575420867563f1aa09f",
+    "word-register-diagnostic.log": "483d6c4a81d9f89beb2de901b1ed573601a80cb69a17209fdceb189e79b62e96",
+    "canonical-v2.log": "d477b1a089b9a64b6df691b9cd4afc9e2c5aeb085ced7183ebcf9b9b6a102d9d",
+    "root-final.log": "f4028a55a27789d05b5e0c0103daf9cc52a767ba17100b0f82016ac9ea86e985",
+    "crt-final-2.log": "3f7b2774eab66091fc8af90fb0f663e5a6dcdebf52d238016c4b95934c519309",
+    "unwind-final.log": "2b8d669b0d50c0fc7e811aadaa078a4e1273cc6f435420ddc8c78b8942099049",
+    "clippy-final.log": "340705305371abc558adf10782bc16c5148335b3866994d5839c8d4e0aa59b2d",
+    "fmt-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "repeat-final.stdout": "e60aa8975f0e197fbd8c79e2b6339364fc9cbbfcedcb373bcef0fb4d81054aa7",
+    "repeat-final.stderr": "ab1e8ab4b828624e75e6e8c917ac437f104b9cd0b496a9d073a4a52c0abca136",
+    "repeat.stdout": "3651b77c2d690c88831592cf9cb4189d13d3121b6ecc42df1ffd27315c9e77c6",
+    "repeat.stderr": "ab1e8ab4b828624e75e6e8c917ac437f104b9cd0b496a9d073a4a52c0abca136",
+    "repeat-bound.stdout": "bfd9c4b767bb897dccb9d0f7075ee25e8256044523e6135e0e5e47ed5c133c3d",
+    "repeat-bound.stderr": "c95084e86d5aa5fc252ec18bba2e49254b9823ff6be18a465ba4112e11117807",
+    "slist-protocol-final.log": "bb80ca3ea100bff9a0100583d6bda0b62c60a43d23d8fe0171e1397335671920",
+    "replay-accepted.log": "320ddd963c5de47278e6892349b0b3ec7bfb35572ed46afeb0cb1ca308694dfa"
+  },
+  "implementation_commit": "a4d382b878744800ebb53360a7d36ec62bb2d4a5",
+  "full_replay": {
+    "kind": "original prolog/epilog component comparison with explicit unexecuted body boundary",
+    "scope": "Live registry fixture; body EAX/flags inputs; original stack/FS/saved-state restoration only",
+    "emitted_Rust_sha256": "52a24b83593945e60cd7096a3f7373e4b1867dd9df5cde3bf559ecb45905af63",
+    "frozen_PE_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+    "report_sha256": "e70194d70300991ee9cc6701594770dc9a7e0fca0828b4a99baef1bb789ab716",
+    "log_sha256": "320ddd963c5de47278e6892349b0b3ec7bfb35572ed46afeb0cb1ca308694dfa",
+    "wrapper_comparisons": 5,
+    "new_whole_PE_pairs": 0,
+    "actual_post_helper_modes": 15,
+    "actual_slist_ABI_modes": 11,
+    "slist_private_bytes": "opaque; old reads expired; raw guest access rejected",
+    "post_helper_hashes": {
+      "crt_c_initializers-post_slist": "7684423447cbcc28ebc5a3bc975568aae132550969b9b343a95fa0300c8aee1a",
+      "crt_c_initializers-post_flag": "d8786a2786d8a005f4037ce6284982ec45841f71bcf650e16aaf3f11f0af8f79",
+      "crt_c_initializers-post_encode": "01d2f8b7bc47bdc3bb782b6329d3403a1563e3b5872a1ea79728dabfe303aea8",
+      "crt_c_initializers-post_noop": "b6cbececf1b07e74f37d57710c68c31f0b92cb08d51093252b321b07542e177b",
+      "crt_c_initializers-post_fp": "021f5a3f174be0d0123fb31d69652ed7644cd7c4e3fba6246d694969ddd76799"
+    },
+    "independent_repeat": {
+      "expected_Rust_sha256": "52a24b83593945e60cd7096a3f7373e4b1867dd9df5cde3bf559ecb45905af63",
+      "independent_outputs": [
+        {
+          "path": "/workspace/w2l-evidence/post-argv/repeat-bound-evidence/normal-wrapper.rs",
+          "sha256": "52a24b83593945e60cd7096a3f7373e4b1867dd9df5cde3bf559ecb45905af63"
+        }
+      ],
+      "required_input_binding": "original EH4 code catalog and vectors, frozen PE; evidence output directory created before invocation",
+      "prior_diagnostics": [
+        "First repeat omitted EH4_CODE and selected existing 34-byte synthetic Main fill fixture; expected source mismatch.",
+        "Second repeat output directory did not exist; generator failed before native execution. Both logs retained; no production or gate change."
+      ]
+    }
+  },
+  "CI_snapshot": {
+    "implementation_head": "a4d382b878744800ebb53360a7d36ec62bb2d4a5",
+    "implementation_inventory_failure": {
+      "run": 41344214535,
+      "job": 124960453455,
+      "cause": "new authored probe compile C4127/C2220; no original execution or following dependent checks",
+      "retained_artifact": 13098681056
+    },
+    "probe_fix_head": "0d5f8c6b9f1a5808d41063c713222ccd0bafd68a",
+    "runs": [
+      {
+        "id": 41344474681,
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "id": 41344469236,
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "id": 41344469225,
+        "status": "in_progress",
+        "conclusion": null
+      }
+    ],
+    "note": "This documentation/retained-evidence commit needs its own CI readback. Probe success is not full workflow success."
+  },
+  "reproduction": {
+    "full_replay": "python3 research/process/startup/check_normal_wrapper.py ORIGINAL_UNWIND ORIGINAL_STDIO FRESH_OUTPUT",
+    "same_input_repeat": "Provide W2L_EH4_CODE=full replay output, W2L_EH4_VECTORS=original normal-wrapper-vectors.txt, W2L_PE_MAPPING_INPUT=frozen PE, and an existing fresh W2L_EH4_EVIDENCE directory before invoking canonical_image_cookie_and_original_record_initialization_compose --ignored",
+    "probe": "Existing startup-inventory Windows2022/MSVC14.44 x86 workflow, observe_slist.py FRESH_OUTPUT",
+    "note": "Raw probe bytes retained; private values not a universal oracle. Native component pairs are not whole-PE translation."
+  }
+}

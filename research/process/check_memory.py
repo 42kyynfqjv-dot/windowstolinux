@@ -17,7 +17,7 @@ mutations=[
  ('defined','!r.defined[s.clone()].iter().all(|&b| b)','false'),
  ('freshness','self.regions[i].epoch != fact.epoch','false'),
  ('top-range','end > (1u64 << 32)','false'),
- ('writable','!r.permissions.write','false'),
+ ('writable','!r.permits(address, size, |p| p.write)','false'),
  ('wx','permissions.write && permissions.execute','false'),
 ]
 rows=[]
@@ -51,4 +51,4 @@ with tempfile.TemporaryDirectory() as tmp:
     for name,_,code in vectors:
         p=run([str(exe),name]);assert p.returncode==code,(name,p.returncode,p.stdout,p.stderr)
         assert p.stdout==b'' and p.stderr==(b'stream runtime contract violation\n' if code else b''),(name,p.stderr)
-print(json.dumps(dict(inherited_memory_tests=7,heap_effect_tests=10,guard_mutations=rows,emitted_frame_vectors=len(vectors)),indent=2))
+print(json.dumps(dict(inherited_memory_tests=(repo/'src/guest_memory_tests.rs').read_text().count('#[test]'),heap_effect_tests=(repo/'src/guest_heap_tests.rs').read_text().count('#[test]'),guard_mutations=rows,emitted_frame_vectors=len(vectors)),indent=2))

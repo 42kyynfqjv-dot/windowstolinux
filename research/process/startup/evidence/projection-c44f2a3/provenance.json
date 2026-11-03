@@ -1,0 +1,21 @@
+{
+  "source_head": "c44f2a35b1e579f6fa5edee621bf6c379f0ffef2",
+  "run": 40909012601,
+  "job": 123574640413,
+  "artifact": 12914070783,
+  "artifact_zip_sha256": "2f7dc5316a1d0bc1092c952b897f0315d0e5a0c7ccdb57f77d527ea4abaf7c5b",
+  "completed_cases": 199,
+  "last_started_case": 199,
+  "completed_microseconds": 14938595,
+  "largest_completed_microseconds": 194904,
+  "largest_case": 196,
+  "stdout_bytes": 0,
+  "same_saved_source_local_optimized_seconds": 1.5162123390036868,
+  "same_saved_source_rust_sha256": "d470d50085cbed3e52c08ca11b4b8bbdfeaa8abf618e00b798284a021f4341cb",
+  "classification": "unoptimized aggregate batch exhausted unchanged 15-second budget while progressing; not a demonstrated individual case hang; does not diagnose historical original-Windows timeouts",
+  "new_build_flags": [
+    "-Copt-level=1",
+    "-Coverflow-checks=yes",
+    "-Cdebug-assertions=yes"
+  ]
+}

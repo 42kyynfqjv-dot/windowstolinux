@@ -1,0 +1,50 @@
+{
+  "kind": "canonical process-image ownership component review",
+  "parent": "466cc8afceb316435e8fd1757a12d6bbef73e431",
+  "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "generated_rust_sha256": "d9c4cd6bce58ac4b8a14e05b23af3b8f6e42130d9ce375361a9b9d94541cc375",
+  "recorded_windows_comparisons": 5,
+  "new_windows_observations": 0,
+  "whole_pe_pairs": 0,
+  "new_process_image_cases": 12,
+  "retained_inline_cases_with_process_backing": 26,
+  "pending_delivery_cases_strengthened": 4,
+  "crt_tests": 245,
+  "crt_ignored": 1,
+  "ignored_test": "vector comparison passed separately in replay",
+  "converter_tests": 175,
+  "python_tests": 60,
+  "python_skips": 1,
+  "clippy": "passed -D warnings",
+  "review": "Preserved preceding checked header reads, unknown LastError and rejection ordering. Tightened bootstrap mapping to READ permission; no implicit writable PE image authority.",
+  "contract": [
+    "One canonical mapped process image; no temporary acquired-module token.",
+    "Initialization creates the mapping and publishes only after successful map.",
+    "No new owned module reference is granted by GetModuleHandleW.",
+    "Thread/fiber/event changes retain process authority; closure, foreign identity, stale mapping and view aliases reject.",
+    "Acquired references at the same base remain separate from process lifetime."
+  ],
+  "remaining": "Compose validated original PE input and section permissions with existing CRT region capabilities before startup emission. Manager406cfa, managed termination406f55 and full startup/rcedit remain unproved.",
+  "historical_timeouts": "Unresolved; no cause inferred from passing runs.",
+  "parent_ci_at_review": [
+    {
+      "id": 41012298142,
+      "conclusion": "success"
+    },
+    {
+      "id": 41012289955,
+      "conclusion": "success"
+    },
+    {
+      "id": 41012289985,
+      "status": "in_progress"
+    }
+  ],
+  "logs": {
+    "crt-reviewed.log": "8e07c440d51cd9431b1b501979d20801e21ee8a372323e13289de7bc4adc1b7b",
+    "root.log": "19a5e09ff88bd9e245eca962ca8e6c38ddc250acc5ce79bed2e4b2694e544c24",
+    "clippy-reviewed.log": "1f8e8f167927c8d1c09762c82178714d9fd7a7430876f3a71ed089e081335168",
+    "python.log": "98fe5da1b92be9e37484f2ea46f6ab634dfd36b82a46978cda0c365a8be4aa56",
+    "replay-reviewed.log": "a3f3c044a46c7eba05caf82e1b020dd69d32c82f9c8e4e85dc5221a2bc275ab7"
+  }
+}

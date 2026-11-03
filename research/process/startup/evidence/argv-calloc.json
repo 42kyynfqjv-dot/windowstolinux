@@ -1,0 +1,160 @@
+{
+  "kind": "original native-profile component execution; no whole-PE translation",
+  "base_commit": "eb69a9605ac8c02594fd10bea1de50221793fb53",
+  "status": "current-source aggregates, full coherent replay, actual original argc/argv publication and repeated deterministic emission passed; exact new-head CI remains separate",
+  "next_boundary": "before original0x4015a6 in first C initializer after successful argv configuration return",
+  "connected_effects": [
+    "actual canonical heap allocation/zeroing through original calloc407cf0",
+    "actual original errno accessor407ccd with live registered native UCRT producer on overflow",
+    "preserved Buffer allocation identity and actual free(NULL) body",
+    "second original parser/copy pass40678d",
+    "original argv store40679e and argc store4067a4; original caller cleanup and successful configuration return"
+  ],
+  "failure_domain": [
+    "native budget/resource failure rejects; no fabricated Windows NULL/error/retry",
+    "multiplication overflow uses original errno12 store and NULL result",
+    "new-handler call40c9c0 remains unbound",
+    "nonnull free, wildcard mode and zero-request calloc remain unbound"
+  ],
+  "source_sha256": {
+    "src/crt_argv.rs": "f4b811c1d6ecc166688c18b05dc98559b31458e76e5015731a52b5de2d9b5a8d",
+    "src/crt_normal_frame_tests.rs": "8f77766e08cb3eec80ad388a7d032c235e5a568eaafb10671f772891dc719274",
+    "src/crt_stream_runtime.rs": "14d5af02a9e77a3f8ad21f02161ef3d66deb006b6050121cc7c1b962a6eaaaab",
+    "src/crt_ucrt_ptd.rs": "4e5b6e7a0c86a2a9bf0e121d28c0bf73cdefdd6f6afa7102aa019e5c2f1053dd",
+    "research/process/startup/check_normal_wrapper.py": "726f0df5657875ca78f9d7868de9d6b080546305f5fda152f06613db9973522a"
+  },
+  "requirements_sha256": "51767d225dc27ff08b45ab698824351525959038882352ac2b80999c9bf832e4",
+  "cases": {
+    "new_original_calloc_component": 18,
+    "new_UCRT_errno_field": 13,
+    "retained_parser_storage": 53,
+    "retained_parser_vectors": 16,
+    "new_original_Windows_calloc_or_parser_observations": 0,
+    "retained_Windows_conversion_API_rows": 158,
+    "new_whole_PE_pairs": 0
+  },
+  "checks": {
+    "root_Rust": 182,
+    "CRT_Rust": 335,
+    "CRT_ignored_artifact_gates": 2,
+    "unwind_Rust": 185,
+    "startup_Python": 99,
+    "startup_Python_skip": 1,
+    "tools_Python": 106,
+    "corpus_Python": 18,
+    "corpus_Python_skip": 1,
+    "clippy_warnings_denied": "passed",
+    "format": "passed",
+    "canonical_gate": "passed from current full-replay source",
+    "log_sha256": {
+      "root": "653e65959ea8281c996937fd160a022f99678e2e8d84357031196dbaf2f211c8",
+      "crt": "ce6345b702762ced5d5e4cb9519fe3822af78dc73f23334ab57f8addd04cfaf3",
+      "unwind": "e89231b478f09e12df33b423c1e3d3b112d2b316f1d94c2e8f9d2123e60695a2",
+      "startup-python": "dd97c03ebf2b4dc9e2d2f2726854d304d9f01f42274adb44610e35d94c134792",
+      "tools-python": "ef7dfda9791cf81fabe29509a303ef8c49f0349ad26d3a8a5d6eeb3007de16f7",
+      "corpus-python": "83926f8b965592ac134477ab1a957fa64d81b12094eb021cc957c42905dc5fe9",
+      "clippy": "fef4384bd175c3a045aad4a1fdded9ae0cdca5716f0bb966b0c672ddb58df3aa",
+      "fmt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "canonical_gate_stdout_sha256": "fe3bc9d03a4a79f953fa57dcac4e28761506508f16aa11138910c1c17874d31e",
+    "CRT_ignored_artifact_gates_executed_by_full_replay": true
+  },
+  "base_CI": [
+    {
+      "run": 41337247190,
+      "conclusion": "success"
+    },
+    {
+      "run": 41337241185,
+      "conclusion": "success"
+    },
+    {
+      "run": 41337241127,
+      "conclusion": "success"
+    }
+  ],
+  "base_review": "source fingerprints rechecked against git show eb69a96; retained158row trace94e18f9c7a6f49141d8e9d9d56351df19a5e19c2ca030444388c950ff58a504d unchanged",
+  "ownership_review": [
+    "UCRT field preserves heap capability/Buffer role; exact868layout/currentFLS publication checked",
+    "overlapping errno writes revalidate role before effects; unknown scalar knowledge retained",
+    "static fallback uses canonical mapped image cell, no new mapping/shadow field",
+    "original callable/import/code guards and protected returns retained",
+    "Registry owner/thread/epoch checked before allocation and original errno acquisition"
+  ],
+  "initial_failure_history": {
+    "lowering.log": "expanded partial caller graph exposed missing external edge; replaced by complete original configuration graph, no structural-success bypass",
+    "canonical-v3.log": "old fixture still expected argc0 after actual publication; replaced with independent actual native-argument/pointer assertions",
+    "errno-view.log": "fallback fixture image was readonly; retained permissions and asserted rejected write instead of relaxing them",
+    "canonical-v5.log": "new fixture range inferred i32 and attempted implicit GuestMemory fault conversion; corrected fixture types/explicit unwraps"
+  },
+  "limits": [
+    "explicit native profile only; no default/full startup/rcedit or XP7 claim",
+    "broader allocation resource-failure/native close-EOF/UTF8 error-growth-free equivalence unresolved",
+    "historical Windows launch timeout causes remain unresolved",
+    "No Ultra, formal PR approval, merge, release or denied optional comment retry"
+  ],
+  "implementation_commit": "7147f93652e98cf6e9d8be2e2a8cb7cdaa84025b",
+  "full_replay": {
+    "scope": "Live registry fixture; body EAX/flags inputs; original stack/FS/saved-state restoration only",
+    "kind": "original prolog/epilog component comparison with explicit unexecuted body boundary",
+    "emitted_Rust_sha256": "51abea7786e5a141e494f54c13741d75d7a165c489a3ed6c95e66c4532d4510b",
+    "frozen_PE_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+    "report_sha256": "260278d05238c4db446f7c3e6cc40269c14e450aaa86d0feb983de5039f67648",
+    "log_sha256": "142ee629048ce33def31e0b2cd702b88136f7d8586e5d72961b837c6e7082363",
+    "wrapper_comparisons": 5,
+    "new_whole_PE_pairs": 0,
+    "argv_mode1_publication": "original native-profile component; no whole PE",
+    "repeated_independent_generator_outputs": [
+      {
+        "path": "/workspace/w2l-build-tmp/w2l-normal-native-340888/run.rs",
+        "mtime_ns": 1793560665576903463,
+        "sha256": "51abea7786e5a141e494f54c13741d75d7a165c489a3ed6c95e66c4532d4510b"
+      },
+      {
+        "path": "/workspace/w2l-build-tmp/w2l-normal-native-340845/run.rs",
+        "mtime_ns": 1793560649781561774,
+        "sha256": "51abea7786e5a141e494f54c13741d75d7a165c489a3ed6c95e66c4532d4510b"
+      }
+    ]
+  },
+  "CI_snapshot": {
+    "implementation_head": "7147f93652e98cf6e9d8be2e2a8cb7cdaa84025b",
+    "runs": [
+      {
+        "id": 41340725747,
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "id": 41340721319,
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "id": 41340721304,
+        "status": "in_progress",
+        "conclusion": null
+      }
+    ],
+    "note": "A later documentation-only head requires its own run status. No final-head pass is inferred from local or predecessor checks."
+  },
+  "next_region_inventory": {
+    "address": "0x40155a",
+    "bytes": 171,
+    "sha256": "2dd83e44be5b5a6c72f6bea4afabf1252886a6b37c7a4f092e94f5483dae6344",
+    "boundary": "0x4015a6",
+    "next_call": "0x4015ac ->0x401bc9",
+    "scope": "read-only inventory; remaining post-argv instructions not admitted"
+  },
+  "reproduction": {
+    "replay": "python3 research/process/startup/check_normal_wrapper.py ORIGINAL_UNWIND ORIGINAL_STDIO FRESH_OUTPUT",
+    "aggregate": [
+      "cargo test --locked --bin w2l",
+      "cargo test --locked --example crt_stream",
+      "cargo test --locked --example unwind_slice",
+      "cargo clippy --locked --all-targets -- -D warnings",
+      "cargo fmt --all -- --check"
+    ],
+    "note": "Use unchanged authored inputs; original Windows observations remain separate from native component fixtures."
+  }
+}

@@ -1,0 +1,480 @@
+   Compiling windowstolinux v0.1.0 (/workspace/windowstolinux-cli-stream)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.78s
+     Running unittests examples/crt_stream.rs (target/debug/examples/crt_stream-df41899f49ec1929)
+
+running 269 tests
+test crt_abort::original_abort_entry_and_query_mutations_reject ... ok
+test crt_buffer::tests::altered_offsets_calls_and_missing_effects_reject ... ok
+test crt_buffer::tests::complete_original_graphs_preserve_calls_and_stack_bounds ... ok
+test crt_abort::original_abort_branches_reject_unknown_stale_and_cross_thread_effects ... ok
+test crt_abort::rotate_cl_preserves_x86_bits_flags_and_rejects_unknown_count ... ok
+test crt_cookie_init::cookie_initializer_binds_every_original_byte_and_retains_entropy_rejection ... ok
+test crt_cookie_init::entropy_code_and_imports_bind_independently_and_reject_changed_effects ... ok
+test crt_abort::original_abort_query_caller_preserves_arguments_cleanup_and_prior_effects ... ok
+test crt_buffer::tests::original_native_allocation_insertion_and_failed_temporary_flush ... ok
+test crt_buffer::tests::original_native_capacity_retains_character_after_short_zero_and_error ... ok
+test crt_cpu_features::classifier_binds_original_bytes_and_queries_require_explicit_effect_contract ... ok
+test crt_cookie_init::low_vector_store_uses_actual_payload_without_observing_high_lanes ... ok
+test crt_cookie_init::scalar_vector_store_preserves_flags_unknowns_and_preflights_both_words ... ok
+test crt_cookie_native::native_clock_units_bounds_and_procfs_identity_are_independent ... ok
+test crt_cpu_features::code_observation_checks_execute_permission_bounds_and_identity ... ok
+test crt_cpu_features::cpu_observations_reject_inconsistent_os_state_and_unknown_queries ... ok
+test crt_cxx_lookup::cold_resolution_has_atomic_publication_and_owned_loader_dependencies ... ok
+test crt_cpu_features::cpu_queries_preserve_flags_and_reject_stale_or_pointer_authority_before_writes ... ok
+test crt_cpu_features::feature_api_rejects_unknown_selector_without_clobbering_prior_state ... ok
+test crt_cxx_lookup::loader_authority_and_exchange_reject_stale_foreign_partial_and_unowned_state ... ok
+test crt_cxx_lookup::cold_original_execution_preserves_module_export_and_publication_authority ... ok
+test crt_cxx_lookup::original_dynamic_lookup_checks_guard_module_fiber_slot_and_protected_return ... ok
+test crt_cxx_lookup::original_prefix_compare_has_independent_word_bounds_and_short_circuit_cases ... ok
+test crt_cxx_ptd::allocated_dispatcher_ptd_cannot_gain_fls_role_by_retagging_or_copying ... ok
+test crt_cxx_ptd::distinct_dispatcher_ptd_extent_and_failure_paths ... ok
+test crt_cxx_ptd::dispatcher_getter_connects_dynamic_fls_without_losing_error_or_lifetime_checks ... ok
+test crt_cxx_ptd::heap_ptd_views_preserve_aliases_and_expire_with_allocation_or_slot ... ok
+test crt_cxx_record::common_handler_acquires_heap_ptd_through_original_lazy_producer ... ok
+test crt_cxx_ptd::original_lazy_ptd_setter_publication_and_cleanup_preserve_heap_identity ... ok
+test crt_cxx_unwind::original_unwind_binding_rejects_changed_control_scope_and_actions ... ok
+test crt_error_map::tests::effect_mutations_table_aliases_and_hidden_helpers_reject ... ok
+test crt_error_map::tests::emitted_context_writes_preserve_order_and_prior_effects_on_failure ... ok
+test crt_cxx_record::owned_cxx_record_keeps_state_metadata_and_continuation_distinct ... ok
+test crt_cxx_record::common_handler_executes_cached_getter_with_owned_context_and_no_loader_authority ... ok
+test crt_error_map::tests::maximum_search_rank_covers_every_table_key_gap_and_unsigned_extreme ... ok
+test crt_error_map::tests::relocated_instruction_graphs_derive_constants_and_all_input_partition_edges ... ok
+test crt_error_map::tests::emitted_updater_uses_actual_checked_memory_identity_and_byte_initialization ... ok
+test crt_cxx_record::unwind_state_helpers_read_and_write_the_same_owned_record_without_cleanup_receipt ... ok
+test crt_exception_wrapper::normal_tests::canonical_image_cookie_and_original_record_initialization_compose ... ignored, requires unchanged authored PE; passed in recorded-input replay
+test crt_exception_wrapper::native_tests::original_native_prolog_relocation_and_failure_boundaries ... ok
+test crt_exception_wrapper::normal_tests::consumed_slot_receipts_require_actual_pop_and_restored_register ... ok
+test crt_exception_wrapper::normal_tests::captured_objects_bind_live_handler_arguments_without_inventing_registers ... ok
+test crt_exception_wrapper::normal_tests::actual_storage_unknown_masks_foreign_arenas_and_stale_epochs_reject ... ok
+test crt_exception_wrapper::normal_tests::emitted_ret_immediate_cannot_use_another_registry_plan ... ok
+test crt_exception_wrapper::normal_tests::epilog_wrong_offsets_order_prefixes_and_cleanup_reject ... ok
+test crt_exception_wrapper::normal_tests::file_scope_certificate_rejects_effect_and_ownership_mutations ... ok
+test crt_exception_wrapper::normal_tests::file_scope_original_lock_cleanup_and_epilog_execute_with_live_registry ... ok
+test crt_exception_wrapper::normal_tests::handler_prolog_rejects_changed_allocation_and_truncated_code ... ok
+test crt_exception_wrapper::normal_tests::file_scope_unclosed_body_effects_do_not_synthesize_cleanup_or_return ... ok
+test crt_exception_wrapper::normal_tests::instruction_path_checks_reject_unknown_flags_and_disagreeing_original_edges ... ok
+test crt_exception_wrapper::normal_tests::allocation_manager_registers_and_retires_original_eh4_under_startup_authority ... ok
+test crt_exception_wrapper::normal_tests::inherited_producer_calls_original_manager_with_live_eh4_registration ... ok
+test crt_exception_wrapper::normal_tests::normal_exception_issue_preserves_guest_call_state_and_blocks_normal_cleanup ... ok
+test crt_exception_wrapper::normal_tests::normal_raise_certificate_requires_exact_original_call_and_disjoint_iat ... ok
+test crt_exception_wrapper::normal_tests::normal_exception_invalid_arguments_and_continuations_have_no_issue_effect ... ok
+test crt_exception_wrapper::normal_tests::original_abort_locked_query_owns_frame_lock_and_failure_effects ... ok
+test crt_exception_wrapper::normal_tests::decoded_local_loop_uses_live_storage_and_preserves_callback_failure_effects ... ok
+test crt_exception_wrapper::normal_tests::live_handler_storage_nested_calls_and_failure_effects_are_coherent ... ok
+test crt_exception_wrapper::normal_tests::original_cached_unwind_executes_under_pending_delivery_child_authority ... ok
+test crt_exception_wrapper::normal_tests::original_cxx_fs_views_do_not_establish_shared_thread_chain_selection ... ok
+test crt_exception_wrapper::normal_tests::original_cxx_and_eh4_share_live_lifo_thread_head ... ok
+test crt_exception_wrapper::normal_tests::original_common_dispatcher_calls_registered_unwind_under_pending_delivery ... ok
+test crt_exception_wrapper::normal_tests::original_empty_search_executes_guard_and_protected_return ... ok
+test crt_exception_wrapper::normal_tests::original_cxx_unwind_registers_eh4_preserves_pending_action_and_counter_failures ... ok
+test crt_exception_wrapper::normal_tests::original_inline_exit_record_preserves_registry_return_and_failure_lifetimes ... ok
+test crt_exception_wrapper::normal_tests::original_cxx_unwind_uses_cached_ptd_getter_without_loader_authority ... ok
+test crt_exception_wrapper::normal_tests::original_local_store_writes_canonical_owned_storage_in_live_registry_lifetime ... ok
+test crt_exception_wrapper::normal_tests::original_prolog_and_epilog_execute_nested_live_registry_lifecycles ... ok
+test crt_exception_wrapper::normal_tests::original_prefix_produces_dispatcher_metadata_under_pending_delivery ... ok
+test crt_exception_wrapper::normal_tests::original_ucrt_errno_registration_preserves_pending_delivery_ownership ... ok
+test crt_exception_wrapper::normal_tests::original_windows_wrapper_state_matches_native_normal_lifecycle ... ignored, requires separately instrumented original Windows wrapper vectors
+test crt_exception_wrapper::normal_tests::original_cxx_invocation_binds_pending_event_and_captured_objects ... ok
+test crt_exception_wrapper::normal_tests::scope_store_decoder_rejects_partial_prefixed_and_unbound_operands ... ok
+test crt_exception_wrapper::normal_tests::shared_chain_rechecks_owner_at_original_fs_effect ... ok
+test crt_exception_wrapper::normal_tests::suspended_delivery_lends_only_child_frames_and_rejects_stale_or_parent_authority ... ok
+test crt_exception_wrapper::normal_tests::suspended_handler_call_returns_owned_receipt_and_preserves_failures ... ok
+test crt_exception_wrapper::normal_tests::unresolved_body_effects_remain_visible_and_block_completion ... ok
+test crt_exception_wrapper::tests::original_prolog_derives_file_and_descriptor_frames_and_return_move ... ok
+test crt_exception_wrapper::tests::protected_return_scope_predecessor_and_word_bounds_mutations_reject ... ok
+test crt_exit::shared_exit_rejects_changed_instruction_regions ... ok
+test crt_formatter::locale::tests::native_classification_reads_real_words_and_handles_eof_and_unknown_boundaries ... ok
+test crt_exception_wrapper::normal_tests::original_finally_dispatch_writes_live_fields_in_instruction_order ... ok
+test crt_formatter::locale::tests::native_classification_rejects_unknown_stale_and_incomplete_words ... ok
+test crt_formatter::locale::tests::original_validation_requires_all_mode_tests_and_exact_call_abis ... ok
+test crt_formatter::tests::format_domain_rejects_unclosed_or_unproved_directives_before_effects ... ok
+test crt_formatter::tests::format_domain_tracks_argument_reads_without_inventing_trailing_values ... ok
+test crt_exception_wrapper::normal_tests::original_return_receipt_advances_only_matching_live_registration ... ok
+test crt_formatter::locale::tests::native_validation_preserves_registers_and_observes_descriptor_modes ... ok
+test crt_formatter_ir_tests::external_tail_inventory_cannot_silently_become_emission ... ok
+test crt_formatter_ir_tests::cdq_adc_div_independent_boundaries_and_fault_atomicity ... ok
+test crt_formatter_ir_tests::emitted_table_branch_uses_actual_owned_words_and_checks_mutation ... ok
+test crt_formatter_ir_tests::fs_hooks_require_binding_and_thread_heads_never_become_scalar_authority ... ok
+test crt_formatter_ir_tests::partial_address_projection_retains_unknown_bits_without_capability ... ok
+test crt_formatter_ir_tests::table_bounds_targets_and_guard_entry_cannot_be_forged ... ok
+test crt_formatter_ir_tests::width_and_fault_domains_are_explicit ... ok
+test crt_formatter_ir_tests::ret_cleanup_requires_caller_authority_and_protected_range_preflight ... ok
+test crt_global_lock::tests::complete_helper_identity_rejects_changed_stride_argument_import_and_return ... ok
+test crt_formatter_ir_tests::signed_index_wrap_is_bounded_by_the_original_capability ... ok
+test crt_heap_free::failed_free_receipt_cannot_cross_runtime_thread_or_reauthorize_aliases ... ok
+test crt_heap_free::original_free_rejects_changed_code_and_mapping ... ok
+test crt_global_lock::native_tests::indexed_helpers_keep_module_ownership_and_failure_effects ... ok
+test crt_heap_free::original_free_failure_executes_mapping_and_owned_errno_without_lifetime_claim ... ok
+test crt_module_image::image_file_anchor_keeps_section_identity_and_rejects_alias_and_partial_init ... ok
+test crt_module_image::original_managed_query_checks_live_image_and_header_paths ... ok
+test crt_module_image::pe32_sections_initialize_original_query_without_temporary_module_owner ... ok
+test crt_module_image::word_memory_compare_reads_sixteen_bits_across_register_choices ... ok
+test crt_module_image::process_image_owns_mapping_once_across_threads_and_module_releases ... ok
+test crt_provider_tests::native_provider_builds_cannot_outlive_their_thread_or_initialization_phase ... ok
+test crt_provider_tests::native_provider_descriptors_cannot_be_transportable_call_authority ... ok
+test crt_provider_tests::native_provider_export_and_publication_limits_preserve_prior_effects ... ok
+test crt_provider_tests::native_provider_failed_target_release_does_not_borrow_source_authority ... ok
+test crt_provider_tests::native_provider_publication_is_owned_and_initialization_failure_is_atomic ... ok
+test crt_provider_tests::native_provider_forwarded_exports_borrow_the_actual_target_until_source_retirement ... ok
+test crt_ptd::different_sized_continuations_preserve_words_and_reject_corruption ... ok
+test crt_ptd::helper_certificates_reject_mutation_and_aliasing ... ok
+test crt_ptd::fls_context_is_fiber_scoped_and_stale_slots_cannot_rebind_authority ... ok
+test crt_ptd::fls_mutation_invalidates_errno_and_rejects_stale_setter_before_effects ... ok
+test crt_ptd::original_errno_call_executes_ptd_body_and_preserves_last_error ... ok
+test crt_ptd::original_lazy_setter_preserves_failure_return_and_success_sentinel ... ok
+test crt_ptd::registered_getter_rejects_changed_original_bytes ... ok
+test crt_ptd::original_ptd_continuation_and_fls_normal_path ... ok
+test crt_ptd::process_fls_index_outlives_empty_fiber_without_lending_its_value ... ok
+test crt_resident_loader::resident_load_acquires_real_reference_and_rejects_search_and_stale_authority ... ok
+test crt_standard_handles_tests::original_allocation_manager_scope_orders_lock_publication_and_cleanup ... ok
+test crt_standard_handles_tests::original_calloc_uses_live_heap_without_startup_or_descriptor_authority ... ok
+test crt_standard_handles_tests::original_errno_router_binds_ptd_or_fallback_without_alias_or_lifetime_renewal ... ok
+test crt_standard_handles_tests::original_heap_producer_calloc_and_descriptor_constructor_preserve_error_paths ... ok
+test crt_standard_handles_tests::original_descriptor_construction_connects_inheritance_and_destruction ... ok
+test crt_standard_handles_tests::original_inherited_records_feed_standard_initialization_with_checked_bounds ... ok
+test crt_standard_handles_tests::original_standard_handles_preserve_inheritance_and_classify_api_results ... ok
+test crt_startup_entry::original_startup_slice_rejects_all_changed_code ... ok
+test crt_standard_handles_tests::two_operand_imul_keeps_signed_overflow_unknowns_and_memory_ownership ... ok
+test crt_stream_callees::tests::complete_probe_relations_and_mutations ... ok
+test crt_stream_callees::tests::guard_binding_preserves_external_failure_edge ... ok
+test crt_startup_modules::startup_module_graphs_bind_each_original_byte ... ok
+test crt_standard_handles_tests::word_compare_and_signed_selection_keep_independent_boundaries ... ok
+test crt_stream_callees_tests::generated_probe_handles_page_edges_opaque_ecx_and_exact_committed_top ... ok
+test crt_stream_callees_tests::generated_probe_preserves_noncanonical_unknown_ecx_and_typed_identity ... ok
+test crt_stream_callees_tests::original_helpers_require_32_bit_returns_and_complete_original_control_edges ... ok
+test crt_stream_emit::indirect_rejection_tests::indirect_register_and_table_calls_need_explicit_lowering_contract ... ok
+test crt_stream_emit::terminal_path_tests::return_contract_does_not_admit_call_cuts_or_wrong_cleanup ... ok
+test crt_stream_emit::terminal_path_tests::return_path_requires_original_edges_and_disjoint_instruction_cuts ... ok
+test crt_stream_ir::linear_fragment_tests::explicit_cut_does_not_relax_complete_graph_or_accept_control_effects ... ok
+test crt_stream_ir::tests::extensions_preserve_operands_and_closed_edges ... ok
+test crt_stream_ir::tests::malformed_control_and_unsupported_prefix_reject ... ok
+test crt_stream_layout_tests::code_table_and_iat_cells_have_complete_disjoint_nonwrapping_ranges ... ok
+test crt_stream_layout_tests::exact_adjacent_layout_boundaries_remain_admissible ... ok
+test crt_stream_layout_tests::relocated_original_writer_cannot_overlap_its_owned_scratch_or_other_live_regions ... ok
+test crt_stream_lifecycle::tests::malformed_lifetime_control_and_failure_mutations_reject ... ok
+test crt_stream_lifecycle::tests::original_initialization_proves_fallback_and_failed_return_without_zeroing_unknowns ... ok
+test crt_stream_callees_tests::generated_probe_rejects_unmapped_pages_or_protected_extent_before_writes ... ok
+test crt_stream_lifecycle::tests::original_teardown_retains_per_stream_release_then_lock_destruction ... ok
+test crt_stream_lifecycle::tests::teardown_cannot_inherit_unchecked_pre_initialization_descriptor_values ... ok
+test crt_stream_proof::tests::independent_flush_requires_reset_before_write_and_exact_error_flag ... ok
+test crt_stream_proof::tests::independent_relocated_small_buffers_have_derived_bounds ... ok
+test crt_stream_proof::tests::loop_safety_and_short_write_edges_are_proof_obligations ... ok
+test crt_stream_proof::tests::native_entry_preflight_rejects_unknown_alias_and_dead_owner_before_effects ... ok
+test crt_stream_callees_tests::generated_security_call_preserves_registers_and_has_owned_transient_return ... ok
+test crt_stream_proof::tests::resource_or_hidden_effects_never_grant_a_certificate ... ok
+test crt_stream_review_tests::branch_enumeration_cannot_make_clobbered_machine_bits_available ... ok
+test crt_stream_review_tests::certified_argument_cleanup_cannot_discard_protected_or_revive_dead_words ... ok
+test crt_stream_lifecycle::tests::original_native_lifecycle_executes_fallback_and_interleaved_teardown ... ok
+test crt_stream_proof::tests::original_flush_native_resets_before_call_and_marks_short_or_error_results ... ok
+test crt_stream_review_tests::failed_write_count_is_unobserved_and_backend_effects_are_never_retried_or_rolled_back ... ok
+test crt_stream_review_tests::freeing_a_narrowed_base_view_cannot_leak_tags_into_reused_storage ... ok
+test crt_stream_review_tests::narrow_signed_shifts_partial_registers_and_unknown_flags_keep_x86_boundaries ... ok
+test crt_stream_review_tests::nested_native_calls_preserve_entry_authority_and_failed_partial_effects ... ok
+test crt_stream_review_tests::original_pointer_test_zero_cannot_prune_the_taken_native_edge ... ok
+test crt_stream_review_tests::rejected_cleanup_and_copied_return_cannot_consume_original_stack_authority ... ok
+test crt_stream_review_tests::unknown_bytes_foreign_capabilities_and_dead_aliases_never_reach_backend ... ok
+test crt_stream_runtime::tests::buffer_claim_and_release_require_the_same_file_record ... ok
+test crt_stream_runtime::tests::composed_heap_errors_cannot_fall_back_to_an_unbound_shadow_errno ... ok
+test crt_stream_runtime::tests::descriptor_allocations_and_locks_preserve_identity_before_handle_binding ... FAILED
+test crt_stream_runtime::tests::global_lock_identity_cannot_be_substituted_by_file_or_record_leases ... FAILED
+test crt_stream_runtime::tests::locale_identity_rejects_another_runtime_with_equal_thread_and_generation ... FAILED
+test crt_stream_runtime::tests::lock_result_preserves_fields_and_rejects_opaque_aliases ... FAILED
+test crt_stream_runtime::tests::opaque_dispatcher_transport_is_scoped_and_never_exposes_bytes ... FAILED
+test crt_stream_runtime::tests::opaque_heap_contracts_reject_cross_runtime_forged_and_unknown_policy ... FAILED
+test crt_stream_runtime::tests::owned_cells_unknowns_alias_lifetime_and_explicit_lock_order ... FAILED
+test crt_stream_runtime::tests::single_call_backend_partial_failure_and_close_are_not_flush_policy ... FAILED
+test crt_stream_runtime::tests::startup_authority_and_per_file_locks_are_distinct_from_live_stream_cut ... FAILED
+test crt_stream_worker::tests::byte_descriptor_access_keeps_table_pointer_and_index_ownership ... ok
+test crt_stream_worker::tests::circular_call_summary_cannot_bootstrap_false_proof ... ok
+test crt_stream_worker::tests::pointer_test_zero_and_dead_pointer_or_are_exact_integer_effects ... ok
+test crt_stream_worker::tests::source_length_identity_is_not_an_arbitrary_initialized_scalar ... ok
+test crt_stream_worker::tests::uninitialized_reads_protected_stores_and_cycles_reject ... ok
+test crt_stream_worker::tests::unknown_initialized_count_explores_both_original_return_paths ... ok
+test dispatch::tests::guarded_failure_unknown_cursor_and_protected_slot_mutations_reject ... ok
+test dispatch::tests::independent_stack_layout_keeps_runtime_values_and_original_cursor_effects ... FAILED
+test dispatch::tests::live_effects_preserve_original_store_order_and_private_failure_boundary ... FAILED
+test dispatch::tests::metadata_alias_truncation_and_proof_resources_reject ... ok
+test dispatch::tests::temporary_stack_depth_tracks_allocations_saves_arguments_and_call_return ... ok
+test frame_init::tests::emitted_initializer_executes_owned_range_and_typed_module_effect ... FAILED
+test crt_stream_runtime::tests::distinct_record_leases_and_one_way_shutdown_do_not_reuse_initialization ... FAILED
+test frame_init::tests::independent_fill_rejects_wrong_footprints_registers_flags_and_prefixes ... ok
+test frame_init::tests::initializer_does_not_invalidate_prior_scalar_or_later_result_proofs ... ok
+test frame_init::tests::original_instruction_arguments_bind_fill_module_and_activation ... ok
+test frame_init::tests::transient_pushes_before_calls_contribute_to_scratch_ownership ... ok
+test frame_init::tests::unknown_feature_selects_independent_rep_and_vector_paths ... ok
+test frame_memory::tests::emitted_byte_storage_preserves_unknowns_protected_tags_and_identity ... FAILED
+test frame_proof::tests::derived_scalar_cells_are_distinct_from_original_record_and_try_level ... ok
+test frame_proof::tests::native_initialization_preserves_opaque_predecessor_and_dynamic_cookie_bits ... FAILED
+test frame_proof::tests::protected_unknown_root_and_unmodeled_effects_reject ... ok
+test frame_proof::tests::separated_initializer_keeps_unproved_gap_and_does_not_change_other_slots ... ok
+test funclet::tests::displaced_original_pointer_layout_and_global_destinations_are_derived ... ok
+test funclet::tests::live_funclet_reads_after_dispatch_and_retains_first_global_on_later_failure ... FAILED
+test funclet::tests::native_postcall_observations_use_live_values_and_store_failure_cannot_succeed ... FAILED
+test funclet::tests::nested_temporary_extent_includes_argument_and_original_call_words ... ok
+test funclet::tests::protected_uninitialized_alias_call_stack_and_clobber_mutations_reject ... ok
+test graph::tests::backedges_are_represented_not_unrolled_or_claimed_terminating ... ok
+test graph::tests::conditional_move_exact_register_form_only ... ok
+test graph::tests::deterministic_closed_graph_and_extent_limit ... ok
+test graph::tests::indexed_byte_forms_and_register_permutations ... ok
+test graph::tests::nop_memory_spelling_has_no_load_effect_and_calls_stay_unbound ... ok
+test graph::tests::partial_alias_forms_and_prefix_boundaries ... ok
+test graph::tests::scalar_forms_and_alignment_nops_have_exact_operands ... ok
+test graph::tests::shifts_mask_count_without_erasing_prefix_or_width_policy ... ok
+test graph::tests::targets_prefixes_truncation_and_unknown_code_reject ... ok
+test graph::tests::zero_extension_and_unsigned_selection_exact_forms ... ok
+test handler_bridge::tests::complete_word_bounds_and_nonaliased_writable_regions_are_required ... ok
+test handler_bridge::tests::independently_mutated_pointer_offsets_saved_registers_and_incomplete_code_reject ... ok
+test handler_bridge::tests::original_instructions_install_only_owned_typed_pair_and_preserve_other_words ... FAILED
+test handler_checks::tests::fourth_callback_argument_cannot_gain_context_authority ... ok
+test handler_checks::tests::original_flow_binds_arguments_order_and_flag_boundary ... ok
+test handler_checks::tests::protected_slots_pointer_confusion_and_branch_mutations_reject ... ok
+test handler_checks::tests::volatile_result_and_unknown_instruction_do_not_gain_tags ... ok
+test handler_checks::tests::wrong_call_cookie_and_installer_bindings_reject ... ok
+test handler_context::tests::bypass_certificate_rejects_dead_capture_reads_before_selector ... ok
+test handler_context::tests::bypass_observation_guard_is_path_local_at_shared_return ... ok
+test handler_context::tests::changed_offsets_branches_failure_and_saved_state_reject ... ok
+test handler_context::tests::decoded_original_contract_and_relocated_instruction_identity ... ok
+test handler_context::tests::generated_owner_lifetime_and_complete_stack_boundaries ... FAILED
+test handler_context::tests::opaque_projection_cannot_admit_other_captured_context_fields ... ok
+test handler_context::tests::opaque_projection_preserves_predicate_order_and_owner_preflight ... FAILED
+test handler_context::tests::original_decision_distinguishes_selector_bypass_from_fail_fast ... FAILED
+test handler_dispatch::tests::actual_signed_filter_extremes_determine_distinct_control_dispositions ... ok
+test handler_dispatch::tests::complete_body_and_required_callee_packets_reject_mutations ... ok
+test handler_dispatch::tests::unwind_uses_only_guaranteed_flag_bit_and_requires_original_local_effect ... ok
+test handler_guard::tests::altered_cookie_branch_calls_and_unproved_guard_forms_reject ... ok
+test handler_guard::tests::emitted_checks_reject_corrupt_unknown_and_foreign_guard_identities ... FAILED
+test handler_guard::tests::instruction_operands_bind_optional_and_required_guard_checks ... ok
+test handler_guard::tests::unknown_values_cycles_and_extent_limits_fail_closed ... ok
+test local_unwind::tests::containment_guards_and_finally_edges_are_proved_before_emission ... ok
+test local_unwind::tests::generated_native_loop_and_collision_order_are_instruction_driven ... FAILED
+test local_unwind::tests::independent_record_stale_progress_and_stack_pivot_regressions ... ok
+test local_unwind::tests::instruction_proof_derives_record_calls_and_both_nested_edges ... ok
+test local_unwind::tests::scope_graph_requires_full_acyclic_bound_rows ... ok
+test local_unwind::tests::unknown_alias_record_call_order_and_control_mutations_reject ... ok
+test local_unwind::tests::wrapper_requires_exactly_one_body_invocation_before_return ... ok
+test main_completion::tests::decoded_branch_variadic_order_and_ignored_io_failure_execute_natively ... FAILED
+test main_completion::tests::hidden_prefix_cycle_branch_mid_instruction_and_postpop_clobber_reject ... ok
+test main_completion::tests::unknown_return_uninitialized_word_and_wrong_cleanup_reject ... ok
+test selection::tests::code_identity_rejects_changed_effects_stack_targets_and_unproved_paths ... ok
+test selection::tests::eh4_cycles_unbound_callbacks_and_wrong_sentinel_reject ... ok
+test selection::tests::emitted_filter_executes_original_scalar_and_temporary_effects ... FAILED
+test selection::tests::original_code_identity_explores_both_unknown_guard_outcomes ... ok
+test selection::tests::original_filter_preserves_temporary_stores_and_derives_language_result ... ok
+test selection::tests::pointer_graph_initialization_aliases_and_flag_provenance_reject ... ok
+test selection::tests::selected_frame_comes_from_original_filter_not_custom_cursor ... ok
+test stdio_effect::tests::accessors_cannot_read_unpassed_arguments_or_alias_owned_code ... ok
+test stdio_effect::tests::format_gate_is_integer_only_and_complete ... ok
+test stdio_effect::tests::native_integer_text_partial_failure_and_count_are_independent ... FAILED
+test stdio_effect::tests::original_wrapper_argument_route_and_leaf_addresses_are_instruction_derived ... ok
+test unwind_bridges::tests::emitted_typed_calls_preserve_stores_and_require_exact_resume ... FAILED
+test unwind_bridges::tests::relocated_bridges_derive_calls_stores_stack_and_continuations ... ok
+test unwind_bridges::tests::wrong_targets_fields_saved_state_and_unwind_continuations_reject ... ok
+test frame_init::tests::independent_fill_all_alignments_and_symbolic_bytes ... ok
+test crt_stream_runtime::tests::effective_addresses_never_expand_memory_or_transport_authority ... FAILED
+test crt_exception_wrapper::normal_tests::owned_main_frame_storage_executes_original_filter_and_rejects_other_owners ... ok
+
+failures:
+
+---- crt_stream_runtime::tests::descriptor_allocations_and_locks_preserve_identity_before_handle_binding stdout ----
+
+thread 'crt_stream_runtime::tests::descriptor_allocations_and_locks_preserve_identity_before_handle_binding' (940813) panicked at examples/../src/crt_stream_runtime.rs:916:9:
+error: linking with `cc` failed: exit status: 1
+  |
+  = note:  "cc" "-m64" "/workspace/w2l-build-tmp/w2l-crt-runtime-938233-2/rustcLvdTFE/symbols.o" "<9 object files omitted>" "-Wl,--as-needed" "-Wl,-Bstatic" "<sysroot>/lib/rustlib/x86_64-unknown-linux-gnu/lib/{libstd-*,libpanic_unwind-*,libobject-*,libmemchr-*,libaddr2line-*,libgimli-*,libcfg_if-*,librustc_demangle-*,libstd_detect-*,libhashbrown-*,librustc_std_workspace_alloc-*,libminiz_oxide-*,libadler2-*,libunwind-*,liblibc-*,librustc_std_workspace_core-*,liballoc-*,libcore-*,libcompiler_builtins-*}.rlib" "-Wl,-Bdynamic" "-lgcc_s" "-lutil" "-lrt" "-lpthread" "-lm" "-ldl" "-lc" "-L" "/workspace/w2l-build-tmp/w2l-crt-runtime-938233-2/rustcLvdTFE/raw-dylibs" "-B<sysroot>/lib/rustlib/x86_64-unknown-linux-gnu/bin/gcc-ld" "-fuse-ld=lld" "-Wl,--eh-frame-hdr" "-Wl,-z,noexecstack" "-L" "<sysroot>/lib/rustlib/x86_64-unknown-linux-gnu/lib" "-o" "/workspace/w2l-build-tmp/w2l-crt-runtime-938233-2/check" "-Wl,--gc-sections" "-pie" "-Wl,-z,relro,-z,now" "-nodefaultlibs"
+  = note: some arguments are omitted. use `--verbose` to show all linker arguments
+  = note: collect2: fatal error: ld terminated with signal 7 [Bus error]
+          compilation terminated.
+          
+
+error: aborting due to 1 previous error
+
+
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- crt_stream_runtime::tests::global_lock_identity_cannot_be_substituted_by_file_or_record_leases stdout ----
+
+thread 'crt_stream_runtime::tests::global_lock_identity_cannot_be_substituted_by_file_or_record_leases' (940882) panicked at examples/../src/crt_stream_runtime.rs:905:39:
+called `Result::unwrap()` on an `Err` value: Os { code: 28, kind: StorageFull, message: "No space left on device" }
+
+---- crt_stream_runtime::tests::locale_identity_rejects_another_runtime_with_equal_thread_and_generation stdout ----
+
+thread 'crt_stream_runtime::tests::locale_identity_rejects_another_runtime_with_equal_thread_and_generation' (940883) panicked at examples/../src/crt_stream_runtime.rs:905:39:
+called `Result::unwrap()` on an `Err` value: Os { code: 28, kind: StorageFull, message: "No space left on device" }
+
+---- crt_stream_runtime::tests::lock_result_preserves_fields_and_rejects_opaque_aliases stdout ----
+
+thread 'crt_stream_runtime::tests::lock_result_preserves_fields_and_rejects_opaque_aliases' (940884) panicked at examples/../src/crt_stream_runtime.rs:905:39:
+called `Result::unwrap()` on an `Err` value: Os { code: 28, kind: StorageFull, message: "No space left on device" }
+
+---- crt_stream_runtime::tests::opaque_dispatcher_transport_is_scoped_and_never_exposes_bytes stdout ----
+
+thread 'crt_stream_runtime::tests::opaque_dispatcher_transport_is_scoped_and_never_exposes_bytes' (940885) panicked at examples/../src/crt_stream_runtime.rs:905:39:
+called `Result::unwrap()` on an `Err` value: Os { code: 28, kind: StorageFull, message: "No space left on device" }
+
+---- crt_stream_runtime::tests::opaque_heap_contracts_reject_cross_runtime_forged_and_unknown_policy stdout ----
+
+thread 'crt_stream_runtime::tests::opaque_heap_contracts_reject_cross_runtime_forged_and_unknown_policy' (940886) panicked at examples/../src/crt_stream_runtime.rs:905:39:
+called `Result::unwrap()` on an `Err` value: Os { code: 28, kind: StorageFull, message: "No space left on device" }
+
+---- crt_stream_runtime::tests::owned_cells_unknowns_alias_lifetime_and_explicit_lock_order stdout ----
+
+thread 'crt_stream_runtime::tests::owned_cells_unknowns_alias_lifetime_and_explicit_lock_order' (940888) panicked at examples/../src/crt_stream_runtime.rs:905:39:
+called `Result::unwrap()` on an `Err` value: Os { code: 28, kind: StorageFull, message: "No space left on device" }
+
+---- crt_stream_runtime::tests::single_call_backend_partial_failure_and_close_are_not_flush_policy stdout ----
+
+thread 'crt_stream_runtime::tests::single_call_backend_partial_failure_and_close_are_not_flush_policy' (940889) panicked at examples/../src/crt_stream_runtime.rs:905:39:
+called `Result::unwrap()` on an `Err` value: Os { code: 28, kind: StorageFull, message: "No space left on device" }
+
+---- crt_stream_runtime::tests::startup_authority_and_per_file_locks_are_distinct_from_live_stream_cut stdout ----
+
+thread 'crt_stream_runtime::tests::startup_authority_and_per_file_locks_are_distinct_from_live_stream_cut' (940890) panicked at examples/../src/crt_stream_runtime.rs:905:39:
+called `Result::unwrap()` on an `Err` value: Os { code: 28, kind: StorageFull, message: "No space left on device" }
+
+---- dispatch::tests::independent_stack_layout_keeps_runtime_values_and_original_cursor_effects stdout ----
+
+thread 'dispatch::tests::independent_stack_layout_keeps_runtime_values_and_original_cursor_effects' (940898) panicked at examples/../src/dispatch.rs:657:39:
+called `Result::unwrap()` on an `Err` value: Os { code: 28, kind: StorageFull, message: "No space left on device" }
+
+---- dispatch::tests::live_effects_preserve_original_store_order_and_private_failure_boundary stdout ----
+
+thread 'dispatch::tests::live_effects_preserve_original_store_order_and_private_failure_boundary' (940899) panicked at examples/../src/dispatch.rs:702:39:
+called `Result::unwrap()` on an `Err` value: Os { code: 28, kind: StorageFull, message: "No space left on device" }
+
+---- frame_init::tests::emitted_initializer_executes_owned_range_and_typed_module_effect stdout ----
+
+thread 'frame_init::tests::emitted_initializer_executes_owned_range_and_typed_module_effect' (940902) panicked at examples/../src/frame_init.rs:1021:45:
+called `Result::unwrap()` on an `Err` value: Os { code: 28, kind: StorageFull, message: "No space left on device" }
+
+---- crt_stream_runtime::tests::distinct_record_leases_and_one_way_shutdown_do_not_reuse_initialization stdout ----
+
+thread 'crt_stream_runtime::tests::distinct_record_leases_and_one_way_shutdown_do_not_reuse_initialization' (940822) panicked at examples/../src/crt_stream_runtime.rs:916:9:
+warning: variable does not need to be mutable
+    --> /workspace/w2l-build-tmp/w2l-crt-runtime-938233-3/check.rs:1615:5
+     |
+1615 | let(mut other,_)=CrtStreamRuntime::new_initializing(7,9,0x4000,32768).unwrap();assert!(r.begin_shutdown(CrtShutdownReceipt{anchor:...
+     |     ----^^^^^
+     |     |
+     |     help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+error: couldn't create a temp dir: No space left on device (os error 28) at path "/workspace/w2l-build-tmp/w2l-crt-runtime-938233-3/rustcccVImT"
+
+error: aborting due to 1 previous error; 1 warning emitted
+
+
+
+---- frame_memory::tests::emitted_byte_storage_preserves_unknowns_protected_tags_and_identity stdout ----
+
+thread 'frame_memory::tests::emitted_byte_storage_preserves_unknowns_protected_tags_and_identity' (940909) panicked at examples/../src/frame_memory.rs:184:45:
+called `Result::unwrap()` on an `Err` value: Os { code: 28, kind: StorageFull, message: "No space left on device" }
+
+---- frame_proof::tests::native_initialization_preserves_opaque_predecessor_and_dynamic_cookie_bits stdout ----
+
+thread 'frame_proof::tests::native_initialization_preserves_opaque_predecessor_and_dynamic_cookie_bits' (940911) panicked at examples/../src/frame_proof.rs:787:39:
+called `Result::unwrap()` on an `Err` value: Os { code: 28, kind: StorageFull, message: "No space left on device" }
+
+---- funclet::tests::live_funclet_reads_after_dispatch_and_retains_first_global_on_later_failure stdout ----
+
+thread 'funclet::tests::live_funclet_reads_after_dispatch_and_retains_first_global_on_later_failure' (940915) panicked at examples/../src/funclet.rs:397:39:
+called `Result::unwrap()` on an `Err` value: Os { code: 28, kind: StorageFull, message: "No space left on device" }
+
+---- funclet::tests::native_postcall_observations_use_live_values_and_store_failure_cannot_succeed stdout ----
+
+thread 'funclet::tests::native_postcall_observations_use_live_values_and_store_failure_cannot_succeed' (940916) panicked at examples/../src/funclet.rs:434:45:
+called `Result::unwrap()` on an `Err` value: Os { code: 28, kind: StorageFull, message: "No space left on device" }
+
+---- handler_bridge::tests::original_instructions_install_only_owned_typed_pair_and_preserve_other_words stdout ----
+
+thread 'handler_bridge::tests::original_instructions_install_only_owned_typed_pair_and_preserve_other_words' (940931) panicked at examples/../src/handler_bridge.rs:321:35:
+called `Result::unwrap()` on an `Err` value: Os { code: 28, kind: StorageFull, message: "No space left on device" }
+
+---- handler_context::tests::generated_owner_lifetime_and_complete_stack_boundaries stdout ----
+
+thread 'handler_context::tests::generated_owner_lifetime_and_complete_stack_boundaries' (940941) panicked at examples/../src/handler_context.rs:849:45:
+called `Result::unwrap()` on an `Err` value: Os { code: 28, kind: StorageFull, message: "No space left on device" }
+
+---- handler_context::tests::opaque_projection_preserves_predicate_order_and_owner_preflight stdout ----
+
+thread 'handler_context::tests::opaque_projection_preserves_predicate_order_and_owner_preflight' (940943) panicked at examples/../src/handler_context.rs:982:45:
+called `Result::unwrap()` on an `Err` value: Os { code: 28, kind: StorageFull, message: "No space left on device" }
+
+---- handler_context::tests::original_decision_distinguishes_selector_bypass_from_fail_fast stdout ----
+
+thread 'handler_context::tests::original_decision_distinguishes_selector_bypass_from_fail_fast' (940944) panicked at examples/../src/handler_context.rs:903:45:
+called `Result::unwrap()` on an `Err` value: Os { code: 28, kind: StorageFull, message: "No space left on device" }
+
+---- handler_guard::tests::emitted_checks_reject_corrupt_unknown_and_foreign_guard_identities stdout ----
+
+thread 'handler_guard::tests::emitted_checks_reject_corrupt_unknown_and_foreign_guard_identities' (940949) panicked at examples/../src/handler_guard.rs:698:39:
+called `Result::unwrap()` on an `Err` value: Os { code: 28, kind: StorageFull, message: "No space left on device" }
+
+---- local_unwind::tests::generated_native_loop_and_collision_order_are_instruction_driven stdout ----
+
+thread 'local_unwind::tests::generated_native_loop_and_collision_order_are_instruction_driven' (940953) panicked at examples/../src/local_unwind.rs:1490:45:
+called `Result::unwrap()` on an `Err` value: Os { code: 28, kind: StorageFull, message: "No space left on device" }
+
+---- main_completion::tests::decoded_branch_variadic_order_and_ignored_io_failure_execute_natively stdout ----
+
+thread 'main_completion::tests::decoded_branch_variadic_order_and_ignored_io_failure_execute_natively' (940959) panicked at examples/../src/main_completion.rs:814:39:
+called `Result::unwrap()` on an `Err` value: Os { code: 28, kind: StorageFull, message: "No space left on device" }
+
+---- selection::tests::emitted_filter_executes_original_scalar_and_temporary_effects stdout ----
+
+thread 'selection::tests::emitted_filter_executes_original_scalar_and_temporary_effects' (940964) panicked at examples/../src/selection.rs:1078:45:
+called `Result::unwrap()` on an `Err` value: Os { code: 28, kind: StorageFull, message: "No space left on device" }
+
+---- stdio_effect::tests::native_integer_text_partial_failure_and_count_are_independent stdout ----
+
+thread 'stdio_effect::tests::native_integer_text_partial_failure_and_count_are_independent' (940971) panicked at examples/../src/stdio_effect.rs:742:39:
+called `Result::unwrap()` on an `Err` value: Os { code: 28, kind: StorageFull, message: "No space left on device" }
+
+---- unwind_bridges::tests::emitted_typed_calls_preserve_stores_and_require_exact_resume stdout ----
+
+thread 'unwind_bridges::tests::emitted_typed_calls_preserve_stores_and_require_exact_resume' (940973) panicked at examples/../src/unwind_bridges.rs:787:39:
+called `Result::unwrap()` on an `Err` value: Os { code: 28, kind: StorageFull, message: "No space left on device" }
+
+---- crt_stream_runtime::tests::effective_addresses_never_expand_memory_or_transport_authority stdout ----
+
+thread 'crt_stream_runtime::tests::effective_addresses_never_expand_memory_or_transport_authority' (940864) panicked at examples/../src/crt_stream_runtime.rs:916:9:
+error: couldn't create a temp dir: No space left on device (os error 28) at path "/workspace/w2l-build-tmp/w2l-crt-runtime-938233-4/rmetanPiE9Q"
+
+error: aborting due to 1 previous error
+
+
+
+
+failures:
+    crt_stream_runtime::tests::descriptor_allocations_and_locks_preserve_identity_before_handle_binding
+    crt_stream_runtime::tests::distinct_record_leases_and_one_way_shutdown_do_not_reuse_initialization
+    crt_stream_runtime::tests::effective_addresses_never_expand_memory_or_transport_authority
+    crt_stream_runtime::tests::global_lock_identity_cannot_be_substituted_by_file_or_record_leases
+    crt_stream_runtime::tests::locale_identity_rejects_another_runtime_with_equal_thread_and_generation
+    crt_stream_runtime::tests::lock_result_preserves_fields_and_rejects_opaque_aliases
+    crt_stream_runtime::tests::opaque_dispatcher_transport_is_scoped_and_never_exposes_bytes
+    crt_stream_runtime::tests::opaque_heap_contracts_reject_cross_runtime_forged_and_unknown_policy
+    crt_stream_runtime::tests::owned_cells_unknowns_alias_lifetime_and_explicit_lock_order
+    crt_stream_runtime::tests::single_call_backend_partial_failure_and_close_are_not_flush_policy
+    crt_stream_runtime::tests::startup_authority_and_per_file_locks_are_distinct_from_live_stream_cut
+    dispatch::tests::independent_stack_layout_keeps_runtime_values_and_original_cursor_effects
+    dispatch::tests::live_effects_preserve_original_store_order_and_private_failure_boundary
+    frame_init::tests::emitted_initializer_executes_owned_range_and_typed_module_effect
+    frame_memory::tests::emitted_byte_storage_preserves_unknowns_protected_tags_and_identity
+    frame_proof::tests::native_initialization_preserves_opaque_predecessor_and_dynamic_cookie_bits
+    funclet::tests::live_funclet_reads_after_dispatch_and_retains_first_global_on_later_failure
+    funclet::tests::native_postcall_observations_use_live_values_and_store_failure_cannot_succeed
+    handler_bridge::tests::original_instructions_install_only_owned_typed_pair_and_preserve_other_words
+    handler_context::tests::generated_owner_lifetime_and_complete_stack_boundaries
+    handler_context::tests::opaque_projection_preserves_predicate_order_and_owner_preflight
+    handler_context::tests::original_decision_distinguishes_selector_bypass_from_fail_fast
+    handler_guard::tests::emitted_checks_reject_corrupt_unknown_and_foreign_guard_identities
+    local_unwind::tests::generated_native_loop_and_collision_order_are_instruction_driven
+    main_completion::tests::decoded_branch_variadic_order_and_ignored_io_failure_execute_natively
+    selection::tests::emitted_filter_executes_original_scalar_and_temporary_effects
+    stdio_effect::tests::native_integer_text_partial_failure_and_count_are_independent
+    unwind_bridges::tests::emitted_typed_calls_preserve_stores_and_require_exact_resume
+
+test result: FAILED. 239 passed; 28 failed; 2 ignored; 0 measured; 0 filtered out; finished in 49.51s
+
+error: test failed, to rerun pass `--example crt_stream`

@@ -1,0 +1,340 @@
+{
+  "scope": "original-entry component plus separately declared C-array and callback tests; not whole-PE translation",
+  "reviewed_predecessor": "dd255f23a86d380d9e24c13c019bf6db51bb7ec0",
+  "predecessor_exact_head_CI": {
+    "41298661677": "success",
+    "41298657052": "success",
+    "41298657042": "success"
+  },
+  "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "source_hashes": {
+    "src/crt_c_initializers.rs": "89df0c825aaff3e96c33b602c786a2078d1eebff5cd8e053ab001c4ef7e32bde",
+    "src/crt_startup_caller.rs": "510491ed05d52b87838ffac87889e37bd700804a063517e7267241592ad6d971",
+    "src/crt_normal_frame_tests.rs": "59c5e0ff88f6bffc5361ce880fbd34b10f63a1ade070cff7ba0bee5983f73662",
+    "research/process/startup/check_normal_wrapper.py": "3b8be1e4d6660b0a7367d0350fca89ef03f6146094c21a0b16f3afa9bea295b7",
+    "research/process/startup/evidence/c-initializer-expectations.json": "4e0741a68aac1cc912d41cb857b1f2bde46703fb3f987e02ddf3868b495d6070"
+  },
+  "regions": {
+    "LOOP": {
+      "address": "0x406ccc",
+      "length": 46,
+      "sha256": "c54b63ff32dafdbb673918e9972681b0e2dd38904c9de8931aca0426f44bfa5a",
+      "disassembly_sha256": "f029deba3224edf08714158abe816de1a5a5420ffc05e027bb457c06aaa46454"
+    },
+    "FIRST": {
+      "address": "0x40155a",
+      "length": 171,
+      "sha256": "2dd83e44be5b5a6c72f6bea4afabf1252886a6b37c7a4f092e94f5483dae6344",
+      "disassembly_sha256": "b0c080651a61462d028aa492db175d3052cc3af4194cd1f7ebf0898e624ddadc"
+    },
+    "SECOND": {
+      "address": "0x401605",
+      "length": 8,
+      "sha256": "860ee8cc93f6dae6941954d1f6258a4e991e2010620d3505a2c85cc0795db540",
+      "disassembly_sha256": "849beafd1bf1a6c24e1acc4fabc1fd6959d4835f22927c61e51754abd9cd0dd8"
+    },
+    "FILE_INIT": {
+      "address": "0x404510",
+      "length": 200,
+      "sha256": "aba9fe49299ebaab26678e88ce15eb3bcdee84636fa95231ea1fe75c353f8827",
+      "disassembly_sha256": "6fa78ef98446cb8222295e00eb24b08ec93e04413d86ebeb02c68596f12a7daf"
+    },
+    "LOCALE": {
+      "address": "0x4109ba",
+      "length": 12,
+      "sha256": "c81c121a8dfc3d767fdf1da6c06b6e1000fa45592da09ac79b5a620ccde19cc8",
+      "disassembly_sha256": "f170042b46898087cf2d62839d6035114f98b48a98e8bc1bf0ec2f81d2c1ee70"
+    },
+    "MODE": {
+      "address": "0x40c109",
+      "length": 22,
+      "sha256": "b574e61938e249462c825b8b7ad7bfe6403ae27192e34762bfffb2455d3f3e98",
+      "disassembly_sha256": "18dbe17f3dad3c8a3eb10880fa4bad28132640e4292004a5fbc9ffa9f962ffe7"
+    },
+    "FEATURE": {
+      "address": "0x4127b0",
+      "length": 16,
+      "sha256": "15e30c5d2773ac22ce5a792b441e159b44dfbc5f9d2147d009f1c82f509bde53",
+      "disassembly_sha256": "63bbc96d97fbc730f09c6c5b315ec6b40d204013bebe1974d47cba529d0909c0"
+    },
+    "CPP": {
+      "address": "0x40160d",
+      "length": 18,
+      "sha256": "96dedec7735731363bfa5c03f20a7e6be3948fca31501922cfea20eba3273e3d",
+      "disassembly_sha256": "b3b1319c9a6bfb74ebb418a4031c446985e829dfa7bb4efe4e4f696cd7553bd2"
+    },
+    "APP_TYPE": {
+      "address": "0x40662e",
+      "length": 15,
+      "sha256": "d707790980727be478bc9b877464fddef5ed1ce2fa6793ebccfacb5ea5ee03bf",
+      "disassembly_sha256": "ccbd10ebc73254dc0f326941870de7d360d431bb099d59bb8c48bffa7c11608c"
+    },
+    "GET_MODE": {
+      "address": "0x401bc3",
+      "length": 6,
+      "sha256": "7515c2aa59fe3196956446e2f0ba640cc09ab3a6092cc8d3b2a2186f18d59e38",
+      "disassembly_sha256": "ddf868cf17e8afff2c50165368d1d4105bac37aea81512dee836c666445c9039"
+    },
+    "SET_MODE": {
+      "address": "0x407056",
+      "length": 61,
+      "sha256": "dfa09abbc38af28b07a02bc69afacbed2bc4e2be53ad5dc1891020f849f07f91",
+      "disassembly_sha256": "38da361ca6cfebfba3a89afeb632272c9b674cb6317197c42868b6468635a39f"
+    },
+    "ZERO": {
+      "address": "0x401bbc",
+      "length": 3,
+      "sha256": "4bc724f3b1d0caf4fe369c18cba3102e6c4ea057f63fe1587e3973134a7f755e",
+      "disassembly_sha256": "62c92d37f0439b0c18c96f7e1a97de3da5b57719d1ecdd3226e05486d608c62c"
+    },
+    "GET_COMMODE": {
+      "address": "0x4071ff",
+      "length": 6,
+      "sha256": "63704eae36e6cb7889da1eec1b44b22cc6f80c0aebe7d25dadeddc2a22350a76",
+      "disassembly_sha256": "75bc5d3cf847d70ab22110be0742c6c86f90539fd96943f6235286c9af47f151"
+    },
+    "ONEXIT": {
+      "address": "0x40197e",
+      "length": 135,
+      "sha256": "bf632bd511b89a381802f16d70f05594fa23d1ba47b1d1542b58fac75fb6acc9",
+      "disassembly_sha256": "50519fc503e14eaefee3dd9a61eea1855b0f56ef49be1518a8821ffda9320ec1"
+    },
+    "OPTIONS": {
+      "address": "0x401c02",
+      "length": 29,
+      "sha256": "c8a94e4cad0254a4fa65947fb98523b6c839f9cc43ed07038ce8137cf362c994",
+      "disassembly_sha256": "a2a6dfdc36cc4986ae8a928f8a4e9eca5537b1904059f979055c5f737786f5cc"
+    },
+    "OPTIONS_GET": {
+      "address": "0x401270",
+      "length": 6,
+      "sha256": "5172e7e28acb1042ceefd68bc16e8ee6fc00c8ac54dcb0f0bb2dd396061307e6",
+      "disassembly_sha256": "c3b7aec2c331a138ff087cf9e6d4dc638c347e7a0f6287de042a3acf507c4f3e"
+    },
+    "SCAN_GET": {
+      "address": "0x401bfc",
+      "length": 6,
+      "sha256": "90a576e61771a6bf016551ef08b3352e4c3a5bc00debec6352d2f30459a614b4",
+      "disassembly_sha256": "cf4d30353a965d5e0e99bc2e0ff486eb47aa659d7c27534806641e9c7c7b1f24"
+    }
+  },
+  "c_array": {
+    "begin": "0x41513c",
+    "end": "0x415158",
+    "words": [
+      "0x0",
+      "0x40155a",
+      "0x401605",
+      "0x404510",
+      "0x4109ba",
+      "0x40c109",
+      "0x4127b0"
+    ]
+  },
+  "original_entry_next_rejection": "before FNCLEX0x40158a; x87 state unmodeled",
+  "actual_normal_order": "only first callback prefix entered; no later callback executed",
+  "declared_traversal_cases": 28,
+  "declared_replay_rejections": 28,
+  "separately_declared_original_callback_cases": 12,
+  "constructor_cases": 16,
+  "new_whole_PE_Windows_ELF_pairs": 0,
+  "retained_recorded_Windows_wrapper_component_comparisons": 5,
+  "focused_canonical_test": "passed",
+  "focused_canonical_log_sha256": "d15e4144e637beb41c3718f9eb5b71629d42324b9dbe4dc08181d7c43fff8c58",
+  "clippy": "passed all-targets -D warnings",
+  "demonstrated_fixed_defect": "Ending initialization inside a callback allowed advancement; validate owner after protected callback before further iteration. Mode23 strictly rejects after first callback and retains its prior marker write.",
+  "local_failed_experiments": {
+    "graph.log": "6e49fe4cf6b98486061a6811d406bc51276516f984a08c115e3c88c71e558a14",
+    "canonical-real-2.log": "329d3b927e506cef0e9881057facb06138d5b22f6ff2f4991d44d5391d796f8f",
+    "canonical-initial.log": "217bef08c4aa0a38c146cddc48dfcf357a2ef6583f3e1b76c6c5d08c91b3fed0",
+    "canonical-real.log": "042b725e7949b8439c576c217160a85bb6b10369246334dfa7b7609c45348470"
+  },
+  "limits": "No limits raised. All prior unsupported startup/default admission/formatter/rcedit, free/error, exceptional delivery and broader equivalence gaps remain; original-Windows timeout causes unresolved.",
+  "source_commit": "c70f834ba25fcdb942eec30abb652afc10c45e14",
+  "checks": {
+    "root": 182,
+    "crt": 317,
+    "crt_ignored": 2,
+    "unwind": 185,
+    "startup_python": {
+      "run": 89,
+      "skip": 1
+    },
+    "tools_python": {
+      "run": 106,
+      "skip": 0
+    },
+    "corpus_python": {
+      "run": 18,
+      "skip": 1
+    },
+    "all_targets_clippy": "passed -D warnings",
+    "fmt": "passed",
+    "artifact_tests": "both named artifact checks passed in complete replay; canonical freshly repeated with identical generated Rust"
+  },
+  "replay": {
+    "kind": "original prolog/epilog component comparison with explicit unexecuted body boundary",
+    "scope": "Live registry fixture; body EAX/flags inputs; original stack/FS/saved-state restoration only",
+    "comparisons": 5,
+    "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+    "rust_sha256": "5ac9baa1625560f73ab728e568f2aceae4152515fc87fd2485fc800f525c6d4b",
+    "whole_pe_translation_pairs": 0,
+    "fresh_identical_rust": true,
+    "emission_mtime_before_ns": 1793533816019477844,
+    "emission_mtime_after_ns": 1793533860321624089,
+    "report_sha256": "38fcf42356fecae458da976be7d3aa589a5adcca0c95293372b11c2dffc48e54",
+    "observer_report_sha256": "0feb586c7170dfd7e2390cf92ce1e5efa050c3e208d6c8903312e2d054c506cc",
+    "wrapper_vectors_sha256": "6f9b74742366c0f207d397ccf8b1af4afc2d01b34fae21cafb68d38d71a6ec66"
+  },
+  "named_gates": {
+    "c-initializer-graph": {
+      "stdout": "65ad13727307896ceedc4af05b61806e270c398e38aefdfa3f815db764211433",
+      "stderr": "29423147df5f27152c143f40399d5189737a902b622fb79efc6e1b2754336583"
+    },
+    "startup-caller-graph": {
+      "stdout": "6ccc0ccf4e79b0c32eea43f177be7bf0f04bfbaef90c5cf931646d777a19813a",
+      "stderr": "ab1e8ab4b828624e75e6e8c917ac437f104b9cd0b496a9d073a4a52c0abca136"
+    },
+    "exit-table-graph": {
+      "stdout": "73906db11016614692ad4c192aea00750690516ddfe3f7d806e34b72a880e879",
+      "stderr": "ab1e8ab4b828624e75e6e8c917ac437f104b9cd0b496a9d073a4a52c0abca136"
+    },
+    "locale-shared-copy": {
+      "stdout": "1911863c8d5472bb4bd7c12291ee4f505788901a5d7a88328aa1f82c58718cee",
+      "stderr": "ab1e8ab4b828624e75e6e8c917ac437f104b9cd0b496a9d073a4a52c0abca136"
+    },
+    "cookie-record": {
+      "stdout": "84fb64aadf395408c4f5844336ff82f2af0cdeadeb60c86dffa548981366a303",
+      "stderr": "29423147df5f27152c143f40399d5189737a902b622fb79efc6e1b2754336583"
+    },
+    "locale-alignment": {
+      "stdout": "16cc2a0b9bdad214c1f4b31b0c4516aeab3789149f1d3044429bfa5831a72963",
+      "stderr": "29423147df5f27152c143f40399d5189737a902b622fb79efc6e1b2754336583"
+    }
+  },
+  "array_sha256": "ba8e86be61de6f3fb6f95f5862dfd994d403b71f7e00ba25d904194d6c7f1617",
+  "original_call_targets": {
+    "first": [
+      "0x40662e",
+      "0x401bc3",
+      "0x407056",
+      "0x401bbc",
+      "0x4071ff",
+      "0x40197e",
+      "0x401e00",
+      "0x401b0f",
+      "0x401bbf",
+      "0x4069d4",
+      "0x401bc9",
+      "0x401c1f",
+      "0x4066b0",
+      "0x401bf9",
+      "0x401bf9",
+      "0x401bd8",
+      "0x401bbc",
+      "0x407158",
+      "0x401bd5",
+      "0x406c9c",
+      "0x401bbc",
+      "0x401d4c",
+      "0x401c37"
+    ],
+    "second": [
+      "0x401c02"
+    ],
+    "file_init": [
+      "0x407cf0",
+      "0x407d50",
+      "0x407cf0",
+      "0x407d50",
+      "0x408079"
+    ],
+    "locale": [
+      "0x40b42a"
+    ],
+    "mode": [],
+    "feature": [],
+    "cpp": [
+      "0x401d93",
+      "0x401bbc",
+      "0x4071d0"
+    ]
+  },
+  "original_call_targets_note": "static direct-call targets in complete selected bodies; indirect/IAT calls remain in hashed bytes/disassembly and are not listed here. Only first prefix reached in normal unchanged-entry order",
+  "local_log_sha256": {
+    "canonical-fresh-identical.log": "f7cab6a82240f586fa7aafe1cfa3473943f20c40d42252888799a93848719ccb",
+    "canonical-initial.log": "217bef08c4aa0a38c146cddc48dfcf357a2ef6583f3e1b76c6c5d08c91b3fed0",
+    "canonical-lifetime-fixed.log": "d15e4144e637beb41c3718f9eb5b71629d42324b9dbe4dc08181d7c43fff8c58",
+    "canonical-mapped-marker.log": "f39249c2cc13bce8714d348caa7b844ebffdaab80d20aae6c005b297f64f5303",
+    "canonical-real-2.log": "329d3b927e506cef0e9881057facb06138d5b22f6ff2f4991d44d5391d796f8f",
+    "canonical-real.log": "042b725e7949b8439c576c217160a85bb6b10369246334dfa7b7609c45348470",
+    "clippy.log": "7434d9dd0d2b2f264610d1947b72116ff4ed0f1dce337302b983a0f933aa7938",
+    "corpus-python.log": "f6db89801c84394dbc4ea8b68b6baa126e3935bf433c01a414917d623f91065e",
+    "crt.log": "07c0849f05a67ceb026b5bf74bf56b5d83d2dd246301994c3fe6e47f06510889",
+    "fmt.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "graph-bounded.log": "606a45ec1bf010c0a122e3c75944848b3a17a9ef512f3997b3b89460172063d0",
+    "graph.log": "6e49fe4cf6b98486061a6811d406bc51276516f984a08c115e3c88c71e558a14",
+    "replay-final.log": "df4f9e8cbf31487af47a074a6290c3d09df956964686a22dd794f7726bedf22d",
+    "root.log": "80d51d4e3aefb5fcff5b2c8435741407bb025f2e3dd52d7ca369ace26fd7dbd2",
+    "startup-python.log": "c2bfd7cd57ac2da6b781742bd38d0cc74e425cefd5459344415a9c1f471a478c",
+    "tools-python.log": "e836e7da8db1a83bea8f157d55e435a48cb9fe17d08d3056a982385d103f92c9",
+    "unwind.log": "ad6e25920d17e186e8af3aa69a8a5695a8e5d263f0f308e90a07b9a27eb005b8"
+  },
+  "local_failed_experiments_explanation": {
+    "graph.log": "default decoder correctly rejected unbound indirect call; used explicit existing bounded graph instead of widening decoder",
+    "canonical-initial.log": "declared marker address outside mapped .data; corrected test marker only",
+    "canonical-real.log": "test attempted to forget immutable guard code; memory correctly denied it; replaced this unperformable mutation with mid-callback initialization retirement",
+    "canonical-real-2.log": "genuine new implementation defect: mid-callback initialization retirement allowed second callback; new post-call owner check fixes it; strict events oracle retained"
+  },
+  "review": {
+    "predecessor": "No demonstrated predecessor defect; all3 exact dd255f2 workflows success",
+    "new_implementation": "Reviewed loop cursor/target and immutable table identity, original branches/CALL/RET, full-width result, actual body bytes, scalar unknown propagation, independent onexit-table identities and retained effects. Fixed demonstrated post-callback lifetime defect. Generic decoder remains unchanged. No formal PR approval.",
+    "next_independent_review": "Sol: check proof/emission and callbacks, raw-BOOL rejection, x87 cutoff, strict native success/error assertions and final-head CI before later integration."
+  },
+  "new_head_ci": "pending after final evidence publication; exact IDs/outcomes tracked in SUB-579; source-head runs recorded separately",
+  "source_head_ci": [
+    {
+      "id": 41303137928,
+      "head": "c70f834ba25fcdb942eec30abb652afc10c45e14",
+      "status": "in_progress",
+      "conclusion": null,
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41303137928"
+    },
+    {
+      "id": 41303135726,
+      "head": "c70f834ba25fcdb942eec30abb652afc10c45e14",
+      "status": "in_progress",
+      "conclusion": null,
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41303135726"
+    },
+    {
+      "id": 41303135690,
+      "head": "c70f834ba25fcdb942eec30abb652afc10c45e14",
+      "status": "in_progress",
+      "conclusion": null,
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41303135690"
+    }
+  ],
+  "next_scope": {
+    "first_rejected_instruction": "x87 FNCLEX0x40158a",
+    "code_level_gap": "CrtCpu has no x87 status/control/tag state. Implement explicit state knowledge and FNCLEX effects under a justified initial environment; preserve control/tag and host isolation, then original remainder without no-op substitution.",
+    "later_callbacks": "401605 and40c109 separately tested;404510 FILE allocation/lock composition,4109ba locale epoch composition,4127b0 raw BOOL producer remain rejected. No normal-order execution beyond first prefix.",
+    "routing": "Sol independent review and routine CI; bounded Astra High only for x87 initial-state/exception-preservation design if required; no Ultra"
+  },
+  "reproduction": {
+    "commands": [
+      "cargo test --locked",
+      "cargo test --locked --example crt_stream",
+      "cargo test --locked --example unwind_slice",
+      "cargo clippy --locked --all-targets -- -D warnings",
+      "cargo fmt --all -- --check",
+      "PYTHONPATH=research/process/startup python3 -m unittest discover -s research/process/startup",
+      "python3 -m unittest discover -s tools",
+      "PYTHONPATH=corpus python3 -m unittest discover -s corpus",
+      "python3 research/process/startup/check_normal_wrapper.py ORIGINAL_DIRECTORY OBSERVER_DIRECTORY NEW_OUTPUT_DIRECTORY"
+    ],
+    "artifact_repeat": "W2L_EH4_CODE=OUTPUT W2L_EH4_EVIDENCE=OUTPUT W2L_EH4_VECTORS=OBSERVED/normal-wrapper-vectors.txt W2L_PE_MAPPING_INPUT=ORIGINAL/unwind.exe cargo test --locked --example crt_stream canonical_image_cookie_and_original_record_initialization_compose -- --ignored",
+    "environment": "configured Rust toolchain; CARGO_INCREMENTAL=0 CARGO_NET_OFFLINE=true TMPDIR=/workspace/w2l-build-tmp W2L_Z3=/workspace/.tools/w2l-z3/bin/z3",
+    "limits": "no stack, proof, timeout or resource limits raised; 64-word C array is an explicit supported-domain bound"
+  }
+}

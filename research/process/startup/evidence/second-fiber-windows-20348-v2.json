@@ -1,0 +1,52 @@
+{
+  "kind": "Original Windows second-FLS candidate identity and availability; zero translations",
+  "windows_version": "10.0.20348",
+  "source_sha256": "4edcf7e86d2a7f24acdcfce6ac3fd8bc25511b4fb93cfcf0166966baa35a1fef",
+  "pe_sha256": "ea7b050c1b877a1284cf957662a81ebe6a2115694acc4706c600f6bc43a4969e",
+  "command": [
+    "cl",
+    "/nologo",
+    "/W4",
+    "/O2",
+    "/GS",
+    "D:\\a\\windowstolinux\\windowstolinux\\research\\process\\startup\\second_fiber_probe_v2.c",
+    "/FeD:\\a\\_temp\\second-fiber-identity-observation\\second-fiber.exe",
+    "/FoD:\\a\\_temp\\second-fiber-identity-observation\\second-fiber.obj"
+  ],
+  "compiler_path": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX86\\x86\\cl.EXE",
+  "compiler_sha256": "fc26dcba228dd91cd09429670f298f4608833c84841a4ceca8c4955b4d495a7b",
+  "rows": [
+    {
+      "candidate": 0,
+      "loaded": true,
+      "load_error": 305419896,
+      "found": false,
+      "lookup_error": 127,
+      "released": true,
+      "load_host": {
+        "path": "\\\\?\\C:\\Windows\\SysWOW64\\KernelBase.dll",
+        "sha256": "2398cc6ad909530545b4e4fbef7d7775447483431afdd90ab7306b8eed0a2ea1"
+      }
+    },
+    {
+      "candidate": 1,
+      "loaded": true,
+      "load_error": 305419896,
+      "found": false,
+      "lookup_error": 127,
+      "released": true,
+      "load_host": {
+        "path": "\\\\?\\C:\\Windows\\SysWOW64\\KernelBase.dll",
+        "sha256": "2398cc6ad909530545b4e4fbef7d7775447483431afdd90ab7306b8eed0a2ea1"
+      }
+    }
+  ],
+  "provenance": {
+    "head": "e169e4c32860c56c3bf377c16a6114ab3b9e6f26",
+    "run": 41095617411,
+    "job": 124200454937,
+    "artifact": 12996845680,
+    "artifact_zip_sha256": "48d7d69b531175008909968b3778ffaccee5c11085da2997a4b39c690dcabe67",
+    "source": "corrected single-release observer CI report; binary/hash metadata from job, artifact not separately downloaded"
+  }
+}

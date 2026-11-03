@@ -1,0 +1,110 @@
+{
+  "kind": "Original Windows API-set observations; no translated pairs",
+  "commit": "f30aff60ff4012a0d25c3c3ed0da167e404e18f7",
+  "run": 41042507916,
+  "job": 124018486441,
+  "artifact": 12970567877,
+  "artifact_zip_sha256": "80290fb24ed44ec8d37fd81bc1d8733aa432aafd6ee6148c714973fe6115ef77",
+  "source": "Report transcribed mechanically from successful job stdout; archive digest reported by upload-artifact, archive not independently downloaded",
+  "report": {
+    "windows_version": [
+      10,
+      0,
+      20348
+    ],
+    "machine": 332,
+    "source_sha256": "5b8dd4a4502529d9c851db54f57473789594df3cf9f628ccfea06991e777bf3e",
+    "pe_sha256": "0cbcfa2d0d3e64b1570860d401e41369f88e60a10568142a3b08725a32afcd6f",
+    "command": [
+      "cl",
+      "/nologo",
+      "/W4",
+      "/O2",
+      "/GS",
+      "D:\\a\\windowstolinux\\windowstolinux\\research\\process\\startup\\api_set_probe.c",
+      "/FeD:\\a\\_temp\\api-set-observation\\probe.exe",
+      "/FoD:\\a\\_temp\\api-set-observation\\probe.obj"
+    ],
+    "compiler_path": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX86\\x86\\cl.EXE",
+    "compiler_sha256": "fc26dcba228dd91cd09429670f298f4608833c84841a4ceca8c4955b4d495a7b",
+    "rows": [
+      {
+        "loaded": true,
+        "same_handle": true,
+        "export_survives_one_release": true,
+        "contract": "api-ms-win-core-synch-l1-2-0",
+        "symbol": "InitializeCriticalSectionEx",
+        "flags": 2048,
+        "load_host": {
+          "path": "\\\\?\\C:\\Windows\\SysWOW64\\KernelBase.dll",
+          "machine": 332,
+          "sha256": "2398cc6ad909530545b4e4fbef7d7775447483431afdd90ab7306b8eed0a2ea1"
+        },
+        "export_host": {
+          "path": "\\\\?\\C:\\Windows\\SysWOW64\\KernelBase.dll",
+          "machine": 332,
+          "sha256": "2398cc6ad909530545b4e4fbef7d7775447483431afdd90ab7306b8eed0a2ea1"
+        },
+        "ntdll": {
+          "path": "\\\\?\\C:\\Windows\\SysWOW64\\ntdll.dll",
+          "machine": 332,
+          "sha256": "1e78588dcb44d47c1656f9f6eab8ab5beb5279959bcebf74c0f869d8d1c73322"
+        }
+      },
+      {
+        "loaded": true,
+        "same_handle": true,
+        "export_survives_one_release": true,
+        "contract": "api-ms-win-core-fibers-l1-1-1",
+        "symbol": "FlsAlloc",
+        "flags": 2048,
+        "load_host": {
+          "path": "\\\\?\\C:\\Windows\\SysWOW64\\KernelBase.dll",
+          "machine": 332,
+          "sha256": "2398cc6ad909530545b4e4fbef7d7775447483431afdd90ab7306b8eed0a2ea1"
+        },
+        "export_host": {
+          "path": "\\\\?\\C:\\Windows\\SysWOW64\\KernelBase.dll",
+          "machine": 332,
+          "sha256": "2398cc6ad909530545b4e4fbef7d7775447483431afdd90ab7306b8eed0a2ea1"
+        },
+        "ntdll": {
+          "path": "\\\\?\\C:\\Windows\\SysWOW64\\ntdll.dll",
+          "machine": 332,
+          "sha256": "1e78588dcb44d47c1656f9f6eab8ab5beb5279959bcebf74c0f869d8d1c73322"
+        }
+      },
+      {
+        "loaded": true,
+        "same_handle": true,
+        "export_survives_one_release": true,
+        "contract": "api-ms-win-core-heap-l1-1-0",
+        "symbol": "HeapAlloc",
+        "flags": 2048,
+        "load_host": {
+          "path": "\\\\?\\C:\\Windows\\SysWOW64\\KernelBase.dll",
+          "machine": 332,
+          "sha256": "2398cc6ad909530545b4e4fbef7d7775447483431afdd90ab7306b8eed0a2ea1"
+        },
+        "export_host": {
+          "path": "\\\\?\\C:\\Windows\\SysWOW64\\ntdll.dll",
+          "machine": 332,
+          "sha256": "1e78588dcb44d47c1656f9f6eab8ab5beb5279959bcebf74c0f869d8d1c73322"
+        },
+        "ntdll": {
+          "path": "\\\\?\\C:\\Windows\\SysWOW64\\ntdll.dll",
+          "machine": 332,
+          "sha256": "1e78588dcb44d47c1656f9f6eab8ab5beb5279959bcebf74c0f869d8d1c73322"
+        }
+      },
+      {
+        "loaded": false,
+        "error": 126,
+        "contract": "api-ms-w2l-missing-contract-l9-9-9",
+        "symbol": "NoSuchExport",
+        "flags": 2048
+      }
+    ],
+    "translated_pairs": 0
+  }
+}

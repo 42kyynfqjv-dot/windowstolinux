@@ -1,0 +1,42 @@
+{
+  "reviewed_commit": "0f6a9c3e166f45a91008d2a87c389b7c6b5bf2c1",
+  "failed_run": 41279220163,
+  "failed_job": 124767509816,
+  "artifact_id": 13072477206,
+  "artifact_sha256": "0d73c221eedc621d2d1261ea4486ddb9837097cf44306f383f58de45b9652741",
+  "failure_excerpt_sha256": "b3d060f4c9b22ab8357d392fde3dc4ce02d55a4afb2019c14825d186c65a5bad",
+  "failure": "generated standalone Rust test child main overflowed its stack; the reported failure is not an original PE timeout",
+  "diagnosis": "unrolled case blocks place repeated owned-runtime temporaries in one main frame; separated noninlined case functions bound simultaneous stack storage",
+  "fix": "same40 word loads+112 extensions, every assertion retained; checked counter requires all152 executions; Linux child only lowered to512KiB before exec; Windows and compiler/other tests limits unchanged",
+  "windows_confirmation": "new fixed-head CI required; no Windows fix claimed solely from Linux result",
+  "artifact_limit": "old upload did not include the external temporary word-register harness source/executable. Source extraction/recompile attempt could not run; no original harness PE stack reserve or exact old-harness Linux execution was measured.",
+  "new_code_scope": "test generator/executor only; production initializer prefix unchanged",
+  "production_prefix_sha256": "bf57f0c6cfee3db9c21b7ce94609756f6d440c8aece22f53a29222ebeb3125ef",
+  "rust_sha256": "c589562e7164c77a019b4f8785712249448592ba086a8490a15715dbf7897b69",
+  "recorded_wrapper_component_comparisons": 5,
+  "new_whole_pe_pairs": 0,
+  "checks": {
+    "crt_example": 308,
+    "unwind_example": 185,
+    "artifact_tests": 2,
+    "word_vectors": 152,
+    "linux_child_stack_kib": 512,
+    "clippy": "passed",
+    "fmt": "passed"
+  },
+  "source_sha256": {
+    "src/crt_locale_code_page.rs": "31c33735edbc3d9451e36109285645a5e8d4ec504ded0d598196e94ab949594f",
+    "src/crt_stream_callees_tests.rs": "cdf3bc92e4eb527356b5745d1b6b6ba11df62f7007c2a1afa4bf35c9961916b0"
+  },
+  "log_sha256": {
+    "crt-stack-final.log": "838a870a2962509ba5f2f847542e837122664896ce990146b9ac07c6db931b2c",
+    "unwind-stack-final.log": "a68ff36e4b2ed36d3d29a082c09015e0e74dbde0f78b694256186b206895b22e",
+    "clippy-stack-final.log": "9ad24bfd741575792af11ff7e3eb9b764de1e5d1c3ed29a8f11d4af9ba8057cf",
+    "fmt-stack-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "word-stack-fixed.log": "b430980d3e479c96749ad7d7f245cbb4c5ad4e4cb1ff8113fa4f2cb705e8c1ed",
+    "stack-artifact-final.log": "d1c23c923fbd9c88cef8756957f36377c62ea421d238cb6562a177ab021da91f",
+    "word-unrolled-build.log": "bbb46f65d114463eb71e1d983278f422897618973bd2865a20b9dc5a6ec923c7",
+    "word-unrolled-low-stack.json": "788e9b8d2edb0a5c4ac03822fdff7744d9b01ed520dcbcb42095fc7e7d39199f"
+  },
+  "original_timeout_causes": "still unresolved; exact-image18 executions and both original gates passed on0f6, not a demonstrated timeout fix"
+}

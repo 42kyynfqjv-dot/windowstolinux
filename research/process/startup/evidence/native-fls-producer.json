@@ -1,0 +1,77 @@
+{
+  "kind": "Bounded native FLS allocation producer and original initializer; component only",
+  "reviewed_commit": "dbb60a291a11eea77fcad906b8a3b657500e7764",
+  "review": "pre-effect saved-register checks and strict synchronization regression retained; no additional defect found",
+  "source_sha256": {
+    "src/crt_stream_runtime.rs": "84d39089fac0463994466bec4fb60b9ce7085c8b33bd502edea1de1d173b8001",
+    "src/crt_stream_cpu.rs": "e42d18085214e58689e2ae0f503e42a462a30462892128646528fcb39963c243",
+    "src/crt_startup_modules.rs": "c4efaf8a23d110f7ae3c7b5781b2c911c4deb4812c214e25c421a4e80e625ab1",
+    "src/crt_normal_frame_tests.rs": "6d84f6b418d0c2535974d7ea164cb41ce5402e287431c9ab66a2a5716502f417",
+    "src/crt_provider_tests.rs": "4b89a31f2286c505728037b5ef1de88c5c7e5eee626ce422cb58e930d6ce78fe",
+    "research/process/startup/check_normal_wrapper.py": "9d62723959837dfa125cacd75342506947b13445e5593d747c36adee67e9d0fe"
+  },
+  "validation": {
+    "crt_passed": 280,
+    "ignored_in_full": 2,
+    "artifact_tests": "both passed in replay",
+    "native_fls_producer_cases": 10,
+    "declared_profile_cases": 7,
+    "capacity_under_allocator_denial": 64,
+    "reuse_under_allocator_denial": true,
+    "python_run": 75,
+    "python_skip": 1,
+    "clippy": "passed",
+    "format": "passed"
+  },
+  "boundaries": {
+    "default": "LoadLibraryExW at0x402b00 remains rejected",
+    "explicit_profile": "original allocation wrapper call0x402968 ->0x402b3e",
+    "constructed_lock_count": 1,
+    "entry_fls_index_allocated": false,
+    "entry_fls_value_published": false,
+    "native_allocator_implemented": true,
+    "native_allocator_wired_to_original_wrapper": false,
+    "native_fls_free_implemented": false
+  },
+  "native_domain": {
+    "process_index_capacity": 64,
+    "fiber_value": "separate checked lease, initially null; publication not inferred",
+    "capacity_failure": "component rejection; no Windows sentinel/error fabricated",
+    "callback": "retained executable process-image owner; body execution/nonnull teardown not certified",
+    "failure_ordering": "prior tables, LastError and serial unchanged on rejection"
+  },
+  "replay": {
+    "kind": "original prolog/epilog component comparison with explicit unexecuted body boundary",
+    "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+    "rust_sha256": "1608813080e26375cfcc087fc996347de82db16029ebcbf2ab53b2b20151bf03",
+    "comparisons": 5,
+    "scope": "Live registry fixture; body EAX/flags inputs; original stack/FS/saved-state restoration only",
+    "whole_pe_translation_pairs": 0
+  },
+  "report_sha256": "9f4d45442e557c347cb67ca029d08666649664897db6fb677d848bcb5ea93c75",
+  "logs": {
+    "artifact-fixed.log": "bee97cc53b068fb9b344c72cedb27dfac0dea88848222091b7f02ff4aac23f27",
+    "full.log": "533f1c5595b132a0e159a45da4d20aefb6b1bf623eb877b7ec8e1c76bcae3d4e",
+    "clippy.log": "1e26f38580dc7f201c2bfcfefc098e4f21af64052f5bd394a926fbfd7b69aa81",
+    "format.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "python.log": "05d8ac0bb13db73ef4e70d0713423f2471b4236d9f094b8863de6c59e19799e2"
+  },
+  "predecessor_ci": [
+    {
+      "run": 41061939658,
+      "conclusion": "success"
+    },
+    {
+      "run": 41061932319,
+      "conclusion": "success"
+    },
+    {
+      "run": 41061932550,
+      "conclusion": "success"
+    }
+  ],
+  "new_windows_observations": 0,
+  "new_whole_pe_pairs": 0,
+  "primary_contract": "https://learn.microsoft.com/en-us/windows/win32/api/fibersapi/nf-fibersapi-flsalloc",
+  "historical_windows_timeouts": "unresolved"
+}

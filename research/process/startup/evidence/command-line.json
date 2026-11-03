@@ -1,0 +1,181 @@
+{
+  "kind": "Process-owned UTF-8 command-line API and original callback9; component/conformance evidence only",
+  "core_source_commit": "5fd86ebd89f928561eca4493870d3ff456eda918",
+  "input_provenance_commit": "1779a18e654c0c6e7f2b3744f520c52e58755b90",
+  "reviewed_parent": "6fb39ce78188fd4c113a2f1c0497b2619a5c6ed7",
+  "source_sha256": {
+    ".gitattributes": "4fa9375ae2c31bc0c6c1513dac2d651698ad841bfd2be9a95c2f96dbe430f1d3",
+    ".github/workflows/startup-inventory.yml": "7e084f25595b33ba3ad20093ed64fb96217d9d3b9ef54fd07004823451da5d98",
+    "examples/crt_stream.rs": "4ba74e06f031b0a8f6b18e879d8735c32b749662ce4c53f12b2e4681d67b2a93",
+    "src/crt_stream_runtime.rs": "1c7732bbac15f046629eb33dcb508cec48e90df0e0015f56ebf29973d055b078",
+    "src/crt_resident_loader.rs": "cb93aef0c90cd438a04b1266d9b43d9058c41eb936dd021cb477fce047b4614a",
+    "src/crt_startup_table.rs": "65f7fbaef908da63e46246c4502990f236263c3dc9097d60b03abbffe15beac4",
+    "src/crt_normal_frame_tests.rs": "cbe3abe7cc5329dbaf9fffd608b93f49e2c99646d55bebc10fe8eabbcceb4fc6",
+    "src/crt_command_line_tests.rs": "80a546ff1a14df6f9e7bb3fa511b84ff1318682edbce52aa41f164344a8f1a44",
+    "research/process/startup/check_normal_wrapper.py": "08a9985b788277e50d6d579a44fad4312e3f14ae61ce210c6b4d7170f6331796",
+    "research/process/startup/command_line_contract.py": "dc14b2ea65569eb1d6e1a326d457da08e4b3a98363990c70581c237e615f5fd4",
+    "research/process/startup/observe_command_line.py": "6de5e2c87834d3e905ad6af33d88f30ff5bca063b03865e5ce3121338d62d0ec",
+    "research/process/startup/test_command_line.py": "87323d30350ab7b885fd43c73c7162d3e979ba3aeff6a7f207610936fbd296d6",
+    "research/process/startup/command_line_probe.c": "2da6ab35c0968b4edb7b2edd946a6e2b5dae7363313819cf218944482c836204",
+    "research/process/startup/command_line_probe.manifest": "76433dcefb453be86234dacbad769bfe31eaf94606213c27ea5a5ad5b3f138c3",
+    "research/process/startup/command-line-vectors.json": "0c431651b0b006357dcd27ab2e97e49e102167d3b753a4d0b4a57026e79a0453",
+    "research/process/startup/command-line-vectors.rs": "1c2c661b049f4038381befce6019116876d47612f5598a0f58499e8c430f0a4a"
+  },
+  "validation": {
+    "crt_passed": 299,
+    "ignored_in_full": 2,
+    "artifact_replay": "complete; both artifact-dependent tests passed",
+    "unwind_slice_passed": 185,
+    "python_run": 84,
+    "python_skip": 1,
+    "clippy": "passed",
+    "format": "passed",
+    "workflow_yaml": "parsed",
+    "manifest_xml": "parsed",
+    "frozen_quote_unicode_vectors": 10,
+    "process_storage_scenarios": 12,
+    "original_body_scenarios": 10,
+    "native_linux_argv_cases": 10,
+    "actual_invalid_utf8_child_cases": 1,
+    "utf16_boundary_cases": 4,
+    "later_emission": "identical source hash, fresh mtime"
+  },
+  "component_evidence": {
+    "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+    "rust_sha256": "d64a6dad254c580ee56db41ef4b34e8f5a144190599d49759e46f5b7fa19abfe",
+    "report_sha256": "8838e6e3fd489c31c6376d43aa1a26720f9be00c02f84ca78ce02d612e66f87e",
+    "recorded_windows_wrapper_comparisons": 5,
+    "new_windows_elf_translation_pairs": 0,
+    "whole_pe_pairs": 0
+  },
+  "windows_conformance": {
+    "unique_cases": 10,
+    "repeated_windows_runs": 2,
+    "scope": "original authored Windows API/CRT observations, not conversion pairs",
+    "initial_crlf_manifest_run": {
+      "observations": 10,
+      "whole_pe_pairs": 0,
+      "toolchain_family": "MSVC14.44",
+      "toolchain_version": "14.44.35207",
+      "sdk_version": "10.0.26100.0\\",
+      "host": "Windows-2022Server-10.0.20348-SP0",
+      "compiler_sha256": "fc26dcba228dd91cd09429670f298f4608833c84841a4ceca8c4955b4d495a7b",
+      "linker_sha256": "83d4fbff908e88be425898184d8470be1f139bf843190c24e041b019c9c69a78",
+      "pe_sha256": "e73805d14ec11755878b74d7fd1dd5daf54fd0f05a93d9f2b8ceee87db0ce47e",
+      "source_sha256": "2da6ab35c0968b4edb7b2edd946a6e2b5dae7363313819cf218944482c836204",
+      "manifest_sha256": "4f636b71972d4814f1f5cb3935416e76f52a74866a13149c886b3d64007ac6a3",
+      "vectors_sha256": "0c431651b0b006357dcd27ab2e97e49e102167d3b753a4d0b4a57026e79a0453",
+      "artifact_id": 13064208599,
+      "zip_sha256": "2c9ad131c85cb50603deb49556522fe2920f9b7ee5ecc7885d85f8769ff0169f",
+      "run_id": 41259747689,
+      "job_id": 124710377429,
+      "head": "5fd86ebd89f928561eca4493870d3ff456eda918",
+      "all_cases_redecoded": true,
+      "source_checkout_bytes": {
+        "command_line_probe.c": {
+          "repo_sha256": "2da6ab35c0968b4edb7b2edd946a6e2b5dae7363313819cf218944482c836204",
+          "observed_sha256": "2da6ab35c0968b4edb7b2edd946a6e2b5dae7363313819cf218944482c836204",
+          "transformation": "identical bytes"
+        },
+        "command_line_probe.manifest": {
+          "repo_sha256": "76433dcefb453be86234dacbad769bfe31eaf94606213c27ea5a5ad5b3f138c3",
+          "observed_sha256": "4f636b71972d4814f1f5cb3935416e76f52a74866a13149c886b3d64007ac6a3",
+          "transformation": "exact LF-to-CRLF checkout transformation verified by hash"
+        },
+        "command-line-vectors.json": {
+          "repo_sha256": "0c431651b0b006357dcd27ab2e97e49e102167d3b753a4d0b4a57026e79a0453",
+          "observed_sha256": "0c431651b0b006357dcd27ab2e97e49e102167d3b753a4d0b4a57026e79a0453",
+          "transformation": "identical bytes"
+        }
+      }
+    },
+    "byte_frozen_lf_manifest_run": {
+      "observations": 10,
+      "whole_pe_pairs": 0,
+      "toolchain_family": "MSVC14.44",
+      "toolchain_version": "14.44.35207",
+      "sdk_version": "10.0.26100.0\\",
+      "host": "Windows-2022Server-10.0.20348-SP0",
+      "compiler_sha256": "fc26dcba228dd91cd09429670f298f4608833c84841a4ceca8c4955b4d495a7b",
+      "linker_sha256": "83d4fbff908e88be425898184d8470be1f139bf843190c24e041b019c9c69a78",
+      "pe_sha256": "851f578ab7ab77904dd08f163f4d6cc70e6b50d4f7cd7dc3ebd0ca4a6f52b5f7",
+      "source_sha256": "2da6ab35c0968b4edb7b2edd946a6e2b5dae7363313819cf218944482c836204",
+      "manifest_sha256": "76433dcefb453be86234dacbad769bfe31eaf94606213c27ea5a5ad5b3f138c3",
+      "vectors_sha256": "0c431651b0b006357dcd27ab2e97e49e102167d3b753a4d0b4a57026e79a0453",
+      "artifact_id": 13064488864,
+      "zip_sha256": "a883e7abacd0f62e6befc2d6563dbf1c4ea8a59dffe0cab777f99c647adc252f",
+      "run_id": 41260275742,
+      "job_id": 124711930713,
+      "head": "1779a18e654c0c6e7f2b3744f520c52e58755b90",
+      "all_cases_redecoded": true,
+      "archived_compiled_inputs_identical_to_repository": true
+    }
+  },
+  "contract": {
+    "native_acquisition": "actual Linux args_os captured once; invalid UTF8 rejects without replacement",
+    "encoding": "explicit process code page65001 only; UTF8 A and UTF16LE W with terminators",
+    "quote_domain": "canonical MSVC argv0/argument rules; does not reconstruct arbitrary original Windows raw command line",
+    "bounds": "32766 UTF16 code units excluding terminator; empty/quoted argv0,NUL,unsupported ACP reject",
+    "ownership": "two initialized read-only ProcessData mappings with stable process-owned pointers; temporary/heap release rejects",
+    "publication": "transactional rollback before pointer escape; later W/import/RET failure preserves completed A store",
+    "last_error": "unproved knowledge invalidated on completed API call"
+  },
+  "component": {
+    "executed": "actual original25-byte callback407093 calls GetCommandLineA/W, writes41ce74/41ce78, setsAL1 and returns",
+    "next_boundary": "CALL40c946 ->40b42a, initializer table index10, before callback execution",
+    "next_inventory": "locale/multibyte static pointers; required UCRT getter40a2ef and helper40b235; -3 selectsGetACP via40afbc",
+    "remaining_assumptions": [
+      "native launch policy is declared, not Windows parent-data acquisition",
+      "parent activation/thread-chain and CPU/entropy fixture inputs remain explicit",
+      "native close/EOF, complete locale/formatter/startup/rcedit/default/XP7 unproved"
+    ]
+  },
+  "prior_ci": {
+    "head": "6fb39ce",
+    "runs": [
+      41256670340,
+      41256665387,
+      41256665420
+    ],
+    "conclusion": "all success",
+    "unwind_job": 124704049836,
+    "e0433_recovery": "CI native-unwind-slice success; current local185tests pass; helper-dependent tests remain outside shared runtime"
+  },
+  "provenance_repair": {
+    "initial_manifest_checkout": "CRLF hash retained and exact LF-to-CRLF transformation verified",
+    "current_attributes": "startup manifests forcedLF",
+    "current_observer": "compiles archived C/manifest copies and consumes copied vectors",
+    "counter_guard": "nonzero exit, malformed or mismatched outputs cannot increment observations"
+  },
+  "resources": {
+    "status": "complete command-line replay passed without a new resource failure",
+    "archive_manifest_sha256": "cb150738127e7b95fdc983cdf251d20b675ac662aacd7987821febb1741b3d47",
+    "older_generated_native_binaries_archived": 120,
+    "preserved": "source, original PE and previous failed Windows/local diagnostics unchanged"
+  },
+  "historical_failures": {
+    "original_windows_case19": {
+      "run": 41107853543,
+      "artifact": 13002965454,
+      "cause": "unresolved; no retries/threshold changes"
+    },
+    "old_e0433": {
+      "run": 41253713718,
+      "job": 124693927907,
+      "status": "retained; fixed and independently verified"
+    },
+    "old_native_replay_disk_linker_failure": "retained separately; no claim it explains Windows timeouts"
+  },
+  "log_sha256": {
+    "full.log": "eb39f52d5a6a286732bb3bc393cba36fabc63e66e3e1d3ca334de79a0431ea7c",
+    "unwind.log": "8141ea15b34972ca3b8a482cdd0120fc738735d099ca34657f6ed35830f19bed",
+    "clippy.log": "70801c253ae7eba12782a7efd8ab58a5434950c6d326d32c46d0a6e379c42c57",
+    "python.log": "695661b60d31b742e45e2a88fe57dbeb65d7a4a0e6593db548e1d241930a36b1",
+    "python-targeted.log": "322e9bec5d6bbde47d6476008f309469c1e42048ed96320a3bae52af8811e27a",
+    "format.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "entry-attempt1.log": "10ca47aaf1b04f80193b991d4008a110a42a61681b34db32482d04cf60d97684",
+    "entry-final.log": "11bdfbf4a33a0c432a21b31c5b5a3d3258ed94fc51b6acc0bea04195b5873910",
+    "replay.log": "dd45b26c7786a8f810970f16c3f4006da217355cf1258f06e77d11f947ac7e27",
+    "repeat.log": "51cf3cdc8e445c83e89d06a46320a40d9f22a4cb2cf965d343aaf1e501bc2b4b"
+  }
+}

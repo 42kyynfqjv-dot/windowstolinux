@@ -1,0 +1,80 @@
+{
+  "kind": "original entropy helper and canonical cookie/record component execution; API acquisitions explicitly supplied",
+  "parent": "da7d7d950eaf40536cb498bc43b84a67864c38d3",
+  "crt_tests": 251,
+  "crt_ignored": 2,
+  "converter_tests": 175,
+  "python_tests": 60,
+  "python_skips": 1,
+  "strict_clippy": "passed",
+  "helper_initializer_cases": 16,
+  "api_boundary_cases": 9,
+  "independent_vector_cases": 33,
+  "changed_helper_bytes_rejected": 77,
+  "changed_import_identities_rejected": 12,
+  "retained_recorded_windows_comparisons": 5,
+  "new_windows_entropy_observations": 0,
+  "whole_pe_pairs": 0,
+  "mutant": [
+    {
+      "name": "pair-baseline",
+      "exit": 0,
+      "source_sha256": "b14a88cc72487d01d9c1fca41b38c77da40c013d223c99a58eaae2908a6fe0db",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "pair-preflight-mutant",
+      "exit": 101,
+      "source_sha256": "833c01151ae7a54b1e3bb966149e456a38ad2fd1359ebb7938757eda9de26be3",
+      "log_sha256": "93b2fe79767e4d126d20c3a1f6d7bb66f6e8d94a7b7993434628318981641372"
+    }
+  ],
+  "review": [
+    "Recovered local cookie/record implementation was committed and pushed as da7d7d9 before further integration. All three workflows for aee7c59 and da7d7d9 passed.",
+    "Code and all four imports bind to original PE evidence. The unparameterized entry retains its default-cookie entropy rejection; only the explicit-input component connects the entropy helper.",
+    "QPC success promises nonzero, not exact BOOL=1. Original helper ignores return bits, now conservatively unknown.",
+    "Checked scalar-pair preflight precedes both stores and any backend acquisition. Changed permission, upper protected word, narrowed storage and typed payloads reject without a low-word partial write.",
+    "Independent preflight-removal mutant changes the low word before upper-word rejection and fails the separate nonmutation assertion.",
+    "Original API failure boundary preserves earlier local writes; counter words remain unknown on rejected acquisition. No Windows failure return or full API-side-effect closure is inferred.",
+    "Numeric IDs remain explicit component inputs; lifecycle checks are not native ID acquisition or a system-wide uniqueness proof.",
+    "Known and partially unknown nonzero vector payloads are tested independently of original XORPS zeroing; flags and high lanes stay unchanged.",
+    "Successful entropy cases feed generated cookies into original normal record registration, protected epilog and retirement on the same mapped storage.",
+    "The first focused run expected a later owner error; it actually rejected earlier at canonical process-image validation. The expected earliest error was corrected; no runtime gate was weakened."
+  ],
+  "remaining": "Native runtime ID/time/counter acquisition, startup40161f composition, loader, locale/FILE, delivery/collided-unwind and physical termination remain unproven. SIMD exception-context restoration is not admitted.",
+  "historical_windows_timeouts": "Unresolved; no cause inferred from passing CI.",
+  "logs": {
+    "replay-final.log": "9a69e64e78917ae1271fb7be359bf6744f954ee1421eb60d712dbab0ef89e131",
+    "payload.log": "85c33dd22acee56b45f7f4cb572bfad83075e65ba5f99d088e63eab502d7f50c",
+    "pair-preflight-mutant.log": "93b2fe79767e4d126d20c3a1f6d7bb66f6e8d94a7b7993434628318981641372",
+    "replay.log": "49e3c430cf7fdab0bfc26ac63097acf2b8a47e281946d8b41cd35d10b4e52e34",
+    "clippy-record-chain.log": "736e2582f563605dd272e5fb977840b0c0767377d27b6940c440caf75eec7157",
+    "unit.log": "5509290e1578753c8fbb8675f5bfcbf9ecebd0d2a8d9cd67d4cb711681f62007",
+    "clippy.log": "8f97142b703bdfb156e509878a757eb57252538a68929179deb875f02d1e493c",
+    "pair-baseline.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "clippy-final.log": "cfb8c9bfc7f43b75bfc491668850a3429a55498141f90de6a0b589c5fa5d4006",
+    "python.log": "5cca6f96ede8b8d32e8d9f6d67f02ec3469cc3c0b1465ebd27a8df19e1c652a1",
+    "crt-final.log": "091dee28b5a3e05a7da42df16733d91985ce1e810429e1343e6d379301060ac8",
+    "connected.log": "c71b059ab34edc61507f06665351ba33788cfb3113ff0a058933cb196c425d28",
+    "record-chain.log": "df6f87f69b81e4f00820627b55afc6660b9d761805a36d0fb1b8881f8677e694",
+    "root.log": "1f3a55c559f06196b66d7c65ddadcbf42b101a15ef363039e68dde75dc87f520",
+    "crt.log": "6df28a38a3c7a828cd26c9ca9b127c116e73d2e9411ef5571a77144ea9d725df",
+    "api-boundaries.log": "24a0da4b0d2cc30e80adde5945e4e3a4ef406578f13011c8d95cdcbfaf2a9e0e"
+  },
+  "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "rust_sha256": "1104e2350f30519b5a96442c7b4ca2f76452620e2e03392fea3f3226306e0c5b",
+  "cookie_initializer_sha256": "7d447a6501029669822a7e701116e73a0b15fa33a704ba552b267f8f30f86e10",
+  "cookie_entropy_sha256": "275bc744d538e6dd726db6aa5929e04c162e00f93eb8a4a0c30ba5b0e351c245",
+  "cookie_imports": [
+    "41502c kernel32.dll GetSystemTimeAsFileTime",
+    "415028 kernel32.dll GetCurrentThreadId",
+    "415024 kernel32.dll GetCurrentProcessId",
+    "415020 kernel32.dll QueryPerformanceCounter"
+  ],
+  "final_replay": "passed; both ignored tests completed separately, including actual produced-cookie/record composition",
+  "parent_ci": {
+    "41020661945": "success",
+    "41020654951": "success",
+    "41020654961": "success"
+  }
+}

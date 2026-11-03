@@ -1,0 +1,175 @@
+{
+  "kind": "original guarded instruction components and independent parser/SETcc tests; no whole-PE translation",
+  "base_commit": "e080da193dfdfce9175361a38b0b2b7fde744957",
+  "status": "corrected source aggregates, focused53scenario execution, full coherent-source replay and repeated deterministic emission passed; new exact-head CI tracked separately",
+  "next_boundary": "before original CALL0x4069ba->0x407cf0 inside storage helper0x406985",
+  "connected_effects": [
+    "actual original count-only parser406813 and live locale classifier40b75b->40b70b->40aabe",
+    "actual original caller count loads and storage arithmetic overflow checks",
+    "prior converted narrow bytes and program-name publication preserved",
+    "argc/argv globals remain0; no allocation result or vector publication supplied"
+  ],
+  "requirements_sha256": "a568d18fc8a51fae0b730f6372b64d16ba4c2073082242b4bff04fcce05a13cf",
+  "source_hashes": {
+    "src/crt_argv.rs": "5a482a5777058f6b866b0be1fdc2e9a043fbafa2ab2b5f06dc88fdb7aaa4d630",
+    "src/crt_normal_frame_tests.rs": "26a7b57c8c8e45e1fef17736fb6ce1997b328d7ec5ba066ddfb561e9c9b370c7",
+    "src/crt_stream_ir.rs": "0885ed534468d7ec3923cdab4fc42bacb68ea3517f1fdecdc8d623f91d703f15",
+    "src/crt_stream_emit.rs": "6093db72a3112d6db49ee7d269ae01507f0e4475dd452ebfe7f43eba1d5da631",
+    "research/process/startup/check_normal_wrapper.py": "81f5b6c126fe8c9bbb6d17d18ceef86e675750cb08a83e1c6c09fae691f5ef61"
+  },
+  "checks": {
+    "root_Rust": 182,
+    "CRT_Rust": 334,
+    "CRT_ignored_artifact_gates": 2,
+    "unwind_Rust": 185,
+    "startup_Python": 99,
+    "startup_Python_skips": 1,
+    "tools_Python": 106,
+    "corpus_Python": 18,
+    "corpus_Python_skips": 1,
+    "clippy_all_targets_warnings_denied": "passed",
+    "format": "passed",
+    "log_sha256": {
+      "root": "c975618bf15d5d7bc3a6ac9ae932a7956a72a297794b0fa8250eed4d20409b6c",
+      "crt": "786213e1613f3c69fd6cb0d442806379a773f0439237cca9d5f8a8009080f3e9",
+      "unwind": "8aa2b5c0d615febe6e5a66f79cb375823f7bac4f73c89185099a8b79d474be37",
+      "startup-python": "37e2e72d46b0801950fcfd47718eee1ecda3c3d4b6b1f31e384d4f56f98d93ae",
+      "tools-python": "120baecf5e4f57734436ac64e679aa4d831edb048a03fcea8f874da4f48b5697",
+      "corpus-python": "16272b47e9e3d4a418622a57b17d8845998371264bc86edb95e7f0c470d84529",
+      "clippy": "40f09080b895ce55ad6d9c1035b4bdcff252307188af062e5ec4f80fae8c9d65",
+      "fmt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "CRT_ignored_artifact_gates_executed_by_full_replay": true
+  },
+  "component_cases": {
+    "frozen_vectors": 16,
+    "vector_executions": 32,
+    "live_locale_mutations": 2,
+    "successful_in_place_alias": 1,
+    "short_output_partial_failure": 1,
+    "lifetime_knowledge_control_and_code_rejections": 11,
+    "budget_rejection": 1,
+    "storage_arithmetic_and_unbound_producer": 5,
+    "total": 53,
+    "SETcc_scenarios": 18
+  },
+  "base_review": {
+    "conversion_source_hashes": "verified against git show e080da1, not current modified files",
+    "retained_Windows_API_rows": 158,
+    "retained_trace_sha256": "94e18f9c7a6f49141d8e9d9d56351df19a5e19c2ca030444388c950ff58a504d",
+    "fresh_Windows_argument_parser_observations": 0,
+    "retained_wrapper_component_comparisons": 5,
+    "new_whole_PE_pairs": 0,
+    "prior_implementation_inventory": {
+      "run": 41332040104,
+      "conclusion": "success"
+    },
+    "CI": [
+      {
+        "run": 41333863687,
+        "conclusion": "success"
+      },
+      {
+        "run": 41333857591,
+        "conclusion": "success"
+      },
+      {
+        "run": 41333857586,
+        "conclusion": "success"
+      }
+    ]
+  },
+  "supported_call_state": "positive standalone fixtures use unknown scalar ECX; opaque saved-register authority remains protected and independently rejects. Connected startup executes actual preceding state.",
+  "preserved_failure_history": {
+    "lowering.log": "expected missing memory SETE lowering exposed; implemented reusable checked form",
+    "canonical.log": "fixture wrongly attempted reserved Buffer mapping; switched test-owned storage to Stack, no runtime relaxation",
+    "canonical-v2.log": "default fixture opaque ECX could not be partially overwritten as local scratch; retained protection and added explicit opaque negative while positive fixtures use unknown scalar ECX",
+    "setcc.log": "fixture EBP changed without matching saved entry; corrected fixture call-entry snapshot",
+    "root-command-error.log": "wrong --lib command on binary-only package, correct bin182tests passed",
+    "replay-vector-source-error.log": "expectation gate initially read wrong test source; corrected filename; failed output retained",
+    "replay.log": "output directory already existed; fresh output path used, no evidence overwritten",
+    "canonical-manual-stdin-mismatch.log": "Manual subprocess inherited stdin instead of DEVNULL used by Rust Command.output(); existing stdin-type expectation differed0xa0a0089 vs0xa0a00c1 after parser cases completed. Matched-stdin rerun of identical source passed. Not a Windows-timeout diagnosis.",
+    "setcc-v2.log": "Corrected fixture entry snapshot;18 scenarios passed without changing production SETcc semantics."
+  },
+  "limits": [
+    "no allocation/errno/new-handler outcome supplied",
+    "strict/insufficient UTF8 error effects/growth/free remain unsupported",
+    "no actual argc/argv publication",
+    "explicit native profile only, default/full startup/rcedit unsupported",
+    "original Windows timeout causes unresolved",
+    "no Ultra, formal PR approval, merge, release or denied optional comment retry"
+  ],
+  "focused_current_native_execution": {
+    "emitted_sha256": "c77e8f34af9e8843f78a93b626e8f50fa247a38cf3de0fe948b04efba11b6f7a",
+    "source_diff": "unsupported free-path label only; byte-for-byte replacement verified",
+    "exit": 0,
+    "stdin": "DEVNULL"
+  },
+  "pre_label_full_replay": {
+    "report_sha256": "70097be3d8393dc2437a1cccbf03f5eabb1f6cdaae9194de8a75a1334df55f65",
+    "rust_sha256": "9d772b9e0cbc7624631868cf9d3d4eae13c3949973cc92873b42d6717670c126",
+    "comparisons": 5,
+    "whole_pe_translation_pairs": 0,
+    "argv_count_component_cases": 53,
+    "argv_count_vectors": 16,
+    "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4"
+  },
+  "review_correction": "Original407d50 is free wrapper. The unsupported-call error label was corrected; no free effect or allocation success was added. Full corrected replay and aggregates passed.",
+  "next_free_helper_inventory": {
+    "entry": "0x407d50",
+    "return": "0x407d89",
+    "NULL_branch": "0x407d59 ->0x407d88",
+    "non_NULL": "HeapFree0x415098 with separate GetLastError/map/errno effects",
+    "implementation": "existing checked null-free body should be reused; not newly implemented"
+  },
+  "implementation_commit": "6925ae95bb32b2dfdb0aa9bbaef0f31da676cce0",
+  "local_replay": {
+    "kind": "original prolog/epilog component comparison with explicit unexecuted body boundary",
+    "scope": "Live registry fixture; body EAX/flags inputs; original stack/FS/saved-state restoration only",
+    "retained_wrapper_comparisons": 5,
+    "new_whole_PE_pairs": 0,
+    "parser_scenarios": 53,
+    "Windows_original_parser_observations": 0,
+    "frozen_PE_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+    "emitted_Rust_sha256": "c77e8f34af9e8843f78a93b626e8f50fa247a38cf3de0fe948b04efba11b6f7a",
+    "report_sha256": "811875479abf0d321b0b4b0914addd934c5ce425ab9442ea6b53655f49d1b746",
+    "repeated_generator_output_identical": true,
+    "repeated_output_mtime_advanced": true,
+    "log_sha256": "5ac3e3c97ffe864b0210d30935599b640c49bb0dcb32ec27aece4eced7b3c8c0"
+  },
+  "CI_snapshot": {
+    "implementation_head": "6925ae95bb32b2dfdb0aa9bbaef0f31da676cce0",
+    "runs": [
+      {
+        "id": 41336710514,
+        "name": "Rust CI PR",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "id": 41336705272,
+        "name": "Rust CI push",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "id": 41336705261,
+        "name": "Pinned startup inventory",
+        "status": "in_progress",
+        "conclusion": null
+      }
+    ],
+    "note": "These runs belong to implementation head. Any subsequent documentation-only head requires its own run status; no final-head pass inferred."
+  },
+  "reproduction": {
+    "aggregates": [
+      "cargo test --locked --bin w2l",
+      "cargo test --locked --example crt_stream",
+      "cargo test --locked --example unwind_slice",
+      "cargo clippy --locked --all-targets -- -D warnings",
+      "cargo fmt --all -- --check"
+    ],
+    "replay": "python3 research/process/startup/check_normal_wrapper.py ORIGINAL_UNWIND ORIGINAL_STDIO FRESH_OUTPUT",
+    "scope": "Use existing unchanged authored artifact/observer inputs. Full PE hashes are not replaced by emitted Rust identity."
+  }
+}

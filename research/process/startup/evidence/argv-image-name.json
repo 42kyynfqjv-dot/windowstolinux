@@ -1,0 +1,280 @@
+{
+  "kind": "original argv-mode/main-image-name native component checkpoint",
+  "status": "local implementation verification complete; final-head CI/raw Windows collector verification pending",
+  "base_commit": "d46b7b69a7e784df5fdde4b57b4d92718e142664",
+  "base_ci": [
+    {
+      "id": 41315586498,
+      "head": "d46b7b69a7e784df5fdde4b57b4d92718e142664",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41315586498"
+    },
+    {
+      "id": 41315580842,
+      "head": "d46b7b69a7e784df5fdde4b57b4d92718e142664",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41315580842"
+    },
+    {
+      "id": 41315580806,
+      "head": "d46b7b69a7e784df5fdde4b57b4d92718e142664",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41315580806"
+    }
+  ],
+  "source_hashes": {
+    "src/crt_argv.rs": "1be57055e99e77e744f0faad464a2cf618e738dd4679c9da6c55e4fe9669d202",
+    "src/crt_stream_runtime.rs": "2c4f353e1103501445d9203d59eb296b7dbe532121b1b0afddf2ffb8f6ada013",
+    "src/crt_resident_loader.rs": "284ac5bd227135fc17a38422350ea99dcfc9a4bc7f7766ede2710540552d34aa",
+    "src/crt_c_initializers.rs": "0df7b09f48adf9f5c747ed4ae1aa3be68749ad760ff31c8764b8f1c43bbcd73d",
+    "src/crt_startup_caller.rs": "e2a55cfa2d197920ec46d86dd35f58db25d7c7d62c7234c050081c69fb1301bf",
+    "src/crt_startup_entry.rs": "a0a30abc3cc97430f8be1f1e46f45cdb6e4de548d1ea4f193d690a39e49ed22a",
+    "src/crt_normal_frame_tests.rs": "89c6183e5c3ec4bd6a5f6cdc7094d36a667d84e87489cff7b557e46e5a27ff48",
+    "examples/crt_stream.rs": "1c2c6dccac2463857cf783441c671f607898ac6b5b6056b14f0f19e62b74f9dc",
+    "research/process/startup/check_normal_wrapper.py": "b4a6d6044b6a3f75fdf268179636bc76e38eef12fbde5b43cf016c17192fc8e3",
+    "research/process/startup/test_image_name_observations.py": "544fc2ce18c925ccf9929211781c0e4deebf2a279732832eb70b4f49aa6e84ad"
+  },
+  "regions": {
+    "MODE": {
+      "address": "0x401bbf",
+      "size": 4,
+      "sha256": "194f81a127723ec366ff0b8410df190c0649a05808a94d5554d82de5af7f425b",
+      "disassembly_sha256": "930a8373ac663b9fa60f4c2d41cf8ce22d276abefe924d1ec6514c77708e9c78"
+    },
+    "WRAPPER": {
+      "address": "0x4069d4",
+      "size": 11,
+      "sha256": "5d35fea0f18f577b04e51a6c6861748c9bb8460abe150d9eff83f3e1f90f28be",
+      "disassembly_sha256": "7200d3af6bcaad13bb0ce790570d7d1482d98341631877b63be3f374b7f0cef8"
+    },
+    "CONFIGURE": {
+      "address": "0x4066d6",
+      "size": 317,
+      "sha256": "b0896d4bf16518a348b2df6fb1c29273067d117a69e67471170f033d545e0408",
+      "disassembly_sha256": "2465874d6cdcc21d84c85e9a903dccf39b7f6e421dca53fd5cff72cb5aa0cc28"
+    },
+    "IMAGE_NAME": {
+      "address": "0x40ae0d",
+      "size": 161,
+      "sha256": "91f736b9e0c3f5531a596347ea5677653dc3fd6bbcdd96e4c04622bee7588af4",
+      "disassembly_sha256": "be0a1569cd2c45cea23fd36be3b930e884b892b1c7d271769181a39ae0ad427d"
+    }
+  },
+  "expectations_sha256": "f85eee6184df9e80d01ca5889bee29ac3c64037e4806a981f62eb17550236c14",
+  "original_pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+  "next_boundary": "before CALL40ae79 ->40ab89 after actual wide output and original output-record initialization",
+  "evidence_limits": "zero new whole-PE Windows/ELF pairs; five retained recorded Windows wrapper comparisons are components; supplied name text cannot authorize production API; Linux image name is explicit native policy, not Windows source spelling",
+  "full_startup_rcedit_default_admission": "unsupported",
+  "historical_windows_timeouts": "preserved and unresolved",
+  "next_review": "Sol: native versus supplied authority, process lifetime/read facts, UTF16/error/ABI and alias tests, original mode/tail and final CI",
+  "implementation_commit": "90612f76e95336f52ec44c36ce7052d508c317d3",
+  "checks": {
+    "root": 182,
+    "crt": 330,
+    "crt_ignored": 2,
+    "unwind": 185,
+    "artifact_gates": "both separately passed in full replay",
+    "startup_python": {
+      "run": 92,
+      "skip": 1
+    },
+    "tools_python": {
+      "run": 106,
+      "skip": 0
+    },
+    "corpus_python": {
+      "run": 18,
+      "skip": 1
+    },
+    "clippy": "all targets -D warnings passed",
+    "fmt": "passed",
+    "current_focused_native_tests": 3,
+    "full_runtime_replay": "passed at implementation checkpoint90612f7; post-checkpoint changes only retain/validate Windows API observations, not runtime",
+    "fresh_current_source_emission": "passed; identical to full replay",
+    "Windows_only_collector_typecheck": "rustc --emit=metadata on Linux passed; no linking/execution/Windows observation claimed"
+  },
+  "replay": {
+    "kind": "original prolog/epilog component comparison with explicit unexecuted body boundary",
+    "scope": "Live registry fixture; body EAX/flags inputs; original stack/FS/saved-state restoration only",
+    "comparisons": 5,
+    "whole_pe_translation_pairs": 0,
+    "pe_sha256": "1e96cb39e34b9f7bb421d21217b2827b8f7b99853e2e177ee72724dd456dcbf4",
+    "rust_sha256": "82f8ee30e71c405e1d8e45835bf4e00f4aa5c0744f2fb1f38a07a1e29f7084b6",
+    "basis_commit": "90612f76e95336f52ec44c36ce7052d508c317d3",
+    "report_sha256": "80f1e8da1a58948df237f9f45b9cf70e1bcff24eb3af46d576e16fe616159583",
+    "source_mtime_before_ns": 1793545360074947304,
+    "source_mtime_after_ns": 1793546015390382914,
+    "observer_report_sha256": "0feb586c7170dfd7e2390cf92ce1e5efa050c3e208d6c8903312e2d054c506cc",
+    "wrapper_vectors_sha256": "6f9b74742366c0f207d397ccf8b1af4afc2d01b34fae21cafb68d38d71a6ec66"
+  },
+  "cases": {
+    "image_name_modeled_output": 86,
+    "negative_output": 17,
+    "publication_failure": 5,
+    "native_API_ABI": 20,
+    "original_mode_and_mutation": 5,
+    "evidence_protocol_mutations": 16,
+    "evidence_protocol_unit_tests": 3,
+    "original_Windows_API_assertions": 6,
+    "retained_new_original_Windows_API_raw_traces": "pending final-head Windows CI; checkpoint lacked retention",
+    "whole_pe_translation_pairs": 0,
+    "retained_recorded_Windows_wrapper_comparisons": 5
+  },
+  "named_gates": {
+    "argv-contract": {
+      "stdout": "799241092ab449b116756a9cba1f4c5d17bf7d77721f4b89ab120f21b5c03625",
+      "stderr": "073eb8120178d9034d49c669a602c4f593152cb42dcf4143bdd8ae1bd1d297fa"
+    },
+    "onexit-contract": {
+      "stdout": "fab838dab2071ba99ea8d084aae3639de89d93c0c14990a1ae9931de591ce1af",
+      "stderr": "ab1e8ab4b828624e75e6e8c917ac437f104b9cd0b496a9d073a4a52c0abca136"
+    },
+    "cookie-record": {
+      "stdout": "4660bc32961d4b3b3171fa6c08262a914217d43e5ab11aa9e8135453d9c82ea7",
+      "stderr": "29423147df5f27152c143f40399d5189737a902b622fb79efc6e1b2754336583"
+    },
+    "locale-alignment": {
+      "stdout": "4dd60a945cd77d475cce95b1f361bb2fe3ce89d26fad3fc319964dc95b8a85c1",
+      "stderr": "ab1e8ab4b828624e75e6e8c917ac437f104b9cd0b496a9d073a4a52c0abca136"
+    },
+    "c-initializer-graph": {
+      "stdout": "8464798e3a17dd1d532829975dd975add10c09a6f1079cbd25a76dedef1e51bc",
+      "stderr": "ab1e8ab4b828624e75e6e8c917ac437f104b9cd0b496a9d073a4a52c0abca136"
+    },
+    "startup-caller-graph": {
+      "stdout": "1f69edd6b73a0652b2d90f90033aa54a6686ff4bea8ea1f3cfecbe55a460ed55",
+      "stderr": "ab1e8ab4b828624e75e6e8c917ac437f104b9cd0b496a9d073a4a52c0abca136"
+    }
+  },
+  "source_head_ci": [
+    {
+      "id": 41318679092,
+      "head": "90612f76e95336f52ec44c36ce7052d508c317d3",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41318679092"
+    },
+    {
+      "id": 41318674124,
+      "head": "90612f76e95336f52ec44c36ce7052d508c317d3",
+      "status": "in_progress",
+      "conclusion": null,
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41318674124"
+    },
+    {
+      "id": 41318674086,
+      "head": "90612f76e95336f52ec44c36ce7052d508c317d3",
+      "status": "in_progress",
+      "conclusion": null,
+      "url": "https://github.com/42kyynfqjv-dot/windowstolinux/actions/runs/41318674086"
+    }
+  ],
+  "source_Windows_API_comparison": {
+    "head": "90612f76e95336f52ec44c36ce7052d508c317d3",
+    "run": 41318674124,
+    "job": 124884057097,
+    "status": "completed",
+    "conclusion": "success",
+    "api_assertion_cases": 6,
+    "scope": "direct original Windows API versus model, not PE translation",
+    "raw_buffer_gap": "original checkpoint discarded its native-test outputs; final collector now retains jsonl, pending final-head CI",
+    "lines": [
+      "2026-11-01T14:57:16.8725546Z SHA256 digest of uploaded artifact zip is b2c059ff3937dc4027250e9ff2d3622561fcbf6f3d4f9fea49c84aa2ea35876a",
+      "2026-11-01T14:57:23.2700302Z SHA256 digest of uploaded artifact zip is 2a6e3487df280a037a236b631e24ac1326ec3f504aa7ba163bae54adf4b1a2c4",
+      "2026-11-01T14:57:24.8227205Z SHA256 digest of uploaded artifact zip is 6d4ad54248e6dc48fb3170ea8226b87fa571a5ea8a446eb34ca47c1ba643bcad",
+      "2026-11-01T14:57:28.4640290Z SHA256 digest of uploaded artifact zip is 0a5ef6c647a44368976b4dc717179cfa7a80bc4d2b7e1dfa247ccc3d4d198507",
+      "2026-11-01T14:57:31.9237918Z SHA256 digest of uploaded artifact zip is b5f8378f3b398a3f01d5d3a96d1394e0c884ed9efdfbee80fbef8df0f33bede8",
+      "2026-11-01T14:57:35.3815672Z SHA256 digest of uploaded artifact zip is 48267d84cecc7674b2a74f905af92351d697166f198be8f7e7c97b9f99954d61",
+      "2026-11-01T14:58:20.7051371Z SHA256 digest of uploaded artifact zip is 14f2669cbcca2e7dcab83cde752759987cca8ebc635da53c846d85d92acfaa67",
+      "2026-11-01T14:58:42.0596076Z SHA256 digest of uploaded artifact zip is 1bd385c5c9149635a444260d30dd6898cd84dba2124bdae014328ead5e95e2fb",
+      "2026-11-01T14:59:14.5917372Z test crt_argv::original_windows_image_name_api_matches_modern_component_contract ... ok",
+      "2026-11-01T15:01:22.7923976Z test result: ok. 328 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 132.82s",
+      "2026-11-01T15:12:50.7489939Z SHA256 digest of uploaded artifact zip is 482bab55a6710f5a5cfce0bd118c45fb617d41b5dca6c60400d9a5a5fc8da85c",
+      "2026-11-01T15:12:51.1618978Z Artifact startup-unwind-slice.zip successfully finalized. Artifact ID 13089420725"
+    ]
+  },
+  "post_checkpoint_evidence_repair": {
+    "defect": "native helper deletes its temporary outputs after success; initial six-case Windows API test therefore retained pass assertions but not actual baseline/buffer bytes",
+    "repair": "Windows-only test flushes raw JSONL baseline and each original count/result/error/buffer before model comparison to W2L_EH4_EVIDENCE. Reproduction gate requires7complete records and validates units/results/truncation/tails before hashing; malformed/missing/non-original/partial data rejects",
+    "local_verification": "collector Rust body typechecked without linking/execution; three protocol tests with16mutants passed; current emitted runtime identical",
+    "remaining_gate": "fresh exact-head Windows CI must retain and validate original-windows-image-name.jsonl; not inferred from source90612f7 job success"
+  },
+  "local_failure_history": {
+    "component-tests.log": "test-case arithmetic expected112 but independently enumerated86; count corrected without changing outputs/oracle",
+    "component-v2.log": "negative test attempted page protection on Stack-owned mapping; core correctly rejected Permission. Read-only negative now uses a separately owned Module mapping and a nonalias output",
+    "canonical.log": "preflight rejected any old stack data tag. Restricted protection remains for live control tags; complete data-word overwrite is checked through32-bit store, partial symbolic-word overwrite remains unbound",
+    "canonical-cases.log": "test omitted prerequisite explicit second-fiber profile for existing startup metadata; corrected fixture profile setup, no production bypass",
+    "canonical-cases-v2.log": "existing16-bit primitive correctly rejected partial pointer overwrite. API output now uses checked whole-word stores only for fully covered symbolic data words; independent complete/partial cases verify authority discard/rejection",
+    "other": "no timeout, proof, stack or resource limit increases; no original PE modifications"
+  },
+  "base_source_review": {
+    "head": "d46b7b69a7e784df5fdde4b57b4d92718e142664",
+    "source_hashes": {
+      "src/crt_onexit.rs": "23ffc04f1d4a494b2a20586a5959874654503ae656231cfd4912852318e8aa87",
+      "src/crt_stream_cpu.rs": "4dd82c554901101f7d65c69ac3e0ea1ed8b7a2daf4ea2a933072800aad5d7230",
+      "src/crt_stream_ir.rs": "37716195a95cee4e7066b03ec094ec7cf4edaf6e7b1a50f146436a904174ae85",
+      "src/crt_stream_emit.rs": "46a181037b348c98c65428321183d56e9bc65a859fb013ae0c6a2e3f97a2a1e4",
+      "src/crt_repeat_copy.rs": "7b8d11b83fcded5eeae7020a028d0355ede92935402ed8f241ae712d16ee6304",
+      "src/crt_normal_frame_tests.rs": "6294c7da02d78a5a8594dcacb2811073eb97d7c6a95458f545c163cd25bb965f",
+      "research/process/startup/check_normal_wrapper.py": "f493b2d643f43436cfa4615df067f03f2f2a3cc2f0f0c79b7383346939d27da2"
+    },
+    "review": "original code/empty-table authority, actual four publication stores/normal cleanup, dedicated REP store effects, single-call transient callback input and discarded encoding authority checked; no persistent decoding/growth/callback authority is issued. Exact identity LEA keeps saved/opaque values without skipping pointer lifetime checks or promoting numeric arithmetic. No demonstrated predecessor defect."
+  },
+  "local_log_sha256": {
+    "canonical-cases-v2.log": "f01a1c78ba68f82efabf181455fa163d5a50ad8780a9cf69ffe5a0705f292bfe",
+    "canonical-cases-v3.log": "236072f6aaf672515333ff01179a12eda33b2269cd157680f6fadb74519bc946",
+    "canonical-cases.log": "2107136b6da1707fd9033f7ffccd657da3b0dc40621d5a722565d9e1ae77a0d2",
+    "canonical-v2.log": "59276bee1aa77cd8c701ea7337db4e425beb37a42e33297e3eb53e4629a43192",
+    "canonical.log": "1fd46d92791040fd6c7a92457ec656e1f3899ff5a159c79a36da41ceaa1012e7",
+    "clippy-final.log": "b4ce57449249cf223d86246ea6a33edba77578e31e491f52991d0dff7b5202aa",
+    "clippy-v2.log": "d338bddf0e50ba1994e6310393a348765c498983b5bd681125f34c38f3fdfc4e",
+    "clippy.log": "961eae1b5c98f7d9f31546ed703d3a190310be43913a32effd573d1c50a2ae48",
+    "component-final.log": "77a260be932322d4b9b13bf6e7497a84298f381cfdebd0c3237027a782d22a6f",
+    "component-tests.log": "815a8f541bcf816a2d74b9f0d755b8a8aaa963a3fa319a1fafd6a3d0d08bf4b5",
+    "component-v2.log": "f63e200401a27d4ba53e1264830f772916a174bd0f6df43700ed771174a71742",
+    "component-v3.log": "5bc4dcff21fff7bf7c3dbc523107f288d9aabf812b48fa8dc55e50acf8ce1496",
+    "corpus-python.log": "3f828f9fd1fae93a2a1e0c3a892827fefb763d35787e266df9d40989d88493b1",
+    "crt.log": "913498c711e87093fa4e6ab8180cc5dc9661b08fa94e14c88c7e267562bc093e",
+    "evidence-protocol.log": "372ee57a30b8a8b17bb056a0814266786a922da7dcf4139f4f9a2457745d6424",
+    "fmt-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "fmt.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "fresh-final-identical.log": "111d56c94cf0ae71bcaf1ac05bd86bd692fd2b64a9616db170c2dd76d16fe6f7",
+    "fresh-identical.log": "e13c712edff1c063eda1904e582f4af14cd9c9edae4aee251a96ffc44086f4be",
+    "graph.log": "1dbc3bda86e6be12acbbac74397b8466c03ea1cdd9360793b5ca6c5baf0421bd",
+    "replay-final.log": "e9e06a4fa9b9c9ceb0f88705d8d6a62a569e182f7f890dfc7b089c1c7e30a79c",
+    "root.log": "d6f97e124c1acdf343d4b95a34ec7b58210b51fa0bc5b355bca55f3091301351",
+    "startup-python-final.log": "e86dc765301d63a3a191de239520c2a97366cfd3e1fd2569696469d8a312fd13",
+    "startup-python.log": "4e81dec52635dea7cf54eb267c685eb9bb6a015da01375d69799eecefd0cea6d",
+    "tools-python.log": "c3a0dd9bfe07e8f38b9d9799ebe0e0eac7b14a7a72a83c342d690b93de8194eb",
+    "unwind.log": "2d09c38cef47db19f99e9b576f2cf8dc8aa0b6086ecafc39d01b6893fe864034",
+    "windows-api-typecheck.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "collector_typecheck_source_sha256": "386b723e672724dc9c42f7dbdd817d521fea61b68a615abc7d2f14b7159b6cb4",
+  "next_inventory": {
+    "first_rejected_call": "40ae79 ->40ab89",
+    "shared_reuse": "40ab89 calls existing locale_view_original at40aabe, reads locale-info+8 versus65001, fallback407fc0, conditionally clears PTD+350 bit1 under temporary-view flag",
+    "following": "40ad10 size-query/conversion helpers, output capacity/data/length, allocation and error/errno effects; original argv count/allocate/parse follows",
+    "scope": "read-only inventory, not observed execution",
+    "route": "Sol review and reuse existing view/owned record machinery; Astra only for concrete unresolved ownership or encoding semantics, no Ultra"
+  },
+  "reproduction": {
+    "commands": [
+      "cargo test --locked",
+      "cargo test --locked --example crt_stream",
+      "cargo test --locked --example unwind_slice",
+      "cargo test --locked --example crt_stream crt_argv::",
+      "cargo clippy --locked --all-targets -- -D warnings",
+      "cargo fmt --all -- --check",
+      "PYTHONPATH=research/process/startup python3 -m unittest discover -s research/process/startup",
+      "python3 -m unittest discover -s tools",
+      "PYTHONPATH=corpus python3 -m unittest discover -s corpus",
+      "python3 research/process/startup/check_normal_wrapper.py ORIGINAL OBSERVED NEW_OUTPUT"
+    ],
+    "repeat": "W2L_EH4_CODE=OUTPUT W2L_EH4_EVIDENCE=OUTPUT W2L_EH4_VECTORS=OBSERVED/normal-wrapper-vectors.txt W2L_PE_MAPPING_INPUT=ORIGINAL/unwind.exe cargo test --locked --example crt_stream canonical_image_cookie_and_original_record_initialization_compose -- --ignored",
+    "Windows_raw": "under Windows the argv-contract gate writes original-windows-image-name.jsonl into OUTPUT; its header and six actual API rows are required and hashed; not whole-PE pairs",
+    "native_profile": "w2l-native-main-image-name-modern-v1 captures actual Linux current_exe before guest entry; host driver supplies ordering; not Windows source-path spelling or loader attestation"
+  }
+}
