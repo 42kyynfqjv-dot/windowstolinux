@@ -252,3 +252,42 @@ The older guard projection/clobber wrapper is insufficient evidence of those CPU
 effects. Selected Outer views and actual-handler-bound ordered receipts remain
 separate requirements. Original startup still stops at its suspended
 RaiseException CALL, with zero whole-PE comparisons.
+
+## Original guard and context caller joined
+
+The protected handler component now continues from normalizer writeback through
+the original scope-table decode, guard argument pushes, guard helper, security
+checker and context-helper CALL/RET. It stops before original caller instruction
+0x402251. Remaining argument cleanup, flag test, pointer-pair installation,
+handler search/disposition and Outer selection are not executed by this cut.
+
+The guard lowers its actual instructions. Scope-header values are checked at
+their corresponding original reads, after the original prolog stores. The
+optional first cookie check executes a nested protected CALL; the final check
+tail-transfers to the security routine on the same CPU and consumes the guard's
+original return token. The security routine executes its real CMP/branch/RET.
+Its failure tail rejects as unsupported; no Windows fail-fast outcome is
+invented. Live original code, cookie-image identity, argument identities, CALL
+depth/continuation, stack extent, pending objects and interrupted source remain
+checked. Compiler reproof rejects altered caller statements or CALL metadata.
+
+The joined path reproduced a normalizer-local lifetime defect: LEAVE discarded
+an unused saved ECX local, but its OpaqueSaved tag survived the validated RET and
+blocked the next helper's scratch. Successful original normalizer return now
+expires only OpaqueSaved tags in its instruction-proved local extent. Actual
+bytes, other tags, active control tokens and every failed-call write remain
+intact. Scratch containing an active control token still rejects.
+
+Nine additional cases cover the joined original path, changed guard/security
+bytes, malformed header reads with earlier guard saves retained, the optional
+nested check, a context selector requiring unsupported observation, occupied
+scratch, wrong activation and expired objects. The optional-check case uses an
+explicitly altered header with a separate guard proof; it is component evidence,
+not an observation of the unchanged binary. Total producer/component cases63.
+Actual CALL counts distinguish the optional nested CALL from the final tail
+transfer. Source CPU and frame count remain unchanged in these cases.
+
+Production handler entry from the pending event remains a separate gate. This
+component grants no complete-handler disposition, selected-frame view, ordered
+advancement receipt or restoration authority. Full startup/rcedit admission,
+exceptional cleanup and historical Windows launch-timeout causes remain open.

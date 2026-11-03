@@ -853,7 +853,14 @@ fn pending_normalizer_call(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,phase:
   ||sp!=frame.rt.offset(root,-{depth})?||frame.rt.load(sp,32)?!=CrtValue::scalar({code}){{return Err("pending normalizer original callsite/argument");}}
  let low=frame.rt.offset(sp,-{scratch})?;frame.rt.valid(low,{scratch})?;frame.stack_range(low.address(),u64::from(sp.address()))?;
  if frame.rt.overlapping_tags(low.address(),{scratch}).iter().any(|(_,v)|matches!(v,CrtValue::ProtectedReturn(_)|CrtValue::OpaqueSaved(_)|CrtValue::ThreadHead(_))){{return Err("pending normalizer protected scratch");}}
- frame.call(cpu,continuation,|f,cpu|{{let rt=&mut *f.rt;{body}}})
+ frame.call(cpu,continuation,|f,cpu|{{let value={{let rt=&mut *f.rt;(||{{{body}}})()?}};
+  if !cpu.returned{{return Err("pending normalizer incomplete return");}}
+  // LEAVE discards proved helper locals. Expire only their saved-value tags;
+  // preserve actual bytes and all failed-call effects.
+  let entry=CrtCpu::pointer(cpu.entry[4])?;let low=f.rt.offset(entry,-{local_bytes})?;
+  if f.rt.overlapping_tags(low.address(),{local_bytes}).iter().any(|(_,v)|matches!(v,CrtValue::ProtectedReturn(_)|CrtValue::ThreadHead(_))){{return Err("pending normalizer local retains control");}}
+  f.rt.tags.retain(|&at,v|!(at>=low.address()&&at<entry.address()&&matches!(v,CrtValue::OpaqueSaved(_))));Ok(value)
+ }})
 }}
 fn pending_normalizer_front(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,phase:&CrtPendingSearch)->RegistryResult<()>{{
  let result=(||{{frame.validate()?;phase.objects.validate(frame.event,frame.rt,frame.interrupted,frame.epoch,frame.binding)?;
@@ -874,6 +881,7 @@ fn pending_normalizer_front(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,phase
         depth = call.entry_depth - 4,
         code = normalizer.event_code(),
         scratch = temporary_bytes + 4,
+        local_bytes = temporary_bytes,
         handler = prefix.entry,
         prefix_raw = prefix.source
     ))
@@ -881,6 +889,183 @@ fn pending_normalizer_front(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,phase
 
 /// Original context helper CALL at a proved handler-prefix component cut.
 /// No handler-entry, delivery, disposition or restoration authority is issued.
+fn reprove_pending_prefix(prefix: &super::handler_checks::PrefixProof) -> Result<(), String> {
+    use super::handler_checks::{prove_prefix, Bindings, CallEffect};
+    let target = |effect| {
+        prefix
+            .calls
+            .iter()
+            .find(|c| c.effect == effect)
+            .map(|c| c.target)
+            .ok_or("pending prefix missing callee")
+    };
+    let p = prove_prefix(
+        &prefix.source,
+        prefix.entry,
+        &Bindings {
+            normalizer_va: target(CallEffect::NormalizeRecordCode)?,
+            guard_va: target(CallEffect::ValidateGuards)?,
+            context_va: target(CallEffect::ValidateContext)?,
+            cookie_va: prefix.cookie_va,
+            installer_va: prefix.installer_start,
+        },
+    )?;
+    if p.calls != prefix.calls
+        || p.front != prefix.front
+        || p.caller != prefix.caller
+        || p.end != prefix.end
+    {
+        return Err("pending caller prefix reproof".into());
+    }
+    Ok(())
+}
+pub(crate) fn emit_pending_guard(
+    prefix: &super::handler_checks::PrefixProof,
+    guard: &super::handler_guard::GuardProof,
+) -> Result<String, String> {
+    use iced_x86::{Decoder, DecoderOptions, Register};
+    reprove_pending_prefix(prefix)?;
+    let [(origin, bytes), (security_origin, security)] = guard.originals();
+    let call = prefix
+        .calls
+        .iter()
+        .find(|c| c.effect == super::handler_checks::CallEffect::ValidateGuards)
+        .ok_or("pending guard missing call")?;
+    if call.target != origin || guard.cookie_va() != prefix.cookie_va {
+        return Err("pending guard target/cookie binding".into());
+    }
+    let mut security_graph = super::crt_stream_ir::Graph::decode_with_exits(
+        security,
+        security_origin,
+        &[guard.failure_target()],
+    )?;
+    // The original failure tail remains an explicit unsupported boundary.
+    for node in security_graph.nodes.values_mut() {
+        if node.successors.contains(&guard.failure_target()) {
+            node.op = Op::Reject("pending guard cookie failure effect unbound");
+            node.successors.clear();
+        }
+    }
+    let roles = BTreeMap::from([(guard.cookie_va(), "CrtRegionKind::Module".into())]);
+    let security_body = crt_stream_emit::emit_body(
+        &security_graph,
+        |_, _| Err("pending security unexpected call".into()),
+        &roles,
+        16,
+    )?;
+    let mut graph =
+        super::crt_stream_ir::Graph::decode_with_exits(bytes, origin, &[security_origin])?;
+    graph.nodes.extend(security_graph.nodes.clone());
+    graph.end = graph.end.max(security_graph.end);
+    let mut reads = BTreeMap::new();
+    let mut decoder = Decoder::with_ip(32, bytes, u64::from(origin), DecoderOptions::NONE);
+    while decoder.can_decode() {
+        let i = decoder.decode();
+        if i.memory_base() == Register::ESI {
+            let offset = i.memory_displacement32();
+            if ![0, 4, 8, 12].contains(&offset) {
+                return Err("pending guard header read extent".into());
+            }
+            reads.insert(i.ip() as u32, offset);
+        }
+    }
+    let header = guard.header();
+    let body = crt_stream_emit::emit_body_with_hooks(
+        &graph,
+        |pc, target| {
+            if target != Target::Direct(security_origin) {
+                return Err("pending guard unexpected target".into());
+            }
+            Ok(format!(
+                "frame.call(cpu,{},|f,cpu|{{let rt=&mut *f.rt;{security_body}}})?;",
+                pc + 5
+            ))
+        },
+        &roles,
+        128,
+        |_, _| Err("pending guard thread effect".into()),
+        |pc, op| {
+            let mut s = if matches!(op, Op::Call(_)) {
+                String::new()
+            } else {
+                "let rt=&mut *frame.rt;".into()
+            };
+            if let Some(&offset) = reads.get(&pc) {
+                let value = header[(offset / 4) as usize] as u32;
+                s.push_str(&format!("if cpu.r[6]!=CrtValue::Pointer(table)||rt.load(rt.offset(table,{offset})?,32)?!=CrtValue::scalar({value}){{return Err(\"pending guard original header read\");}}"));
+            }
+            Ok(s)
+        },
+        |_, _| Ok(None),
+    )?;
+    Ok(format!(
+        r#"
+fn pending_guard_call(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,phase:&CrtPendingSearch,continuation:u32)->RegistryResult<()>{{
+ let result=(||{{frame.validate()?;phase.objects.validate(frame.event,frame.rt,frame.interrupted,frame.epoch,frame.binding)?;
+ let root=CrtCpu::pointer(cpu.entry[4])?;let sp=CrtCpu::pointer(cpu.r[4])?;
+ if !frame.event.search_started||frame.state.depth!=1||frame.state.activation!=cpu.return_id||cpu.returned
+  ||continuation!={continuation}||sp!=frame.rt.offset(root,-{depth})?{{return Err("pending guard activation/callsite");}}
+ let image=frame.binding.application.ok_or("pending guard application")?.image;
+ let table=frame.rt.process_image_pointer(image,frame.scope_address(),16)?;
+ if frame.rt.load(sp,32)?!=CrtValue::Pointer(table)||frame.rt.load(frame.rt.offset(sp,4)?,32)?!=CrtValue::Pointer(frame.owner_frame()?){{return Err("pending guard original arguments");}}
+ let cookie=frame.rt.process_image_pointer(image,{cookie},4)?;let resolved=frame.rt.resolve_absolute({cookie},CrtRegionKind::Module)?;
+ if cookie.cap!=resolved.cap||cookie.address()!=resolved.address(){{return Err("pending guard cookie image identity");}}
+ for(base,expected)in[({origin},&{bytes:?}[..]),({security_origin},&{security:?}[..])]{{let p=frame.rt.process_image_code(image,base,expected.len()as u32)?;if frame.rt.memory.read(p.address(),expected.len()as u32).map_err(|_|"pending guard code read")?!=expected{{return Err("pending guard original bytes changed");}}}}
+ let low=frame.rt.offset(sp,-{scratch})?;frame.rt.valid(low,{scratch})?;frame.stack_range(low.address(),u64::from(sp.address()))?;
+ if frame.rt.overlapping_tags(low.address(),{scratch}).iter().any(|(_,v)|matches!(v,CrtValue::ProtectedReturn(_)|CrtValue::OpaqueSaved(_)|CrtValue::ThreadHead(_))){{return Err("pending guard protected scratch");}}
+ frame.call(cpu,continuation,|frame,cpu|{{{body}}})?;
+ phase.objects.validate(frame.event,frame.rt,frame.interrupted,frame.epoch,frame.binding)?;frame.validate()?;Ok(())
+ }})();if result.is_err(){{phase.objects.live.set(false);frame.state.failed=true;}}result
+}}
+"#,
+        continuation = call.va + 5,
+        depth = call.entry_depth - 4,
+        cookie = guard.cookie_va(),
+        scratch = guard.temporary_bytes() + 4
+    ))
+}
+
+/// Joins original caller effects after normalizer writeback through context RET.
+pub(crate) fn emit_pending_after_normalizer(
+    prefix: &super::handler_checks::PrefixProof,
+) -> Result<String, String> {
+    reprove_pending_prefix(prefix)?;
+    let context = prefix
+        .calls
+        .iter()
+        .find(|c| c.effect == super::handler_checks::CallEffect::ValidateContext)
+        .ok_or("pending caller missing context")?;
+    let marker = format!(
+        "context_prefix_call(frame,cpu,objects,{})?;",
+        context.va + 5
+    );
+    let tail = prefix
+        .caller_body()
+        .strip_prefix(prefix.normalizer_front())
+        .ok_or("pending caller prefix split")?;
+    let end = tail
+        .find(&marker)
+        .ok_or("pending caller context boundary")?
+        + marker.len();
+    let body = tail[..end]
+        .replace(
+            "guard_prefix_call(frame,cpu,",
+            "pending_guard_call(frame,cpu,phase,",
+        )
+        .replace(
+            "context_prefix_call(frame,cpu,objects,",
+            "pending_context_activation_call(frame,cpu,phase,",
+        );
+    Ok(format!(
+        r#"
+fn pending_after_normalizer(frame:&mut CrtLiveFrame<'_,'_>,cpu:&mut CrtCpu,phase:&CrtPendingSearch)->RegistryResult<()>{{
+ let result=(||{{frame.validate()?;phase.objects.validate(frame.event,frame.rt,frame.interrupted,frame.epoch,frame.binding)?;{body}
+ phase.objects.validate(frame.event,frame.rt,frame.interrupted,frame.epoch,frame.binding)?;Ok(())}})();if result.is_err(){{phase.objects.live.set(false);frame.state.failed=true;}}result
+}}
+"#
+    ))
+}
+
 pub(crate) fn emit_pending_context_call(
     prefix: &super::handler_checks::PrefixProof,
     context: &super::handler_context::ContextCheckProof,

@@ -12,9 +12,10 @@ cut executes the original context-helper selector bypass and returns to its live
 handler activation. The next boundary is **complete original handler-prefix
 composition and a separately validated selected Outer view**. No complete handler
 delivery, captured Windows registers, cleanup or resumption is admitted.
-An additional protected component path executes original handler entry through
-the normalizer body, RET and record-code writeback. Original guard execution and
-the caller sequence joining it to the context helper are still unconnected.
+The protected component path executes original handler entry through normalizer
+writeback, the actual guard/security checker and the original context-helper
+CALL/RET, stopping before caller0x402251. The remaining prefix, production
+handler entry and separately selected Outer view are still unconnected.
 Five retained Windows component comparisons and zero whole-PE pairs remain.
 
 [Producer proof, ownership, tests and exact delivery limits](PENDING-CALL.md).
